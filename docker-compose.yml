@@ -1,0 +1,127 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - host
+    networks:
+      - agentpod-edge
+
+  host:
+    build:
+      context: .
+      dockerfile: host/Dockerfile
+    image: agentpod-host:latest
+    restart: unless-stopped
+    volumes:
+      - ./shared-skills:/seed/shared-skills:ro
+      - shared-skills:/srv/shared-skills
+      - ./host/src/agentpod_host/web/static:/usr/local/lib/python3.11/site-packages/agentpod_host/web/static:ro
+      - ./host/src/agentpod_host/web/templates:/usr/local/lib/python3.11/site-packages/agentpod_host/web/templates:ro
+    environment:
+      GITHUB_CLIENT_ID:     ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+      OAUTH_REDIRECT_URI:   ${OAUTH_REDIRECT_URI}
+      ENCRYPTION_KEY:       ${ENCRYPTION_KEY}
+      SESSION_SECRET:       ${SESSION_SECRET}
+      DATABASE_URL:         ${DATABASE_URL}
+      DOCKER_HOST:          ${DOCKER_HOST}
+      AGENT_IMAGE:          ${AGENT_IMAGE}
+      EMBEDDING_BASE_URL:   ${EMBEDDING_BASE_URL}
+      EMBEDDING_MODEL:      ${EMBEDDING_MODEL}
+      AGENT_MEMORY_LIMIT:   ${AGENT_MEMORY_LIMIT}
+      AGENT_CPU_QUOTA:      ${AGENT_CPU_QUOTA}
+      AGENT_PIDS_LIMIT:     ${AGENT_PIDS_LIMIT}
+      IDLE_PAUSE_SECONDS:   ${IDLE_PAUSE_SECONDS}
+      PAUSE_TO_STOP_SECONDS: ${PAUSE_TO_STOP_SECONDS}
+      PUBLIC_BASE_URL:      ${PUBLIC_BASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      docker-proxy:
+        condition: service_started
+      agent-image:
+        condition: service_completed_successfully
+    # embedding 服务是软依赖：不可用时关键词检索自动降级
+    networks:
+      - agentpod-edge
+      - agentpod-internal
+
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1
+      NETWORKS:   1
+      IMAGES:     1
+      VOLUMES:    1
+      EXEC:       0
+      POST:       1
+      DELETE:     1
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - agentpod-internal
+
+  agent-image:
+    build:
+      context: .
+      dockerfile: agent/Dockerfile
+    image: ${AGENT_IMAGE}
+    command: ["sh", "-c", "echo agent image ready"]
+    restart: "no"
+    networks:
+      - agentpod-internal
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       agentpod
+      POSTGRES_USER:     agentpod
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentpod"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - agentpod-internal
+
+  tei:
+    image: ${TEI_IMAGE}
+    restart: unless-stopped
+    command:
+      - --model-id
+      - ${EMBEDDING_MODEL}
+      - --port
+      - "80"
+      - --huggingface-hub-cache
+      - /data
+      - --auto-truncate
+    volumes:
+      - tei-data:/data
+    networks: [agentpod-internal]
+
+volumes:
+  caddy-data:
+  caddy-config:
+  pgdata:
+  tei-data:
+  shared-skills:
+    name: agentpod_shared-skills
+
+networks:
+  agentpod-edge:
+    driver: bridge
+  agentpod-internal:
+    driver: bridge
