@@ -435,6 +435,18 @@ async def list_sessions(limit: int = 50) -> list[dict]:
     return await run_in_thread(_do)
 
 
+async def get_session_title(session_id: str) -> str | None:
+    def _do() -> str | None:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute("SELECT title FROM sessions WHERE id = ?", (session_id,)).fetchone()
+            if row is None:
+                return None
+            title = row["title"]
+            return str(title) if title is not None else None
+
+    return await run_in_thread(_do)
+
+
 async def list_messages(session_id: str) -> list[dict]:
     def _do() -> list[dict]:
         with conn_scope(load_vec=False) as c:

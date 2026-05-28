@@ -755,7 +755,7 @@ html.apod-chat-sidebar-collapsed #page-chat #btn-chat-sidebar-toggle svg {
   white-space: pre-wrap;
   word-break: break-word;
   font-size: 14px;
-  line-height: 1.65;
+  line-height: 1.5;
   color: var(--text);
   min-width: 0;
 }
@@ -847,7 +847,7 @@ html.apod-chat-sidebar-collapsed #page-chat #btn-chat-sidebar-toggle svg {
 .tool-event-memory { border-color: rgba(89, 214, 162, 0.45); color: #9beec8; }
 
 /* markdown 元素 */
-.msg.assistant .msg-content p { margin: 0 0 12px; }
+.msg.assistant .msg-content p { margin: 0 0 8px; }
 .msg.assistant .msg-content p:last-child { margin-bottom: 0; }
 .msg.assistant .msg-content h1,
 .msg.assistant .msg-content h2,
@@ -863,11 +863,16 @@ html.apod-chat-sidebar-collapsed #page-chat #btn-chat-sidebar-toggle svg {
 .msg.assistant .msg-content h4 { font-size: 14px; }
 .msg.assistant .msg-content ul,
 .msg.assistant .msg-content ol {
-  margin: 4px 0 12px;
+  margin: 4px 0 8px;
   padding-left: 24px;
 }
-.msg.assistant .msg-content li { margin: 4px 0; }
+.msg.assistant .msg-content li { margin: 2px 0; }
 .msg.assistant .msg-content li > p { margin: 0; }
+.msg.assistant .msg-content ol > li + li { margin-top: 6px; }
+.msg.assistant .msg-content li > p + ul,
+.msg.assistant .msg-content li > p + ol {
+  margin-top: 4px;
+}
 .msg.assistant .msg-content a {
   color: var(--accent);
   text-decoration: underline;

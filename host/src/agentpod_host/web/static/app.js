@@ -2115,10 +2115,29 @@
     let cachedMemoryItems = [];
     let memorySearchKeyword = '';
     let activeMemoryAnchor = 'identity';
+    let memoryAutoRefreshTimer = null;
+    let memoryAutoRefreshInFlight = false;
     const sectionVersion = { skills: 0, mcp: 0, memory: 0 };
     const nextVersion = (k) => { sectionVersion[k] += 1; return sectionVersion[k]; };
     const isLatest = (k, v) => sectionVersion[k] === v;
     const errText = (err, fallback = '操作失败') => escapeHtml(err?.message || fallback);
+    const stopMemoryAutoRefresh = () => {
+      if (!memoryAutoRefreshTimer) return;
+      clearInterval(memoryAutoRefreshTimer);
+      memoryAutoRefreshTimer = null;
+    };
+    const startMemoryAutoRefresh = () => {
+      if (memoryAutoRefreshTimer || PAGE !== 'memory') return;
+      memoryAutoRefreshTimer = setInterval(async () => {
+        if (memoryAutoRefreshInFlight) return;
+        memoryAutoRefreshInFlight = true;
+        try {
+          await refreshMemoryList({ silent: true });
+        } finally {
+          memoryAutoRefreshInFlight = false;
+        }
+      }, 3000);
+    };
     const withButtonBusy = async (btn, fn) => {
       if (btn) btn.disabled = true;
       try {
@@ -2431,16 +2450,19 @@
         });
       });
     };
-    const refreshMemoryList = async () => {
+    const refreshMemoryList = async ({ silent = false } = {}) => {
       const v = nextVersion('memory');
       try {
         const mem = await j('/api/workspace/memory?limit=100');
         if (!isLatest('memory', v)) return;
         const items = mem.items || [];
         renderMemories(items);
+        const hasPending = items.some((it) => String(it.embedding_state || '') === 'pending');
+        if (hasPending) startMemoryAutoRefresh();
+        else stopMemoryAutoRefresh();
       } catch (err) {
         if (!isLatest('memory', v)) return;
-        showErr('#memory-list', err);
+        if (!silent) showErr('#memory-list', err);
       }
     };
     await Promise.all([

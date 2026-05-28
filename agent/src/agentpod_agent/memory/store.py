@@ -36,16 +36,28 @@ async def add_memory(content: str, *, anchor: str = "experience") -> int:
     return await run_in_thread(_do)
 
 
-async def update_memory(memory_id: int, content: str) -> bool:
-    if not content.strip():
+async def update_memory(memory_id: int, content: str | None = None, *, anchor: str | None = None) -> bool:
+    has_content = content is not None
+    has_anchor = anchor is not None
+    if not has_content and not has_anchor:
+        raise ValueError("nothing to update")
+    if has_content and not str(content).strip():
         raise ValueError("content is empty")
+    normalized_anchor = _normalize_anchor(anchor) if has_anchor else None
 
     def _do() -> bool:
         with conn_scope(load_vec=False) as c:
-            cur = c.execute(
-                "UPDATE memory SET content=?, embedding=NULL, embedding_state='pending' WHERE id=?",
-                (content, memory_id),
-            )
+            set_parts: list[str] = []
+            params: list[Any] = []
+            if has_content:
+                set_parts.extend(["content=?", "embedding=NULL", "embedding_state='pending'"])
+                params.append(str(content))
+            if has_anchor:
+                set_parts.append("anchor=?")
+                params.append(str(normalized_anchor))
+            params.append(memory_id)
+            sql = f"UPDATE memory SET {', '.join(set_parts)} WHERE id=?"
+            cur = c.execute(sql, params)
             return cur.rowcount > 0
 
     return await run_in_thread(_do)

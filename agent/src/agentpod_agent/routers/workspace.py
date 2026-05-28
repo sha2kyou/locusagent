@@ -255,7 +255,8 @@ class MemoryIn(BaseModel):
 
 
 class MemoryUpdateIn(BaseModel):
-    content: str
+    content: str | None = None
+    anchor: Literal["identity", "experience"] | None = None
 
 
 @router.get("/memory")
@@ -275,10 +276,13 @@ async def workspace_add_memory(payload: MemoryIn) -> dict:
 
 @router.put("/memory/{entry_id}")
 async def workspace_update_memory(entry_id: int, payload: MemoryUpdateIn) -> dict:
-    ok = await update_memory(entry_id, payload.content)
+    if payload.content is None and payload.anchor is None:
+        raise WsError("memory_update_empty", "nothing to update", status_code=400)
+    ok = await update_memory(entry_id, payload.content, anchor=payload.anchor)
     if not ok:
         raise WsError("memory_not_found", "memory not found", status_code=404)
-    await enqueue_embedding(entry_id)
+    if payload.content is not None:
+        await enqueue_embedding(entry_id)
     return {"updated": True}
 
 

@@ -5,11 +5,16 @@ from __future__ import annotations
 from ..config import get_settings
 from ..logging import get_logger
 from .llm import get_llm_client
-from .persistence import upsert_session_meta
+from .persistence import get_session_title, upsert_session_meta
 
 log = get_logger("session_title")
 
 _TITLE_MAX_LEN = 28
+
+
+def _is_default_title(title: str | None) -> bool:
+    t = (title or "").strip()
+    return not t or t == "新对话"
 
 
 def _sanitize_title(raw: str, *, fallback: str) -> str:
@@ -34,6 +39,9 @@ async def maybe_generate_and_update_session_title(
     answer = (assistant_text or "").strip()
     if not query:
         return None
+    current_title = await get_session_title(session_id)
+    if not _is_default_title(current_title):
+        return current_title
 
     settings = get_settings()
     chosen_model = model or settings.llm_model

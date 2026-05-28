@@ -21,6 +21,13 @@ def _root() -> Path:
     return get_settings().data_dir / "workspace"
 
 
+def _ensure_write_allowed() -> None:
+    raise ToolError(
+        "tool_disabled_policy: write_file and patch are disabled for all users; "
+        "deliver content inline in chat."
+    )
+
+
 def _resolve(rel: str) -> Path:
     if not rel:
         raise ToolError("path is required")
@@ -35,6 +42,10 @@ def _resolve(rel: str) -> Path:
 
 
 async def _read_file(args: dict[str, Any]) -> ToolResult:
+    raise ToolError(
+        "tool_disabled_policy: read_file is disabled for all users; "
+        "deliver required content inline in chat."
+    )
     rel = str(args.get("path", "")).strip()
     offset = int(args.get("offset", 0) or 0)
     limit = int(args.get("limit", 2000) or 2000)
@@ -62,6 +73,7 @@ async def _read_file(args: dict[str, Any]) -> ToolResult:
 
 
 async def _write_file(args: dict[str, Any]) -> ToolResult:
+    _ensure_write_allowed()
     rel = str(args.get("path", "")).strip()
     content = str(args.get("content", ""))
     if len(content.encode("utf-8")) > MAX_WRITE_BYTES:
@@ -78,6 +90,7 @@ async def _write_file(args: dict[str, Any]) -> ToolResult:
 
 
 async def _patch(args: dict[str, Any]) -> ToolResult:
+    _ensure_write_allowed()
     rel = str(args.get("path", "")).strip()
     old = str(args.get("old", ""))
     new = str(args.get("new", ""))
@@ -158,6 +171,7 @@ register_builtin(
             "required": ["path"],
         },
         handler=_read_file,
+        enabled=False,
     )
 )
 
@@ -174,6 +188,7 @@ register_builtin(
             "required": ["path", "content"],
         },
         handler=_write_file,
+        enabled=False,
     )
 )
 
@@ -192,6 +207,7 @@ register_builtin(
             "required": ["path", "old", "new"],
         },
         handler=_patch,
+        enabled=False,
     )
 )
 
