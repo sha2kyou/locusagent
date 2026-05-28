@@ -397,7 +397,7 @@ async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
                 if _is_legacy_event_meta(tool_calls):
                     if tool_calls and tool_calls[0].get("event_type") == "tool_result":
                         tc_id = tool_calls[0].get("tool_call_id") or ""
-                        preview = tool_calls[0].get("preview") or content
+                        preview = content or (tool_calls[0].get("preview") or "")
                         if tc_id:
                             out.append({"role": "tool", "tool_call_id": tc_id, "content": preview})
                     continue

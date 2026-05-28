@@ -45,6 +45,21 @@ from ..skills import list_skills
 
 router = APIRouter(prefix="/v1", tags=["v1"], dependencies=[Depends(verify_internal_token)])
 log = get_logger("v1")
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _schedule_remember(user_query: str, final_text: str, *, model: str | None) -> None:
+    async def _run() -> None:
+        try:
+            mids = await _maybe_remember(user_query, final_text, model=model)
+            for mid in mids:
+                await enqueue_embedding(mid)
+        except Exception as exc:
+            log.warning("memory_autostore_failed", error=str(exc))
+
+    task = asyncio.create_task(_run(), name="memory-autostore")
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 _TITLE_MAX_LEN = 28
 _REMEMBER_QUERY_MIN_LEN = 4
 _REMEMBER_ANSWER_MIN_LEN = 24
@@ -430,16 +445,7 @@ async def chat_completions(req: ChatRequest, request: Request):
             raise
 
         if user_query and stream_final_text:
-            try:
-                mids = await _maybe_remember(
-                    user_query,
-                    stream_final_text,
-                    model=chosen_model,
-                )
-                for mid in mids:
-                    await enqueue_embedding(mid)
-            except Exception as exc:
-                log.warning("memory_autostore_failed", error=str(exc))
+            _schedule_remember(user_query, stream_final_text, model=chosen_model)
 
         done = {
             "id": chat_id,

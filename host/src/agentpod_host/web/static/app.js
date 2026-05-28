@@ -684,25 +684,11 @@
       return {
         kind,
         toolName: m0.tool_name || '',
-        preview: m0.preview ? String(m0.preview) : '结果已返回',
+        preview: String(text || m0.preview || '结果已返回'),
       };
     }
-    let raw = String(text || '').trim();
-    let kind = 'tool';
-    for (let i = 0; i < 3; i++) {
-      const m = raw.match(/^\[(tool|mcp|skill|memory)\]\s*(.*)$/i);
-      if (!m) break;
-      kind = m[1].toLowerCase();
-      raw = (m[2] || '').trim();
-    }
-    const callMatch = raw.match(/^调用：(.+)$/);
-    const resultMatch = raw.match(/^结果：([\s\S]+)$/);
-    if (resultMatch) {
-      const preview = resultMatch[1];
-      return { kind, toolName: '', preview };
-    }
-    if (callMatch) return { kind, toolName: callMatch[1], preview: '' };
-    return { kind, toolName: '', preview: raw };
+    // 严格来源：无结构化元数据时不从文本反推工具名，仅展示结果内容。
+    return { kind: 'tool', toolName: '', preview: String(text || '') };
   }
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -741,6 +727,12 @@
         const id = ev.tool_call_id || '';
         const name = ev.tool_name || '';
         if (id) meta.set(id, { name, kind: ev.tool_kind || detectToolKind(name) });
+        continue;
+      }
+      if (ev?.event_type === 'tool_result') {
+        const id = ev.tool_call_id || '';
+        const name = ev.tool_name || '';
+        if (id && name) meta.set(id, { name, kind: ev.tool_kind || detectToolKind(name) });
       }
     }
     return meta;
@@ -813,17 +805,21 @@
       }
       if (meta?.event_type === 'tool_result') {
         const id = meta.tool_call_id || '';
-        const preview = meta.preview || String(m.content || '').replace(/^\[tool\]\s*结果：/, '');
+        const preview = String(m.content || meta.preview || '');
+        const info = id ? callMeta.get(id) : null;
+        const toolName = meta.tool_name || info?.name || '';
+        const kind = meta.tool_kind || info?.kind || detectToolKind(toolName);
         if (id && callIdx.has(id)) {
-          rows[callIdx.get(id)].preview = preview;
+          const idx = callIdx.get(id);
+          rows[idx].preview = preview;
+          if (!rows[idx].tool_name && toolName) rows[idx].tool_name = toolName;
+          if ((!rows[idx].kind || rows[idx].kind === 'tool') && kind) rows[idx].kind = kind;
         } else {
-          const info = id ? callMeta.get(id) : null;
-          const toolName = meta.tool_name || info?.name || '';
-          const kind = meta.tool_kind || info?.kind || detectToolKind(toolName);
           const pendingIdx = findPendingRowIndex({ toolName, kind });
           if (pendingIdx >= 0) {
             rows[pendingIdx].preview = preview || '结果已返回';
             if (!rows[pendingIdx].tool_name && toolName) rows[pendingIdx].tool_name = toolName;
+            if ((!rows[pendingIdx].kind || rows[pendingIdx].kind === 'tool') && kind) rows[pendingIdx].kind = kind;
           } else {
             rows.push({
               type: 'tool',
@@ -863,17 +859,13 @@
         }
         continue;
       }
-      const parsed = parseToolMessage(m.content, m.tool_calls);
-      const pendingIdx = parsed.preview ? findPendingRowIndex({ toolName: parsed.toolName, kind: parsed.kind }) : -1;
-      if (pendingIdx >= 0) {
-        rows[pendingIdx].preview = parsed.preview || '结果已返回';
-        if (!rows[pendingIdx].tool_name && parsed.toolName) rows[pendingIdx].tool_name = parsed.toolName;
-      } else {
+      const rawPreview = String(m.content || '').trim();
+      if (rawPreview) {
         rows.push({
           type: 'tool',
-          tool_name: parsed.toolName,
-          kind: parsed.kind,
-          preview: parsed.preview,
+          tool_name: '',
+          kind: 'tool',
+          preview: rawPreview,
         });
       }
     }
@@ -1961,7 +1953,15 @@
     input.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
       if (e.isComposing) return;
-      if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const start = Number.isInteger(input.selectionStart) ? input.selectionStart : input.value.length;
+        const end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : input.value.length;
+        input.setRangeText('\n', start, end, 'end');
+        autoGrow(input);
+        return;
+      }
+      if (e.shiftKey || e.altKey) return;
       e.preventDefault();
       form.requestSubmit();
     });
@@ -1984,7 +1984,14 @@
       const streamToolEls = new Map();
       const streamPendingToolEls = [];
       let aborted = false;
+      let streamCompleted = false;
       chatStreamAbort = new AbortController();
+      const markStreamCompleted = () => {
+        if (streamCompleted) return;
+        streamCompleted = true;
+        setStreaming(false);
+        stopRunningToolBlocks('已完成');
+      };
 
       const isPendingToolEl = (el) => Boolean(el && el.dataset?.toolRunning === '1');
       const rememberPendingToolEl = (el) => {
@@ -2100,7 +2107,11 @@
               win.scrollTop = win.scrollHeight;
             }
           },
+          onDone: () => {
+            markStreamCompleted();
+          },
         }, { signal: chatStreamAbort.signal });
+        markStreamCompleted();
         if (contentEl && acc) {
           contentEl.innerHTML = renderAssistantContent(acc, { enableHtmlRender: true, renderHtmlNow: true });
           hydrateHtmlRenderBlocks(contentEl);
@@ -2146,7 +2157,10 @@
       } finally {
         chatStreamAbort = null;
         stoppingStream = false;
-        if (ChatState.currentId) {
+        if (streamCompleted) {
+          setStreaming(false);
+          stopRunningToolBlocks('已完成');
+        } else if (ChatState.currentId) {
           try {
             const active = await j(`/api/workspace/sessions/${ChatState.currentId}/active-run`);
             setStreaming(active.run?.status === 'running');

@@ -12,7 +12,6 @@ from .loop import run_chat_loop_stream
 from .persistence import (
     append_message,
     get_active_run,
-    persist_openai_message,
     update_message,
     update_run,
     upsert_session_meta,
@@ -81,7 +80,13 @@ async def _persist_event(
         tool_msg = ev.get("message") or {}
         assistant_msg_id = state.get("assistant_msg_id")
         partial = str(state.get("partial_text") or "")
-        if assistant_msg_id is not None and not partial.strip():
+        already_after_tool_round = bool(state.get("after_tool_round"))
+        can_update_in_place = (
+            assistant_msg_id is not None
+            and not partial.strip()
+            and not already_after_tool_round
+        )
+        if can_update_in_place:
             await update_message(
                 assistant_msg_id,
                 content=str(tool_msg.get("content") or ""),
@@ -104,13 +109,24 @@ async def _persist_event(
     if t == "tool_result":
         preview = str(ev.get("preview") or "")
         full_content = str(ev.get("content") or preview)
-        await persist_openai_message(
-            session_id,
+        tool_call_id = str(ev.get("tool_call_id") or "")
+        tool_name = str(ev.get("name") or "")
+        tool_kind = str(ev.get("tool_kind") or _tool_kind(tool_name))
+        tool_meta = [
             {
-                "role": "tool",
-                "tool_call_id": str(ev.get("tool_call_id") or ""),
-                "content": full_content,
-            },
+                "event_type": "tool_result",
+                "tool_call_id": tool_call_id,
+                "tool_name": tool_name,
+                "tool_kind": tool_kind,
+                "preview": preview,
+            }
+        ]
+        await append_message(
+            session_id,
+            "tool",
+            full_content,
+            tool_calls=tool_meta,
+            tool_call_id=tool_call_id,
             run_id=run_id,
         )
         return
@@ -171,6 +187,7 @@ async def _worker(
     extra: dict[str, Any] | None,
     auto_title_user_query: str | None,
 ) -> None:
+    call_name_by_id: dict[str, str] = {}
     state: dict[str, Any] = {
         "partial_text": "",
         "assistant_msg_id": None,
@@ -188,10 +205,22 @@ async def _worker(
             model=model,
             extra=extra,
         ):
-            await _persist_event(handle.session_id, handle.run_id, ev, state)
             public = dict(ev)
-            if public.get("type") == "tool_call":
-                public["tool_kind"] = _tool_kind(str(public.get("name") or ""))
+            et = str(public.get("type") or "")
+            if et == "tool_call":
+                tool_name = str(public.get("name") or "")
+                tool_id = str(public.get("id") or "")
+                if tool_id and tool_name:
+                    call_name_by_id[tool_id] = tool_name
+                public["tool_kind"] = _tool_kind(tool_name)
+            elif et == "tool_result":
+                tool_call_id = str(public.get("tool_call_id") or "")
+                mapped_name = call_name_by_id.get(tool_call_id, "")
+                if mapped_name:
+                    public["name"] = mapped_name
+                tool_name = str(public.get("name") or "")
+                public["tool_kind"] = _tool_kind(tool_name)
+            await _persist_event(handle.session_id, handle.run_id, public, state)
             await handle.queue.put(public)
     except asyncio.CancelledError:
         stream_error = "run cancelled by user"
