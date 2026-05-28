@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 import uuid
 from typing import Any
@@ -36,14 +37,23 @@ from ..core import (
     update_run,
     upsert_session_meta,
 )
+from ..core.llm import get_llm_client
 from ..core.run_manager import ERROR, FINISHED, start_stream_run
 from ..logging import get_logger
-from ..memory import enqueue_embedding, recall
+from ..memory import add_memory, enqueue_embedding, list_memories, recall
 from ..skills import list_skills
 
 router = APIRouter(prefix="/v1", tags=["v1"], dependencies=[Depends(verify_internal_token)])
 log = get_logger("v1")
 _TITLE_MAX_LEN = 28
+_REMEMBER_QUERY_MIN_LEN = 4
+_REMEMBER_ANSWER_MIN_LEN = 24
+_REMEMBER_RECENT_SCAN = 80
+_REMEMBER_ANSWER_MAX_LEN = 1200
+_REMEMBER_CANDIDATES_MAX = 3
+_REMEMBER_SKIP_QUERY_PATTERNS = (
+    re.compile(r"^(hi|hello|hey|你好|在吗|在么|test|测试)\W*$", re.IGNORECASE),
+)
 
 
 class ChatMessage(BaseModel):
@@ -298,8 +308,12 @@ async def chat_completions(req: ChatRequest, request: Request):
                 await upsert_session_meta(sid, tokens_delta=result.total_tokens)
                 if user_query and result.final_text:
                     try:
-                        mid = await _maybe_remember(user_query, result.final_text)
-                        if mid is not None:
+                        mids = await _maybe_remember(
+                            user_query,
+                            result.final_text,
+                            model=chosen_model,
+                        )
+                        for mid in mids:
                             await enqueue_embedding(mid)
                     except Exception as exc:
                         log.warning("memory_autostore_failed", error=str(exc))
@@ -369,10 +383,12 @@ async def chat_completions(req: ChatRequest, request: Request):
                 x_preview="已自动匹配并注入技能上下文",
             )
         try:
+            stream_final_text = ""
             while True:
                 ev = await handle.queue.get()
                 t = ev.get("type")
                 if t == FINISHED:
+                    stream_final_text = str(ev.get("final_text") or "")
                     break
                 if t == ERROR:
                     yield _chunk({}, x_event="error", x_message=ev.get("message") or "unknown")
@@ -400,6 +416,18 @@ async def chat_completions(req: ChatRequest, request: Request):
         except asyncio.CancelledError:
             log.info("sse_disconnected", run_id=run_id, session_id=sid)
             raise
+
+        if user_query and stream_final_text:
+            try:
+                mids = await _maybe_remember(
+                    user_query,
+                    stream_final_text,
+                    model=chosen_model,
+                )
+                for mid in mids:
+                    await enqueue_embedding(mid)
+            except Exception as exc:
+                log.warning("memory_autostore_failed", error=str(exc))
 
         done = {
             "id": chat_id,
@@ -505,6 +533,17 @@ async def responses(req: ResponsesRequest):
                 assistant_message_id=last_assistant_id,
             )
             await upsert_session_meta(sid, tokens_delta=result.total_tokens)
+            if user_query and result.final_text:
+                try:
+                    mids = await _maybe_remember(
+                        user_query,
+                        result.final_text,
+                        model=chosen_model,
+                    )
+                    for mid in mids:
+                        await enqueue_embedding(mid)
+                except Exception as exc:
+                    log.warning("memory_autostore_failed", error=str(exc))
             response_id = await create_response(
                 sid,
                 run_id=run_id,
@@ -577,8 +616,95 @@ async def retrieve_response(response_id: str) -> JSONResponse:
     )
 
 
-async def _maybe_remember(_query: str, _answer: str) -> int | None:
-    return None
+def _normalize_memory_text(text: str) -> str:
+    return re.sub(r"\s+", "", text).lower()
+
+
+async def _extract_memory_candidates(query: str, answer: str, *, model: str | None) -> list[str]:
+    settings = get_settings()
+    chosen_model = model or settings.llm_model
+    client = get_llm_client()
+    prompt = (
+        "你是记忆提炼器。请从用户问题和助手回答中提炼对后续对话有长期价值的记忆。"
+        "只保留可复用的信息（偏好、约束、稳定事实、目标），不要复述过程性内容。"
+        "输出严格 JSON：{\"memories\":[\"...\",\"...\"]}，最多3条，每条中文不超过60字。"
+        "如果没有可保存记忆，返回 {\"memories\":[]}。"
+    )
+    content = f"用户问题：{query[:500]}\n助手回答：{answer[:1000]}"
+    resp = await client.chat.completions.create(
+        model=chosen_model,
+        messages=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": content},
+        ],
+        max_tokens=220,
+        temperature=0.1,
+    )
+    raw = ((resp.choices or [None])[0].message.content if resp.choices else "") or ""
+    raw = raw.strip()
+    if not raw:
+        return []
+    memories: list[str] = []
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            arr = parsed.get("memories")
+            if isinstance(arr, list):
+                memories = [str(x).strip() for x in arr if str(x).strip()]
+        elif isinstance(parsed, list):
+            memories = [str(x).strip() for x in parsed if str(x).strip()]
+    except json.JSONDecodeError:
+        for line in raw.splitlines():
+            s = re.sub(r"^[\-\*\d\.\)\s]+", "", line).strip()
+            if s:
+                memories.append(s)
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for m in memories:
+        if len(m) < 6:
+            continue
+        m = m[:80].strip()
+        key = _normalize_memory_text(m)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(m)
+        if len(cleaned) >= _REMEMBER_CANDIDATES_MAX:
+            break
+    return cleaned
+
+
+async def _maybe_remember(_query: str, _answer: str, *, model: str | None = None) -> list[int]:
+    query = (_query or "").strip()
+    answer = (_answer or "").strip()
+    if not query or not answer:
+        return []
+    if len(query) < _REMEMBER_QUERY_MIN_LEN and len(answer) < _REMEMBER_ANSWER_MIN_LEN:
+        return []
+    for p in _REMEMBER_SKIP_QUERY_PATTERNS:
+        if p.match(query):
+            return []
+
+    answer = answer[:_REMEMBER_ANSWER_MAX_LEN].strip()
+    candidates = await _extract_memory_candidates(query, answer, model=model)
+    if not candidates:
+        return []
+
+    recent = await list_memories(limit=_REMEMBER_RECENT_SCAN)
+    recent_norm = {_normalize_memory_text(str(item.get("content") or "")) for item in recent}
+    saved_ids: list[int] = []
+    for memory_text in candidates:
+        norm = _normalize_memory_text(memory_text)
+        if not norm:
+            continue
+        if norm in recent_norm:
+            continue
+        if any(norm in r or r in norm for r in recent_norm if r):
+            continue
+        mid = await add_memory(memory_text, anchor="experience")
+        saved_ids.append(mid)
+        recent_norm.add(norm)
+    return saved_ids
 
 
 @router.get("/models")

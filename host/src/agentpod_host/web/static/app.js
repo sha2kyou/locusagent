@@ -644,7 +644,8 @@
   function updateToolBlock(el, { preview, toolName }) {
     if (!el) return;
     const kind = el.dataset.toolKind || 'tool';
-    const name = toolName || el.querySelector('.tool-event-call')?.textContent || '工具';
+    const name = String(toolName || '').trim()
+      || String(el.querySelector('.tool-event-call')?.textContent || '').trim();
     const startedAt = Number(el.dataset.toolStartedAt || 0);
     const hasResult = Boolean(preview);
     let elapsedMs = null;
@@ -664,6 +665,13 @@
     });
     const win = $('#chat-window');
     win.scrollTop = win.scrollHeight;
+  }
+
+  function stopRunningToolBlocks(reason = '已停止') {
+    const preview = String(reason || '').trim() || '已停止';
+    document.querySelectorAll('.msg.tool-event[data-tool-running="1"]').forEach((el) => {
+      updateToolBlock(el, { preview });
+    });
   }
 
   function parseToolMessage(text, meta) {
@@ -689,7 +697,10 @@
     }
     const callMatch = raw.match(/^调用：(.+)$/);
     const resultMatch = raw.match(/^结果：([\s\S]+)$/);
-    if (resultMatch) return { kind, toolName: '', preview: resultMatch[1] };
+    if (resultMatch) {
+      const preview = resultMatch[1];
+      return { kind, toolName: '', preview };
+    }
     if (callMatch) return { kind, toolName: callMatch[1], preview: '' };
     return { kind, toolName: '', preview: raw };
   }
@@ -739,6 +750,20 @@
     const rows = [];
     const callIdx = new Map();
     const callMeta = buildToolCallMeta(messages);
+    const findPendingRowIndex = ({ toolName = '', kind = '' } = {}) => {
+      const preferredName = String(toolName || '').trim();
+      const preferredKind = String(kind || '').trim();
+      let fallback = -1;
+      for (let i = rows.length - 1; i >= 0; i--) {
+        const row = rows[i];
+        if (row?.type !== 'tool') continue;
+        if (row.preview) continue;
+        if (preferredName && String(row.tool_name || '').trim() === preferredName) return i;
+        if (preferredKind && String(row.kind || '').trim() === preferredKind) return i;
+        if (fallback < 0) fallback = i;
+      }
+      return fallback;
+    };
 
     for (const m of messages) {
       if (m.role === 'system') continue;
@@ -793,14 +818,22 @@
           rows[callIdx.get(id)].preview = preview;
         } else {
           const info = id ? callMeta.get(id) : null;
-          rows.push({
-            type: 'tool',
-            tool_call_id: id,
-            tool_name: meta.tool_name || info?.name || '',
-            kind: meta.tool_kind || info?.kind || detectToolKind(info?.name),
-            preview: preview || '结果已返回',
-          });
-          if (id) callIdx.set(id, rows.length - 1);
+          const toolName = meta.tool_name || info?.name || '';
+          const kind = meta.tool_kind || info?.kind || detectToolKind(toolName);
+          const pendingIdx = findPendingRowIndex({ toolName, kind });
+          if (pendingIdx >= 0) {
+            rows[pendingIdx].preview = preview || '结果已返回';
+            if (!rows[pendingIdx].tool_name && toolName) rows[pendingIdx].tool_name = toolName;
+          } else {
+            rows.push({
+              type: 'tool',
+              tool_call_id: id,
+              tool_name: toolName,
+              kind,
+              preview: preview || '结果已返回',
+            });
+            if (id) callIdx.set(id, rows.length - 1);
+          }
         }
         continue;
       }
@@ -812,23 +845,37 @@
       }
       if (tcId || preview) {
         const info = tcId ? callMeta.get(tcId) : null;
-        rows.push({
-          type: 'tool',
-          tool_call_id: tcId,
-          tool_name: info?.name || '',
-          kind: info?.kind || detectToolKind(info?.name),
-          preview: preview || '结果已返回',
-        });
-        if (tcId) callIdx.set(tcId, rows.length - 1);
+        const toolName = info?.name || '';
+        const kind = info?.kind || detectToolKind(toolName);
+        const pendingIdx = !tcId ? findPendingRowIndex({ toolName, kind }) : -1;
+        if (pendingIdx >= 0) {
+          rows[pendingIdx].preview = preview || '结果已返回';
+          if (!rows[pendingIdx].tool_name && toolName) rows[pendingIdx].tool_name = toolName;
+        } else {
+          rows.push({
+            type: 'tool',
+            tool_call_id: tcId,
+            tool_name: toolName,
+            kind,
+            preview: preview || '结果已返回',
+          });
+          if (tcId) callIdx.set(tcId, rows.length - 1);
+        }
         continue;
       }
       const parsed = parseToolMessage(m.content, m.tool_calls);
-      rows.push({
-        type: 'tool',
-        tool_name: parsed.toolName,
-        kind: parsed.kind,
-        preview: parsed.preview,
-      });
+      const pendingIdx = parsed.preview ? findPendingRowIndex({ toolName: parsed.toolName, kind: parsed.kind }) : -1;
+      if (pendingIdx >= 0) {
+        rows[pendingIdx].preview = parsed.preview || '结果已返回';
+        if (!rows[pendingIdx].tool_name && parsed.toolName) rows[pendingIdx].tool_name = parsed.toolName;
+      } else {
+        rows.push({
+          type: 'tool',
+          tool_name: parsed.toolName,
+          kind: parsed.kind,
+          preview: parsed.preview,
+        });
+      }
     }
     return rows;
   }
@@ -1343,6 +1390,7 @@
 
   function abortChatStream() {
     chatStreamAbort?.abort();
+    stopRunningToolBlocks('已停止');
     chatStreamAbort = null;
     stoppingStream = false;
     setChatStreamingUi(false);
@@ -1872,6 +1920,7 @@
       }
       showToast('正在停止…', { type: 'info', duration: 1200 });
       chatStreamAbort?.abort();
+      stopRunningToolBlocks('已停止');
       setStreaming(false);
       const sid = ChatState.currentId;
       if (!sid || !stopBtn) {
@@ -1933,8 +1982,37 @@
       let acc = '';
       let started = false;
       const streamToolEls = new Map();
+      const streamPendingToolEls = [];
       let aborted = false;
       chatStreamAbort = new AbortController();
+
+      const isPendingToolEl = (el) => Boolean(el && el.dataset?.toolRunning === '1');
+      const rememberPendingToolEl = (el) => {
+        if (!el) return;
+        streamPendingToolEls.push(el);
+      };
+      const consumePendingToolEl = ({ toolName = '' } = {}) => {
+        const preferredName = String(toolName || '').trim();
+        for (let i = streamPendingToolEls.length - 1; i >= 0; i--) {
+          const el = streamPendingToolEls[i];
+          if (!isPendingToolEl(el)) {
+            streamPendingToolEls.splice(i, 1);
+            continue;
+          }
+          if (!preferredName) return el;
+          const currentName = String(el.querySelector('.tool-event-call')?.textContent || '').trim();
+          if (currentName && currentName === displayToolName(preferredName)) return el;
+        }
+        for (let i = streamPendingToolEls.length - 1; i >= 0; i--) {
+          const el = streamPendingToolEls[i];
+          if (!isPendingToolEl(el)) {
+            streamPendingToolEls.splice(i, 1);
+            continue;
+          }
+          return el;
+        }
+        return null;
+      };
 
       function resetAssistantBlock() {
         if (contentEl) contentEl.classList.remove('msg-loading');
@@ -1986,6 +2064,7 @@
                 preview: '',
                 pending: true,
               });
+              rememberPendingToolEl(el);
               if (toolId) streamToolEls.set(toolId, el);
               return;
             }
@@ -1993,9 +2072,9 @@
               const toolId = chunk.x_tool_call_id || '';
               const toolName = chunk.x_tool_name || '';
               const preview = chunk.x_preview || '';
-              const el = toolId ? streamToolEls.get(toolId) : null;
+              const el = (toolId ? streamToolEls.get(toolId) : null) || consumePendingToolEl({ toolName });
               if (el) {
-                updateToolBlock(el, { preview });
+                updateToolBlock(el, { preview, toolName });
               } else if (preview) {
                 appendToolBlock({ toolName, kind: 'tool', preview });
               }
@@ -2071,12 +2150,18 @@
           try {
             const active = await j(`/api/workspace/sessions/${ChatState.currentId}/active-run`);
             setStreaming(active.run?.status === 'running');
-            if (active.run?.status === 'running') pollActiveRun(ChatState.currentId);
+            if (active.run?.status === 'running') {
+              pollActiveRun(ChatState.currentId);
+            } else {
+              stopRunningToolBlocks('已停止');
+            }
           } catch {
             setStreaming(false);
+            stopRunningToolBlocks('已停止');
           }
         } else {
           setStreaming(false);
+          stopRunningToolBlocks('已停止');
         }
         if (!aborted) input.focus();
       }

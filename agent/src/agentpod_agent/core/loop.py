@@ -33,6 +33,10 @@ MODEL_TOKEN_LIMITS: dict[str, int] = {
     "gpt-3.5-turbo": 16_000,
 }
 DEFAULT_TOKEN_LIMIT = 32_000
+_TOOL_ROUND_LIMIT_NOTICE = (
+    "工具调用轮次已达到上限。请立即停止继续调用任何工具（包括 tool/mcp/skill/memory），"
+    "基于当前已知信息给出最终结论，并明确说明剩余不确定项。"
+)
 
 
 def _model_limit(model: str) -> int:
@@ -126,6 +130,28 @@ async def _execute_tool_calls(
     return results
 
 
+async def _finalize_without_tools(
+    *,
+    client,
+    model: str,
+    working_messages: list[dict[str, Any]],
+    extra: dict[str, Any] | None,
+) -> tuple[dict[str, Any], str, int]:
+    req_messages = list(working_messages)
+    req_messages.append({"role": "system", "content": _TOOL_ROUND_LIMIT_NOTICE})
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "messages": req_messages,
+    }
+    if extra:
+        kwargs.update(extra)
+    completion: ChatCompletion = await client.chat.completions.create(**kwargs)
+    usage_tokens = int((completion.usage.total_tokens if completion.usage else 0) or 0)
+    msg = completion.choices[0].message
+    msg_dict = _serialize_message(msg)
+    return msg_dict, str(msg.content or ""), usage_tokens
+
+
 async def run_chat_loop(
     messages: list[dict[str, Any]],
     *,
@@ -139,10 +165,12 @@ async def run_chat_loop(
     token_limit = int(_model_limit(chosen_model) * settings.context_compress_ratio)
     client = get_llm_client()
     tools_schema = registry.schemas() or None
+    max_tool_rounds = max(1, settings.max_tool_rounds)
 
     working = list(messages)
     total_tokens = 0
     tool_calls_made = 0
+    tool_rounds_made = 0
     final_text = ""
 
     for round_idx in range(1, max_rounds + 1):
@@ -180,6 +208,31 @@ async def run_chat_loop(
             if msg.content is not None:
                 assistant_msg["content"] = msg.content
             working.append(assistant_msg)
+            if tool_rounds_made >= max_tool_rounds:
+                log.warning(
+                    "loop_tool_round_limit_reached",
+                    round=round_idx,
+                    tool_rounds=tool_rounds_made,
+                    max_tool_rounds=max_tool_rounds,
+                )
+                final_msg, final_text, more_tokens = await _finalize_without_tools(
+                    client=client,
+                    model=chosen_model,
+                    working_messages=working,
+                    extra=extra,
+                )
+                total_tokens += more_tokens
+                working.append(final_msg)
+                return (
+                    LoopResult(
+                        final_text=final_text or "[tool round limit reached]",
+                        rounds=round_idx,
+                        total_tokens=total_tokens,
+                        tool_calls_made=tool_calls_made,
+                    ),
+                    working,
+                )
+            tool_rounds_made += 1
             tool_calls_made += len(normalized_calls)
             stub_calls = [_ToolCallStub(raw) for raw in normalized_calls]
             tool_results = await _execute_tool_calls(registry, stub_calls)
@@ -252,10 +305,12 @@ async def run_chat_loop_stream(
     token_limit = int(_model_limit(chosen_model) * settings.context_compress_ratio)
     client = get_llm_client()
     tools_schema = registry.schemas() or None
+    max_tool_rounds = max(1, settings.max_tool_rounds)
 
     working = list(messages)
     total_tokens = 0
     tool_calls_made = 0
+    tool_rounds_made = 0
     final_text = ""
 
     for round_idx in range(1, max_rounds + 1):
@@ -336,6 +391,34 @@ async def run_chat_loop_stream(
         working.append(msg_dict)
 
         if finish_reason == "tool_calls" and normalized_tool_calls:
+            if tool_rounds_made >= max_tool_rounds:
+                log.warning(
+                    "loop_tool_round_limit_reached",
+                    round=round_idx,
+                    tool_rounds=tool_rounds_made,
+                    max_tool_rounds=max_tool_rounds,
+                    stream=True,
+                )
+                final_msg, capped_text, more_tokens = await _finalize_without_tools(
+                    client=client,
+                    model=chosen_model,
+                    working_messages=working,
+                    extra=extra,
+                )
+                total_tokens += more_tokens
+                working.append(final_msg)
+                if capped_text:
+                    yield {"type": "delta", "content": capped_text}
+                final_text = capped_text
+                yield {
+                    "type": "done",
+                    "final_text": final_text or "[tool round limit reached]",
+                    "rounds": round_idx,
+                    "total_tokens": total_tokens,
+                    "tool_calls_made": tool_calls_made,
+                }
+                return
+            tool_rounds_made += 1
             tool_calls_made += len(normalized_tool_calls)
             stub_calls = [_ToolCallStub(raw) for raw in normalized_tool_calls]
             yield {"type": "assistant_tools", "message": msg_dict}

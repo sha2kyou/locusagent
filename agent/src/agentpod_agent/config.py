@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     shared_skills_dir: Path = Field(default=Path("/app/skills"), alias="SHARED_SKILLS_DIR")
 
     max_loop_rounds: int = Field(default=20, alias="MAX_LOOP_ROUNDS")
+    max_tool_rounds: int = Field(default=30, alias="MAX_TOOL_ROUNDS")
     context_compress_ratio: float = Field(default=0.8, alias="CONTEXT_COMPRESS_RATIO")
     full_inject_threshold: int = Field(default=20, alias="FULL_INJECT_THRESHOLD")
 
