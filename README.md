@@ -110,6 +110,56 @@ uv run uvicorn agentpod_host.main:app --reload --port 8080
 uv run uvicorn agentpod_agent.main:app --reload --port 8000
 ```
 
+## Compose 下按需重建规则
+
+原则：只重建受影响层，避免全量重建。
+
+### 1) 只改前端静态资源（无需重建）
+
+`host/src/agentpod_host/web/static/*` 与 `host/src/agentpod_host/web/templates/*` 已通过 volume 挂载到 `host` 容器。
+
+- 操作：浏览器强制刷新（`Cmd+Shift+R`）
+- 说明：通常不需要 `docker compose build`
+
+### 2) 使用重建脚本（推荐）
+
+仓库根目录提供脚本：`rebuild.sh`。
+其中 `agent` 镜像通过 `docker build` 构建，不走 `docker compose build`。
+
+```bash
+# Host 代码改动：仅重建 host（不带起依赖）
+./rebuild.sh host
+```
+
+```bash
+# Agent 代码改动：重建 agent 镜像 + 重建单个用户隔离容器
+./rebuild.sh agent <user_id>
+```
+
+```bash
+# 全量重建（怀疑运行时环境异常时使用）
+./rebuild.sh full
+```
+
+```bash
+# 全量重建后，顺带强制重建某个用户隔离容器
+./rebuild.sh full <user_id>
+```
+
+### 3) 删除一次性占位容器
+
+```bash
+./rebuild.sh clean-placeholder
+```
+
+`agentpod-agent-image-1` 是一次性构建占位容器（`Exited (0)` 正常），可按需清理。
+
+### 4) 可选验证
+
+```bash
+docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" | rg "apod-user|agentpod-host|agentpod-agent-image"
+```
+
 ## 鉴权与路由边界
 
 - Bearer 仅允许：`/api/v1/chat/completions`、`/api/v1/responses`、`/api/v1/models`、`/api/v1/health`

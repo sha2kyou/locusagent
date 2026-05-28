@@ -393,7 +393,14 @@
       const id = String(data.id || '');
       const height = Number(data.height || 0);
       if (!id || !Number.isFinite(height) || height <= 0) return;
-      const frame = document.querySelector(`.html-render-frame[data-html-render-id="${CSS.escape(id)}"]`);
+      let frame = null;
+      const direct = document.querySelectorAll('.html-render-frame[data-html-render-id]');
+      for (const item of direct) {
+        if (item.dataset.htmlRenderId === id) {
+          frame = item;
+          break;
+        }
+      }
       if (!frame) return;
       const next = Math.max(24, Math.ceil(height));
       const prev = Number(frame.dataset.htmlRenderHeight || 0);
@@ -407,7 +414,7 @@
     const id = nextHtmlRenderId();
     const b64 = encodeBase64Utf8(html || '');
     return `<div class="html-render-card" data-html-render-id="${escapeHtml(id)}" data-html-render-b64="${escapeHtml(b64)}">
-      <iframe class="html-render-frame" data-html-render-id="${escapeHtml(id)}" sandbox="" loading="eager" referrerpolicy="no-referrer"></iframe>
+      <iframe class="html-render-frame" data-html-render-id="${escapeHtml(id)}" sandbox="allow-scripts" loading="eager" referrerpolicy="no-referrer"></iframe>
     </div>`;
   }
 
@@ -1597,6 +1604,27 @@
     $('#chat-title').textContent = title || '新对话';
   }
 
+  function isDefaultSessionTitle(title) {
+    const t = String(title || '').trim();
+    return !t || t === '新对话';
+  }
+
+  async function waitForGeneratedSessionTitle(sessionId, { attempts = 30, intervalMs = 2000 } = {}) {
+    if (!sessionId) return;
+    for (let i = 0; i < attempts; i += 1) {
+      await sleep(intervalMs);
+      await loadSessions();
+      const session = ChatState.sessions.find((s) => s.id === sessionId);
+      if (!session) return;
+      if (!isDefaultSessionTitle(session.title)) {
+        if (ChatState.currentId === sessionId) {
+          setChatTitle(session.title);
+        }
+        return;
+      }
+    }
+  }
+
   function showEmpty() {
     const chips = PROMPT_CHIPS.map(
       (p) => `<button type="button" class="chat-prompt-chip" data-prompt="${escapeHtml(p)}">${escapeHtml(p)}</button>`
@@ -1697,6 +1725,11 @@
 
     const found = ChatState.sessions.find((s) => s.id === id);
     setChatTitle(found?.title || '会话');
+    if (isDefaultSessionTitle(found?.title)) {
+      waitForGeneratedSessionTitle(id).catch((err) => {
+        console.warn('waitForGeneratedSessionTitle failed', err);
+      });
+    }
     $('#chat-meta').textContent = '加载中…';
 
     try {
@@ -1995,6 +2028,16 @@
           enhanceCodeBlocks(contentEl);
         }
         await loadSessions();
+        if (ChatState.currentId) {
+          const current = ChatState.sessions.find((s) => s.id === ChatState.currentId);
+          if (isDefaultSessionTitle(current?.title)) {
+            waitForGeneratedSessionTitle(ChatState.currentId).catch((err) => {
+              console.warn('waitForGeneratedSessionTitle failed', err);
+            });
+          } else {
+            setChatTitle(current.title);
+          }
+        }
       } catch (err) {
         if (err.name === 'AbortError') {
           aborted = true;
@@ -2314,7 +2357,7 @@
         : filteredByAnchor.filter((m) => String(m.content || '').toLowerCase().includes(memorySearchKeyword.toLowerCase()));
       const identityCount = items.filter((m) => String(m.anchor || 'experience') === 'identity').length;
       const expCount = items.filter((m) => String(m.anchor || 'experience') === 'experience').length;
-      $('#memory-count').textContent = `每次必看 ${identityCount} / 按需检索 ${expCount}`;
+      $('#memory-count').textContent = `常驻记忆 ${identityCount} / 按需检索 ${expCount}`;
       renderList(
         '#memory-list',
         filtered,
@@ -2324,13 +2367,14 @@
               <span class="badge ${EMBED_BADGE[it.embedding_state] || 'badge-muted'}" title="${escapeHtml(it.embedding_state)}">${EMBED_LABEL[it.embedding_state] || it.embedding_state}</span>
             </div>
             <div class="ws-item-actions">
+              <button class="btn-icon memory-toggle-anchor-btn" data-id="${it.id}" data-anchor="${it.anchor || 'experience'}" title="${it.anchor === 'identity' ? '降级为按需检索记忆' : '升级为常驻记忆'}" aria-label="${it.anchor === 'identity' ? '降级为按需检索记忆' : '升级为常驻记忆'}">${it.anchor === 'identity' ? '↓' : '↑'}</button>
               <button class="btn-icon memory-edit-btn" data-id="${it.id}" title="编辑记忆">✎</button>
               <button class="btn-icon memory-delete-btn" data-id="${it.id}" title="删除记忆">×</button>
             </div>
           </div>
           <div class="ws-item-meta">${escapeHtml(it.content || '')}</div>
         </div>`,
-        memorySearchKeyword ? '无匹配记忆' : `暂无 ${activeMemoryAnchor} 记忆`
+        memorySearchKeyword ? '无匹配记忆' : `暂无 ${activeMemoryAnchor === 'identity' ? '常驻记忆' : '按需检索记忆'}`
       );
       $$('#memory-anchor-tabs .ws-tab').forEach((btn) => {
         btn.classList.toggle('active', btn.dataset.anchor === activeMemoryAnchor);
@@ -2348,6 +2392,27 @@
           const contentEl = $('#memory-content');
           if (contentEl) contentEl.placeholder = '编辑记忆内容';
           $('#memory-form')?.closest('details')?.setAttribute('open', '');
+        });
+      });
+      $$('.memory-toggle-anchor-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const id = Number(btn.dataset.id || 0);
+          if (!id) return;
+          const currentAnchor = btn.dataset.anchor === 'identity' ? 'identity' : 'experience';
+          const nextAnchor = currentAnchor === 'identity' ? 'experience' : 'identity';
+          const actionText = nextAnchor === 'identity' ? '升级为常驻记忆' : '降级为按需检索记忆';
+          await withButtonBusy(btn, async () => {
+            try {
+              await j(`/api/workspace/memory/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ anchor: nextAnchor }),
+              });
+              await refreshMemoryList();
+              showToast(`${actionText}成功`);
+            } catch (err) {
+              showToast(`${actionText}失败：${errText(err)}`, { type: 'error' });
+            }
+          });
         });
       });
       $$('.memory-delete-btn').forEach((btn) => {
@@ -2540,7 +2605,7 @@
     const updateMemoryFormHint = () => {
       if (!memoryContentEl || editingMemoryId) return;
       memoryContentEl.placeholder = activeMemoryAnchor === 'identity'
-        ? '添加到「每次必看」…'
+        ? '添加到「常驻记忆」…'
         : '添加到「按需检索」…';
     };
     const exitMemoryEditMode = () => {

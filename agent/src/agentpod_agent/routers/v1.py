@@ -40,10 +40,10 @@ from ..core.run_manager import ERROR, FINISHED, start_stream_run
 from ..logging import get_logger
 from ..memory import enqueue_embedding, recall
 from ..skills import list_skills
-from ..core.session_title import maybe_generate_and_update_session_title
 
 router = APIRouter(prefix="/v1", tags=["v1"], dependencies=[Depends(verify_internal_token)])
 log = get_logger("v1")
+_TITLE_MAX_LEN = 28
 
 
 class ChatMessage(BaseModel):
@@ -78,8 +78,12 @@ def _build_system_prompt(user_query: str) -> tuple[str, list[str]]:
     settings = get_settings()
     pieces = [
         f"You are an AI agent operating in a sandboxed container for user {settings.user_id}.",
-        "Use the provided tools (read_file/write_file/patch/search_files/web_search/web_extract/memory/skill_view/skill_manage/manage_workspace) when appropriate.",
+        "Use the provided tools (web_search/web_extract/memory/skill_view/skill_manage/manage_workspace) when appropriate.",
         "Workspace files live under /data/workspace; private skills live under /data/skills.",
+        "Do not perform any file CRUD operations: no file read/list/search/create/update/patch/delete in container or workspace.",
+        "The user cannot directly retrieve container/server files from the web UI.",
+        "By default, do not create or modify files in workspace.",
+        "Deliver outputs directly in chat as inline text, code blocks, and step-by-step instructions.",
         "Proactively check reusable skills before implementing. If the request is non-trivial, call skill_view with empty name once to inspect available skills, then open relevant skill(s) with skill_view{name}.",
     ]
     if skills:
@@ -172,6 +176,17 @@ def _extract_new_user_message(req: ChatRequest) -> str | None:
     return None
 
 
+def _title_from_first_user_message(text: str | None) -> str:
+    raw = (text or "").strip()
+    if not raw:
+        return "新对话"
+    title = raw.replace("\n", " ").replace("\r", " ").strip()
+    title = title.strip("\"'“”‘’` ")
+    if len(title) > _TITLE_MAX_LEN:
+        title = title[:_TITLE_MAX_LEN].rstrip()
+    return title or "新对话"
+
+
 def _last_user_content(messages: list[dict[str, Any]]) -> str | None:
     for msg in reversed(messages):
         if msg.get("role") == "user":
@@ -196,6 +211,7 @@ async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, 
     else:
         db_msgs = [{"role": "user", "content": new_user}]
         await append_message(sid, "user", new_user)
+        await upsert_session_meta(sid, title=_title_from_first_user_message(new_user))
         user_query = new_user
 
     system_prompt, triggered_skills = _build_system_prompt(user_query)
@@ -230,7 +246,7 @@ async def _persist_loop_messages(
 async def chat_completions(req: ChatRequest, request: Request):
     settings = get_settings()
     chosen_model = req.model or settings.llm_model
-    sid, is_new_session = await _ensure_session(req)
+    sid, _ = await _ensure_session(req)
 
     handle = None
     lock = await session_lock(sid)
@@ -280,14 +296,6 @@ async def chat_completions(req: ChatRequest, request: Request):
                     assistant_message_id=last_assistant_id,
                 )
                 await upsert_session_meta(sid, tokens_delta=result.total_tokens)
-                if is_new_session and user_query:
-                    await maybe_generate_and_update_session_title(
-                        sid,
-                        user_query=user_query,
-                        assistant_text=result.final_text,
-                        model=chosen_model,
-                    )
-
                 if user_query and result.final_text:
                     try:
                         mid = await _maybe_remember(user_query, result.final_text)
@@ -327,7 +335,6 @@ async def chat_completions(req: ChatRequest, request: Request):
                     registry=registry,
                     model=chosen_model,
                     extra=req.extra,
-                    auto_title_user_query=user_query if is_new_session else None,
                 )
             except Exception as exc:
                 await update_run(run_id, status="failed", error_message=str(exc))
@@ -458,6 +465,7 @@ async def responses(req: ResponsesRequest):
 
         if is_new_session:
             await append_message(sid, "user", new_user)
+            await upsert_session_meta(sid, title=_title_from_first_user_message(new_user))
             db_msgs: list[dict[str, Any]] = [{"role": "user", "content": new_user}]
         else:
             db_msgs = await build_llm_messages(sid)
@@ -497,13 +505,6 @@ async def responses(req: ResponsesRequest):
                 assistant_message_id=last_assistant_id,
             )
             await upsert_session_meta(sid, tokens_delta=result.total_tokens)
-            if is_new_session and user_query:
-                await maybe_generate_and_update_session_title(
-                    sid,
-                    user_query=user_query,
-                    assistant_text=result.final_text,
-                    model=chosen_model,
-                )
             response_id = await create_response(
                 sid,
                 run_id=run_id,

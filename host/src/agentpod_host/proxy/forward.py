@@ -13,9 +13,10 @@ from typing import Any
 import httpx
 from fastapi import Request
 from fastapi.responses import JSONResponse, StreamingResponse
+from sqlalchemy import select
 
 from ..config import get_settings
-from ..db import ContainerStatus, User
+from ..db import ContainerStatus, User, get_session
 from ..logging import get_logger
 from ..orchestrator import container_name_for, ensure_container_ready, reconcile_container_state, touch_last_active
 from ..security import decrypt_str
@@ -75,12 +76,16 @@ async def proxy_to_user_container(
             headers={"Retry-After": "5", "X-Container-State": state.value},
         )
 
-    if user.internal_token_enc is None:
+    # 容器自动重建时 INTERNAL_TOKEN 会更新；这里必须从 DB 重新读取，避免使用旧 token 导致 401。
+    async with get_session() as session:
+        latest_user = (await session.execute(select(User).where(User.id == user.id))).scalar_one()
+
+    if latest_user.internal_token_enc is None:
         return JSONResponse(
             {"error": {"code": "missing_internal_token", "message": "internal token missing"}},
             status_code=500,
         )
-    internal_token = decrypt_str(user.internal_token_enc)
+    internal_token = decrypt_str(latest_user.internal_token_enc)
 
     container_host = container_name_for(user.id)
     target_url = f"http://{container_host}:{AGENT_PORT}{target_path}"
