@@ -2200,6 +2200,7 @@
     let cachedMemoryItems = [];
     let memorySearchKeyword = '';
     let activeMemoryAnchor = 'identity';
+    let updateMcpInputs = () => {};
     let memoryAutoRefreshTimer = null;
     let memoryAutoRefreshInFlight = false;
     const sectionVersion = { skills: 0, mcp: 0, memory: 0 };
@@ -2574,7 +2575,7 @@
       cancelEditBtn.hidden = true;
       updateMcpInputs();
     };
-    const updateMcpInputs = () => {
+    updateMcpInputs = () => {
       const transport = transportEl.value;
       const isHttp = transport === 'http';
       commandEl.disabled = isHttp;

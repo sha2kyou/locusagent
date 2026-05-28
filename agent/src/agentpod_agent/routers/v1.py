@@ -50,10 +50,22 @@ _REMEMBER_QUERY_MIN_LEN = 4
 _REMEMBER_ANSWER_MIN_LEN = 24
 _REMEMBER_RECENT_SCAN = 80
 _REMEMBER_ANSWER_MAX_LEN = 1200
-_REMEMBER_CANDIDATES_MAX = 3
+_REMEMBER_CANDIDATES_MAX = 1
 _REMEMBER_SKIP_QUERY_PATTERNS = (
     re.compile(r"^(hi|hello|hey|你好|在吗|在么|test|测试)\W*$", re.IGNORECASE),
 )
+_MEM_KIND_LABELS = {
+    "preference": "偏好",
+    "constraint": "约束",
+    "fact": "事实",
+    "goal": "目标",
+}
+_MEM_KIND_PRIORITY = {
+    "constraint": 0,
+    "preference": 1,
+    "goal": 2,
+    "fact": 3,
+}
 
 
 class ChatMessage(BaseModel):
@@ -620,14 +632,32 @@ def _normalize_memory_text(text: str) -> str:
     return re.sub(r"\s+", "", text).lower()
 
 
-async def _extract_memory_candidates(query: str, answer: str, *, model: str | None) -> list[str]:
+def _normalize_mem_kind(kind: str | None) -> str:
+    k = str(kind or "").strip().lower()
+    if k in _MEM_KIND_LABELS:
+        return k
+    return "fact"
+
+
+def _format_memory_text(kind: str, text: str) -> str:
+    label = _MEM_KIND_LABELS.get(kind, _MEM_KIND_LABELS["fact"])
+    return f"【{label}】{text.strip()}"
+
+
+async def _extract_memory_candidates(
+    query: str,
+    answer: str,
+    *,
+    model: str | None,
+) -> list[dict[str, str]]:
     settings = get_settings()
     chosen_model = model or settings.llm_model
     client = get_llm_client()
     prompt = (
         "你是记忆提炼器。请从用户问题和助手回答中提炼对后续对话有长期价值的记忆。"
-        "只保留可复用的信息（偏好、约束、稳定事实、目标），不要复述过程性内容。"
-        "输出严格 JSON：{\"memories\":[\"...\",\"...\"]}，最多3条，每条中文不超过60字。"
+        "每条记忆只能包含一种类型（preference/constraint/fact/goal），不要混合。"
+        "输出严格 JSON：{\"memories\":[{\"kind\":\"preference|constraint|fact|goal\",\"text\":\"...\"}]}"
+        "最多1条，每条中文不超过60字。"
         "如果没有可保存记忆，返回 {\"memories\":[]}。"
     )
     content = f"用户问题：{query[:500]}\n助手回答：{answer[:1000]}"
@@ -644,31 +674,56 @@ async def _extract_memory_candidates(query: str, answer: str, *, model: str | No
     raw = raw.strip()
     if not raw:
         return []
-    memories: list[str] = []
+    memories: list[dict[str, str]] = []
     try:
         parsed = json.loads(raw)
         if isinstance(parsed, dict):
             arr = parsed.get("memories")
             if isinstance(arr, list):
-                memories = [str(x).strip() for x in arr if str(x).strip()]
+                for x in arr:
+                    if not isinstance(x, dict):
+                        continue
+                    text = str(x.get("text") or "").strip()
+                    if not text:
+                        continue
+                    memories.append(
+                        {
+                            "kind": _normalize_mem_kind(str(x.get("kind") or "")),
+                            "text": text,
+                        }
+                    )
         elif isinstance(parsed, list):
-            memories = [str(x).strip() for x in parsed if str(x).strip()]
+            for x in parsed:
+                if not isinstance(x, dict):
+                    continue
+                text = str(x.get("text") or "").strip()
+                if not text:
+                    continue
+                memories.append(
+                    {
+                        "kind": _normalize_mem_kind(str(x.get("kind") or "")),
+                        "text": text,
+                    }
+                )
     except json.JSONDecodeError:
         for line in raw.splitlines():
             s = re.sub(r"^[\-\*\d\.\)\s]+", "", line).strip()
             if s:
-                memories.append(s)
-    cleaned: list[str] = []
+                memories.append({"kind": "fact", "text": s})
+    memories.sort(key=lambda m: _MEM_KIND_PRIORITY.get(_normalize_mem_kind(m.get("kind")), 99))
+    cleaned: list[dict[str, str]] = []
     seen: set[str] = set()
     for m in memories:
-        if len(m) < 6:
+        text = str(m.get("text") or "").strip()
+        if len(text) < 6:
             continue
-        m = m[:80].strip()
-        key = _normalize_memory_text(m)
+        text = text[:80].strip()
+        kind = _normalize_mem_kind(m.get("kind"))
+        key = _normalize_memory_text(f"{kind}:{text}")
         if not key or key in seen:
             continue
         seen.add(key)
-        cleaned.append(m)
+        cleaned.append({"kind": kind, "text": text})
         if len(cleaned) >= _REMEMBER_CANDIDATES_MAX:
             break
     return cleaned
@@ -693,7 +748,12 @@ async def _maybe_remember(_query: str, _answer: str, *, model: str | None = None
     recent = await list_memories(limit=_REMEMBER_RECENT_SCAN)
     recent_norm = {_normalize_memory_text(str(item.get("content") or "")) for item in recent}
     saved_ids: list[int] = []
-    for memory_text in candidates:
+    for item in candidates:
+        kind = _normalize_mem_kind(item.get("kind"))
+        text = str(item.get("text") or "").strip()
+        if not text:
+            continue
+        memory_text = _format_memory_text(kind, text)
         norm = _normalize_memory_text(memory_text)
         if not norm:
             continue
