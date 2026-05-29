@@ -12,7 +12,6 @@ import {
   Loader2,
   WrapText,
 } from "lucide-react";
-import "highlight.js/styles/github.css";
 import { cn } from "@/lib/utils";
 
 interface Segment {
@@ -135,7 +134,7 @@ function CodeBlock({ children }: { children: ReactNode }) {
 
   return (
     <div ref={ref} className="group my-3 overflow-hidden rounded-lg border border-border">
-      <div className="flex items-center justify-between border-b border-border bg-surface-2/60 px-3 py-1.5 text-xs text-muted-foreground">
+      <div className="flex items-center justify-between border-b border-border bg-surface-2 px-3 py-1.5 text-xs text-muted-foreground">
         <span className="font-mono lowercase">{lang || "code"}</span>
         <div className="flex items-center gap-0.5">
           <button
@@ -163,7 +162,7 @@ function CodeBlock({ children }: { children: ReactNode }) {
       </div>
       <pre
         className={cn(
-          "overflow-x-auto bg-[#f6f8fa] p-3.5 text-[13px] leading-relaxed",
+          "overflow-x-auto bg-surface-2 p-3.5 text-[13px] leading-relaxed",
           wrap && "whitespace-pre-wrap wrap-break-word",
         )}
       >

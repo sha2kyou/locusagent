@@ -39,6 +39,7 @@ interface ChatContextValue {
   isRunning: boolean;
   lastErrored: boolean;
   canRegenerate: boolean;
+  send: (text: string) => void;
   regenerate: () => void;
   newSession: () => void;
   selectSession: (id: string) => void;
@@ -356,6 +357,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         isRunning,
         lastErrored,
         canRegenerate: !isRunning && messages.some((m) => m.role === "user"),
+        send: (text: string) => {
+          void send(text);
+        },
         regenerate,
         newSession,
         selectSession,

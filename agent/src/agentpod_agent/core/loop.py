@@ -89,6 +89,23 @@ def _normalize_chat_tool_calls(
     return normalized
 
 
+def _cap_clarify_calls(calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """每轮最多保留一个 clarify 调用：一次只向用户抛出一个待选问题。
+
+    在拼装 assistant 消息与执行之前裁剪，被丢弃的调用不会进入 working，
+    因此不会出现没有对应 tool 结果的悬空 tool_call。
+    """
+    out: list[dict[str, Any]] = []
+    has_clarify = False
+    for c in calls:
+        if (c.get("function") or {}).get("name") == "clarify":
+            if has_clarify:
+                continue
+            has_clarify = True
+        out.append(c)
+    return out
+
+
 async def _execute_one_tool_call(registry: ToolRegistry, tc: Any) -> dict[str, Any]:
     name = tc.function.name
     raw_args = tc.function.arguments or "{}"
@@ -204,6 +221,7 @@ async def run_chat_loop(
                 msg.tool_calls,
                 id_prefix=f"call-r{round_idx}",
             )
+            normalized_calls = _cap_clarify_calls(normalized_calls)
             assistant_msg: dict[str, Any] = {"role": "assistant", "tool_calls": normalized_calls}
             if msg.content is not None:
                 assistant_msg["content"] = msg.content
@@ -237,6 +255,17 @@ async def run_chat_loop(
             stub_calls = [_ToolCallStub(raw) for raw in normalized_calls]
             tool_results = await _execute_tool_calls(registry, stub_calls)
             working.extend(tool_results)
+            # clarify 是终结性工具：执行后立即返回，不再续跑下一轮
+            if any(s.function.name == "clarify" for s in stub_calls):
+                return (
+                    LoopResult(
+                        final_text=msg.content or "",
+                        rounds=round_idx,
+                        total_tokens=total_tokens,
+                        tool_calls_made=tool_calls_made,
+                    ),
+                    working,
+                )
             continue
 
         working.append(_serialize_message(msg))
@@ -389,6 +418,7 @@ async def run_chat_loop_stream(
                 if not str(raw.get("id") or "").strip():
                     raw["id"] = f"call-r{round_idx}-{pos}"
                 normalized_tool_calls.append(raw)
+        normalized_tool_calls = _cap_clarify_calls(normalized_tool_calls)
 
         msg_dict: dict[str, Any] = {"role": "assistant"}
         if accum_content:
@@ -442,6 +472,16 @@ async def run_chat_loop_stream(
                     "content": r.get("content") or "",
                 }
             working.extend(tool_results)
+            # clarify 是终结性工具：抛出选项卡片后立即收尾，不再续跑下一轮，等待用户选择
+            if any(s.function.name == "clarify" for s in stub_calls):
+                yield {
+                    "type": "done",
+                    "final_text": accum_content,
+                    "rounds": round_idx,
+                    "total_tokens": total_tokens,
+                    "tool_calls_made": tool_calls_made,
+                }
+                return
             continue
 
         final_text = accum_content
