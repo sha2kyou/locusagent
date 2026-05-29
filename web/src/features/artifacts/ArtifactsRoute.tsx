@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Plus, Trash2 } from "lucide-react";
+import { Download, Plus, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
@@ -19,9 +19,29 @@ import {
   listArtifactCategories,
   listArtifacts,
 } from "@/api/endpoints";
-import type { ArtifactCategory, ArtifactEntry } from "@/api/types";
+import type { ArtifactCategory, ArtifactEntry, ArtifactType } from "@/api/types";
 
 const CATEGORIES_CHANGED = "artifacts:categories-changed";
+
+const EXPORT_FORMAT: Record<ArtifactType, { ext: string; mime: string }> = {
+  markdown: { ext: "md", mime: "text/markdown" },
+  html: { ext: "html", mime: "text/html" },
+  text: { ext: "txt", mime: "text/plain" },
+};
+
+function downloadArtifact(a: ArtifactEntry): void {
+  const fmt = EXPORT_FORMAT[a.type] ?? EXPORT_FORMAT.text;
+  const safeTitle = (a.title || "artifact").replace(/[\\/:*?"<>|]/g, "_").trim().slice(0, 80);
+  const blob = new Blob([a.content], { type: `${fmt.mime};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${safeTitle || "artifact"}.${fmt.ext}`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
 
 function notifyCategoriesChanged() {
   window.dispatchEvent(new Event(CATEGORIES_CHANGED));
@@ -293,6 +313,18 @@ export function ArtifactsRoute() {
           selected
             ? `${catName(selected.category_id)} · ${formatFull(selected.created_at)}`
             : undefined
+        }
+        actions={
+          selected && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => downloadArtifact(selected)}
+              title="导出为文件"
+            >
+              <Download className="size-4" /> 导出
+            </Button>
+          )
         }
       >
         {selected && <ArtifactBody artifact={selected} />}
