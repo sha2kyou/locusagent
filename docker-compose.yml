@@ -47,8 +47,6 @@ services:
         condition: service_healthy
       docker-proxy:
         condition: service_started
-      agent-image:
-        condition: service_completed_successfully
     # embedding 服务是软依赖：不可用时关键词检索自动降级
     networks:
       - agentpod-edge
@@ -67,16 +65,6 @@ services:
       DELETE:     1
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
-    networks:
-      - agentpod-internal
-
-  agent-image:
-    build:
-      context: .
-      dockerfile: agent/Dockerfile
-    image: ${AGENT_IMAGE}
-    command: ["sh", "-c", "echo agent image ready"]
-    restart: "no"
     networks:
       - agentpod-internal
 

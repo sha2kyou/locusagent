@@ -15,9 +15,6 @@ Usage:
 
   ./rebuild.sh full [user_id]
       Rebuild full compose stack, then optionally recreate one user container.
-
-  ./rebuild.sh clean-placeholder
-      Remove exited one-shot placeholder container: agentpod-agent-image-1.
 EOF
 }
 
@@ -66,9 +63,6 @@ case "$cmd" in
     if [[ -n "$user_id" ]]; then
       ensure_user_container "$user_id"
     fi
-    ;;
-  clean-placeholder)
-    docker rm "agentpod-agent-image-1" 2>/dev/null || true
     ;;
   *)
     usage

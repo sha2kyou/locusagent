@@ -159,18 +159,10 @@ npm run build
 ./rebuild.sh full <user_id>
 ```
 
-### 3) 删除一次性占位容器
+### 3) 可选验证
 
 ```bash
-./rebuild.sh clean-placeholder
-```
-
-`agentpod-agent-image-1` 是一次性构建占位容器（`Exited (0)` 正常），可按需清理。
-
-### 4) 可选验证
-
-```bash
-docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" | rg "apod-user|agentpod-host|agentpod-agent-image"
+docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" | rg "apod-user|agentpod-host"
 ```
 
 ## 鉴权与路由边界
