@@ -374,7 +374,7 @@ async def workspace_update_memory(entry_id: int, payload: MemoryUpdateIn) -> dic
     if not ok:
         raise WsError("memory_not_found", "memory not found", status_code=404)
     if payload.content is not None:
-        await enqueue_embedding(entry_id)
+        await enqueue_embedding(entry_id, bump=True)
     return {"updated": True}
 
 

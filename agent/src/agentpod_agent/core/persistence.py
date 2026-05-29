@@ -293,7 +293,16 @@ async def append_message(
             )
             return int(cur.lastrowid or 0)
 
-    return await run_in_thread(_do)
+    message_id = await run_in_thread(_do)
+    if role in {"user", "assistant"}:
+        from ..memory.queue import enqueue_message_embedding
+
+        await enqueue_message_embedding(message_id)
+    else:
+        from ..recall.messages import mark_message_embedding_skipped
+
+        await mark_message_embedding_skipped(message_id)
+    return message_id
 
 
 async def update_message(
@@ -323,7 +332,12 @@ async def update_message(
             cur = c.execute(sql, params)
             return (cur.rowcount or 0) > 0
 
-    return await run_in_thread(_do)
+    ok = await run_in_thread(_do)
+    if ok and content is not None:
+        from ..memory.queue import bump_message_embedding
+
+        await bump_message_embedding(message_id)
+    return ok
 
 
 async def persist_openai_message(

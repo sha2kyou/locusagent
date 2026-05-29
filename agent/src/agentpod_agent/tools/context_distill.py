@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from ..config import get_settings
-from ..core.llm import get_llm_client
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 _DISTILL_SYSTEM_PROMPT = (
@@ -24,6 +23,9 @@ async def _summarize(args: dict[str, Any]) -> ToolResult:
         max_tokens = 64
     if max_tokens > 1500:
         max_tokens = 1500
+
+    # 延迟导入，避免 tools 初始化阶段与 core.loop 互相导入造成循环依赖。
+    from ..core.llm import get_llm_client
 
     settings = get_settings()
     client = get_llm_client()

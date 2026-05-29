@@ -56,7 +56,7 @@ async def _memory_tool(args: dict[str, Any]) -> ToolResult:
         ok = await update_memory(mid, content, anchor=anchor)
         if not ok:
             raise ToolError(f"memory#{mid} not found")
-        await enqueue_embedding(mid)
+        await enqueue_embedding(mid, bump=True)
         return ToolResult(content=f"memory#{mid} replaced")
 
     if action == "remove":
@@ -85,7 +85,7 @@ async def _memory_tool(args: dict[str, Any]) -> ToolResult:
         ok = await update_memory(mid, content)
         if not ok:
             raise ToolError(f"memory#{mid} not found")
-        await enqueue_embedding(mid)
+        await enqueue_embedding(mid, bump=True)
         return ToolResult(content=f"memory#{mid} updated")
     if action == "delete":
         mid = int(args.get("id", 0) or 0)

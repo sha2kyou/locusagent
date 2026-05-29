@@ -8,6 +8,12 @@ from ..config import get_settings
 from ..db import conn_scope, run_in_thread
 from ..logging import get_logger
 from ..memory.embedder import EmbeddingUnavailable, embed_text
+from ..recall import fts_search
+from ..recall.pipeline import (
+    SHORT_QUERY_MAX_LEN,
+    like_fallback_env_var_ids,
+    run_hybrid_recall,
+)
 
 log = get_logger("env_vars")
 
@@ -119,59 +125,81 @@ async def recall_env_vars(query: str, top_k: int = 5) -> list[dict[str, Any]]:
     if not q:
         return []
     k = max(1, min(int(top_k or 5), 20))
+    fetch_k = k * 2
     max_distance = get_settings().recall_max_distance
 
+    q_blob: bytes | None = None
     try:
         q_blob = await embed_text(q)
     except EmbeddingUnavailable:
-        return await _keyword_recall(q, k)
+        q_blob = None
 
-    def _vec() -> list[dict[str, Any]]:
-        with conn_scope(load_vec=True) as c:
-            rows = c.execute(
-                """
-                SELECT id, name, value, description, embedding_state, created_at, updated_at,
-                       vec_distance_cosine(embedding, ?) AS score
-                FROM env_vars
-                WHERE embedding_state='ready'
-                ORDER BY score ASC
-                LIMIT ?
-                """,
-                (q_blob, k),
-            ).fetchall()
-            out: list[dict[str, Any]] = []
-            for r in rows:
-                score = r["score"]
-                if score is None or score > max_distance:
-                    continue
-                d = dict(r)
-                d.pop("score", None)
-                out.append(d)
-            return out
+    async def _fts_keys() -> list[str]:
+        hits = await fts_search(
+            fts_table="env_vars_fts",
+            from_clause="FROM env_vars_fts JOIN env_vars e ON e.id = env_vars_fts.rowid",
+            select_columns="CAST(e.id AS TEXT) AS id",
+            query=q,
+            top_k=fetch_k,
+        )
+        return [str(h["id"]) for h in hits]
 
-    try:
-        hits = await run_in_thread(_vec)
-        if hits:
-            return hits
-    except Exception as exc:
-        log.warning("env_var_vector_recall_failed", error=str(exc))
-    return await _keyword_recall(q, k)
+    async def _vec_keys() -> list[str]:
+        if q_blob is None:
+            return []
 
+        def _do() -> list[str]:
+            with conn_scope(load_vec=True) as c:
+                rows = c.execute(
+                    """
+                    SELECT CAST(id AS TEXT) AS id, vec_distance_cosine(embedding, ?) AS score
+                    FROM env_vars
+                    WHERE embedding_state='ready'
+                    ORDER BY score ASC
+                    LIMIT ?
+                    """,
+                    (q_blob, fetch_k),
+                ).fetchall()
+                return [
+                    str(r["id"])
+                    for r in rows
+                    if r["score"] is not None and r["score"] <= max_distance
+                ]
 
-async def _keyword_recall(query: str, top_k: int) -> list[dict[str, Any]]:
-    like = f"%{query}%"
+        try:
+            return await run_in_thread(_do)
+        except Exception as exc:
+            log.warning("env_var_vector_recall_failed", error=str(exc))
+            return []
 
-    def _do() -> list[dict[str, Any]]:
-        with conn_scope(load_vec=False) as c:
-            rows = c.execute(
-                "SELECT id, name, value, description, embedding_state, created_at, updated_at "
-                "FROM env_vars WHERE name LIKE ? OR description LIKE ? "
-                "ORDER BY id DESC LIMIT ?",
-                (like, like, top_k),
-            ).fetchall()
-            return [dict(r) for r in rows]
+    async def _resolve(keys: list[str], _scores: dict[str, float]) -> list[dict[str, Any]]:
+        if not keys:
+            return []
 
-    return await run_in_thread(_do)
+        def _do() -> list[dict[str, Any]]:
+            placeholders = ",".join("?" * len(keys))
+            with conn_scope(load_vec=False) as c:
+                rows = c.execute(
+                    "SELECT id, name, value, description, embedding_state, created_at, updated_at "
+                    f"FROM env_vars WHERE id IN ({placeholders})",
+                    keys,
+                ).fetchall()
+            by_id = {str(r["id"]): dict(r) for r in rows}
+            return [by_id[key] for key in keys if key in by_id]
+
+        return await run_in_thread(_do)
+
+    vec_fn = _vec_keys if q_blob is not None else None
+    hits = await run_hybrid_recall(
+        top_k=k,
+        vector_keys=vec_fn,
+        fts_keys=_fts_keys,
+        resolve=_resolve,
+    )
+    if not hits and len(q) <= SHORT_QUERY_MAX_LEN:
+        like_keys = await like_fallback_env_var_ids(q, k)
+        hits = await _resolve(like_keys, {})
+    return hits
 
 
 async def _refresh_embedding(env_id: int) -> None:
@@ -190,14 +218,6 @@ async def _refresh_embedding(env_id: int) -> None:
     try:
         emb = await embed_text(text)
     except EmbeddingUnavailable:
-        def _mark_failed() -> None:
-            with conn_scope(load_vec=False) as c:
-                c.execute(
-                    "UPDATE env_vars SET embedding=NULL, embedding_state='failed', updated_at=datetime('now') WHERE id=?",
-                    (env_id,),
-                )
-
-        await run_in_thread(_mark_failed)
         return
     except Exception:
         def _mark_failed() -> None:

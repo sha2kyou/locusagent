@@ -9,21 +9,60 @@ from ..config import get_settings
 from ..db import conn_scope, run_in_thread
 from ..logging import get_logger
 from ..memory.embedder import EmbeddingUnavailable, embed_text
+from ..recall import fts_search
+from ..recall.pipeline import (
+    SHORT_QUERY_MAX_LEN,
+    like_fallback_artifact_ids,
+    run_hybrid_recall,
+)
+from ..recall.messages import truncate_embed_text
 
 log = get_logger("artifacts")
 
+_ARTIFACT_EMBED_CONTENT_MAX = 500
 
-async def _embed_title(title: str) -> bytes | None:
-    """对标题生成向量，失败返回 None（调用方落 pending，召回时再补/降级）。"""
-    if not title or not title.strip():
-        return None
-    try:
-        return await embed_text(title)
-    except EmbeddingUnavailable:
-        return None
-    except Exception as exc:
-        log.warning("artifact_embed_failed", error=str(exc))
-        return None
+
+def _artifact_embed_text(title: str, content: str) -> str:
+    t = str(title or "").strip()
+    body = truncate_embed_text(str(content or ""), max_chars=_ARTIFACT_EMBED_CONTENT_MAX)
+    if t and body:
+        return f"{t}\n{body}"
+    return t or body
+
+
+async def fetch_pending_artifact_ids(limit: int = 50) -> list[str]:
+    def _do() -> list[str]:
+        with conn_scope(load_vec=False) as c:
+            rows = c.execute(
+                "SELECT id FROM artifacts WHERE embedding_state='pending' ORDER BY created_at ASC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            return [str(r["id"]) for r in rows]
+
+    return await run_in_thread(_do)
+
+
+async def get_artifact_embed_text(artifact_id: str) -> str | None:
+    def _do() -> str | None:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT title, content FROM artifacts WHERE id=?",
+                (artifact_id,),
+            ).fetchone()
+            if not row:
+                return None
+            text = _artifact_embed_text(str(row["title"]), str(row.get("content") or ""))
+            return text or None
+
+    return await run_in_thread(_do)
+
+
+async def write_artifact_embedding(artifact_id: str, blob: bytes) -> None:
+    await _set_embedding(artifact_id, blob, "ready")
+
+
+async def mark_artifact_embedding_failed(artifact_id: str) -> None:
+    await _set_embedding(artifact_id, None, "failed")
 
 
 def _new_artifact_id() -> str:
@@ -132,15 +171,13 @@ async def create_artifact(
 ) -> dict[str, Any]:
     aid = _new_artifact_id()
     art_type = _normalize_type(type)
-    blob = await _embed_title(title)
-    state = "ready" if blob is not None else "pending"
 
     def _do() -> dict[str, Any]:
         with conn_scope(load_vec=False) as c:
             c.execute(
                 "INSERT INTO artifacts(id, category_id, type, title, content, embedding, embedding_state) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (aid, category_id, art_type, title, content, blob, state),
+                "VALUES (?, ?, ?, ?, ?, NULL, 'pending')",
+                (aid, category_id, art_type, title, content),
             )
             row = c.execute(
                 "SELECT id, category_id, type, title, content, created_at, updated_at "
@@ -149,7 +186,11 @@ async def create_artifact(
             ).fetchone()
             return dict(row)
 
-    return await run_in_thread(_do)
+    art = await run_in_thread(_do)
+    from ..memory.queue import enqueue_artifact_embedding
+
+    await enqueue_artifact_embedding(aid)
+    return art
 
 
 async def update_artifact(
@@ -167,12 +208,12 @@ async def update_artifact(
             if title is not None:
                 updates.append("title = ?")
                 params.append(title)
-                # 标题变更：清空旧向量，召回时惰性重建
-                updates.append("embedding = NULL")
-                updates.append("embedding_state = 'pending'")
             if content is not None:
                 updates.append("content = ?")
                 params.append(content)
+            if title is not None or content is not None:
+                updates.append("embedding = NULL")
+                updates.append("embedding_state = 'pending'")
             if clear_category:
                 updates.append("category_id = NULL")
             elif category_id is not None:
@@ -186,7 +227,13 @@ async def update_artifact(
             )
             return (cur.rowcount or 0) > 0
 
-    return await run_in_thread(_do)
+    need_reembed = title is not None or content is not None
+    ok = await run_in_thread(_do)
+    if ok and need_reembed:
+        from ..memory.queue import enqueue_artifact_embedding
+
+        await enqueue_artifact_embedding(artifact_id, bump=True)
+    return ok
 
 
 async def delete_artifact(artifact_id: str) -> bool:
@@ -196,30 +243,6 @@ async def delete_artifact(artifact_id: str) -> bool:
             return (cur.rowcount or 0) > 0
 
     return await run_in_thread(_do)
-
-
-async def _embed_pending_artifacts(limit: int = 50) -> None:
-    """惰性补齐未就绪的标题向量（含历史产物）；服务不可用则整轮放弃。"""
-
-    def _fetch() -> list[dict[str, Any]]:
-        with conn_scope(load_vec=False) as c:
-            rows = c.execute(
-                "SELECT id, title FROM artifacts WHERE embedding_state != 'ready' LIMIT ?",
-                (limit,),
-            ).fetchall()
-            return [dict(r) for r in rows]
-
-    pending = await run_in_thread(_fetch)
-    for p in pending:
-        try:
-            blob = await embed_text(str(p["title"]))
-        except EmbeddingUnavailable:
-            break
-        except Exception as exc:
-            log.warning("artifact_embed_failed", id=p["id"], error=str(exc))
-            await _set_embedding(str(p["id"]), None, "failed")
-            continue
-        await _set_embedding(str(p["id"]), blob, "ready")
 
 
 async def _set_embedding(artifact_id: str, blob: bytes | None, state: str) -> None:
@@ -247,58 +270,90 @@ def _to_hit(row: dict[str, Any], *, score: float | None = None) -> dict[str, Any
     }
 
 
-async def _keyword_recall_artifacts(query: str, top_k: int) -> list[dict[str, Any]]:
-    like = f"%{query}%"
-
-    def _do() -> list[dict[str, Any]]:
-        with conn_scope(load_vec=False) as c:
-            rows = c.execute(
-                "SELECT id, category_id, type, title, content, created_at FROM artifacts "
-                "WHERE title LIKE ? ORDER BY created_at DESC LIMIT ?",
-                (like, top_k),
-            ).fetchall()
-            return [_to_hit(dict(r)) for r in rows]
-
-    return await run_in_thread(_do)
-
-
 async def recall_artifacts(query: str, top_k: int = 5) -> list[dict[str, Any]]:
-    """按标题语义召回产物；向量优先，服务不可用或无命中时回退标题关键词。"""
+    """RAG + FTS hybrid 召回产物（title + content）。"""
     if not query or not query.strip():
         return []
-    await _embed_pending_artifacts()
+    k = max(1, top_k)
+    fetch_k = k * 2
+    max_distance = get_settings().recall_max_distance
+
+    q_blob: bytes | None = None
     try:
         q_blob = await embed_text(query)
     except EmbeddingUnavailable:
-        return await _keyword_recall_artifacts(query, top_k)
+        q_blob = None
 
-    max_distance = get_settings().recall_max_distance
+    async def _fts_keys() -> list[str]:
+        hits = await fts_search(
+            fts_table="artifacts_fts",
+            from_clause="FROM artifacts_fts JOIN artifacts a ON a.rowid = artifacts_fts.rowid",
+            select_columns="a.id AS id",
+            query=query,
+            top_k=fetch_k,
+        )
+        return [str(h["id"]) for h in hits]
 
-    def _do() -> list[dict[str, Any]]:
-        with conn_scope(load_vec=True) as c:
-            rows = c.execute(
-                """
-                SELECT id, category_id, type, title, content, created_at,
-                       vec_distance_cosine(embedding, ?) AS score
-                FROM artifacts
-                WHERE embedding_state = 'ready'
-                ORDER BY score ASC
-                LIMIT ?
-                """,
-                (q_blob, top_k),
-            ).fetchall()
+    async def _vec_keys() -> list[str]:
+        if q_blob is None:
+            return []
+
+        def _do() -> list[str]:
+            with conn_scope(load_vec=True) as c:
+                rows = c.execute(
+                    """
+                    SELECT id, vec_distance_cosine(embedding, ?) AS score
+                    FROM artifacts
+                    WHERE embedding_state = 'ready'
+                    ORDER BY score ASC
+                    LIMIT ?
+                    """,
+                    (q_blob, fetch_k),
+                ).fetchall()
+                return [
+                    str(r["id"])
+                    for r in rows
+                    if r["score"] is not None and r["score"] <= max_distance
+                ]
+
+        try:
+            return await run_in_thread(_do)
+        except Exception as exc:
+            log.warning("artifact_vector_recall_failed", error=str(exc))
+            return []
+
+    async def _resolve(keys: list[str], scores: dict[str, float]) -> list[dict[str, Any]]:
+        if not keys:
+            return []
+
+        def _do() -> list[dict[str, Any]]:
+            placeholders = ",".join("?" * len(keys))
+            with conn_scope(load_vec=False) as c:
+                rows = c.execute(
+                    "SELECT id, category_id, type, title, content, created_at "
+                    f"FROM artifacts WHERE id IN ({placeholders})",
+                    keys,
+                ).fetchall()
+            by_id = {str(r["id"]): dict(r) for r in rows}
             return [
-                _to_hit(dict(r), score=r["score"])
-                for r in rows
-                if r["score"] is not None and r["score"] <= max_distance
+                _to_hit(by_id[key], score=scores.get(key))
+                for key in keys
+                if key in by_id
             ]
 
-    try:
-        hits = await run_in_thread(_do)
-    except Exception as exc:
-        log.warning("artifact_vector_recall_failed", error=str(exc))
-        return await _keyword_recall_artifacts(query, top_k)
-    return hits or await _keyword_recall_artifacts(query, top_k)
+        return await run_in_thread(_do)
+
+    vec_fn = _vec_keys if q_blob is not None else None
+    hits = await run_hybrid_recall(
+        top_k=k,
+        vector_keys=vec_fn,
+        fts_keys=_fts_keys,
+        resolve=_resolve,
+    )
+    if not hits and len(query.strip()) <= SHORT_QUERY_MAX_LEN:
+        like_keys = await like_fallback_artifact_ids(query, k)
+        hits = await _resolve(like_keys, {})
+    return hits
 
 
 async def resolve_category_id(name: str) -> str | None:

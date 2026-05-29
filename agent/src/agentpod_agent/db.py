@@ -131,27 +131,139 @@ CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE ON messages BEGIN
 END;
 """
 
+_MEMORY_FTS_TRIGGERS = """
+CREATE TRIGGER IF NOT EXISTS memory_fts_ai AFTER INSERT ON memory BEGIN
+    INSERT INTO memory_fts(rowid, content) VALUES (new.id, new.content);
+END;
+CREATE TRIGGER IF NOT EXISTS memory_fts_ad AFTER DELETE ON memory BEGIN
+    INSERT INTO memory_fts(memory_fts, rowid, content) VALUES('delete', old.id, old.content);
+END;
+CREATE TRIGGER IF NOT EXISTS memory_fts_au AFTER UPDATE ON memory BEGIN
+    INSERT INTO memory_fts(memory_fts, rowid, content) VALUES('delete', old.id, old.content);
+    INSERT INTO memory_fts(rowid, content) VALUES (new.id, new.content);
+END;
+"""
+
+_ENV_VARS_FTS_TRIGGERS = """
+CREATE TRIGGER IF NOT EXISTS env_vars_fts_ai AFTER INSERT ON env_vars BEGIN
+    INSERT INTO env_vars_fts(rowid, name, description) VALUES (new.id, new.name, new.description);
+END;
+CREATE TRIGGER IF NOT EXISTS env_vars_fts_ad AFTER DELETE ON env_vars BEGIN
+    INSERT INTO env_vars_fts(env_vars_fts, rowid, name, description) VALUES('delete', old.id, old.name, old.description);
+END;
+CREATE TRIGGER IF NOT EXISTS env_vars_fts_au AFTER UPDATE ON env_vars BEGIN
+    INSERT INTO env_vars_fts(env_vars_fts, rowid, name, description) VALUES('delete', old.id, old.name, old.description);
+    INSERT INTO env_vars_fts(rowid, name, description) VALUES (new.id, new.name, new.description);
+END;
+"""
+
+_ARTIFACTS_FTS_TRIGGERS = """
+CREATE TRIGGER IF NOT EXISTS artifacts_fts_ai AFTER INSERT ON artifacts BEGIN
+    INSERT INTO artifacts_fts(rowid, title, content, artifact_id) VALUES (new.rowid, new.title, new.content, new.id);
+END;
+CREATE TRIGGER IF NOT EXISTS artifacts_fts_ad AFTER DELETE ON artifacts BEGIN
+    INSERT INTO artifacts_fts(artifacts_fts, rowid, title, content, artifact_id) VALUES('delete', old.rowid, old.title, old.content, old.id);
+END;
+CREATE TRIGGER IF NOT EXISTS artifacts_fts_au AFTER UPDATE ON artifacts BEGIN
+    INSERT INTO artifacts_fts(artifacts_fts, rowid, title, content, artifact_id) VALUES('delete', old.rowid, old.title, old.content, old.id);
+    INSERT INTO artifacts_fts(rowid, title, content, artifact_id) VALUES (new.rowid, new.title, new.content, new.id);
+END;
+"""
+
 
 def _init_messages_fts(c: sqlite3.Connection) -> None:
-    """为 messages.content 建 trigram FTS5（external content）+ 同步触发器。
-
-    仅首次创建时回填一次；环境不支持 FTS5/trigram 时降级（不建表，检索回退 LIKE）。
-    """
-    exists = c.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='messages_fts'"
+    """为 messages.content 建 trigram FTS5（standalone + trigger，与其他表一致）。"""
+    row = c.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='messages_fts'"
     ).fetchone()
-    if exists:
+    if row:
+        ddl = str(row[0] or "")
+        if "content='messages'" in ddl:
+            _migrate_messages_fts_to_standalone(c)
         return
     try:
         c.execute(
-            "CREATE VIRTUAL TABLE messages_fts USING fts5("
-            "content, content='messages', content_rowid='id', tokenize='trigram')"
+            "CREATE VIRTUAL TABLE messages_fts USING fts5(content, tokenize='trigram')"
         )
         c.executescript(_MESSAGES_FTS_TRIGGERS)
-        c.execute("INSERT INTO messages_fts(messages_fts) VALUES('rebuild')")
+        c.execute("INSERT INTO messages_fts(rowid, content) SELECT id, content FROM messages")
         log.info("messages_fts_ready")
     except sqlite3.OperationalError as exc:
         log.warning("messages_fts_unavailable", error=str(exc))
+
+
+def _migrate_messages_fts_to_standalone(c: sqlite3.Connection) -> None:
+    """将旧版 external-content messages_fts 迁移为 standalone。"""
+    try:
+        for name in ("messages_fts_ai", "messages_fts_ad", "messages_fts_au"):
+            c.execute(f"DROP TRIGGER IF EXISTS {name}")
+        c.execute("DROP TABLE IF EXISTS messages_fts")
+        c.execute(
+            "CREATE VIRTUAL TABLE messages_fts USING fts5(content, tokenize='trigram')"
+        )
+        c.executescript(_MESSAGES_FTS_TRIGGERS)
+        c.execute("INSERT INTO messages_fts(rowid, content) SELECT id, content FROM messages")
+        log.info("messages_fts_migrated_standalone")
+    except sqlite3.OperationalError as exc:
+        log.warning("messages_fts_migration_failed", error=str(exc))
+
+
+def _init_memory_fts(c: sqlite3.Connection) -> None:
+    if c.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_fts'"
+    ).fetchone():
+        return
+    try:
+        c.execute(
+            "CREATE VIRTUAL TABLE memory_fts USING fts5(content, tokenize='trigram')"
+        )
+        c.executescript(_MEMORY_FTS_TRIGGERS)
+        c.execute(
+            "INSERT INTO memory_fts(rowid, content) SELECT id, content FROM memory"
+        )
+        log.info("memory_fts_ready")
+    except sqlite3.OperationalError as exc:
+        log.warning("memory_fts_unavailable", error=str(exc))
+
+
+def _init_env_vars_fts(c: sqlite3.Connection) -> None:
+    if c.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='env_vars_fts'"
+    ).fetchone():
+        return
+    try:
+        c.execute(
+            "CREATE VIRTUAL TABLE env_vars_fts USING fts5("
+            "name, description, tokenize='trigram')"
+        )
+        c.executescript(_ENV_VARS_FTS_TRIGGERS)
+        c.execute(
+            "INSERT INTO env_vars_fts(rowid, name, description) "
+            "SELECT id, name, description FROM env_vars"
+        )
+        log.info("env_vars_fts_ready")
+    except sqlite3.OperationalError as exc:
+        log.warning("env_vars_fts_unavailable", error=str(exc))
+
+
+def _init_artifacts_fts(c: sqlite3.Connection) -> None:
+    if c.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='artifacts_fts'"
+    ).fetchone():
+        return
+    try:
+        c.execute(
+            "CREATE VIRTUAL TABLE artifacts_fts USING fts5("
+            "title, content, artifact_id UNINDEXED, tokenize='trigram')"
+        )
+        c.executescript(_ARTIFACTS_FTS_TRIGGERS)
+        c.execute(
+            "INSERT INTO artifacts_fts(rowid, title, content, artifact_id) "
+            "SELECT rowid, title, content, id FROM artifacts"
+        )
+        log.info("artifacts_fts_ready")
+    except sqlite3.OperationalError as exc:
+        log.warning("artifacts_fts_unavailable", error=str(exc))
 
 
 def _db_path() -> Path:
@@ -233,7 +345,38 @@ def init_db() -> None:
             )
         c.execute("CREATE INDEX IF NOT EXISTS idx_env_vars_name ON env_vars(name)")
         c.execute("CREATE INDEX IF NOT EXISTS idx_env_vars_embed_state ON env_vars(embedding_state)")
+        if msg_cols and "embedding" not in msg_cols:
+            c.execute("ALTER TABLE messages ADD COLUMN embedding BLOB")
+        if msg_cols and "embedding_state" not in msg_cols:
+            c.execute(
+                "ALTER TABLE messages ADD COLUMN embedding_state TEXT NOT NULL DEFAULT 'pending'"
+            )
+            c.execute(
+                "UPDATE messages SET embedding_state='skipped' "
+                "WHERE role NOT IN ('user', 'assistant')"
+            )
+        else:
+            c.execute(
+                "UPDATE messages SET embedding_state='skipped' "
+                "WHERE embedding_state IN ('pending', 'failed') "
+                "AND role NOT IN ('user', 'assistant')"
+            )
+        c.execute(
+            "UPDATE messages SET embedding_state='pending' WHERE embedding_state='failed'"
+        )
+        c.execute(
+            "UPDATE memory SET embedding_state='pending' WHERE embedding_state='failed'"
+        )
+        c.execute(
+            "UPDATE artifacts SET embedding_state='pending' WHERE embedding_state='failed'"
+        )
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_messages_embed_state ON messages(embedding_state)"
+        )
         _init_messages_fts(c)
+        _init_memory_fts(c)
+        _init_env_vars_fts(c)
+        _init_artifacts_fts(c)
         for stmt in (
             """
             CREATE TABLE IF NOT EXISTS runs (

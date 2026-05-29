@@ -2,7 +2,7 @@
 
 约束：
 - 写入时不阻塞：仅入库 content + state=pending，由 embedding worker 异步生成向量。
-- 召回：少于 N 条全量注入；否则向量优先；向量不可用退化关键词。
+- 召回：少于 N 条全量注入；否则 RAG + FTS hybrid（RRF 融合）。
 """
 
 from __future__ import annotations
@@ -13,6 +13,12 @@ from typing import Any
 from ..config import get_settings
 from ..db import conn_scope, run_in_thread
 from ..logging import get_logger
+from ..recall import fts_search
+from ..recall.pipeline import (
+    SHORT_QUERY_MAX_LEN,
+    like_fallback_memory_ids,
+    run_hybrid_recall,
+)
 from .embedder import EmbeddingUnavailable, embed_text
 
 log = get_logger("memory")
@@ -141,7 +147,7 @@ async def recall(query: str, top_k: int = 5) -> list[str]:
     """召回入口。
 
     - 总数 < FULL_INJECT_THRESHOLD：全量返回（按时间倒序）。
-    - 否则：向量优先；Embedding 服务不可用 → 关键词 LIKE 兜底。
+    - 否则：RAG + FTS hybrid；Embedding 不可用时仅 FTS。
     """
     settings = get_settings()
     total = await count_memories()
@@ -151,7 +157,6 @@ async def recall(query: str, top_k: int = 5) -> list[str]:
     identity_texts = [r["content"] for r in identity_rows]
     if total < settings.full_inject_threshold:
         rows = await list_memories(limit=total)
-        # identity 固定前置，再补 experience，避免重复
         out: list[str] = []
         seen: set[str] = set()
         for t in identity_texts + [r["content"] for r in rows]:
@@ -161,62 +166,89 @@ async def recall(query: str, top_k: int = 5) -> list[str]:
             out.append(t)
         return out
 
+    k = max(1, top_k)
+    fetch_k = k * 2
+    q_blob: bytes | None = None
     try:
         q_blob = await embed_text(query)
     except EmbeddingUnavailable:
-        return await _keyword_recall(query, top_k)
+        q_blob = None
 
     max_distance = settings.recall_max_distance
 
-    def _do() -> list[str]:
-        with conn_scope(load_vec=True) as c:
-            rows = c.execute(
-                """
-                SELECT content, vec_distance_cosine(embedding, ?) AS score
-                FROM memory
-                WHERE embedding_state = 'ready'
-                ORDER BY score ASC
-                LIMIT ?
-                """,
-                (q_blob, top_k),
-            ).fetchall()
-            return [r["content"] for r in rows if r["score"] is not None and r["score"] <= max_distance]
+    async def _fts_keys() -> list[str]:
+        hits = await fts_search(
+            fts_table="memory_fts",
+            from_clause="FROM memory_fts JOIN memory m ON m.id = memory_fts.rowid",
+            select_columns="CAST(m.id AS TEXT) AS id",
+            query=query,
+            top_k=fetch_k,
+        )
+        return [str(h["id"]) for h in hits]
 
-    try:
-        vec_texts = await run_in_thread(_do)
-        out: list[str] = []
-        seen: set[str] = set()
-        for t in identity_texts + vec_texts:
-            if t in seen:
-                continue
-            seen.add(t)
-            out.append(t)
-        return out
-    except Exception as exc:
-        log.warning("vector_recall_failed", error=str(exc))
-        kw = await _keyword_recall(query, top_k)
-        out: list[str] = []
-        seen: set[str] = set()
-        for t in identity_texts + kw:
-            if t in seen:
-                continue
-            seen.add(t)
-            out.append(t)
-        return out
+    async def _vec_keys() -> list[str]:
+        if q_blob is None:
+            return []
 
+        def _do() -> list[str]:
+            with conn_scope(load_vec=True) as c:
+                rows = c.execute(
+                    """
+                    SELECT CAST(id AS TEXT) AS id, vec_distance_cosine(embedding, ?) AS score
+                    FROM memory
+                    WHERE embedding_state = 'ready'
+                    ORDER BY score ASC
+                    LIMIT ?
+                    """,
+                    (q_blob, fetch_k),
+                ).fetchall()
+                return [
+                    str(r["id"])
+                    for r in rows
+                    if r["score"] is not None and r["score"] <= max_distance
+                ]
 
-async def _keyword_recall(query: str, top_k: int) -> list[str]:
-    like = f"%{query}%"
+        try:
+            return await run_in_thread(_do)
+        except Exception as exc:
+            log.warning("vector_recall_failed", error=str(exc))
+            return []
 
-    def _do() -> list[str]:
-        with conn_scope(load_vec=False) as c:
-            rows = c.execute(
-                "SELECT content FROM memory WHERE content LIKE ? ORDER BY id DESC LIMIT ?",
-                (like, top_k),
-            ).fetchall()
-            return [r["content"] for r in rows]
+    async def _resolve(keys: list[str], _scores: dict[str, float]) -> list[str]:
+        if not keys:
+            return []
 
-    return await run_in_thread(_do)
+        def _do() -> list[str]:
+            placeholders = ",".join("?" * len(keys))
+            with conn_scope(load_vec=False) as c:
+                rows = c.execute(
+                    f"SELECT CAST(id AS TEXT) AS id, content FROM memory WHERE id IN ({placeholders})",
+                    keys,
+                ).fetchall()
+            by_id = {str(r["id"]): str(r["content"]) for r in rows}
+            return [by_id[key] for key in keys if key in by_id]
+
+        return await run_in_thread(_do)
+
+    vec_fn = _vec_keys if q_blob is not None else None
+    recalled = await run_hybrid_recall(
+        top_k=k,
+        vector_keys=vec_fn,
+        fts_keys=_fts_keys,
+        resolve=_resolve,
+    )
+    if not recalled and len(query.strip()) <= SHORT_QUERY_MAX_LEN:
+        like_keys = await like_fallback_memory_ids(query, k)
+        recalled = await _resolve(like_keys, {})
+
+    out: list[str] = []
+    seen: set[str] = set()
+    for t in identity_texts + recalled:
+        if t in seen:
+            continue
+        seen.add(t)
+        out.append(t)
+    return out
 
 
 async def _list_identity_memories(limit: int = 20) -> list[dict[str, Any]]:
