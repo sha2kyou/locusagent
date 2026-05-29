@@ -1,10 +1,10 @@
-"""孤儿 Docker 资源回收：软删用户、provision 失败、无 DB 用户的 apod/gwzz 资源。"""
+"""孤儿 Docker 资源回收：软删用户、provision 失败、无 DB 用户的 apod 资源。"""
 
 from __future__ import annotations
 
 from typing import Any
 
-from docker.errors import APIError, NotFound
+from docker.errors import NotFound
 from sqlalchemy import select
 
 from ..db import ContainerStatus, ProvisionStatus, User, get_session
@@ -19,9 +19,6 @@ _RESOURCE_PREFIXES = (
     "apod-user-",
     "apod-net-",
     "apod-data-",
-    "gwzz-user-",
-    "gwzz-net-",
-    "gwzz-data-",
 )
 
 
@@ -132,7 +129,7 @@ async def cleanup_failed_provision_users() -> int:
 
 
 async def reconcile_orphan_docker_resources() -> int:
-    """Docker 中存在 apod/gwzz 资源但 DB 无对应有效用户时清理。"""
+    """Docker 中存在 apod 资源但 DB 无对应有效用户时清理。"""
     users = await _load_all_users()
     docker_ids = await _run_blocking(_collect_docker_user_ids)
 
@@ -142,10 +139,7 @@ async def reconcile_orphan_docker_resources() -> int:
         remove_volume = False
         should_clean = False
 
-        if user is None:
-            should_clean = True
-            remove_volume = True
-        elif user.deleted_at is not None:
+        if user is None or user.deleted_at is not None:
             should_clean = True
             remove_volume = True
         elif (

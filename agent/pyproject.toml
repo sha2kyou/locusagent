@@ -16,6 +16,7 @@ dependencies = [
     "numpy>=1.26",
     "structlog>=24.4",
     "tenacity>=9.0",
+    "tiktoken>=0.13.0",
 ]
 
 [build-system]

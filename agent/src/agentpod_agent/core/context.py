@@ -1,12 +1,12 @@
-"""上下文压缩：超限时先 LLM 蒸馏中间旧消息为摘要，再保留 system + 摘要 + 最近 N 轮。
-
-token 估算基于字符数（token≈4 字符），不依赖 tiktoken；后续可替换。
-"""
+"""上下文压缩：超限时先 LLM 蒸馏中间旧消息为摘要，再保留 system + 摘要 + 最近 N 轮。"""
 
 from __future__ import annotations
 
 from typing import Any
 
+import tiktoken
+
+from ..config import get_settings
 from ..logging import get_logger
 
 log = get_logger("context")
@@ -35,6 +35,10 @@ def _estimate_text_tokens(text: str) -> int:
 
 
 def estimate_tokens(messages: list[dict[str, Any]]) -> int:
+    try:
+        return _estimate_tokens_by_tiktoken(messages, model=get_settings().llm_model)
+    except Exception as exc:
+        log.warning("token_estimate_fallback", error=str(exc))
     total = 0
     for m in messages:
         c = m.get("content")
@@ -42,6 +46,45 @@ def estimate_tokens(messages: list[dict[str, Any]]) -> int:
             total += _estimate_text_tokens(c)
         for tc in m.get("tool_calls") or []:
             total += _estimate_text_tokens(str(tc))
+    return total
+
+
+_ENCODING_CACHE: dict[str, tiktoken.Encoding] = {}
+
+
+def _encoding_for_model(model: str | None) -> tiktoken.Encoding:
+    key = (model or "").strip() or "__default__"
+    enc = _ENCODING_CACHE.get(key)
+    if enc is not None:
+        return enc
+    if key == "__default__":
+        enc = tiktoken.get_encoding("o200k_base")
+    else:
+        try:
+            enc = tiktoken.encoding_for_model(key)
+        except KeyError:
+            enc = tiktoken.get_encoding("o200k_base")
+    _ENCODING_CACHE[key] = enc
+    return enc
+
+
+def _estimate_tokens_by_tiktoken(messages: list[dict[str, Any]], *, model: str | None) -> int:
+    enc = _encoding_for_model(model)
+    # 兼容 Chat Completions 的经验开销：每条消息 +3，整体 +3，name 字段 +1。
+    total = 3
+    for m in messages:
+        total += 3
+        role = m.get("role")
+        if isinstance(role, str):
+            total += len(enc.encode(role))
+        name = m.get("name")
+        if isinstance(name, str) and name:
+            total += len(enc.encode(name)) + 1
+        c = m.get("content")
+        if isinstance(c, str):
+            total += len(enc.encode(c))
+        for tc in m.get("tool_calls") or []:
+            total += len(enc.encode(str(tc)))
     return total
 
 

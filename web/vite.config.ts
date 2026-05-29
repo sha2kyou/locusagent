@@ -17,6 +17,16 @@ export default defineConfig({
   build: {
     outDir: fileURLToPath(new URL('../host/src/agentpod_host/web/spa', import.meta.url)),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        entryFileNames: 'assets/[name].js',
+        chunkFileNames: 'assets/[name].js',
+        assetFileNames: ({ name }) => {
+          if (name?.endsWith('.css')) return 'assets/[name].css'
+          return 'assets/[name][extname]'
+        },
+      },
+    },
   },
   server: {
     proxy: {

@@ -145,7 +145,7 @@ async def reattach_self_to_user_networks() -> int:
         attached = 0
         for net in client.networks.list():
             name = net.name
-            if not (name.startswith("apod-net-") or name.startswith("gwzz-net-")):
+            if not name.startswith("apod-net-"):
                 continue
             if _connect_self_to_network(name):
                 attached += 1

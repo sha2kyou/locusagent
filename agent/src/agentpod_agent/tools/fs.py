@@ -1,4 +1,4 @@
-"""文件类工具：read_file / write_file / patch / search_files。
+"""文件类工具：read_file / search_files。
 
 所有路径限定在 /data/workspace 根下；越界一律拒绝。
 """
@@ -14,18 +14,10 @@ from ..db import run_in_thread
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 MAX_READ_BYTES = 256 * 1024
-MAX_WRITE_BYTES = 1 * 1024 * 1024
 
 
 def _root() -> Path:
     return get_settings().data_dir / "workspace"
-
-
-def _ensure_write_allowed() -> None:
-    raise ToolError(
-        "tool_disabled_policy: write_file and patch are disabled for all users; "
-        "deliver content inline in chat."
-    )
 
 
 def _resolve(rel: str) -> Path:
@@ -67,50 +59,6 @@ async def _read_file(args: dict[str, Any]) -> ToolResult:
         chunk = lines[offset:end]
         numbered = "\n".join(f"{i+1:>6}|{line}" for i, line in enumerate(chunk, start=offset))
         return f"# {rel} ({offset+1}..{end} / {len(lines)} lines)\n{numbered}"
-
-    out = await run_in_thread(_do)
-    return ToolResult(content=out)
-
-
-async def _write_file(args: dict[str, Any]) -> ToolResult:
-    _ensure_write_allowed()
-    rel = str(args.get("path", "")).strip()
-    content = str(args.get("content", ""))
-    if len(content.encode("utf-8")) > MAX_WRITE_BYTES:
-        raise ToolError(f"content too large (> {MAX_WRITE_BYTES} bytes)")
-    p = _resolve(rel)
-
-    def _do() -> str:
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content, encoding="utf-8")
-        return f"wrote {len(content)} chars to {rel}"
-
-    out = await run_in_thread(_do)
-    return ToolResult(content=out)
-
-
-async def _patch(args: dict[str, Any]) -> ToolResult:
-    _ensure_write_allowed()
-    rel = str(args.get("path", "")).strip()
-    old = str(args.get("old", ""))
-    new = str(args.get("new", ""))
-    replace_all = bool(args.get("replace_all", False))
-    if not old:
-        raise ToolError("old must be non-empty")
-    p = _resolve(rel)
-    if not p.is_file():
-        raise ToolError(f"not a file: {rel}")
-
-    def _do() -> str:
-        text = p.read_text(encoding="utf-8")
-        count = text.count(old)
-        if count == 0:
-            raise ToolError("old text not found")
-        if not replace_all and count > 1:
-            raise ToolError(f"old text occurs {count} times; pass replace_all=true or extend context")
-        new_text = text.replace(old, new) if replace_all else text.replace(old, new, 1)
-        p.write_text(new_text, encoding="utf-8")
-        return f"patched {rel} ({'all' if replace_all else 'first'} occurrence(s), {count} matches)"
 
     out = await run_in_thread(_do)
     return ToolResult(content=out)
@@ -171,42 +119,6 @@ register_builtin(
             "required": ["path"],
         },
         handler=_read_file,
-        enabled=False,
-    )
-)
-
-register_builtin(
-    Tool(
-        name="write_file",
-        description="写入工作区文件，覆盖原内容；目录不存在时自动创建。",
-        parameters={
-            "type": "object",
-            "properties": {
-                "path": {"type": "string"},
-                "content": {"type": "string"},
-            },
-            "required": ["path", "content"],
-        },
-        handler=_write_file,
-        enabled=False,
-    )
-)
-
-register_builtin(
-    Tool(
-        name="patch",
-        description="查找替换：默认要求 old 唯一；replace_all=true 替换所有。",
-        parameters={
-            "type": "object",
-            "properties": {
-                "path": {"type": "string"},
-                "old": {"type": "string"},
-                "new": {"type": "string"},
-                "replace_all": {"type": "boolean", "default": False},
-            },
-            "required": ["path", "old", "new"],
-        },
-        handler=_patch,
         enabled=False,
     )
 )
