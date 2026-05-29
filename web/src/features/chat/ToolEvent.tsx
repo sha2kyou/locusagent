@@ -20,7 +20,7 @@ function fmtElapsed(ms: number): string {
 
 interface ClarifyPayload {
   question: string;
-  options: string[];
+  choices: string[];
   allow_other?: boolean;
 }
 
@@ -28,19 +28,19 @@ function parseClarify(result: unknown): ClarifyPayload | null {
   const raw = typeof result === "string" ? result : "";
   if (!raw) return null;
   try {
-    const data = JSON.parse(raw) as Partial<ClarifyPayload>;
-    if (
-      data &&
-      typeof data.question === "string" &&
-      Array.isArray(data.options) &&
-      data.options.length >= 2
-    ) {
-      return {
-        question: data.question,
-        options: data.options.map((o) => String(o)),
-        allow_other: data.allow_other !== false,
-      };
-    }
+    const data = JSON.parse(raw) as Partial<ClarifyPayload> & { options?: unknown };
+    if (!data || typeof data.question !== "string") return null;
+    const rawChoices = Array.isArray(data.choices)
+      ? data.choices
+      : Array.isArray(data.options)
+        ? data.options
+        : [];
+    const choices = rawChoices.map((o) => String(o).trim()).filter(Boolean).slice(0, 4);
+    return {
+      question: data.question,
+      choices,
+      allow_other: data.allow_other !== false,
+    };
   } catch {
     /* 非法 JSON：回退为普通工具展示 */
   }
@@ -48,7 +48,7 @@ function parseClarify(result: unknown): ClarifyPayload | null {
 }
 
 function clarifyMessage(question: string, answer: string): string {
-  return `针对问题「${question}」，我的选择：${answer}`;
+  return `针对问题「${question}」，我的回答：${answer}`;
 }
 
 function ClarifyCard({ payload }: { payload: ClarifyPayload }) {
@@ -71,7 +71,7 @@ function ClarifyCard({ payload }: { payload: ClarifyPayload }) {
         <span className="font-medium text-foreground">{payload.question}</span>
       </div>
       <div className="mt-2.5 flex flex-wrap gap-2">
-        {payload.options.map((opt, i) => (
+        {payload.choices.map((opt, i) => (
           <Button
             key={`${i}-${opt}`}
             variant="outline"
@@ -83,7 +83,7 @@ function ClarifyCard({ payload }: { payload: ClarifyPayload }) {
           </Button>
         ))}
       </div>
-      {payload.allow_other && (
+      {(payload.allow_other || payload.choices.length === 0) && (
         <form
           className="mt-2 flex items-center gap-2"
           onSubmit={(e) => {
@@ -95,7 +95,7 @@ function ClarifyCard({ payload }: { payload: ClarifyPayload }) {
           <input
             value={other}
             onChange={(e) => setOther(e.target.value)}
-            placeholder="其他（自由输入）…"
+            placeholder={payload.choices.length === 0 ? "请输入你的回答…" : "其他（自由输入）…"}
             disabled={disabled}
             className="h-8 min-w-0 flex-1 rounded-md border border-border bg-surface px-2.5 text-[13px] text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-45"
           />

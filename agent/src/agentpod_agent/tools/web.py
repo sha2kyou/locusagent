@@ -1,13 +1,9 @@
-"""网页类工具：web_search / web_extract。
-
-P0 简化：
-- web_search：默认 DuckDuckGo HTML 端点；如配置 BRAVE_API_KEY 走 Brave Search API。
-- web_extract：httpx 拉 HTML，用 stdlib html.parser 提纯文本（保留段落分隔）。
-"""
+"""网页类工具：web_search / web_extract。"""
 
 from __future__ import annotations
 
 import asyncio
+import json
 import ipaddress
 import os
 import re
@@ -122,7 +118,8 @@ async def _brave_search(query: str, top_k: int, key: str) -> list[dict[str, str]
 
 async def _web_search(args: dict[str, Any]) -> ToolResult:
     query = str(args.get("query", "")).strip()
-    top_k = int(args.get("top_k", 5) or 5)
+    top_k = int(args.get("limit", args.get("top_k", 5)) or 5)
+    top_k = max(1, min(100, top_k))
     if not query:
         raise ToolError("query is required")
     brave_key = os.environ.get("BRAVE_API_KEY")
@@ -169,38 +166,57 @@ class _TextExtractor(HTMLParser):
 
 
 async def _web_extract(args: dict[str, Any]) -> ToolResult:
-    url = str(args.get("url", "")).strip()
-    if not url or not url.startswith(("http://", "https://")):
-        raise ToolError("url must start with http(s)://")
+    urls_arg = args.get("urls")
+    if isinstance(urls_arg, list):
+        urls = [str(u).strip() for u in urls_arg if str(u).strip()]
+    else:
+        single = str(args.get("url", "")).strip()
+        urls = [single] if single else []
+    if not urls:
+        raise ToolError("urls is required")
+    urls = urls[:5]
+    out: list[dict[str, Any]] = []
     async with httpx.AsyncClient(
         timeout=TIMEOUT, headers={"User-Agent": USER_AGENT}, follow_redirects=False
     ) as client:
-        resp = await _guarded_get(client, url)
-    ctype = resp.headers.get("content-type", "")
-    if "html" not in ctype.lower():
-        raise ToolError(f"non-HTML content-type: {ctype}")
-    if len(resp.content) > MAX_HTML_BYTES:
-        raise ToolError(f"page too large: {len(resp.content)} bytes")
-    parser = _TextExtractor()
-    parser.feed(resp.text)
-    text = parser.text()
-    truncated = text[:MAX_TEXT_CHARS]
-    note = "\n…(truncated)" if len(text) > MAX_TEXT_CHARS else ""
-    return ToolResult(
-        content=f"# {url}\n\n{truncated}{note}",
-        metadata={"final_url": str(resp.url), "length": len(text)},
-    )
+        for url in urls:
+            if not url.startswith(("http://", "https://")):
+                out.append({"url": url, "title": "", "content": "", "error": "invalid url scheme"})
+                continue
+            try:
+                resp = await _guarded_get(client, url)
+                ctype = resp.headers.get("content-type", "")
+                if "html" not in ctype.lower():
+                    out.append({"url": url, "title": "", "content": "", "error": f"non-HTML content-type: {ctype}"})
+                    continue
+                if len(resp.content) > MAX_HTML_BYTES:
+                    out.append({"url": url, "title": "", "content": "", "error": f"page too large: {len(resp.content)} bytes"})
+                    continue
+                parser = _TextExtractor()
+                parser.feed(resp.text)
+                text = parser.text()
+                title_m = re.search(r"<title[^>]*>(.*?)</title>", resp.text, flags=re.IGNORECASE | re.DOTALL)
+                title = re.sub(r"\s+", " ", title_m.group(1)).strip() if title_m else ""
+                truncated = text[:MAX_TEXT_CHARS]
+                if len(text) > MAX_TEXT_CHARS:
+                    truncated += "\n…(truncated)"
+                out.append({"url": str(resp.url), "title": title, "content": truncated, "error": None})
+            except Exception as exc:
+                out.append({"url": url, "title": "", "content": "", "error": str(exc)})
+    return ToolResult(content=json.dumps({"results": out}, ensure_ascii=False), metadata={"results": out})
 
 
 register_builtin(
     Tool(
         name="web_search",
-        description="网页搜索（DuckDuckGo 默认；配置 BRAVE_API_KEY 后走 Brave）。",
+        description=(
+            "网页搜索，返回标题/URL/摘要。默认使用 DuckDuckGo；配置 BRAVE_API_KEY 后走 Brave。"
+        ),
         parameters={
             "type": "object",
             "properties": {
                 "query": {"type": "string"},
-                "top_k": {"type": "integer", "minimum": 1, "maximum": 10, "default": 5},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 5},
             },
             "required": ["query"],
         },
@@ -211,11 +227,21 @@ register_builtin(
 register_builtin(
     Tool(
         name="web_extract",
-        description="提取网页正文为纯文本。",
+        description=(
+            "提取网页 URL 内容，返回 results 列表（每项含 url/title/content/error）。"
+            "支持最多 5 个 URL。"
+        ),
         parameters={
             "type": "object",
-            "properties": {"url": {"type": "string"}},
-            "required": ["url"],
+            "properties": {
+                "urls": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "maxItems": 5,
+                    "description": "要提取的 URL 列表（最多 5 个）",
+                }
+            },
+            "required": ["urls"],
         },
         handler=_web_extract,
     )

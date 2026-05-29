@@ -1,6 +1,7 @@
 import { apiGet, apiSend } from "./client";
 import type {
   ActiveRunResponse,
+  EnvVarEntry,
   ArtifactCategory,
   ArtifactEntry,
   LLMConfig,
@@ -101,6 +102,22 @@ export const updateMemory = (id: number, body: { content?: string; anchor?: Memo
 
 export const deleteMemory = (id: number) =>
   apiSend<{ deleted: boolean }>(`/api/workspace/memory/${id}`, "DELETE");
+
+// ---- 环境变量 ----
+export const listEnvVars = (limit = 200) =>
+  apiGet<{ items: EnvVarEntry[] }>(`/api/workspace/env-vars?limit=${limit}`);
+
+export const createEnvVar = (body: { name: string; value: string; description?: string }) =>
+  apiSend<{ id: number }>("/api/workspace/env-vars", "POST", body);
+
+export const updateEnvVar = (id: number, body: { name?: string; value?: string; description?: string }) =>
+  apiSend<{ updated: boolean }>(`/api/workspace/env-vars/${id}`, "PUT", body);
+
+export const deleteEnvVar = (id: number) =>
+  apiSend<{ deleted: boolean }>(`/api/workspace/env-vars/${id}`, "DELETE");
+
+export const recallEnvVars = (body: { query: string; top_k?: number }) =>
+  apiSend<{ items: EnvVarEntry[] }>("/api/workspace/env-vars/recall", "POST", body);
 
 // ---- 产物类目（子菜单） ----
 export const listArtifactCategories = () =>

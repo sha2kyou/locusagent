@@ -30,6 +30,13 @@ from ..core import (
     session_lock,
 )
 from ..db import run_in_thread
+from ..env_vars import (
+    add_env_var,
+    delete_env_var,
+    list_env_vars,
+    recall_env_vars,
+    update_env_var,
+)
 from ..errors import WsError
 from ..mcp_ import (
     MCPServerConfig,
@@ -327,6 +334,23 @@ class MemoryUpdateIn(BaseModel):
     anchor: Literal["identity", "experience"] | None = None
 
 
+class EnvVarIn(BaseModel):
+    name: str
+    value: str
+    description: str = ""
+
+
+class EnvVarUpdateIn(BaseModel):
+    name: str | None = None
+    value: str | None = None
+    description: str | None = None
+
+
+class EnvVarRecallIn(BaseModel):
+    query: str
+    top_k: int = 5
+
+
 @router.get("/memory")
 async def workspace_list_memory(limit: int = 100) -> dict:
     items = await list_memories(limit=limit)
@@ -359,6 +383,64 @@ async def workspace_delete_memory(entry_id: int) -> dict:
     ok = await delete_memory(entry_id)
     if not ok:
         raise WsError("memory_not_found", "memory not found", status_code=404)
+    return {"deleted": True}
+
+
+@router.get("/env-vars")
+async def workspace_list_env_vars(limit: int = 200) -> dict:
+    items = await list_env_vars(limit=limit)
+    return {"items": items}
+
+
+@router.post("/env-vars", status_code=201)
+async def workspace_add_env_var(payload: EnvVarIn) -> dict:
+    if not payload.name.strip():
+        raise WsError("env_var_name_empty", "name is empty", status_code=400)
+    if not payload.value.strip():
+        raise WsError("env_var_value_empty", "value is empty", status_code=400)
+    try:
+        env_id = await add_env_var(payload.name, payload.value, payload.description)
+    except FileExistsError as exc:
+        raise WsError("env_var_exists", str(exc), status_code=409) from exc
+    except ValueError as exc:
+        raise WsError("env_var_invalid", str(exc), status_code=400) from exc
+    return {"id": env_id}
+
+
+@router.post("/env-vars/recall")
+async def workspace_recall_env_vars(payload: EnvVarRecallIn) -> dict:
+    query = payload.query.strip()
+    if not query:
+        raise WsError("env_var_query_empty", "query is empty", status_code=400)
+    items = await recall_env_vars(query, top_k=payload.top_k)
+    return {"items": items}
+
+
+@router.put("/env-vars/{entry_id}")
+async def workspace_update_env_var(entry_id: int, payload: EnvVarUpdateIn) -> dict:
+    if payload.name is None and payload.value is None and payload.description is None:
+        raise WsError("env_var_update_empty", "nothing to update", status_code=400)
+    try:
+        ok = await update_env_var(
+            entry_id,
+            name=payload.name,
+            value=payload.value,
+            description=payload.description,
+        )
+    except FileExistsError as exc:
+        raise WsError("env_var_exists", str(exc), status_code=409) from exc
+    except ValueError as exc:
+        raise WsError("env_var_invalid", str(exc), status_code=400) from exc
+    if not ok:
+        raise WsError("env_var_not_found", "env var not found", status_code=404)
+    return {"updated": True}
+
+
+@router.delete("/env-vars/{entry_id}")
+async def workspace_delete_env_var(entry_id: int) -> dict:
+    ok = await delete_env_var(entry_id)
+    if not ok:
+        raise WsError("env_var_not_found", "env var not found", status_code=404)
     return {"deleted": True}
 
 

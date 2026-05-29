@@ -147,6 +147,16 @@ export interface MemoryEntry {
   created_at: string;
 }
 
+export interface EnvVarEntry {
+  id: number;
+  name: string;
+  value: string;
+  description: string;
+  embedding_state: "pending" | "ready" | "failed";
+  created_at: string;
+  updated_at: string;
+}
+
 export interface LLMConfig {
   base_url: string | null;
   model: string;

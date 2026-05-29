@@ -64,7 +64,7 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
             raise ToolError(str(exc)) from exc
         return ToolResult(content=f"skill '{name}' created")
 
-    if action == "update":
+    if action in {"update", "edit"}:
         body = args.get("body")
         if body is not None:
             verdict = await review_write(str(body), kind="skill")
@@ -82,6 +82,45 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
             raise ToolError(str(exc)) from exc
         return ToolResult(content=f"skill '{name}' updated")
 
+    if action == "patch":
+        old_string = str(args.get("old_string", ""))
+        new_string = args.get("new_string")
+        replace_all = bool(args.get("replace_all", False))
+        if not old_string:
+            raise ToolError("old_string is required")
+        if new_string is None:
+            raise ToolError("new_string is required (use empty string to delete)")
+        current = await run_in_thread(get_skill, name)
+        if current is None:
+            raise ToolError(f"skill not found: {name}")
+        body = str(current.body)
+        if replace_all:
+            count = body.count(old_string)
+            if count < 1:
+                raise ToolError("old_string not found")
+            patched = body.replace(old_string, str(new_string))
+        else:
+            count = body.count(old_string)
+            if count < 1:
+                raise ToolError("old_string not found")
+            if count > 1:
+                raise ToolError("old_string matched multiple sections; provide more context or set replace_all=true")
+            patched = body.replace(old_string, str(new_string), 1)
+        verdict = await review_write(str(patched), kind="skill")
+        if not verdict.allowed:
+            raise ToolError(f"skill write blocked by guard: {verdict.reason}")
+        try:
+            await run_in_thread(
+                update_skill,
+                name,
+                description=None,
+                body=patched,
+                triggers=None,
+            )
+        except FileNotFoundError as exc:
+            raise ToolError(str(exc)) from exc
+        return ToolResult(content=f"skill '{name}' patched ({count} match{'es' if count != 1 else ''})")
+
     if action == "delete":
         ok = await run_in_thread(delete_skill, name)
         if not ok:
@@ -94,7 +133,7 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
 register_builtin(
     Tool(
         name="skill_view",
-        description="查看 Skill：name 为空时列出全部，给定 name 时返回正文。",
+        description="查看技能内容。name 为空时列出技能摘要；给定 name 时返回完整 SKILL.md 内容。",
         parameters={
             "type": "object",
             "properties": {"name": {"type": "string", "default": ""}},
@@ -106,15 +145,21 @@ register_builtin(
 register_builtin(
     Tool(
         name="skill_manage",
-        description="管理私有 Skill：create / update / delete。公共 Skill 只读。",
+        description=(
+            "管理私有技能：create / edit / patch / delete。"
+            "其中 patch 用于按 old_string/new_string 做定点替换。"
+        ),
         parameters={
             "type": "object",
             "properties": {
-                "action": {"type": "string", "enum": ["create", "update", "delete"]},
+                "action": {"type": "string", "enum": ["create", "edit", "patch", "delete", "update"]},
                 "name": {"type": "string"},
                 "description": {"type": "string"},
                 "body": {"type": "string"},
                 "triggers": {"type": "array", "items": {"type": "string"}},
+                "old_string": {"type": "string"},
+                "new_string": {"type": "string"},
+                "replace_all": {"type": "boolean", "default": False},
             },
             "required": ["action", "name"],
         },

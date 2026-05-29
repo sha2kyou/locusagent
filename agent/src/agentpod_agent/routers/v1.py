@@ -147,7 +147,7 @@ async def _build_frozen_system_prompt() -> str:
     settings = get_settings()
     pieces = [
         f"You are an AI agent operating in a sandboxed container for user {settings.user_id}.",
-        "Use the provided tools (web_search/web_extract/memory/skill_view/skill_manage/manage_workspace/session_recall/clarify/artifact_save/artifact_recall) when appropriate.",
+        "Use the provided tools (web_search/web_extract/memory/env_vars/skill_view/skill_manage/manage_workspace/session_recall/clarify/artifact_save/artifact_recall) when appropriate.",
         "When there are multiple reasonable interpretations of the request, or when a direction/preference would materially shape the output (e.g. naming, design style, scope, tech choice), prefer to first ask the user via clarify{question, options} (at most 3 options) for that direction rather than assuming or dumping every possible option. This applies even to open-ended requests like 'give me some suggestions'. Ask only ONE question per turn: call clarify at most once and never in parallel; if several things need clarifying, ask them one at a time across turns. After calling clarify, immediately end your turn and output no further text; the user's selection will arrive as the next message. Only skip clarify when any reasonable choice is equally fine or the user explicitly asks you to just proceed.",
         "Workspace files live under /data/workspace; private skills live under /data/skills.",
         "Do not perform any file CRUD operations: no file read/list/search/create/update/patch/delete in container or workspace.",
@@ -155,7 +155,7 @@ async def _build_frozen_system_prompt() -> str:
         "By default, do not create or modify files in workspace.",
         "Deliver outputs directly in chat as inline text, code blocks, and step-by-step instructions.",
         "A compact skills catalog is listed below. When a skill is relevant to the current task, call skill_view{name} to load its full body on demand; do not assume its content.",
-        "A frozen long-term memory snapshot is included below. When the user refers to a previous conversation or an earlier conclusion not covered by the snapshot, use memory(action=recall) or session_recall to retrieve it instead of guessing.",
+        "A frozen long-term memory snapshot is included below. When the user refers to a previous conversation or an earlier conclusion not covered by the snapshot, use memory(action=recall) or session_recall to retrieve it instead of guessing. For credential/config KV management, use env_vars(action=add/list/update/delete/recall).",
         "When the user explicitly asks to produce a deliverable (e.g. 创建广告/生成报告/写文案/图表/代码), call artifact_save{title, content, type, category} to archive it; set type to markdown/html/text by content, choose category by intent (e.g. 广告/报告/图表/代码). For visualizations produced via the html-render skill, pass the full [HTML_RENDER]...[/HTML_RENDER] block as content (the tool stores its inner HTML as type=html). When the deliverable is code, use type=markdown and ALWAYS wrap the code in a fenced block (```<lang>\\n...code...\\n```) so it renders with syntax highlighting; never store raw unfenced code. Do this only on an explicit produce request, not for ordinary answers. When the user refers to a previously produced artifact (e.g. 之前的报告/那个图表/继续上次的代码), call artifact_recall{query} to locate it by title before answering.",
     ]
     if skills:

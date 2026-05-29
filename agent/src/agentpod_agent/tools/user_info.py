@@ -27,7 +27,11 @@ async def _get_current_user(_args: dict) -> ToolResult:
 register_builtin(
     Tool(
         name="get_current_user",
-        description="获取当前登录用户基础信息（user_id、模型配置与工作目录）。",
+        description=(
+            "获取当前会话的运行身份与基础上下文（user_id、模型配置、数据目录等）。"
+            "适用于诊断“我是谁/当前模型是什么/数据落在哪”的环境确认场景。"
+            "不用于读取业务数据，也不返回敏感凭据明文。"
+        ),
         parameters={
             "type": "object",
             "properties": {},

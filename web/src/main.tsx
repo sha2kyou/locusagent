@@ -19,6 +19,9 @@ const McpRoute = lazy(() => import("@/features/mcp/McpRoute").then((m) => ({ def
 const MemoryRoute = lazy(() =>
   import("@/features/memory/MemoryRoute").then((m) => ({ default: m.MemoryRoute })),
 );
+const EnvVarsRoute = lazy(() =>
+  import("@/features/envvars/EnvVarsRoute").then((m) => ({ default: m.EnvVarsRoute })),
+);
 const ArtifactsRoute = lazy(() =>
   import("@/features/artifacts/ArtifactsRoute").then((m) => ({ default: m.ArtifactsRoute })),
 );
@@ -39,6 +42,7 @@ const router = createBrowserRouter([
       { path: "skills", element: <SkillsRoute /> },
       { path: "mcp", element: <McpRoute /> },
       { path: "memory", element: <MemoryRoute /> },
+      { path: "env-vars", element: <EnvVarsRoute /> },
       { path: "artifacts", element: <ArtifactsRoute /> },
       { path: "artifacts/c/:categoryId", element: <ArtifactsRoute /> },
       { path: "*", element: <Navigate to="/chat" replace /> },

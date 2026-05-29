@@ -124,20 +124,42 @@ async def _manage_workspace(args: dict[str, Any]) -> ToolResult:
 register_builtin(
     Tool(
         name="manage_workspace",
-        description="工作区高层操作：summary / list_mcp / add_mcp / remove_mcp。",
+        description=(
+            "工作区运维级管理工具：查看摘要、管理 MCP 服务连接。"
+            "用于“环境状态盘点”“MCP 服务增删与排障”这类基础设施任务，"
+            "而不是常规业务内容生成。"
+            "支持动作：summary / list_mcp / add_mcp / remove_mcp。"
+        ),
         parameters={
             "type": "object",
             "properties": {
                 "action": {
                     "type": "string",
                     "enum": ["summary", "list_mcp", "add_mcp", "remove_mcp"],
+                    "description": "执行动作：摘要、列出 MCP、新增 MCP、移除 MCP。",
                 },
-                "name": {"type": "string"},
-                "transport": {"type": "string", "enum": ["stdio", "http"]},
-                "command": {"type": "array", "items": {"type": "string"}},
-                "args": {"type": "array", "items": {"type": "string"}},
-                "env": {"type": "object", "additionalProperties": {"type": "string"}},
-                "url": {"type": "string"},
+                "name": {"type": "string", "description": "MCP 服务名（add_mcp/remove_mcp 必填）。"},
+                "transport": {
+                    "type": "string",
+                    "enum": ["stdio", "http"],
+                    "description": "MCP 传输方式（add_mcp 时使用）。",
+                },
+                "command": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "stdio 模式启动命令（例如 ['npx','-y','@xxx/server']）。",
+                },
+                "args": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "stdio 模式附加参数。",
+                },
+                "env": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": "stdio 模式环境变量覆盖。",
+                },
+                "url": {"type": "string", "description": "http 模式服务地址。"},
             },
             "required": ["action"],
         },

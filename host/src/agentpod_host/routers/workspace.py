@@ -59,6 +59,24 @@ async def proxy_memory(
     return await proxy_to_user_container(request, ctx.user, target)
 
 
+@router.api_route("/env-vars", methods=PROXY_METHODS)
+@router.post("/env-vars/recall")
+@router.api_route("/env-vars/{entry_id}", methods=PROXY_METHODS)
+async def proxy_env_vars(
+    request: Request,
+    ctx: AuthContext = Depends(require_session),
+    entry_id: int | None = None,
+):
+    path = request.url.path.rstrip("/")
+    if path.endswith("/recall"):
+        target = "/workspace/env-vars/recall"
+    elif entry_id is not None:
+        target = f"/workspace/env-vars/{entry_id}"
+    else:
+        target = "/workspace/env-vars"
+    return await proxy_to_user_container(request, ctx.user, target)
+
+
 @router.api_route("/sessions", methods=PROXY_METHODS)
 @router.get("/sessions/{session_id}/active-run")
 @router.api_route("/sessions/{session_id}", methods=PROXY_METHODS)

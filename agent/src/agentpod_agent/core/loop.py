@@ -20,7 +20,7 @@ from openai.types.chat import ChatCompletion
 from ..config import get_settings
 from ..logging import get_logger
 from ..tools import ToolError, ToolRegistry
-from .context import compress
+from .context import compress, compress_with_report
 from .llm import get_llm_client
 
 log = get_logger("loop")
@@ -343,7 +343,7 @@ async def run_chat_loop_stream(
     final_text = ""
 
     for round_idx in range(1, max_rounds + 1):
-        working = await compress(
+        working, compression_report = await compress_with_report(
             working,
             max_tokens=token_limit,
             client=client,
@@ -351,6 +351,51 @@ async def run_chat_loop_stream(
             keep_last=settings.context_keep_last,
             min_middle=settings.context_distill_min_middle,
         )
+        if compression_report.get("triggered"):
+            call_id = f"auto-summarize-r{round_idx}"
+            mode = str(compression_report.get("mode") or "truncate")
+            before_tokens = int(compression_report.get("before_tokens") or 0)
+            after_tokens = int(compression_report.get("after_tokens") or 0)
+            summary_text = str(compression_report.get("summary") or "").strip()
+            tool_args = json.dumps(
+                {
+                    "text": f"[auto-context-compress mode={mode} before={before_tokens} after={after_tokens}]",
+                    "max_tokens": 500,
+                },
+                ensure_ascii=False,
+            )
+            yield {
+                "type": "assistant_tools",
+                "message": {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "id": call_id,
+                            "type": "function",
+                            "function": {"name": "summarize", "arguments": tool_args},
+                        }
+                    ],
+                    "content": "已自动执行上下文压缩。",
+                },
+            }
+            yield {"type": "tool_call", "name": "summarize", "id": call_id}
+            if summary_text:
+                tool_content = (
+                    f"【自动上下文压缩】mode={mode}, tokens: {before_tokens} -> {after_tokens}\n\n"
+                    f"{summary_text}"
+                )
+            else:
+                tool_content = (
+                    f"【自动上下文压缩】mode={mode}, tokens: {before_tokens} -> {after_tokens}\n"
+                    "本次未生成可展示摘要（已进行截断保留）。"
+                )
+            yield {
+                "type": "tool_result",
+                "tool_call_id": call_id,
+                "name": "summarize",
+                "preview": tool_content[:1000],
+                "content": tool_content,
+            }
         log.info(
             "loop_round_start",
             round=round_idx,

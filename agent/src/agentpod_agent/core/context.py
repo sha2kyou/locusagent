@@ -173,9 +173,36 @@ async def compress(
     keep_last: int = 8,
     min_middle: int = 4,
 ) -> list[dict[str, Any]]:
+    compressed, _ = await compress_with_report(
+        messages,
+        max_tokens=max_tokens,
+        client=client,
+        model=model,
+        keep_last=keep_last,
+        min_middle=min_middle,
+    )
+    return compressed
+
+
+async def compress_with_report(
+    messages: list[dict[str, Any]],
+    *,
+    max_tokens: int,
+    client,
+    model: str,
+    keep_last: int = 8,
+    min_middle: int = 4,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """超限时蒸馏中间旧消息为摘要；蒸馏失败则退化为硬截断。"""
-    if estimate_tokens(messages) <= max_tokens:
-        return messages
+    before_tokens = estimate_tokens(messages)
+    if before_tokens <= max_tokens:
+        return messages, {
+            "triggered": False,
+            "mode": "none",
+            "before_tokens": before_tokens,
+            "after_tokens": before_tokens,
+            "summary": "",
+        }
 
     head: list[dict[str, Any]] = []
     body = list(messages)
@@ -183,7 +210,15 @@ async def compress(
         head = [body[0]]
         body = body[1:]
     if len(body) <= keep_last:
-        return head + body
+        out = head + body
+        after_tokens = estimate_tokens(out)
+        return out, {
+            "triggered": True,
+            "mode": "truncate",
+            "before_tokens": before_tokens,
+            "after_tokens": after_tokens,
+            "summary": "",
+        }
 
     tail = body[-keep_last:]
     middle = body[:-keep_last]
@@ -191,17 +226,27 @@ async def compress(
     while tail and tail[0].get("role") == "tool":
         middle.append(tail.pop(0))
     if not tail:
-        return truncate(messages, max_tokens=max_tokens, keep_last=keep_last)
+        out = truncate(messages, max_tokens=max_tokens, keep_last=keep_last)
+        after_tokens = estimate_tokens(out)
+        return out, {
+            "triggered": True,
+            "mode": "truncate",
+            "before_tokens": before_tokens,
+            "after_tokens": after_tokens,
+            "summary": "",
+        }
 
+    summary_text = ""
     summary_msgs: list[dict[str, Any]] = []
     if len(middle) >= min_middle:
         try:
             summary = await _distill_messages(middle, client=client, model=model)
             if summary.strip():
+                summary_text = summary.strip()
                 summary_msgs = [
                     {
                         "role": "system",
-                        "content": "## 历史对话摘要（更早的消息已压缩）\n" + summary.strip(),
+                        "content": "## 历史对话摘要（更早的消息已压缩）\n" + summary_text,
                     }
                 ]
         except Exception as exc:
@@ -211,4 +256,13 @@ async def compress(
         tail = _drop_leading_tool(tail[1:])
         if not tail:
             break
-    return head + summary_msgs + tail
+    out = head + summary_msgs + tail
+    after_tokens = estimate_tokens(out)
+    mode = "distill" if summary_text else "truncate"
+    return out, {
+        "triggered": True,
+        "mode": mode,
+        "before_tokens": before_tokens,
+        "after_tokens": after_tokens,
+        "summary": summary_text,
+    }

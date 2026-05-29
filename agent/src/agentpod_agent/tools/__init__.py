@@ -8,8 +8,10 @@ from .base import Tool, ToolError, ToolResult, builtin_tools
 # 触发各内置工具的 register_builtin 副作用
 from . import artifacts as _artifacts  # noqa: F401
 from . import clarify as _clarify  # noqa: F401
+from . import context_distill as _summarize  # noqa: F401
 from . import fs as _fs  # noqa: F401
 from . import memory as _memory  # noqa: F401
+from . import env_vars as _env_vars  # noqa: F401
 from . import session_recall as _session_recall  # noqa: F401
 from . import skills as _skills  # noqa: F401
 from . import manage_workspace as _manage_workspace  # noqa: F401

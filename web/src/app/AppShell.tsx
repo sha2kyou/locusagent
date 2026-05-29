@@ -8,6 +8,7 @@ import {
   Menu,
   MessagesSquare,
   PanelLeft,
+  KeyRound,
   Settings,
   Sparkles,
   Wrench,
@@ -42,6 +43,7 @@ const NAV_SECONDARY: NavEntry[] = [
   { to: "/skills", label: "技能", icon: Sparkles },
   { to: "/mcp", label: "MCP", icon: Blocks },
   { to: "/memory", label: "记忆", icon: Brain },
+  { to: "/env-vars", label: "环境变量", icon: KeyRound },
 ];
 
 const EXPAND_KEY = "apod-nav-expanded";

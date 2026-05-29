@@ -102,6 +102,19 @@ CREATE TABLE IF NOT EXISTS artifacts (
 CREATE INDEX IF NOT EXISTS idx_artifacts_category ON artifacts(category_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_artifacts_created ON artifacts(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_artifacts_embed_state ON artifacts(embedding_state);
+
+CREATE TABLE IF NOT EXISTS env_vars (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT NOT NULL UNIQUE,
+    value           TEXT NOT NULL,
+    description     TEXT NOT NULL DEFAULT '',
+    embedding       BLOB,
+    embedding_state TEXT NOT NULL DEFAULT 'pending',
+    created_at      TIMESTAMP NOT NULL DEFAULT (datetime('now')),
+    updated_at      TIMESTAMP NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_env_vars_name ON env_vars(name);
+CREATE INDEX IF NOT EXISTS idx_env_vars_embed_state ON env_vars(embedding_state);
 """
 
 
@@ -205,6 +218,21 @@ def init_db() -> None:
         c.execute(
             "CREATE INDEX IF NOT EXISTS idx_artifacts_embed_state ON artifacts(embedding_state)"
         )
+        env_cols = {str(r["name"]) for r in c.execute("PRAGMA table_info(env_vars)").fetchall()}
+        if env_cols and "description" not in env_cols:
+            c.execute("ALTER TABLE env_vars ADD COLUMN description TEXT NOT NULL DEFAULT ''")
+        if env_cols and "embedding" not in env_cols:
+            c.execute("ALTER TABLE env_vars ADD COLUMN embedding BLOB")
+        if env_cols and "embedding_state" not in env_cols:
+            c.execute(
+                "ALTER TABLE env_vars ADD COLUMN embedding_state TEXT NOT NULL DEFAULT 'pending'"
+            )
+        if env_cols and "updated_at" not in env_cols:
+            c.execute(
+                "ALTER TABLE env_vars ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT (datetime('now'))"
+            )
+        c.execute("CREATE INDEX IF NOT EXISTS idx_env_vars_name ON env_vars(name)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_env_vars_embed_state ON env_vars(embedding_state)")
         _init_messages_fts(c)
         for stmt in (
             """
