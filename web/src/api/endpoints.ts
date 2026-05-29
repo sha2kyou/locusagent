@@ -10,6 +10,7 @@ import type {
   Message,
   SessionMeta,
   Skill,
+  ToolToggleOverview,
 } from "./types";
 
 // ---- 用户 / 认证 ----
@@ -75,6 +76,30 @@ export const reconnectMcp = (name: string) =>
 
 export const deleteMcp = (name: string) =>
   apiSend<{ deleted: boolean }>(`/api/workspace/mcp/${encodeURIComponent(name)}`, "DELETE");
+
+// ---- 工具开关 ----
+export const listToolToggles = () => apiGet<ToolToggleOverview>("/api/workspace/tools");
+
+export const updateBuiltinToolToggle = (name: string, enabled: boolean) =>
+  apiSend<{ name: string; enabled: boolean }>(
+    `/api/workspace/tools/builtin/${encodeURIComponent(name)}`,
+    "PUT",
+    { enabled },
+  );
+
+export const updateSkillToggle = (name: string, enabled: boolean) =>
+  apiSend<{ name: string; enabled: boolean }>(
+    `/api/workspace/tools/skills/${encodeURIComponent(name)}`,
+    "PUT",
+    { enabled },
+  );
+
+export const updateMcpToggle = (name: string, enabled: boolean) =>
+  apiSend<{ name: string; enabled: boolean }>(
+    `/api/workspace/tools/mcp/${encodeURIComponent(name)}`,
+    "PUT",
+    { enabled },
+  );
 
 // ---- 记忆 ----
 export const listMemory = (limit = 100) =>

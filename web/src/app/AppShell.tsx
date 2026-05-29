@@ -10,6 +10,7 @@ import {
   PanelLeft,
   Settings,
   Sparkles,
+  Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ export function useShell() {
 
 const NAV = [
   { to: "/chat", label: "对话", icon: MessagesSquare },
+  { to: "/tools", label: "工具", icon: Wrench },
   { to: "/skills", label: "技能", icon: Sparkles },
   { to: "/mcp", label: "MCP", icon: Blocks },
   { to: "/memory", label: "记忆", icon: Brain },
@@ -50,6 +52,7 @@ export function AppShell() {
   const [flashKey, setFlashKey] = useState<string | null>(null);
   const [navOpen, setNavOpen] = useState(false);
   const [mobileAction, setMobileAction] = useState<ReactNode>(null);
+  const forceModelSetup = !!me && !me.llm_configured;
 
   useEffect(() => {
     localStorage.setItem(EXPAND_KEY, expanded ? "1" : "0");
@@ -240,7 +243,12 @@ export function AppShell() {
         </div>
       </div>
 
-      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} onLogout={() => navigate("/login")} />
+      <SettingsModal
+        open={settingsOpen}
+        required={forceModelSetup}
+        onClose={() => setSettingsOpen(false)}
+        onLogout={() => navigate("/login")}
+      />
       <ApiKeyFlashModal value={flashKey} onClose={() => setFlashKey(null)} />
     </ShellContext.Provider>
   );

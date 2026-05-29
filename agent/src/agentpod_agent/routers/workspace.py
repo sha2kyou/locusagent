@@ -11,7 +11,6 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from ..auth import verify_internal_token
-from ..errors import WsError
 from ..core import (
     cancel_active_run,
     delete_session,
@@ -21,6 +20,7 @@ from ..core import (
     session_lock,
 )
 from ..db import run_in_thread
+from ..errors import WsError
 from ..mcp_ import (
     MCPServerConfig,
     add_mcp_server,
@@ -51,6 +51,14 @@ from ..skills import (
     list_skills,
     update_skill,
 )
+from ..tool_settings import (
+    is_mcp_server_enabled,
+    is_skill_enabled,
+    set_builtin_tool_enabled,
+    set_mcp_server_enabled,
+    set_skill_enabled,
+)
+from ..tools import registry as tool_registry
 
 router = APIRouter(
     prefix="/workspace",
@@ -75,7 +83,15 @@ class SkillUpdateIn(BaseModel):
 @router.get("/skills")
 async def workspace_list_skills() -> dict:
     skills = await run_in_thread(list_skills)
-    return {"items": [s.to_dict() for s in skills]}
+    return {
+        "items": [
+            {
+                **s.to_dict(),
+                "enabled": is_skill_enabled(s.name),
+            }
+            for s in skills
+        ]
+    }
 
 
 @router.get("/skills/{name}")
@@ -149,9 +165,79 @@ class MCPIn(BaseModel):
     url: str | None = None
 
 
+class ToolToggleIn(BaseModel):
+    enabled: bool
+
+
+@router.get("/tools")
+async def workspace_list_tools() -> dict:
+    skills = await run_in_thread(list_skills)
+    mcp_servers = await run_in_thread(list_mcp_servers)
+    builtins = [
+        {
+            "name": tool.name,
+            "description": tool.description,
+            "enabled": tool.enabled,
+        }
+        for tool in tool_registry.all()
+        if tool.category == "builtin"
+    ]
+    builtins.sort(key=lambda t: t["name"])
+    return {
+        "builtin_tools": builtins,
+        "skills": [
+            {
+                "name": s.name,
+                "description": s.description,
+                "source": s.source,
+                "enabled": is_skill_enabled(s.name),
+            }
+            for s in skills
+        ],
+        "mcp_servers": [
+            {
+                "name": s.name,
+                "transport": s.transport,
+                "enabled": is_mcp_server_enabled(s.name),
+            }
+            for s in mcp_servers
+        ],
+    }
+
+
+@router.put("/tools/builtin/{name}")
+async def workspace_toggle_builtin_tool(name: str, payload: ToolToggleIn) -> dict:
+    tool = tool_registry.get(name)
+    if tool is None or tool.category != "builtin":
+        raise WsError("tool_not_found", "builtin tool not found", status_code=404)
+    tool.enabled = payload.enabled
+    await run_in_thread(set_builtin_tool_enabled, name, payload.enabled)
+    return {"name": name, "enabled": payload.enabled}
+
+
+@router.put("/tools/skills/{name}")
+async def workspace_toggle_skill(name: str, payload: ToolToggleIn) -> dict:
+    skill = await run_in_thread(get_skill, name)
+    if skill is None:
+        raise WsError("skill_not_found", "skill not found", status_code=404)
+    await run_in_thread(set_skill_enabled, name, payload.enabled)
+    return {"name": name, "enabled": payload.enabled}
+
+
+@router.put("/tools/mcp/{name}")
+async def workspace_toggle_mcp(name: str, payload: ToolToggleIn) -> dict:
+    cfg = await run_in_thread(get_mcp_server, name)
+    if cfg is None:
+        raise WsError("mcp_not_found", "mcp server not found", status_code=404)
+    await run_in_thread(set_mcp_server_enabled, name, payload.enabled)
+    _set_mcp_tools_enabled(name, payload.enabled)
+    return {"name": name, "enabled": payload.enabled}
+
+
 def _mcp_item_with_runtime(cfg: MCPServerConfig, runtime: dict[str, dict]) -> dict:
     d = cfg.to_dict()
     r = runtime.get(cfg.name, {})
+    d["enabled"] = is_mcp_server_enabled(cfg.name)
     d["connected"] = bool(r.get("connected", False))
     d["tools"] = r.get("tools", [])
     d["tool_count"] = len(d["tools"])
@@ -162,12 +248,20 @@ def _mcp_item_with_runtime(cfg: MCPServerConfig, runtime: dict[str, dict]) -> di
 
 def _mcp_response(cfg: MCPServerConfig, runtime: dict[str, object]) -> dict:
     d = cfg.to_dict()
+    d["enabled"] = is_mcp_server_enabled(cfg.name)
     d["connected"] = bool(runtime.get("connected", False))
     d["tools"] = runtime.get("tools", [])
     d["tool_count"] = len(d["tools"])
     if runtime.get("error"):
         d["runtime_error"] = runtime["error"]
     return d
+
+
+def _set_mcp_tools_enabled(server_name: str, enabled: bool) -> None:
+    target = f"mcp:{server_name}"
+    for tool in tool_registry.all():
+        if tool.category == target:
+            tool.enabled = enabled
 
 
 def _to_mcp_cfg(payload: MCPIn) -> MCPServerConfig:
@@ -216,7 +310,10 @@ async def workspace_update_mcp(name: str, payload: MCPIn) -> dict:
     except (ValueError, FileExistsError) as exc:
         raise WsError("mcp_invalid", str(exc), status_code=400) from exc
     runtime = await reconnect_mcp_server(updated.name)
+    enabled = is_mcp_server_enabled(updated.name)
+    _set_mcp_tools_enabled(updated.name, enabled)
     d = updated.to_dict()
+    d["enabled"] = enabled
     d["connected"] = bool(runtime.get("connected", False))
     d["tools"] = runtime.get("tools", [])
     d["tool_count"] = len(d["tools"])
@@ -231,7 +328,10 @@ async def workspace_reconnect_mcp(name: str) -> dict:
     if cfg is None:
         raise WsError("mcp_not_found", "mcp server not found", status_code=404)
     runtime = await reconnect_mcp_server(name)
+    enabled = is_mcp_server_enabled(name)
+    _set_mcp_tools_enabled(name, enabled)
     d = cfg.to_dict()
+    d["enabled"] = enabled
     d["connected"] = bool(runtime.get("connected", False))
     d["tools"] = runtime.get("tools", [])
     d["tool_count"] = len(d["tools"])

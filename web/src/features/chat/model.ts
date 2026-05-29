@@ -22,6 +22,7 @@ export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   parts: ChatPart[];
+  sourceText?: string;
   error?: string;
 }
 
@@ -31,8 +32,8 @@ export function uid(prefix = "m"): string {
   return `${prefix}_${Date.now().toString(36)}_${counter}`;
 }
 
-export function userMessage(text: string): ChatMessage {
-  return { id: uid("u"), role: "user", parts: [{ type: "text", text }] };
+export function userMessage(text: string, sourceText?: string): ChatMessage {
+  return { id: uid("u"), role: "user", parts: [{ type: "text", text }], sourceText };
 }
 
 export function emptyAssistant(): ChatMessage {

@@ -9,13 +9,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from .config import get_settings
-from .errors import WsError, ws_error_handler, ws_validation_handler
 from .db import init_db
+from .errors import WsError, ws_error_handler, ws_validation_handler
 from .logging import configure_logging, get_logger
 from .memory import start_embedding_worker, stop_embedding_worker
 from .routers import internal as internal_router
 from .routers import v1 as v1_router
 from .routers import workspace as workspace_router
+from .tool_settings import load_tool_settings
 
 
 @asynccontextmanager
@@ -37,6 +38,9 @@ async def lifespan(app: FastAPI):
     from .tools import registry as tool_registry
 
     skills = list_skills()
+    tool_settings = load_tool_settings()
+    for name, enabled in tool_settings.builtin_tools.items():
+        tool_registry.set_enabled(name, enabled)
     app.state.tool_registry = tool_registry
     log.info("agent_ready", skills=len(skills), tools=len(tool_registry.list()))
 

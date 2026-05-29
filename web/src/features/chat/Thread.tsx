@@ -7,7 +7,7 @@ import {
   useThreadRuntime,
   type TextMessagePartComponent,
 } from "@assistant-ui/react";
-import { ArrowDown, ArrowUp, Check, Copy, RotateCcw, Square } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Copy, Paperclip, RotateCcw, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
@@ -121,8 +121,15 @@ const LONG_PASTE_THRESHOLD = 8000;
 
 function Composer({ blocked }: { blocked: boolean }) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const runtime = useThreadRuntime();
   const toast = useToast();
+  const {
+    addPendingFiles,
+    isRunning,
+    pendingAttachments,
+    removePendingAttachment,
+  } = useChat();
 
   // 全局 "/" 聚焦输入（不在其它输入/可编辑元素中时）
   useGlobalFocusShortcut(inputRef);
@@ -147,9 +154,46 @@ function Composer({ blocked }: { blocked: boolean }) {
     }
   };
 
+  const onPickFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    await addPendingFiles(files);
+    e.currentTarget.value = "";
+  };
+
   return (
     <div className="border-t border-border bg-background/80 px-4 py-3 backdrop-blur">
+      {pendingAttachments.length > 0 ? (
+        <div className="mx-auto mb-2 flex w-full max-w-3xl flex-wrap gap-1.5">
+          {pendingAttachments.map((file) => (
+            <span
+              key={file.id}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/70 px-2.5 py-1 text-xs text-muted-foreground"
+            >
+              <Paperclip className="size-3" />
+              <span className="max-w-56 truncate">{file.name}</span>
+              {!file.processable ? <span className="text-warning">不可解析</span> : null}
+              <button
+                type="button"
+                onClick={() => removePendingAttachment(file.id)}
+                className="inline-flex size-4 items-center justify-center rounded-full hover:bg-accent hover:text-foreground"
+                aria-label={`移除 ${file.name}`}
+                title="移除附件"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
       <ComposerPrimitive.Root className="mx-auto flex w-full max-w-3xl items-end gap-2 rounded-2xl border border-border-strong bg-surface px-3 py-2 focus-within:border-brand/50">
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={onPickFiles}
+        />
         <ComposerPrimitive.Input
           ref={inputRef}
           rows={1}
@@ -159,6 +203,18 @@ function Composer({ blocked }: { blocked: boolean }) {
           placeholder={blocked ? "请先在设置中配置模型…" : "给 Agent 发送消息…"}
           className="max-h-48 flex-1 resize-none bg-transparent py-1.5 text-sm outline-none placeholder:text-muted-foreground"
         />
+        <Button
+          type="button"
+          variant="primary"
+          size="icon"
+          className="rounded-xl"
+          aria-label="添加附件"
+          title="添加附件"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isRunning}
+        >
+          <Paperclip />
+        </Button>
         <ThreadPrimitive.If running={false}>
           <ComposerPrimitive.Send asChild>
             <Button variant="primary" size="icon" className="rounded-xl" aria-label="发送">
@@ -175,7 +231,7 @@ function Composer({ blocked }: { blocked: boolean }) {
         </ThreadPrimitive.If>
       </ComposerPrimitive.Root>
       <p className="mx-auto mt-2 max-w-3xl text-center text-xs text-muted-foreground/60">
-        Enter 发送 · Shift+Enter 换行
+        Enter 发送 · Shift+Enter 换行 · 一次 1 个附件（非文本格式将提示无法处理）
         <ThreadPrimitive.If running>
           <span> · Esc 停止</span>
         </ThreadPrimitive.If>

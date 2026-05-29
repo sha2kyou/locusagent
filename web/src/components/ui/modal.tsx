@@ -13,6 +13,7 @@ interface ModalProps {
   footer?: ReactNode;
   size?: "sm" | "md" | "lg";
   showClose?: boolean;
+  closeDisabled?: boolean;
 }
 
 const sizes = {
@@ -30,6 +31,7 @@ export function Modal({
   footer,
   size = "md",
   showClose = true,
+  closeDisabled = false,
 }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -50,7 +52,7 @@ export function Modal({
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        onClose();
+        if (!closeDisabled) onClose();
         return;
       }
       if (e.key !== "Tab") return;
@@ -78,7 +80,7 @@ export function Modal({
       document.body.style.overflow = "";
       prevFocus?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open, onClose, closeDisabled]);
 
   if (!open) return null;
 
@@ -86,7 +88,9 @@ export function Modal({
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-black/55 backdrop-blur-sm apod-fade"
-        onClick={onClose}
+        onClick={() => {
+          if (!closeDisabled) onClose();
+        }}
       />
       <div
         ref={dialogRef}
@@ -106,7 +110,7 @@ export function Modal({
                 <p className="text-sm text-muted-foreground">{description}</p>
               )}
             </div>
-            {showClose && (
+            {showClose && !closeDisabled && (
               <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="关闭">
                 <X />
               </Button>

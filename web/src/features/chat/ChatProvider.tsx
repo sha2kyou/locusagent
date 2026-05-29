@@ -29,6 +29,16 @@ import {
 import { convertMessage } from "./convert";
 import { coalesceHistory } from "./history";
 
+export interface PendingAttachment {
+  id: string;
+  name: string;
+  size: number;
+  text?: string;
+  processable: boolean;
+  unsupportedReason?: string;
+  truncated: boolean;
+}
+
 interface ChatContextValue {
   sessions: SessionMeta[];
   loadingSessions: boolean;
@@ -39,6 +49,10 @@ interface ChatContextValue {
   isRunning: boolean;
   lastErrored: boolean;
   canRegenerate: boolean;
+  pendingAttachments: PendingAttachment[];
+  addPendingFiles: (files: FileList | File[]) => Promise<void>;
+  removePendingAttachment: (id: string) => void;
+  clearPendingAttachments: () => void;
   send: (text: string) => void;
   regenerate: () => void;
   newSession: () => void;
@@ -54,6 +68,9 @@ export function useChat() {
 }
 
 const DEFAULT_TITLE = "新对话";
+const MAX_FILE_SIZE = 256 * 1024;
+const MAX_TOTAL_ATTACHMENTS = 1;
+const MAX_ATTACHMENT_CHARS = 16000;
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const toast = useToast();
@@ -66,10 +83,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
 
   const currentIdRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const pollTokenRef = useRef(0);
+  const pendingAttachmentsRef = useRef<PendingAttachment[]>([]);
+
+  useEffect(() => {
+    pendingAttachmentsRef.current = pendingAttachments;
+  }, [pendingAttachments]);
 
   const setCurrent = (id: string | null) => {
     currentIdRef.current = id;
@@ -166,11 +189,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // ---- 发送 / 重跑 ----
   // appendUser=false 用于"重新生成 / 重试"：复用最后一条用户消息重跑，
   // 后端在 new_user == 库内最后一条 user 时不会重复落库（见 v1._prepare_messages）。
-  const runTurn = async (text: string, opts: { appendUser: boolean }) => {
+  const runTurn = async (
+    text: string,
+    opts: { appendUser: boolean; requestText?: string },
+  ) => {
     abortChat();
     setLastErrored(false);
     setMessages((prev) => {
-      if (opts.appendUser) return [...prev, userMessage(text), emptyAssistant()];
+      if (opts.appendUser) return [...prev, userMessage(text, opts.requestText ?? text), emptyAssistant()];
       const arr = [...prev];
       while (arr.length && arr[arr.length - 1].role === "assistant") arr.pop();
       return [...arr, emptyAssistant()];
@@ -182,7 +208,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     const sid = currentIdRef.current;
     const body = {
-      messages: [{ role: "user", content: text }],
+      messages: [{ role: "user", content: opts.requestText ?? text }],
       stream: true as const,
       ...(sid ? { session_id: sid } : {}),
     };
@@ -277,7 +303,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const send = (text: string) => runTurn(text, { appendUser: true });
+  const send = (text: string, requestText?: string) =>
+    runTurn(text, { appendUser: true, requestText });
 
   const regenerate = () => {
     if (isRunning) return;
@@ -301,6 +328,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setCurrent(null);
     setMessages([]);
     setIsRunning(false);
+    setPendingAttachments([]);
   };
 
   const selectSession = (id: string) => {
@@ -308,6 +336,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     stopActiveRunPoll();
     setCurrent(id);
     setIsRunning(false);
+    setPendingAttachments([]);
     void (async () => {
       try {
         const { items } = await getSessionMessages(id);
@@ -330,6 +359,64 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (currentIdRef.current === id) newSession();
   };
 
+  const removePendingAttachment = (id: string) => {
+    setPendingAttachments((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const clearPendingAttachments = () => {
+    setPendingAttachments([]);
+  };
+
+  const addPendingFiles = async (files: FileList | File[]) => {
+    const current = pendingAttachmentsRef.current;
+    const remain = MAX_TOTAL_ATTACHMENTS - current.length;
+    const selected = Array.from(files).slice(0, 1);
+    if (selected.length === 0) return;
+    if (Array.from(files).length > 1) {
+      toast("一次仅支持添加 1 个附件", "info");
+    }
+    const next: PendingAttachment[] = [];
+    for (const file of selected) {
+      if (file.size > MAX_FILE_SIZE) {
+        toast(`${file.name} 超过 ${Math.round(MAX_FILE_SIZE / 1024)}KB，已跳过`, "error");
+        continue;
+      }
+      try {
+        const processable = isProcessableTextFile(file);
+        if (!processable) {
+          next.push({
+            id: uid("f"),
+            name: file.name,
+            size: file.size,
+            processable: false,
+            unsupportedReason: "当前仅支持解析文本类附件",
+            truncated: false,
+          });
+        } else {
+          const raw = await file.text();
+          const normalized = raw.replace(/\r\n/g, "\n");
+          const truncated = normalized.length > MAX_ATTACHMENT_CHARS;
+          next.push({
+            id: uid("f"),
+            name: file.name,
+            size: file.size,
+            text: truncated ? `${normalized.slice(0, MAX_ATTACHMENT_CHARS)}\n...（文件过长，已截断）` : normalized,
+            processable: true,
+            truncated,
+          });
+        }
+      } catch {
+        toast(`${file.name} 读取失败，请重试`, "error");
+      }
+    }
+    if (next.length > 0) {
+      if (remain <= 0) {
+        toast("已替换为新附件", "info");
+      }
+      setPendingAttachments(next);
+    }
+  };
+
   const runtime = useExternalStoreRuntime({
     isRunning,
     messages,
@@ -340,7 +427,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         .map((c) => (c.type === "text" ? c.text : ""))
         .join("")
         .trim();
-      if (text) await send(text);
+      const attachments = pendingAttachmentsRef.current;
+      if (!text && attachments.length === 0) return;
+      const displayText = buildDisplayText(text, attachments);
+      const requestText = buildRequestText(text, attachments);
+      clearPendingAttachments();
+      await send(displayText, requestText);
     },
     onCancel: cancel,
   });
@@ -357,6 +449,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         isRunning,
         lastErrored,
         canRegenerate: !isRunning && messages.some((m) => m.role === "user"),
+        pendingAttachments,
+        addPendingFiles,
+        removePendingAttachment,
+        clearPendingAttachments,
         send: (text: string) => {
           void send(text);
         },
@@ -381,9 +477,89 @@ function lastAssistantIndex(msgs: ChatMessage[]): number {
 function lastUserText(msgs: ChatMessage[]): string | null {
   for (let i = msgs.length - 1; i >= 0; i--) {
     if (msgs[i].role === "user") {
-      const t = msgs[i].parts.map((p) => (p.type === "text" ? p.text : "")).join("").trim();
+      const t = (
+        msgs[i].sourceText ??
+        msgs[i].parts.map((p) => (p.type === "text" ? p.text : "")).join("")
+      ).trim();
       return t || null;
     }
   }
   return null;
+}
+
+function buildDisplayText(text: string, attachments: PendingAttachment[]): string {
+  const clean = text.trim();
+  if (attachments.length === 0) return clean;
+  const file = attachments[0];
+  const status = file.processable ? "" : "（该格式暂不支持解析）";
+  const header = `已附加文件：${file.name}${status}`;
+  return clean ? `${clean}\n\n${header}` : header;
+}
+
+function buildRequestText(text: string, attachments: PendingAttachment[]): string {
+  const clean = text.trim();
+  if (attachments.length === 0) return clean;
+  const file = attachments[0];
+  if (!file.processable) {
+    return [
+      clean,
+      `用户上传了 1 个附件：name=${file.name}, size=${formatBytes(file.size)}。`,
+      `该附件当前无法解析内容（${file.unsupportedReason ?? "未知原因"}）。`,
+      "请直接告知用户：当前无法处理该格式附件；请改为上传文本文件，或把内容粘贴到对话中。",
+      "不要猜测或编造附件内容。",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }
+  const meta = [
+    `name=${file.name}`,
+    `size=${formatBytes(file.size)}`,
+    file.truncated ? "truncated=true" : "truncated=false",
+  ].join(", ");
+  return [clean, "以下是用户上传的附件内容：", `[附件 1] (${meta})\n${file.text ?? ""}`]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function formatBytes(size: number): string {
+  if (size < 1024) return `${size}B`;
+  return `${(size / 1024).toFixed(1)}KB`;
+}
+
+function isProcessableTextFile(file: File): boolean {
+  if (file.type.startsWith("text/")) return true;
+  const lower = file.name.toLowerCase();
+  const textExts = [
+    ".txt",
+    ".md",
+    ".markdown",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".conf",
+    ".csv",
+    ".log",
+    ".xml",
+    ".html",
+    ".css",
+    ".js",
+    ".jsx",
+    ".ts",
+    ".tsx",
+    ".py",
+    ".java",
+    ".go",
+    ".rs",
+    ".c",
+    ".cc",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".sh",
+    ".sql",
+  ];
+  return textExts.some((ext) => lower.endsWith(ext));
 }

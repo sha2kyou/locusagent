@@ -30,6 +30,16 @@ class ToolRegistry:
     def list(self) -> list[Tool]:
         return [t for t in self._tools.values() if t.enabled]
 
+    def all(self) -> list[Tool]:
+        return list(self._tools.values())
+
+    def set_enabled(self, name: str, enabled: bool) -> bool:
+        tool = self._tools.get(name)
+        if tool is None:
+            return False
+        tool.enabled = enabled
+        return True
+
     def schemas(self) -> list[dict[str, Any]]:
         return [t.to_openai_schema() for t in self.list()]
 

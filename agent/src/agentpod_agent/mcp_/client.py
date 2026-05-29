@@ -20,7 +20,9 @@ from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamablehttp_client
 
 from ..logging import get_logger
-from ..tools import Tool, ToolError, ToolResult, registry as tool_registry
+from ..tool_settings import is_mcp_server_enabled
+from ..tools import Tool, ToolError, ToolResult
+from ..tools import registry as tool_registry
 from .config import MCPServerConfig, get_mcp_server, list_mcp_servers
 
 log = get_logger("mcp")
@@ -113,7 +115,7 @@ class MCPManager:
                     description=description,
                     parameters=schema,
                     handler=_handler,
-                    enabled=True,
+                    enabled=is_mcp_server_enabled(server_name),
                     category=f"mcp:{server_name}",
                 )
             )

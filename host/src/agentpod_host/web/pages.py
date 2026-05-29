@@ -18,16 +18,20 @@ SPA_DIR = WEB_DIR / "spa"
 SPA_INDEX = SPA_DIR / "index.html"
 
 # 前端 Router 暴露的客户端路由，全部回退到 index.html
-CLIENT_ROUTES = ("/", "/login", "/chat", "/skills", "/mcp", "/memory")
+CLIENT_ROUTES = ("/", "/login", "/chat", "/tools", "/skills", "/mcp", "/memory")
 
 
 class ImmutableStaticFiles(StaticFiles):
-    """Vite 产物文件名带内容哈希，可长期不可变缓存，避免重复访问重新下载。"""
+    """静态资源统一短缓存。
+
+    当前前端使用稳定文件名（如 index.js/index.css），不能使用 immutable 长缓存，
+    否则新版本部署后浏览器会长期命中旧资源。
+    """
 
     async def get_response(self, path: str, scope: Scope):
         response = await super().get_response(path, scope)
         if response.status_code == 200:
-            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            response.headers["Cache-Control"] = "no-cache"
         return response
 
 

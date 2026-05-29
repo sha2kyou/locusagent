@@ -19,9 +19,10 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onLogout: () => void;
+  required?: boolean;
 }
 
-export function SettingsModal({ open, onClose, onLogout }: Props) {
+export function SettingsModal({ open, onClose, onLogout, required = false }: Props) {
   const toast = useToast();
   const { confirm } = useDialogs();
   const { me, reload } = useAuth();
@@ -46,6 +47,7 @@ export function SettingsModal({ open, onClose, onLogout }: Props) {
   }, [open]);
 
   const configured = cfg?.configured ?? false;
+  const mustConfigure = required && !configured;
   const dirty = configured
     ? baseUrl !== (cfg?.base_url ?? "") || model !== (cfg?.model ?? "") || apiKey.length >= 8
     : baseUrl.trim().length > 0 && model.trim().length > 0 && apiKey.length >= 8;
@@ -64,6 +66,7 @@ export function SettingsModal({ open, onClose, onLogout }: Props) {
         "success",
       );
       await reload();
+      if (required && next.configured) onClose();
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
@@ -90,7 +93,15 @@ export function SettingsModal({ open, onClose, onLogout }: Props) {
 
   return (
     <>
-      <Modal open={open} onClose={onClose} title="设置" description="配置对话模型与外部访问" size="lg">
+      <Modal
+        open={open}
+        onClose={onClose}
+        title="设置"
+        description={mustConfigure ? "首次使用请先完成模型配置，完成前无法关闭。" : "配置对话模型与外部访问"}
+        size="lg"
+        showClose={!mustConfigure}
+        closeDisabled={mustConfigure}
+      >
         <div className="space-y-5">
           {/* LLM */}
           <section className="rounded-lg border border-border bg-surface/40 p-4">
@@ -134,29 +145,33 @@ export function SettingsModal({ open, onClose, onLogout }: Props) {
             </div>
           </section>
 
-          {/* 外部 API Key */}
-          <section className="rounded-lg border border-border bg-surface/40 p-4">
-            <div className="mb-1 flex items-center gap-2">
-              <h3 className="text-sm font-semibold">外部 API Key</h3>
-              {me?.agent_api_key_configured ? (
-                <Badge variant="brand">已签发</Badge>
-              ) : (
-                <Badge>未签发</Badge>
-              )}
-            </div>
-            <p className="mb-3 text-xs text-muted-foreground">
-              供外部客户端调用 <code className="rounded bg-secondary px-1">/api/v1/*</code>，与上方模型 Key 无关。
-            </p>
-            <Button variant="secondary" onClick={rotate}>
-              <KeyRound className="size-4" /> 重置外部 API Key
-            </Button>
-          </section>
+          {!mustConfigure ? (
+            <>
+              {/* 外部 API Key */}
+              <section className="rounded-lg border border-border bg-surface/40 p-4">
+                <div className="mb-1 flex items-center gap-2">
+                  <h3 className="text-sm font-semibold">外部 API Key</h3>
+                  {me?.agent_api_key_configured ? (
+                    <Badge variant="brand">已签发</Badge>
+                  ) : (
+                    <Badge>未签发</Badge>
+                  )}
+                </div>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  供外部客户端调用 <code className="rounded bg-secondary px-1">/api/v1/*</code>，与上方模型 Key 无关。
+                </p>
+                <Button variant="secondary" onClick={rotate}>
+                  <KeyRound className="size-4" /> 重置外部 API Key
+                </Button>
+              </section>
 
-          <div className="flex justify-end">
-            <Button variant="danger-ghost" size="sm" onClick={() => setDeleteOpen(true)}>
-              删除账户…
-            </Button>
-          </div>
+              <div className="flex justify-end">
+                <Button variant="danger-ghost" size="sm" onClick={() => setDeleteOpen(true)}>
+                  删除账户…
+                </Button>
+              </div>
+            </>
+          ) : null}
         </div>
       </Modal>
 

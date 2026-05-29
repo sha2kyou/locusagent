@@ -91,6 +91,7 @@ export interface Skill {
   triggers: string[];
   source: "private" | "public";
   body: string;
+  enabled?: boolean;
 }
 
 export interface McpTool {
@@ -112,6 +113,7 @@ export interface McpServer {
   tools: McpTool[];
   tool_count: number;
   runtime_error?: string;
+  enabled?: boolean;
 }
 
 export interface McpInput {
@@ -121,6 +123,20 @@ export interface McpInput {
   args?: string[];
   env?: Record<string, string>;
   url?: string;
+}
+
+export interface ToolToggleItem {
+  name: string;
+  description?: string;
+  source?: "private" | "public";
+  transport?: "stdio" | "http";
+  enabled: boolean;
+}
+
+export interface ToolToggleOverview {
+  builtin_tools: ToolToggleItem[];
+  skills: ToolToggleItem[];
+  mcp_servers: ToolToggleItem[];
 }
 
 export type MemoryAnchor = "identity" | "experience";

@@ -8,14 +8,15 @@ from __future__ import annotations
 from typing import Any
 
 from ..db import run_in_thread
-from ..memory import count_memories
 from ..mcp_.config import (
     MCPServerConfig,
     add_mcp_server,
     list_mcp_servers,
     remove_mcp_server,
 )
+from ..memory import count_memories
 from ..skills import list_skills
+from ..tool_settings import is_mcp_server_enabled, is_skill_enabled
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 
@@ -26,8 +27,8 @@ def _list_mcp_runtime():
 
 
 async def _summary() -> ToolResult:
-    skills = await run_in_thread(list_skills)
-    servers = await run_in_thread(list_mcp_servers)
+    skills = [s for s in await run_in_thread(list_skills) if is_skill_enabled(s.name)]
+    servers = [s for s in await run_in_thread(list_mcp_servers) if is_mcp_server_enabled(s.name)]
     mem_count = await count_memories()
     lines = [
         f"skills: {len(skills)} ({sum(1 for s in skills if s.source == 'public')} public + {sum(1 for s in skills if s.source == 'private')} private)",
@@ -38,7 +39,7 @@ async def _summary() -> ToolResult:
 
 
 async def _list_mcp() -> ToolResult:
-    servers = await run_in_thread(list_mcp_servers)
+    servers = [s for s in await run_in_thread(list_mcp_servers) if is_mcp_server_enabled(s.name)]
     if not servers:
         return ToolResult(content="(no mcp servers)")
     runtime = _list_mcp_runtime()

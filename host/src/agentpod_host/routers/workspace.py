@@ -37,6 +37,18 @@ async def proxy_mcp(
     return await proxy_to_user_container(request, ctx.user, target)
 
 
+@router.api_route("/tools", methods=PROXY_METHODS)
+@router.api_route("/tools/{kind}/{name}", methods=PROXY_METHODS)
+async def proxy_tools(
+    request: Request,
+    ctx: AuthContext = Depends(require_session),
+    kind: str | None = None,
+    name: str | None = None,
+):
+    target = f"/workspace/tools/{kind}/{name}" if kind and name else "/workspace/tools"
+    return await proxy_to_user_container(request, ctx.user, target)
+
+
 @router.api_route("/memory", methods=PROXY_METHODS)
 @router.api_route("/memory/{entry_id}", methods=PROXY_METHODS)
 async def proxy_memory(

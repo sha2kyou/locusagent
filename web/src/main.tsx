@@ -12,6 +12,9 @@ const ChatRoute = lazy(() => import("@/routes/ChatRoute").then((m) => ({ default
 const SkillsRoute = lazy(() =>
   import("@/features/skills/SkillsRoute").then((m) => ({ default: m.SkillsRoute })),
 );
+const ToolsRoute = lazy(() =>
+  import("@/features/tools/ToolsRoute").then((m) => ({ default: m.ToolsRoute })),
+);
 const McpRoute = lazy(() => import("@/features/mcp/McpRoute").then((m) => ({ default: m.McpRoute })));
 const MemoryRoute = lazy(() =>
   import("@/features/memory/MemoryRoute").then((m) => ({ default: m.MemoryRoute })),
@@ -29,6 +32,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/chat" replace /> },
       { path: "chat", element: <ChatRoute /> },
+      { path: "tools", element: <ToolsRoute /> },
       { path: "skills", element: <SkillsRoute /> },
       { path: "mcp", element: <McpRoute /> },
       { path: "memory", element: <MemoryRoute /> },

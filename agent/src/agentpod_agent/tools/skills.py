@@ -14,6 +14,7 @@ from ..skills import (
     list_skills,
     update_skill,
 )
+from ..tool_settings import is_skill_enabled
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 
@@ -22,11 +23,14 @@ async def _skill_view(args: dict[str, Any]) -> ToolResult:
 
     if not name:
         skills = await run_in_thread(list_skills)
+        skills = [s for s in skills if is_skill_enabled(s.name)]
         if not skills:
             return ToolResult(content="(no skills)")
         lines = [f"- {s.name} [{s.source}]: {s.description}" for s in skills]
         return ToolResult(content="\n".join(lines))
 
+    if not is_skill_enabled(name):
+        raise ToolError(f"skill disabled: {name}")
     s = await run_in_thread(get_skill, name)
     if s is None:
         raise ToolError(f"skill not found: {name}")

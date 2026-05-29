@@ -44,6 +44,7 @@ from ..core.run_manager import ERROR, FINISHED, start_stream_run
 from ..logging import get_logger
 from ..memory import enqueue_embedding, list_memories
 from ..skills import list_skills
+from ..tool_settings import is_skill_enabled
 from .v1_sessions import router as sessions_router
 
 router = APIRouter(prefix="/v1", tags=["v1"], dependencies=[Depends(verify_internal_token)])
@@ -141,7 +142,7 @@ async def _build_frozen_system_prompt() -> str:
     - 技能：仅注入紧凑索引；正文由模型按需 skill_view{name} 加载。
     - 记忆：注入冻结快照；回指/引用历史时由模型按需 recall。
     """
-    skills = list_skills()
+    skills = [s for s in list_skills() if is_skill_enabled(s.name)]
     settings = get_settings()
     pieces = [
         f"You are an AI agent operating in a sandboxed container for user {settings.user_id}.",
