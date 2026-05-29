@@ -11,6 +11,16 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from ..auth import verify_internal_token
+from ..artifacts import (
+    create_artifact,
+    create_category,
+    delete_artifact,
+    delete_category,
+    get_artifact,
+    list_artifacts,
+    list_categories,
+    update_artifact,
+)
 from ..core import (
     cancel_active_run,
     delete_session,
@@ -55,8 +65,6 @@ from ..tool_settings import (
     is_mcp_server_enabled,
     is_skill_enabled,
     set_builtin_tool_enabled,
-    set_mcp_server_enabled,
-    set_skill_enabled,
 )
 from ..tools import registry as tool_registry
 
@@ -171,8 +179,6 @@ class ToolToggleIn(BaseModel):
 
 @router.get("/tools")
 async def workspace_list_tools() -> dict:
-    skills = await run_in_thread(list_skills)
-    mcp_servers = await run_in_thread(list_mcp_servers)
     builtins = [
         {
             "name": tool.name,
@@ -183,26 +189,7 @@ async def workspace_list_tools() -> dict:
         if tool.category == "builtin"
     ]
     builtins.sort(key=lambda t: t["name"])
-    return {
-        "builtin_tools": builtins,
-        "skills": [
-            {
-                "name": s.name,
-                "description": s.description,
-                "source": s.source,
-                "enabled": is_skill_enabled(s.name),
-            }
-            for s in skills
-        ],
-        "mcp_servers": [
-            {
-                "name": s.name,
-                "transport": s.transport,
-                "enabled": is_mcp_server_enabled(s.name),
-            }
-            for s in mcp_servers
-        ],
-    }
+    return {"builtin_tools": builtins}
 
 
 @router.put("/tools/builtin/{name}")
@@ -212,25 +199,6 @@ async def workspace_toggle_builtin_tool(name: str, payload: ToolToggleIn) -> dic
         raise WsError("tool_not_found", "builtin tool not found", status_code=404)
     tool.enabled = payload.enabled
     await run_in_thread(set_builtin_tool_enabled, name, payload.enabled)
-    return {"name": name, "enabled": payload.enabled}
-
-
-@router.put("/tools/skills/{name}")
-async def workspace_toggle_skill(name: str, payload: ToolToggleIn) -> dict:
-    skill = await run_in_thread(get_skill, name)
-    if skill is None:
-        raise WsError("skill_not_found", "skill not found", status_code=404)
-    await run_in_thread(set_skill_enabled, name, payload.enabled)
-    return {"name": name, "enabled": payload.enabled}
-
-
-@router.put("/tools/mcp/{name}")
-async def workspace_toggle_mcp(name: str, payload: ToolToggleIn) -> dict:
-    cfg = await run_in_thread(get_mcp_server, name)
-    if cfg is None:
-        raise WsError("mcp_not_found", "mcp server not found", status_code=404)
-    await run_in_thread(set_mcp_server_enabled, name, payload.enabled)
-    _set_mcp_tools_enabled(name, payload.enabled)
     return {"name": name, "enabled": payload.enabled}
 
 
@@ -428,4 +396,91 @@ async def workspace_delete_session(session_id: str) -> dict:
         ok = await delete_session(session_id)
     if not ok:
         raise WsError("session_not_found", "session not found", status_code=404)
+    return {"deleted": True}
+
+
+class CategoryIn(BaseModel):
+    name: str
+
+
+class ArtifactIn(BaseModel):
+    title: str
+    content: str
+    type: Literal["markdown", "html", "text"] = "markdown"
+    category_id: str | None = None
+
+
+class ArtifactUpdateIn(BaseModel):
+    title: str | None = None
+    content: str | None = None
+    category_id: str | None = None
+
+
+@router.get("/artifact-categories")
+async def workspace_list_categories() -> dict:
+    return {"items": await list_categories()}
+
+
+@router.post("/artifact-categories", status_code=201)
+async def workspace_create_category(payload: CategoryIn) -> dict:
+    name = payload.name.strip()
+    if not name:
+        raise WsError("category_empty", "name is empty", status_code=400)
+    return await create_category(name)
+
+
+@router.delete("/artifact-categories/{category_id}")
+async def workspace_delete_category(category_id: str) -> dict:
+    ok = await delete_category(category_id)
+    if not ok:
+        raise WsError("category_not_found", "category not found", status_code=404)
+    return {"deleted": True}
+
+
+@router.get("/artifacts")
+async def workspace_list_artifacts(category_id: str | None = None) -> dict:
+    return {"items": await list_artifacts(category_id)}
+
+
+@router.get("/artifacts/{artifact_id}")
+async def workspace_get_artifact(artifact_id: str) -> dict:
+    item = await get_artifact(artifact_id)
+    if item is None:
+        raise WsError("artifact_not_found", "artifact not found", status_code=404)
+    return item
+
+
+@router.post("/artifacts", status_code=201)
+async def workspace_create_artifact(payload: ArtifactIn) -> dict:
+    title = payload.title.strip()
+    if not title:
+        raise WsError("artifact_empty", "title is empty", status_code=400)
+    return await create_artifact(
+        title=title,
+        content=payload.content,
+        type=payload.type,
+        category_id=payload.category_id,
+    )
+
+
+@router.put("/artifacts/{artifact_id}")
+async def workspace_update_artifact(artifact_id: str, payload: ArtifactUpdateIn) -> dict:
+    if payload.title is None and payload.content is None and payload.category_id is None:
+        raise WsError("artifact_update_empty", "nothing to update", status_code=400)
+    ok = await update_artifact(
+        artifact_id,
+        title=payload.title.strip() if payload.title is not None else None,
+        content=payload.content,
+        category_id=payload.category_id,
+    )
+    if not ok:
+        raise WsError("artifact_not_found", "artifact not found", status_code=404)
+    return {"updated": True}
+
+
+@router.delete("/artifacts/{artifact_id}")
+async def workspace_delete_artifact(artifact_id: str) -> dict:
+    ok = await delete_artifact(artifact_id)
+    if not ok:
+        raise WsError("artifact_not_found", "artifact not found", status_code=404)
     return {"deleted": True}

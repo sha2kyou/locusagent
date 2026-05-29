@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.types import Scope
@@ -17,8 +17,8 @@ WEB_DIR = Path(__file__).resolve().parent
 SPA_DIR = WEB_DIR / "spa"
 SPA_INDEX = SPA_DIR / "index.html"
 
-# 前端 Router 暴露的客户端路由，全部回退到 index.html
-CLIENT_ROUTES = ("/", "/login", "/chat", "/tools", "/skills", "/mcp", "/memory")
+# 后端保留前缀：这些路径不回退到 SPA，未匹配时返回 404
+API_PREFIXES = ("api/", "internal/", "assets/")
 
 
 class ImmutableStaticFiles(StaticFiles):
@@ -47,9 +47,13 @@ def install_pages(app: FastAPI) -> None:
         # index.html 引用哈希资源，必须每次校验，避免新部署被缓存挡住
         return FileResponse(SPA_INDEX, headers={"Cache-Control": "no-cache"})
 
-    for route in CLIENT_ROUTES:
-        app.add_api_route(route, spa_index, methods=["GET"], include_in_schema=False)
-
     @app.get("/favicon.ico", include_in_schema=False)
     async def favicon():
         return HTMLResponse("", status_code=204)
+
+    # 通用 history 回退：非后端前缀的 GET 一律返回 index.html，交由前端 Router 处理
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_fallback(full_path: str) -> FileResponse:
+        if full_path.startswith(API_PREFIXES):
+            raise HTTPException(status_code=404)
+        return spa_index()

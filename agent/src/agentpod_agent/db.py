@@ -81,6 +81,27 @@ CREATE TABLE IF NOT EXISTS responses (
     updated_at           TIMESTAMP NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_responses_session ON responses(session_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS artifact_categories (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL UNIQUE,
+    created_at  TIMESTAMP NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS artifacts (
+    id              TEXT PRIMARY KEY,
+    category_id     TEXT,
+    type            TEXT NOT NULL DEFAULT 'text',
+    title           TEXT NOT NULL,
+    content         TEXT NOT NULL,
+    embedding       BLOB,
+    embedding_state TEXT NOT NULL DEFAULT 'pending',
+    created_at      TIMESTAMP NOT NULL DEFAULT (datetime('now')),
+    updated_at      TIMESTAMP NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_artifacts_category ON artifacts(category_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_artifacts_created ON artifacts(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_artifacts_embed_state ON artifacts(embedding_state);
 """
 
 
@@ -172,6 +193,18 @@ def init_db() -> None:
         sess_cols = {str(r["name"]) for r in c.execute("PRAGMA table_info(sessions)").fetchall()}
         if "system_prompt" not in sess_cols:
             c.execute("ALTER TABLE sessions ADD COLUMN system_prompt TEXT")
+        art_cols = {str(r["name"]) for r in c.execute("PRAGMA table_info(artifacts)").fetchall()}
+        if art_cols and "type" not in art_cols:
+            c.execute("ALTER TABLE artifacts ADD COLUMN type TEXT NOT NULL DEFAULT 'text'")
+        if art_cols and "embedding" not in art_cols:
+            c.execute("ALTER TABLE artifacts ADD COLUMN embedding BLOB")
+        if art_cols and "embedding_state" not in art_cols:
+            c.execute(
+                "ALTER TABLE artifacts ADD COLUMN embedding_state TEXT NOT NULL DEFAULT 'pending'"
+            )
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_artifacts_embed_state ON artifacts(embedding_state)"
+        )
         _init_messages_fts(c)
         for stmt in (
             """

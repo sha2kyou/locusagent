@@ -1,6 +1,8 @@
 import { apiGet, apiSend } from "./client";
 import type {
   ActiveRunResponse,
+  ArtifactCategory,
+  ArtifactEntry,
   LLMConfig,
   McpInput,
   McpServer,
@@ -87,20 +89,6 @@ export const updateBuiltinToolToggle = (name: string, enabled: boolean) =>
     { enabled },
   );
 
-export const updateSkillToggle = (name: string, enabled: boolean) =>
-  apiSend<{ name: string; enabled: boolean }>(
-    `/api/workspace/tools/skills/${encodeURIComponent(name)}`,
-    "PUT",
-    { enabled },
-  );
-
-export const updateMcpToggle = (name: string, enabled: boolean) =>
-  apiSend<{ name: string; enabled: boolean }>(
-    `/api/workspace/tools/mcp/${encodeURIComponent(name)}`,
-    "PUT",
-    { enabled },
-  );
-
 // ---- 记忆 ----
 export const listMemory = (limit = 100) =>
   apiGet<{ items: MemoryEntry[] }>(`/api/workspace/memory?limit=${limit}`);
@@ -113,3 +101,35 @@ export const updateMemory = (id: number, body: { content?: string; anchor?: Memo
 
 export const deleteMemory = (id: number) =>
   apiSend<{ deleted: boolean }>(`/api/workspace/memory/${id}`, "DELETE");
+
+// ---- 产物类目（子菜单） ----
+export const listArtifactCategories = () =>
+  apiGet<{ items: ArtifactCategory[] }>("/api/workspace/artifact-categories");
+
+export const createArtifactCategory = (name: string) =>
+  apiSend<ArtifactCategory>("/api/workspace/artifact-categories", "POST", { name });
+
+export const deleteArtifactCategory = (id: string) =>
+  apiSend<{ deleted: boolean }>(
+    `/api/workspace/artifact-categories/${encodeURIComponent(id)}`,
+    "DELETE",
+  );
+
+// ---- 产物 ----
+export const listArtifacts = (categoryId?: string) =>
+  apiGet<{ items: ArtifactEntry[] }>(
+    categoryId
+      ? `/api/workspace/artifacts?category_id=${encodeURIComponent(categoryId)}`
+      : "/api/workspace/artifacts",
+  );
+
+export const getArtifact = (id: string) =>
+  apiGet<ArtifactEntry>(`/api/workspace/artifacts/${encodeURIComponent(id)}`);
+
+export const updateArtifact = (
+  id: string,
+  body: { title?: string; content?: string; category_id?: string },
+) => apiSend<{ updated: boolean }>(`/api/workspace/artifacts/${encodeURIComponent(id)}`, "PUT", body);
+
+export const deleteArtifact = (id: string) =>
+  apiSend<{ deleted: boolean }>(`/api/workspace/artifacts/${encodeURIComponent(id)}`, "DELETE");

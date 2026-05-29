@@ -161,6 +161,19 @@
   .apod-fade {
     animation: apod-fade 0.15s ease-out;
   }
+  @keyframes apod-enter-right {
+    from {
+      opacity: 0;
+      transform: translateX(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  .apod-enter-right {
+    animation: apod-enter-right 0.2s ease-out;
+  }
 
   /* 流式输出光标 */
   @keyframes apod-blink {

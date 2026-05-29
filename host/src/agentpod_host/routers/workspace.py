@@ -38,14 +38,13 @@ async def proxy_mcp(
 
 
 @router.api_route("/tools", methods=PROXY_METHODS)
-@router.api_route("/tools/{kind}/{name}", methods=PROXY_METHODS)
+@router.api_route("/tools/builtin/{name}", methods=PROXY_METHODS)
 async def proxy_tools(
     request: Request,
     ctx: AuthContext = Depends(require_session),
-    kind: str | None = None,
     name: str | None = None,
 ):
-    target = f"/workspace/tools/{kind}/{name}" if kind and name else "/workspace/tools"
+    target = f"/workspace/tools/builtin/{name}" if name else "/workspace/tools"
     return await proxy_to_user_container(request, ctx.user, target)
 
 
@@ -86,6 +85,32 @@ async def cancel_session_run(
 ):
     """按 session 粒度取消运行中的任务，避免容器级 stop 造成 run 状态残留。"""
     return await proxy_to_user_container(request, ctx.user, f"/workspace/sessions/{session_id}/cancel")
+
+
+@router.api_route("/artifact-categories", methods=PROXY_METHODS)
+@router.api_route("/artifact-categories/{category_id}", methods=PROXY_METHODS)
+async def proxy_artifact_categories(
+    request: Request,
+    ctx: AuthContext = Depends(require_session),
+    category_id: str | None = None,
+):
+    target = (
+        f"/workspace/artifact-categories/{category_id}"
+        if category_id
+        else "/workspace/artifact-categories"
+    )
+    return await proxy_to_user_container(request, ctx.user, target)
+
+
+@router.api_route("/artifacts", methods=PROXY_METHODS)
+@router.api_route("/artifacts/{artifact_id}", methods=PROXY_METHODS)
+async def proxy_artifacts(
+    request: Request,
+    ctx: AuthContext = Depends(require_session),
+    artifact_id: str | None = None,
+):
+    target = f"/workspace/artifacts/{artifact_id}" if artifact_id else "/workspace/artifacts"
+    return await proxy_to_user_container(request, ctx.user, target)
 
 
 @router.post("/chat/completions")

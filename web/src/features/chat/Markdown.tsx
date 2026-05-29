@@ -231,7 +231,7 @@ function HtmlPending() {
   );
 }
 
-function HtmlRender({ html }: { html: string }) {
+export function HtmlRender({ html }: { html: string }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [copied, setCopied] = useState(false);
   const [height, setHeight] = useState(320);

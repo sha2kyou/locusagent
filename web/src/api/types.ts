@@ -135,8 +135,6 @@ export interface ToolToggleItem {
 
 export interface ToolToggleOverview {
   builtin_tools: ToolToggleItem[];
-  skills: ToolToggleItem[];
-  mcp_servers: ToolToggleItem[];
 }
 
 export type MemoryAnchor = "identity" | "experience";
@@ -154,4 +152,22 @@ export interface LLMConfig {
   model: string;
   configured: boolean;
   provision_action: "none" | "starting" | "applying";
+}
+
+export interface ArtifactCategory {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
+export type ArtifactType = "markdown" | "html" | "text";
+
+export interface ArtifactEntry {
+  id: string;
+  category_id: string | null;
+  type: ArtifactType;
+  title: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
 }

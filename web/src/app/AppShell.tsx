@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { ArtifactsNav } from "@/features/artifacts/ArtifactsNav";
 import { useAuth } from "./auth";
 import { BrandMark } from "./Brand";
 import { ApiKeyFlashModal, SettingsModal } from "@/features/settings/SettingsModal";
@@ -31,8 +32,12 @@ export function useShell() {
   return ctx;
 }
 
-const NAV = [
-  { to: "/chat", label: "对话", icon: MessagesSquare },
+type NavEntry = { to: string; label: string; icon: typeof MessagesSquare };
+
+// 内容类：日常产出与消费
+const NAV_PRIMARY: NavEntry[] = [{ to: "/chat", label: "对话", icon: MessagesSquare }];
+// 配置类：能力与上下文管理
+const NAV_SECONDARY: NavEntry[] = [
   { to: "/tools", label: "工具", icon: Wrench },
   { to: "/skills", label: "技能", icon: Sparkles },
   { to: "/mcp", label: "MCP", icon: Blocks },
@@ -106,35 +111,15 @@ export function AppShell() {
           </div>
 
           <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
-            {NAV.map(({ to, label, icon: Icon }) => (
-              <NavLink
-                key={to}
-                to={to}
-                title={label}
-                onClick={() => setNavOpen(false)}
-                className={({ isActive }) =>
-                  cn(
-                    "group relative flex h-10 items-center gap-3 rounded-lg px-2.5 text-sm font-medium transition-colors",
-                    !expanded && "md:justify-center",
-                    isActive
-                      ? "bg-sidebar-accent text-foreground"
-                      : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
-                  )
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    <span
-                      className={cn(
-                        "absolute left-0 h-5 w-0.5 rounded-full bg-brand transition-opacity",
-                        isActive ? "opacity-100" : "opacity-0",
-                      )}
-                    />
-                    <Icon className="size-[18px] shrink-0" />
-                    <span className={cn("truncate", !expanded && "md:hidden")}>{label}</span>
-                  </>
-                )}
-              </NavLink>
+            {NAV_PRIMARY.map((item) => (
+              <NavRow key={item.to} {...item} expanded={expanded} onNavigate={() => setNavOpen(false)} />
+            ))}
+            <ArtifactsNav expanded={expanded} onNavigate={() => setNavOpen(false)} />
+
+            <div className="mx-1 my-1.5 border-t border-sidebar-border/70" />
+
+            {NAV_SECONDARY.map((item) => (
+              <NavRow key={item.to} {...item} expanded={expanded} onNavigate={() => setNavOpen(false)} />
             ))}
           </nav>
 
@@ -251,6 +236,44 @@ export function AppShell() {
       />
       <ApiKeyFlashModal value={flashKey} onClose={() => setFlashKey(null)} />
     </ShellContext.Provider>
+  );
+}
+
+function NavRow({
+  to,
+  label,
+  icon: Icon,
+  expanded,
+  onNavigate,
+}: NavEntry & { expanded: boolean; onNavigate: () => void }) {
+  return (
+    <NavLink
+      to={to}
+      title={label}
+      onClick={onNavigate}
+      className={({ isActive }) =>
+        cn(
+          "group relative flex h-10 items-center gap-3 rounded-lg px-2.5 text-sm font-medium transition-colors",
+          !expanded && "md:justify-center",
+          isActive
+            ? "bg-sidebar-accent text-foreground"
+            : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+        )
+      }
+    >
+      {({ isActive }) => (
+        <>
+          <span
+            className={cn(
+              "absolute left-0 h-5 w-0.5 rounded-full bg-brand transition-opacity",
+              isActive ? "opacity-100" : "opacity-0",
+            )}
+          />
+          <Icon className="size-[18px] shrink-0" />
+          <span className={cn("truncate", !expanded && "md:hidden")}>{label}</span>
+        </>
+      )}
+    </NavLink>
   );
 }
 

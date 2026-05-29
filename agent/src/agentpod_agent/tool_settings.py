@@ -56,20 +56,6 @@ def set_builtin_tool_enabled(name: str, enabled: bool) -> ToolSettings:
     return data
 
 
-def set_skill_enabled(name: str, enabled: bool) -> ToolSettings:
-    data = load_tool_settings()
-    data.skills[name] = bool(enabled)
-    save_tool_settings(data)
-    return data
-
-
-def set_mcp_server_enabled(name: str, enabled: bool) -> ToolSettings:
-    data = load_tool_settings()
-    data.mcp_servers[name] = bool(enabled)
-    save_tool_settings(data)
-    return data
-
-
 def is_skill_enabled(name: str) -> bool:
     data = load_tool_settings()
     return data.skills.get(name, True)
