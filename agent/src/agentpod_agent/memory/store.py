@@ -166,6 +166,8 @@ async def recall(query: str, top_k: int = 5) -> list[str]:
     except EmbeddingUnavailable:
         return await _keyword_recall(query, top_k)
 
+    max_distance = settings.recall_max_distance
+
     def _do() -> list[str]:
         with conn_scope(load_vec=True) as c:
             rows = c.execute(
@@ -178,7 +180,7 @@ async def recall(query: str, top_k: int = 5) -> list[str]:
                 """,
                 (q_blob, top_k),
             ).fetchall()
-            return [r["content"] for r in rows]
+            return [r["content"] for r in rows if r["score"] is not None and r["score"] <= max_distance]
 
     try:
         vec_texts = await run_in_thread(_do)

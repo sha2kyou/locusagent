@@ -9,6 +9,7 @@ P0 非流式：完整等待 LLM 回复后再返回；后续可加流式。
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import AsyncIterator, Iterable
 from dataclasses import dataclass
@@ -19,7 +20,7 @@ from openai.types.chat import ChatCompletion
 from ..config import get_settings
 from ..logging import get_logger
 from ..tools import ToolError, ToolRegistry
-from .context import truncate
+from .context import compress
 from .llm import get_llm_client
 
 log = get_logger("loop")
@@ -88,46 +89,38 @@ def _normalize_chat_tool_calls(
     return normalized
 
 
+async def _execute_one_tool_call(registry: ToolRegistry, tc: Any) -> dict[str, Any]:
+    name = tc.function.name
+    raw_args = tc.function.arguments or "{}"
+    try:
+        args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
+    except json.JSONDecodeError as exc:
+        log.warning("tool_args_parse_failed", tool=name, error=str(exc))
+        return {
+            "role": "tool",
+            "tool_call_id": tc.id,
+            "content": f"Error: invalid JSON arguments: {exc}",
+        }
+    try:
+        result = await registry.call(name, args)
+        log.info("tool_executed", tool=name)
+        return {"role": "tool", "tool_call_id": tc.id, "content": result.to_message()}
+    except ToolError as exc:
+        log.warning("tool_failed", tool=name, error=str(exc))
+        return {"role": "tool", "tool_call_id": tc.id, "content": f"Error: {exc}"}
+
+
 async def _execute_tool_calls(
     registry: ToolRegistry,
     tool_calls: Iterable[Any],
 ) -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
-    for tc in tool_calls:
-        name = tc.function.name
-        raw_args = tc.function.arguments or "{}"
-        try:
-            args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
-        except json.JSONDecodeError as exc:
-            log.warning("tool_args_parse_failed", tool=name, error=str(exc))
-            results.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": f"Error: invalid JSON arguments: {exc}",
-                }
-            )
-            continue
-        try:
-            result = await registry.call(name, args)
-            results.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": result.to_message(),
-                }
-            )
-            log.info("tool_executed", tool=name)
-        except ToolError as exc:
-            log.warning("tool_failed", tool=name, error=str(exc))
-            results.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": f"Error: {exc}",
-                }
-            )
-    return results
+    """并行执行同一轮的多个工具调用（gather 保持原顺序）。"""
+    calls = list(tool_calls)
+    if not calls:
+        return []
+    if len(calls) == 1:
+        return [await _execute_one_tool_call(registry, calls[0])]
+    return list(await asyncio.gather(*(_execute_one_tool_call(registry, tc) for tc in calls)))
 
 
 async def _finalize_without_tools(
@@ -174,7 +167,14 @@ async def run_chat_loop(
     final_text = ""
 
     for round_idx in range(1, max_rounds + 1):
-        working = truncate(working, max_tokens=token_limit)
+        working = await compress(
+            working,
+            max_tokens=token_limit,
+            client=client,
+            model=chosen_model,
+            keep_last=settings.context_keep_last,
+            min_middle=settings.context_distill_min_middle,
+        )
         log.info(
             "loop_round_start",
             round=round_idx,
@@ -314,7 +314,14 @@ async def run_chat_loop_stream(
     final_text = ""
 
     for round_idx in range(1, max_rounds + 1):
-        working = truncate(working, max_tokens=token_limit)
+        working = await compress(
+            working,
+            max_tokens=token_limit,
+            client=client,
+            model=chosen_model,
+            keep_last=settings.context_keep_last,
+            min_middle=settings.context_distill_min_middle,
+        )
         log.info(
             "loop_round_start",
             round=round_idx,
@@ -426,7 +433,7 @@ async def run_chat_loop_stream(
                 yield {"type": "tool_call", "name": stub.function.name, "id": stub.id}
             tool_results = await _execute_tool_calls(registry, stub_calls)
             for stub, r in zip(stub_calls, tool_results):
-                preview = (r.get("content") or "")[:200]
+                preview = (r.get("content") or "")[:1000]
                 yield {
                     "type": "tool_result",
                     "tool_call_id": r["tool_call_id"],

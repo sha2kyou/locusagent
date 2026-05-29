@@ -1,73 +1,50 @@
-"""前端页面：登录、Chat、Skills、MCP、Memory、Settings。"""
+"""前端托管：单页应用（React SPA）。
+
+构建产物位于 ``web/spa``（由 Vite 输出）。鉴权完全交由前端 ``AuthProvider``
+处理：访问任意页面时前端拉取 ``/api/me``，401 自动跳转 ``/login``。
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-
-from ..auth.session import read_session
+from starlette.types import Scope
 
 WEB_DIR = Path(__file__).resolve().parent
-TEMPLATES_DIR = WEB_DIR / "templates"
-STATIC_DIR = WEB_DIR / "static"
+SPA_DIR = WEB_DIR / "spa"
+SPA_INDEX = SPA_DIR / "index.html"
+
+# 前端 Router 暴露的客户端路由，全部回退到 index.html
+CLIENT_ROUTES = ("/", "/login", "/chat", "/skills", "/mcp", "/memory")
+
+
+class ImmutableStaticFiles(StaticFiles):
+    """Vite 产物文件名带内容哈希，可长期不可变缓存，避免重复访问重新下载。"""
+
+    async def get_response(self, path: str, scope: Scope):
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
 
 
 def install_pages(app: FastAPI) -> None:
-    templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
-    if STATIC_DIR.exists():
-        app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    if not SPA_INDEX.exists():
+        return
 
-    @app.get("/", include_in_schema=False)
-    async def root(request: Request):
-        if read_session(request) is not None:
-            return RedirectResponse("/chat", status_code=302)
-        return templates.TemplateResponse(request, "login.html", {})
+    assets_dir = SPA_DIR / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", ImmutableStaticFiles(directory=str(assets_dir)), name="assets")
 
-    @app.get("/dashboard", include_in_schema=False)
-    async def dashboard_redirect(request: Request):
-        if read_session(request) is None:
-            return RedirectResponse("/", status_code=302)
-        return RedirectResponse("/chat", status_code=302)
+    def spa_index() -> FileResponse:
+        # index.html 引用哈希资源，必须每次校验，避免新部署被缓存挡住
+        return FileResponse(SPA_INDEX, headers={"Cache-Control": "no-cache"})
 
-    @app.get("/settings", include_in_schema=False)
-    async def settings_redirect(request: Request):
-        if read_session(request) is None:
-            return RedirectResponse("/", status_code=302)
-        return RedirectResponse("/chat?settings=1", status_code=302)
-
-    @app.get("/skills", include_in_schema=False)
-    async def skills_page(request: Request):
-        if read_session(request) is None:
-            return RedirectResponse("/", status_code=302)
-        return templates.TemplateResponse(request, "app.html", {"page": "skills"})
-
-    @app.get("/mcp", include_in_schema=False)
-    async def mcp_page(request: Request):
-        if read_session(request) is None:
-            return RedirectResponse("/", status_code=302)
-        return templates.TemplateResponse(request, "app.html", {"page": "mcp"})
-
-    @app.get("/memory", include_in_schema=False)
-    async def memory_page(request: Request):
-        if read_session(request) is None:
-            return RedirectResponse("/", status_code=302)
-        return templates.TemplateResponse(request, "app.html", {"page": "memory"})
-
-    @app.get("/workspace", include_in_schema=False)
-    async def workspace_redirect(request: Request):
-        if read_session(request) is None:
-            return RedirectResponse("/", status_code=302)
-        return RedirectResponse("/skills", status_code=302)
-
-    @app.get("/chat", include_in_schema=False)
-    async def chat_page(request: Request):
-        if read_session(request) is None:
-            return RedirectResponse("/", status_code=302)
-        return templates.TemplateResponse(request, "app.html", {"page": "chat"})
+    for route in CLIENT_ROUTES:
+        app.add_api_route(route, spa_index, methods=["GET"], include_in_schema=False)
 
     @app.get("/favicon.ico", include_in_schema=False)
     async def favicon():

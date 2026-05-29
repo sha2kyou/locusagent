@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..db import run_in_thread
+from ..security import review_write
 from ..skills import (
     Skill,
     create_skill,
@@ -42,10 +43,14 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
         raise ToolError("name is required")
 
     if action == "create":
+        body = str(args.get("body", ""))
+        verdict = await review_write(f"{args.get('description', '')}\n\n{body}", kind="skill")
+        if not verdict.allowed:
+            raise ToolError(f"skill write blocked by guard: {verdict.reason}")
         skill = Skill(
             name=name,
             description=str(args.get("description", "")),
-            body=str(args.get("body", "")),
+            body=body,
             triggers=list(args.get("triggers", []) or []),
             source="private",
         )
@@ -56,12 +61,17 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
         return ToolResult(content=f"skill '{name}' created")
 
     if action == "update":
+        body = args.get("body")
+        if body is not None:
+            verdict = await review_write(str(body), kind="skill")
+            if not verdict.allowed:
+                raise ToolError(f"skill write blocked by guard: {verdict.reason}")
         try:
             await run_in_thread(
                 update_skill,
                 name,
                 description=args.get("description"),
-                body=args.get("body"),
+                body=body,
                 triggers=args.get("triggers"),
             )
         except FileNotFoundError as exc:

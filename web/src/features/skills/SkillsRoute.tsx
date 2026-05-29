@@ -1,0 +1,191 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Pencil, Trash2 } from "lucide-react";
+import { PageContainer } from "@/components/PageContainer";
+import { SkeletonList } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Input, Label, Textarea } from "@/components/ui/field";
+import { Badge } from "@/components/ui/badge";
+import { CollapsiblePanel, ListCard } from "@/components/ui/panel";
+import { useToast } from "@/components/ui/toast";
+import { useDialogs } from "@/components/ui/dialogs";
+import { ReadyGate } from "@/components/ReadyGate";
+import { createSkill, deleteSkill, listSkills, updateSkill } from "@/api/endpoints";
+import type { Skill } from "@/api/types";
+
+export function SkillsRoute() {
+  const toast = useToast();
+  const { confirm } = useDialogs();
+  const [items, setItems] = useState<Skill[] | null>(null);
+  const [query, setQuery] = useState("");
+  const [editing, setEditing] = useState<Skill | null>(null);
+
+  const [name, setName] = useState("");
+  const [desc, setDesc] = useState("");
+  const [triggers, setTriggers] = useState("");
+  const [body, setBody] = useState("");
+  const [saving, setSaving] = useState(false);
+  const formRef = useRef<HTMLDivElement>(null);
+
+  const load = async () => {
+    try {
+      const { items } = await listSkills();
+      setItems(items);
+    } catch (e) {
+      toast((e as Error).message, "error");
+      setItems([]);
+    }
+  };
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = items ?? [];
+    if (!q) return list;
+    return list.filter(
+      (s) => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q) || s.body.toLowerCase().includes(q),
+    );
+  }, [items, query]);
+
+  const pub = filtered.filter((s) => s.source === "public");
+  const priv = filtered.filter((s) => s.source === "private");
+
+  const resetForm = () => {
+    setEditing(null);
+    setName("");
+    setDesc("");
+    setTriggers("");
+    setBody("");
+  };
+
+  const startEdit = (s: Skill) => {
+    setEditing(s);
+    setName(s.name);
+    setDesc(s.description);
+    setTriggers(s.triggers.join(", "));
+    setBody(s.body);
+    requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
+  const submit = async () => {
+    setSaving(true);
+    const triggerList = triggers
+      .split(/[,，\n]/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+    try {
+      if (editing) {
+        await updateSkill(editing.name, { description: desc, body, triggers: triggerList });
+        toast("已更新", "success");
+      } else {
+        await createSkill({ name, description: desc, body, triggers: triggerList });
+        toast("已添加", "success");
+      }
+      resetForm();
+      await load();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (s: Skill) => {
+    if (!(await confirm({ title: "删除技能", body: `删除「${s.name}」？`, danger: true, confirmText: "删除" }))) return;
+    try {
+      await deleteSkill(s.name);
+      await load();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  };
+
+  return (
+    <PageContainer
+      title="技能"
+      subtitle="公共技能只读展示；私有技能可自行添加与管理"
+      actions={items && <Badge variant="outline">公共 {pub.length} / 私有 {priv.length}</Badge>}
+    >
+      <ReadyGate>
+        <div className="space-y-4">
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索技能…" />
+
+          {items === null ? (
+            <Loading />
+          ) : (
+            <div className="space-y-2">
+              {[...priv, ...pub].map((s) => (
+                <ListCard key={`${s.source}-${s.name}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{s.name}</span>
+                        {s.source === "public" ? <Badge>公共</Badge> : <Badge variant="brand">私有</Badge>}
+                      </div>
+                      {s.description && <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>}
+                      {s.triggers.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {s.triggers.map((t) => (
+                            <span key={t} className="rounded bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground">{t}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {s.source === "private" && (
+                      <div className="flex shrink-0 gap-1">
+                        <Button variant="ghost" size="icon-sm" onClick={() => startEdit(s)} aria-label="编辑"><Pencil /></Button>
+                        <Button variant="ghost" size="icon-sm" onClick={() => remove(s)} aria-label="删除"><Trash2 /></Button>
+                      </div>
+                    )}
+                  </div>
+                </ListCard>
+              ))}
+              {filtered.length === 0 && <Empty text={query ? "无匹配技能" : "暂无技能"} />}
+            </div>
+          )}
+
+          <div ref={formRef}>
+          <CollapsiblePanel summary={editing ? `编辑技能：${editing.name}` : "添加技能"} defaultOpen={!!editing}>
+            <div className="grid gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label>名称（唯一）</Label>
+                  <Input value={name} disabled={!!editing} onChange={(e) => setName(e.target.value)} placeholder="skill-name" />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label>描述</Label>
+                  <Input value={desc} onChange={(e) => setDesc(e.target.value)} />
+                </div>
+              </div>
+              <div className="grid gap-1.5">
+                <Label>触发词（逗号分隔，可选）</Label>
+                <Input value={triggers} onChange={(e) => setTriggers(e.target.value)} />
+              </div>
+              <div className="grid gap-1.5">
+                <Label>正文（Markdown）</Label>
+                <Textarea rows={5} value={body} onChange={(e) => setBody(e.target.value)} />
+              </div>
+              <div className="flex gap-2">
+                <Button variant="primary" disabled={saving || !name.trim()} onClick={submit}>
+                  {saving && <Loader2 className="size-4 animate-spin" />}
+                  {editing ? "保存" : "添加"}
+                </Button>
+                {editing && <Button variant="ghost" onClick={resetForm}>取消编辑</Button>}
+              </div>
+            </div>
+          </CollapsiblePanel>
+          </div>
+        </div>
+      </ReadyGate>
+    </PageContainer>
+  );
+}
+
+export function Loading() {
+  return <SkeletonList rows={5} />;
+}
+export function Empty({ text }: { text: string }) {
+  return <p className="py-8 text-center text-sm text-muted-foreground">{text}</p>;
+}

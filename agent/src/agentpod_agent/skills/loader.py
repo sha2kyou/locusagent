@@ -32,12 +32,6 @@ class Skill:
     source: str = "private"
     path: str | None = None
 
-    def matches(self, query: str) -> bool:
-        if not self.triggers:
-            return False
-        q = query.lower()
-        return any(t.lower() in q for t in self.triggers)
-
     def to_dict(self) -> dict:
         return {
             "name": self.name,

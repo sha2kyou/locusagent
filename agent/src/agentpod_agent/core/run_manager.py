@@ -16,14 +16,18 @@ from .persistence import (
     update_run,
     upsert_session_meta,
 )
+from .post_run import run_post_tasks
 from .session_title import maybe_generate_and_update_session_title
 
 log = get_logger("run_manager")
 
 FINISHED = "_finished"
 ERROR = "_error"
+CANCELLED_MARK = "run cancelled by user"
+HEARTBEAT_SECONDS = 60
 
 _active: dict[str, StreamRunHandle] = {}
+_post_tasks: set[asyncio.Task] = set()
 
 
 @dataclass
@@ -81,15 +85,13 @@ async def _persist_event(
         assistant_msg_id = state.get("assistant_msg_id")
         partial = str(state.get("partial_text") or "")
         already_after_tool_round = bool(state.get("after_tool_round"))
-        can_update_in_place = (
-            assistant_msg_id is not None
-            and not partial.strip()
-            and not already_after_tool_round
-        )
+        # 同一轮里：已有(可能含流式文本的)assistant 消息时就地补 tool_calls，
+        # 合并成规范的单条 assistant(content + tool_calls)，避免拆成两条
+        can_update_in_place = assistant_msg_id is not None and not already_after_tool_round
         if can_update_in_place:
             await update_message(
                 assistant_msg_id,
-                content=str(tool_msg.get("content") or ""),
+                content=str(tool_msg.get("content") or partial),
                 tool_calls=tool_msg.get("tool_calls"),
             )
         else:
@@ -134,6 +136,7 @@ async def _persist_event(
     if t == "done":
         state["final_text"] = ev.get("final_text") or ""
         state["total_tokens"] = int(ev.get("total_tokens") or 0)
+        state["tool_calls_made"] = int(ev.get("tool_calls_made") or 0)
 
 
 async def _finalize_run(session_id: str, run_id: str, state: dict[str, Any], *, error: str | None) -> None:
@@ -143,7 +146,8 @@ async def _finalize_run(session_id: str, run_id: str, state: dict[str, Any], *, 
     total_tokens = int(state.get("total_tokens") or 0)
     try:
         if error:
-            await update_run(run_id, status="failed", error_message=error)
+            status = "cancelled" if error == CANCELLED_MARK else "failed"
+            await update_run(run_id, status=status, error_message=error)
             return
         if assistant_msg_id is None:
             assistant_msg_id = await append_message(
@@ -198,6 +202,21 @@ async def _worker(
         "model": model,
     }
     stream_error: str | None = None
+
+    # 心跳：长工具调用期间无 delta 时也推进 run.updated_at，避免被 expire_stale_runs 误标
+    stop_heartbeat = asyncio.Event()
+
+    async def _heartbeat() -> None:
+        while not stop_heartbeat.is_set():
+            try:
+                await asyncio.wait_for(stop_heartbeat.wait(), timeout=HEARTBEAT_SECONDS)
+            except TimeoutError:
+                try:
+                    await update_run(handle.run_id)
+                except Exception:
+                    pass
+
+    heartbeat_task = asyncio.create_task(_heartbeat(), name=f"run-heartbeat-{handle.run_id}")
     try:
         async for ev in run_chat_loop_stream(
             messages,
@@ -223,7 +242,7 @@ async def _worker(
             await _persist_event(handle.session_id, handle.run_id, public, state)
             await handle.queue.put(public)
     except asyncio.CancelledError:
-        stream_error = "run cancelled by user"
+        stream_error = CANCELLED_MARK
         log.info("run_worker_cancelled", run_id=handle.run_id, session_id=handle.session_id)
         await handle.queue.put({"type": ERROR, "message": "已停止生成"})
     except Exception as exc:
@@ -239,8 +258,22 @@ async def _worker(
                 "error": stream_error,
             }
         )
+    stop_heartbeat.set()
+    heartbeat_task.cancel()
     await _finalize_run(handle.session_id, handle.run_id, state, error=stream_error)
     _active.pop(handle.run_id, None)
+
+    if stream_error is None:
+        post = asyncio.create_task(
+            run_post_tasks(
+                session_id=handle.session_id,
+                tool_calls_made=int(state.get("tool_calls_made") or 0),
+                model=str(state.get("model") or "") or None,
+            ),
+            name=f"post-run-{handle.run_id}",
+        )
+        _post_tasks.add(post)
+        post.add_done_callback(_post_tasks.discard)
 
 
 def start_stream_run(
@@ -286,6 +319,6 @@ async def cancel_active_run(session_id: str) -> bool:
     if handle and not handle.task.done():
         handle.task.cancel()
         return True
-    await update_run(run_id, status="failed", error_message="run cancelled by user")
+    await update_run(run_id, status="cancelled", error_message=CANCELLED_MARK)
     _active.pop(run_id, None)
     return True

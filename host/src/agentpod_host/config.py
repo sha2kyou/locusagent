@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     agent_memory_limit: str = Field(default="512m", alias="AGENT_MEMORY_LIMIT")
     agent_cpu_quota: int = Field(default=50000, alias="AGENT_CPU_QUOTA")
     agent_pids_limit: int = Field(default=256, alias="AGENT_PIDS_LIMIT")
+    # 每用户 /data 卷磁盘配额（如 "2g"）。空=不限。
+    # 仅在宿主 docker 卷所在 FS 支持 project quota（XFS pquota / ext4 project）时可用。
+    agent_disk_limit: str = Field(default="", alias="AGENT_DISK_LIMIT")
 
     idle_pause_seconds: int = Field(default=1800, alias="IDLE_PAUSE_SECONDS")
     pause_to_stop_seconds: int = Field(default=86400, alias="PAUSE_TO_STOP_SECONDS")

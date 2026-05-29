@@ -1,0 +1,209 @@
+import { useEffect, useRef, useState } from "react";
+import { Loader2, Pencil, Plug, RefreshCw, Trash2 } from "lucide-react";
+import { PageContainer } from "@/components/PageContainer";
+import { Button } from "@/components/ui/button";
+import { Input, Label, Select } from "@/components/ui/field";
+import { Badge, Dot } from "@/components/ui/badge";
+import { CollapsiblePanel, ListCard } from "@/components/ui/panel";
+import { useToast } from "@/components/ui/toast";
+import { useDialogs } from "@/components/ui/dialogs";
+import { ReadyGate } from "@/components/ReadyGate";
+import { Empty, Loading } from "@/features/skills/SkillsRoute";
+import { createMcp, deleteMcp, listMcp, reconnectMcp, testMcp, updateMcp } from "@/api/endpoints";
+import type { McpInput, McpServer } from "@/api/types";
+
+export function McpRoute() {
+  const toast = useToast();
+  const { confirm } = useDialogs();
+  const [items, setItems] = useState<McpServer[] | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+
+  const [name, setName] = useState("");
+  const [transport, setTransport] = useState<"stdio" | "http">("stdio");
+  const [command, setCommand] = useState("");
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const formRef = useRef<HTMLDivElement>(null);
+
+  const load = async () => {
+    try {
+      const { items } = await listMcp();
+      setItems(items);
+    } catch (e) {
+      toast((e as Error).message, "error");
+      setItems([]);
+    }
+  };
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const buildPayload = (): McpInput =>
+    transport === "stdio"
+      ? { name, transport, command: command.trim().split(/\s+/).filter(Boolean), args: [], env: {} }
+      : { name, transport, url: url.trim() };
+
+  const reset = () => {
+    setEditing(null);
+    setName("");
+    setTransport("stdio");
+    setCommand("");
+    setUrl("");
+  };
+
+  const startEdit = (s: McpServer) => {
+    setEditing(s.name);
+    setName(s.name);
+    setTransport(s.transport);
+    setCommand((s.command ?? []).join(" "));
+    setUrl(s.url ?? "");
+    requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
+  const submit = async () => {
+    setBusy(true);
+    try {
+      if (editing) {
+        await updateMcp(editing, buildPayload());
+        toast("已更新", "success");
+      } else {
+        await createMcp(buildPayload());
+        toast("已添加", "success");
+      }
+      reset();
+      await load();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const test = async () => {
+    setBusy(true);
+    try {
+      const r = await testMcp(buildPayload());
+      toast(r.connected ? `连接成功，发现 ${r.tool_count} 个工具` : `连接失败：${r.runtime_error ?? "未知错误"}`, r.connected ? "success" : "error");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const reconnect = async (s: McpServer) => {
+    try {
+      await reconnectMcp(s.name);
+      toast("已重连", "success");
+      await load();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  };
+
+  const remove = async (s: McpServer) => {
+    if (!(await confirm({ title: "删除 MCP 服务", body: `删除「${s.name}」？`, danger: true, confirmText: "删除" }))) return;
+    try {
+      await deleteMcp(s.name);
+      await load();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  };
+
+  return (
+    <PageContainer
+      title="MCP"
+      subtitle="MCP 服务连接与工具管理"
+      actions={items && <Badge variant="outline">{items.length} 个服务</Badge>}
+    >
+      <ReadyGate>
+        <div className="space-y-4">
+          {items === null ? (
+            <Loading />
+          ) : items.length === 0 ? (
+            <Empty text="暂无 MCP 服务" />
+          ) : (
+            <div className="space-y-2">
+              {items.map((s) => (
+                <ListCard key={s.name}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Plug className="size-4 text-muted-foreground" />
+                        <span className="font-medium">{s.name}</span>
+                        <Badge variant={s.connected ? "success" : "danger"}>
+                          <Dot className={s.connected ? "bg-success" : "bg-destructive"} />
+                          {s.connected ? "在线" : "离线"}
+                        </Badge>
+                        <Badge>{s.transport}</Badge>
+                      </div>
+                      <p className="mt-1 truncate text-xs text-muted-foreground">
+                        {s.transport === "http" ? s.url : (s.command ?? []).join(" ")}
+                      </p>
+                      {s.runtime_error && <p className="mt-1 text-xs text-destructive">{s.runtime_error}</p>}
+                      {s.tools.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {s.tools.map((t) => (
+                            <span key={t.full_name} title={t.description} className="rounded bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground">
+                              {t.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      <Button variant="ghost" size="icon-sm" onClick={() => reconnect(s)} aria-label="重连"><RefreshCw /></Button>
+                      <Button variant="ghost" size="icon-sm" onClick={() => startEdit(s)} aria-label="编辑"><Pencil /></Button>
+                      <Button variant="ghost" size="icon-sm" onClick={() => remove(s)} aria-label="删除"><Trash2 /></Button>
+                    </div>
+                  </div>
+                </ListCard>
+              ))}
+            </div>
+          )}
+
+          <div ref={formRef}>
+          <CollapsiblePanel summary={editing ? `编辑服务：${editing}` : "添加 MCP 服务"} defaultOpen={!!editing}>
+            <div className="grid gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label>名称（唯一）</Label>
+                  <Input value={name} disabled={!!editing} onChange={(e) => setName(e.target.value)} />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label>传输方式</Label>
+                  <Select value={transport} onChange={(e) => setTransport(e.target.value as "stdio" | "http")}>
+                    <option value="stdio">stdio</option>
+                    <option value="http">http</option>
+                  </Select>
+                </div>
+              </div>
+              {transport === "stdio" ? (
+                <div className="grid gap-1.5">
+                  <Label>命令</Label>
+                  <Input value={command} onChange={(e) => setCommand(e.target.value)} placeholder="npx @scope/mcp-server" />
+                </div>
+              ) : (
+                <div className="grid gap-1.5">
+                  <Label>URL</Label>
+                  <Input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com/mcp" />
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Button variant="primary" disabled={busy || !name.trim()} onClick={submit}>
+                  {busy && <Loader2 className="size-4 animate-spin" />}
+                  {editing ? "保存" : "添加"}
+                </Button>
+                <Button variant="secondary" disabled={busy} onClick={test}>测试连接</Button>
+                {editing && <Button variant="ghost" onClick={reset}>取消编辑</Button>}
+              </div>
+            </div>
+          </CollapsiblePanel>
+          </div>
+        </div>
+      </ReadyGate>
+    </PageContainer>
+  );
+}

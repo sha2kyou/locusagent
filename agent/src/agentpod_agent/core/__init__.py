@@ -14,15 +14,19 @@ from .persistence import (
     get_last_user_message,
     get_response,
     get_response_session_id,
+    get_session_system_prompt,
     list_messages,
     list_sessions,
     persist_openai_message,
     session_lock,
+    set_session_system_prompt,
+    truncate_after_last_user,
     update_message,
     update_run,
     upsert_session_meta,
 )
 from .run_manager import ERROR, FINISHED, cancel_active_run, start_stream_run
+from .session_title import maybe_generate_and_update_session_title
 
 __all__ = [
     "append_message",
@@ -36,15 +40,19 @@ __all__ = [
     "get_last_user_message",
     "get_response",
     "get_response_session_id",
+    "get_session_system_prompt",
     "get_llm_client",
     "list_messages",
     "list_sessions",
     "persist_openai_message",
     "run_chat_loop",
     "session_lock",
+    "set_session_system_prompt",
+    "truncate_after_last_user",
     "update_message",
     "update_run",
     "upsert_session_meta",
     "start_stream_run",
     "cancel_active_run",
+    "maybe_generate_and_update_session_title",
 ]

@@ -23,8 +23,7 @@ services:
     volumes:
       - ./shared-skills:/seed/shared-skills:ro
       - shared-skills:/srv/shared-skills
-      - ./host/src/agentpod_host/web/static:/usr/local/lib/python3.11/site-packages/agentpod_host/web/static:ro
-      - ./host/src/agentpod_host/web/templates:/usr/local/lib/python3.11/site-packages/agentpod_host/web/templates:ro
+      - ./host/src/agentpod_host/web/spa:/usr/local/lib/python3.11/site-packages/agentpod_host/web/spa:ro
     environment:
       GITHUB_CLIENT_ID:     ${GITHUB_CLIENT_ID}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
@@ -39,6 +38,7 @@ services:
       AGENT_MEMORY_LIMIT:   ${AGENT_MEMORY_LIMIT}
       AGENT_CPU_QUOTA:      ${AGENT_CPU_QUOTA}
       AGENT_PIDS_LIMIT:     ${AGENT_PIDS_LIMIT}
+      AGENT_DISK_LIMIT:     ${AGENT_DISK_LIMIT:-}
       IDLE_PAUSE_SECONDS:   ${IDLE_PAUSE_SECONDS}
       PAUSE_TO_STOP_SECONDS: ${PAUSE_TO_STOP_SECONDS}
       PUBLIC_BASE_URL:      ${PUBLIC_BASE_URL}

@@ -12,6 +12,7 @@ from ..memory import (
     recall,
     update_memory,
 )
+from ..security import review_write
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 
@@ -21,6 +22,9 @@ async def _memory_tool(args: dict[str, Any]) -> ToolResult:
         content = str(args.get("content", "")).strip()
         if not content:
             raise ToolError("content is required for add")
+        verdict = await review_write(content, kind="memory")
+        if not verdict.allowed:
+            raise ToolError(f"memory write blocked by guard: {verdict.reason}")
         mid = await add_memory(content)
         await enqueue_embedding(mid)
         return ToolResult(content=f"memory#{mid} saved")

@@ -1,5 +1,6 @@
 """记忆模块：SQLite + sqlite-vec，异步 embedding，向量+关键词召回。"""
 
+from .curator import maybe_curate_memories
 from .embedder import EmbeddingUnavailable, embed_text
 from .queue import enqueue_embedding, start_embedding_worker, stop_embedding_worker
 from .store import (
@@ -19,6 +20,7 @@ __all__ = [
     "embed_text",
     "enqueue_embedding",
     "list_memories",
+    "maybe_curate_memories",
     "recall",
     "start_embedding_worker",
     "stop_embedding_worker",

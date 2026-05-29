@@ -409,6 +409,32 @@ async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
     return await run_in_thread(_do)
 
 
+async def truncate_after_last_user(session_id: str) -> int:
+    """删除最后一条 user 消息之后的所有 assistant/tool 消息。
+
+    用于"重新生成 / 失败重试"：流式路径在首个 token 即落库 assistant，
+    重跑前需先清掉上一轮(可能是完整或中断的)助手输出，避免历史中残留重复。
+    返回删除的消息数。
+    """
+
+    def _do() -> int:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT id FROM messages WHERE session_id = ? AND role = 'user' "
+                "ORDER BY id DESC LIMIT 1",
+                (session_id,),
+            ).fetchone()
+            if row is None:
+                return 0
+            cur = c.execute(
+                "DELETE FROM messages WHERE session_id = ? AND id > ?",
+                (session_id, row["id"]),
+            )
+            return int(cur.rowcount or 0)
+
+    return await run_in_thread(_do)
+
+
 async def get_last_user_message(session_id: str) -> str | None:
     def _do() -> str | None:
         with conn_scope(load_vec=False) as c:
@@ -433,6 +459,36 @@ async def list_sessions(limit: int = 50) -> list[dict]:
             return [dict(r) for r in rows]
 
     return await run_in_thread(_do)
+
+
+async def get_session_system_prompt(session_id: str) -> str | None:
+    """读取 session 级冻结的 system prompt 快照。"""
+
+    def _do() -> str | None:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT system_prompt FROM sessions WHERE id = ?",
+                (session_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            value = row["system_prompt"]
+            return str(value) if value else None
+
+    return await run_in_thread(_do)
+
+
+async def set_session_system_prompt(session_id: str, system_prompt: str) -> None:
+    """写入 session 级冻结的 system prompt 快照（仅首次构建时调用）。"""
+
+    def _do() -> None:
+        with conn_scope(load_vec=False) as c:
+            c.execute(
+                "UPDATE sessions SET system_prompt = ? WHERE id = ?",
+                (system_prompt, session_id),
+            )
+
+    await run_in_thread(_do)
 
 
 async def get_session_title(session_id: str) -> str | None:
@@ -472,6 +528,7 @@ async def list_messages(session_id: str) -> list[dict]:
 async def delete_session(session_id: str) -> bool:
     def _do() -> bool:
         with conn_scope(load_vec=False) as c:
+            c.execute("DELETE FROM responses WHERE session_id = ?", (session_id,))
             c.execute("DELETE FROM runs WHERE session_id = ?", (session_id,))
             c.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
             cur = c.execute("DELETE FROM sessions WHERE id = ?", (session_id,))

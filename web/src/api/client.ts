@@ -1,0 +1,100 @@
+// 统一 fetch 封装：错误解析、401 跳登录、JSON/文本自适应。
+
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  detail?: unknown;
+  data?: unknown;
+
+  constructor(message: string, opts: { status: number; code?: string; detail?: unknown; data?: unknown }) {
+    super(message);
+    this.name = "ApiError";
+    this.status = opts.status;
+    this.code = opts.code;
+    this.detail = opts.detail;
+    this.data = opts.data;
+  }
+}
+
+export function redirectToLogin() {
+  if (window.location.pathname !== "/login") {
+    window.location.href = "/login";
+  }
+}
+
+function parseApiError(status: number, data: unknown): ApiError {
+  // 容器/代理错误：{ error: { code, message, detail } }
+  if (data && typeof data === "object" && "error" in data) {
+    const err = (data as { error?: { code?: string; message?: string; detail?: unknown } }).error;
+    if (err) {
+      return new ApiError(err.message || `请求失败 (${status})`, {
+        status,
+        code: err.code,
+        detail: err.detail,
+        data,
+      });
+    }
+  }
+  // FastAPI 原生：{ detail: string | array }
+  if (data && typeof data === "object" && "detail" in data) {
+    const detail = (data as { detail?: unknown }).detail;
+    if (typeof detail === "string") {
+      return new ApiError(detail, { status, detail, data });
+    }
+    if (Array.isArray(detail)) {
+      const msg = detail.map((d) => (d as { msg?: string })?.msg).filter(Boolean).join("；") || `请求失败 (${status})`;
+      return new ApiError(msg, { status, detail, data });
+    }
+  }
+  if (typeof data === "string" && data) {
+    return new ApiError(data, { status, data });
+  }
+  return new ApiError(`请求失败 (${status})`, { status, data });
+}
+
+export interface RequestOptions extends RequestInit {
+  /** 401 时不自动跳转（用于探测登录态） */
+  noAuthRedirect?: boolean;
+}
+
+export async function api<T = unknown>(url: string, opts: RequestOptions = {}): Promise<T> {
+  const { noAuthRedirect, headers, ...rest } = opts;
+  const res = await fetch(url, {
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    ...rest,
+  });
+
+  if (res.status === 401 && !noAuthRedirect) {
+    redirectToLogin();
+    throw new ApiError("未登录", { status: 401, code: "unauthenticated" });
+  }
+
+  const ct = res.headers.get("content-type") || "";
+  const data: unknown = ct.includes("json")
+    ? await res.json().catch(() => null)
+    : await res.text();
+
+  if (!res.ok) {
+    throw parseApiError(res.status, data);
+  }
+  return data as T;
+}
+
+export const apiGet = <T = unknown>(url: string, opts?: RequestOptions) =>
+  api<T>(url, { ...opts, method: "GET" });
+
+export const apiSend = <T = unknown>(
+  url: string,
+  method: "POST" | "PUT" | "DELETE",
+  body?: unknown,
+  opts?: RequestOptions,
+) =>
+  api<T>(url, {
+    ...opts,
+    method,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });

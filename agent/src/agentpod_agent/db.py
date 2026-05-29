@@ -1,6 +1,8 @@
 """容器内 SQLite：memory / sessions / messages 表，WAL + sqlite-vec。
 
-所有写入由"单 writer 队列"集中协调，避免并发写锁；读取可直接连接。
+并发模型：每次操作经 ``asyncio.to_thread`` 在线程池中用独立短连接执行，写并发
+依赖 WAL(单写多读)+ ``busy_timeout`` 排队等待，而非应用层写队列。单用户容器内
+并发量低，足够；如未来出现写争用再引入显式写串行。
 """
 
 from __future__ import annotations
@@ -32,12 +34,13 @@ CREATE TABLE IF NOT EXISTS memory (
 CREATE INDEX IF NOT EXISTS idx_memory_state ON memory(embedding_state);
 
 CREATE TABLE IF NOT EXISTS sessions (
-    id           TEXT PRIMARY KEY,
-    title        TEXT,
-    status       TEXT NOT NULL DEFAULT 'active',
-    total_tokens INTEGER NOT NULL DEFAULT 0,
-    created_at   TIMESTAMP NOT NULL DEFAULT (datetime('now')),
-    updated_at   TIMESTAMP NOT NULL DEFAULT (datetime('now'))
+    id            TEXT PRIMARY KEY,
+    title         TEXT,
+    status        TEXT NOT NULL DEFAULT 'active',
+    total_tokens  INTEGER NOT NULL DEFAULT 0,
+    system_prompt TEXT,
+    created_at    TIMESTAMP NOT NULL DEFAULT (datetime('now')),
+    updated_at    TIMESTAMP NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -81,6 +84,42 @@ CREATE INDEX IF NOT EXISTS idx_responses_session ON responses(session_id, create
 """
 
 
+_MESSAGES_FTS_TRIGGERS = """
+CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN
+    INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+END;
+CREATE TRIGGER IF NOT EXISTS messages_fts_ad AFTER DELETE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
+END;
+CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
+    INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+END;
+"""
+
+
+def _init_messages_fts(c: sqlite3.Connection) -> None:
+    """为 messages.content 建 trigram FTS5（external content）+ 同步触发器。
+
+    仅首次创建时回填一次；环境不支持 FTS5/trigram 时降级（不建表，检索回退 LIKE）。
+    """
+    exists = c.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='messages_fts'"
+    ).fetchone()
+    if exists:
+        return
+    try:
+        c.execute(
+            "CREATE VIRTUAL TABLE messages_fts USING fts5("
+            "content, content='messages', content_rowid='id', tokenize='trigram')"
+        )
+        c.executescript(_MESSAGES_FTS_TRIGGERS)
+        c.execute("INSERT INTO messages_fts(messages_fts) VALUES('rebuild')")
+        log.info("messages_fts_ready")
+    except sqlite3.OperationalError as exc:
+        log.warning("messages_fts_unavailable", error=str(exc))
+
+
 def _db_path() -> Path:
     return get_settings().data_dir / "agent.sqlite"
 
@@ -93,6 +132,8 @@ def _open_conn(load_vec: bool = True) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.execute("PRAGMA synchronous=NORMAL")
+    # 并行工具可能并发写：让写锁等待而非立即抛 "database is locked"
+    conn.execute("PRAGMA busy_timeout=10000")
     if load_vec:
         conn.enable_load_extension(True)
         try:
@@ -128,6 +169,10 @@ def init_db() -> None:
             c.execute("ALTER TABLE messages ADD COLUMN tool_call_id TEXT")
         if "run_id" not in msg_cols:
             c.execute("ALTER TABLE messages ADD COLUMN run_id TEXT")
+        sess_cols = {str(r["name"]) for r in c.execute("PRAGMA table_info(sessions)").fetchall()}
+        if "system_prompt" not in sess_cols:
+            c.execute("ALTER TABLE sessions ADD COLUMN system_prompt TEXT")
+        _init_messages_fts(c)
         for stmt in (
             """
             CREATE TABLE IF NOT EXISTS runs (

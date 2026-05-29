@@ -154,12 +154,17 @@ async def reattach_self_to_user_networks() -> int:
     return await _run_blocking(_do)
 
 
-def _ensure_volume(volume: str):
+def _ensure_volume(volume: str, size_limit: str = ""):
+    """幂等创建用户数据卷。size_limit 非空时附带磁盘配额（需宿主 FS 支持 project quota）。
+
+    配额仅对新建卷生效；已存在的卷不会被重设配额（避免销毁用户数据）。
+    """
     client = get_docker_client()
     try:
         return client.volumes.get(volume)
     except NotFound:
-        return client.volumes.create(name=volume)
+        driver_opts = {"size": size_limit} if size_limit else None
+        return client.volumes.create(name=volume, driver="local", driver_opts=driver_opts)
 
 
 def _find_container(name: str) -> Container | None:
@@ -213,7 +218,7 @@ async def _create_container(user: User) -> str:
 
     def _do_create() -> str:
         _ensure_network(network)
-        _ensure_volume(volume)
+        _ensure_volume(volume, settings.agent_disk_limit)
 
         existing = _find_container(container_name)
         if existing is not None:

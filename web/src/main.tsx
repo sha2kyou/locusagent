@@ -1,0 +1,48 @@
+import { lazy, StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
+import "./index.css";
+import { ToastProvider } from "@/components/ui/toast";
+import { DialogProvider } from "@/components/ui/dialogs";
+import { AuthProvider } from "@/app/auth";
+import { AppShell } from "@/app/AppShell";
+import { LoginRoute } from "@/routes/LoginRoute";
+
+const ChatRoute = lazy(() => import("@/routes/ChatRoute").then((m) => ({ default: m.ChatRoute })));
+const SkillsRoute = lazy(() =>
+  import("@/features/skills/SkillsRoute").then((m) => ({ default: m.SkillsRoute })),
+);
+const McpRoute = lazy(() => import("@/features/mcp/McpRoute").then((m) => ({ default: m.McpRoute })));
+const MemoryRoute = lazy(() =>
+  import("@/features/memory/MemoryRoute").then((m) => ({ default: m.MemoryRoute })),
+);
+
+const router = createBrowserRouter([
+  { path: "/login", element: <LoginRoute /> },
+  {
+    path: "/",
+    element: (
+      <AuthProvider>
+        <AppShell />
+      </AuthProvider>
+    ),
+    children: [
+      { index: true, element: <Navigate to="/chat" replace /> },
+      { path: "chat", element: <ChatRoute /> },
+      { path: "skills", element: <SkillsRoute /> },
+      { path: "mcp", element: <McpRoute /> },
+      { path: "memory", element: <MemoryRoute /> },
+      { path: "*", element: <Navigate to="/chat" replace /> },
+    ],
+  },
+]);
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <ToastProvider>
+      <DialogProvider>
+        <RouterProvider router={router} />
+      </DialogProvider>
+    </ToastProvider>
+  </StrictMode>,
+);

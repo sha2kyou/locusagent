@@ -59,6 +59,42 @@ async def _list_messages(session_id: str) -> list[dict[str, Any]]:
     return await run_in_thread(_do)
 
 
+async def _fts_recall(query: str, top_k: int) -> list[dict[str, Any]] | None:
+    """trigram FTS5 跨会话关键词检索（bm25 排序）。
+
+    FTS 表不存在或查询异常时返回 None，调用方回退 LIKE 扫描。
+    """
+    match = '"' + query.replace('"', '""') + '"'
+
+    def _do() -> list[dict[str, Any]] | None:
+        with conn_scope(load_vec=False) as c:
+            has_fts = c.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='messages_fts'"
+            ).fetchone()
+            if not has_fts:
+                return None
+            rows = c.execute(
+                """
+                SELECT m.id, m.session_id, m.role, m.content, m.created_at,
+                       s.title AS session_title, s.updated_at AS session_updated_at,
+                       bm25(messages_fts) AS rank
+                FROM messages_fts
+                JOIN messages m ON m.id = messages_fts.rowid
+                JOIN sessions s ON s.id = m.session_id
+                WHERE messages_fts MATCH ? AND m.role IN ('user', 'assistant')
+                ORDER BY rank
+                LIMIT ?
+                """,
+                (match, top_k),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    try:
+        return await run_in_thread(_do)
+    except Exception:
+        return None
+
+
 async def _session_recall(args: dict[str, Any]) -> ToolResult:
     action = str(args.get("action", "recall") or "recall").strip().lower()
     if action == "sessions":
@@ -97,58 +133,80 @@ async def _session_recall(args: dict[str, Any]) -> ToolResult:
     query = str(args.get("query", "")).strip()
     if not query:
         raise ToolError("query is required for recall")
-    scan_sessions = _clamp_int(args.get("scan_sessions"), default=20, min_v=1, max_v=100)
     top_k = _clamp_int(args.get("top_k"), default=5, min_v=1, max_v=30)
-    per_session_messages = _clamp_int(args.get("per_session_messages"), default=80, min_v=1, max_v=500)
 
-    sessions = await _list_sessions(limit=scan_sessions)
-    q_lower = query.lower()
-    hits: list[dict[str, Any]] = []
-    for s in sessions:
-        sid = str(s.get("id") or "")
-        if not sid:
-            continue
-        title = str(s.get("title") or "新对话")
-        updated_at = s.get("updated_at")
-        rows = await _list_messages(sid)
-        for r in reversed(rows[-per_session_messages:]):
-            role = str(r.get("role") or "")
-            if role not in {"user", "assistant"}:
-                continue
-            content = str(r.get("content") or "").strip()
-            if not content:
-                continue
-            lower = content.lower()
-            if q_lower not in lower:
-                continue
-            score = lower.count(q_lower) * 5
-            if role == "user":
-                score += 1
-            hits.append(
+    picked: list[dict[str, Any]] | None = None
+
+    # 优先 trigram FTS5（query 至少 3 字符，trigram 最小匹配粒度）
+    if len(query) >= 3:
+        fts_hits = await _fts_recall(query, top_k)
+        if fts_hits is not None:
+            picked = [
                 {
-                    "session_id": sid,
-                    "session_title": title,
-                    "session_updated_at": updated_at,
-                    "message_id": r.get("id"),
-                    "role": role,
-                    "created_at": r.get("created_at"),
-                    "score": score,
-                    "snippet": _snippet(content, query),
+                    "session_id": str(h.get("session_id") or ""),
+                    "session_title": str(h.get("session_title") or "新对话"),
+                    "session_updated_at": h.get("session_updated_at"),
+                    "message_id": h.get("id"),
+                    "role": str(h.get("role") or ""),
+                    "created_at": h.get("created_at"),
+                    "score": round(-float(h.get("rank") or 0.0), 4),
+                    "snippet": _snippet(str(h.get("content") or ""), query),
                 }
-            )
+                for h in fts_hits
+            ]
 
-    if not hits:
+    # 回退：短 query 或 FTS 不可用时，LIKE 扫描最近会话
+    if picked is None:
+        scan_sessions = _clamp_int(args.get("scan_sessions"), default=20, min_v=1, max_v=100)
+        per_session_messages = _clamp_int(args.get("per_session_messages"), default=80, min_v=1, max_v=500)
+        sessions = await _list_sessions(limit=scan_sessions)
+        q_lower = query.lower()
+        hits: list[dict[str, Any]] = []
+        for s in sessions:
+            sid = str(s.get("id") or "")
+            if not sid:
+                continue
+            title = str(s.get("title") or "新对话")
+            updated_at = s.get("updated_at")
+            rows = await _list_messages(sid)
+            for r in reversed(rows[-per_session_messages:]):
+                role = str(r.get("role") or "")
+                if role not in {"user", "assistant"}:
+                    continue
+                content = str(r.get("content") or "").strip()
+                if not content:
+                    continue
+                lower = content.lower()
+                if q_lower not in lower:
+                    continue
+                score = lower.count(q_lower) * 5
+                if role == "user":
+                    score += 1
+                hits.append(
+                    {
+                        "session_id": sid,
+                        "session_title": title,
+                        "session_updated_at": updated_at,
+                        "message_id": r.get("id"),
+                        "role": role,
+                        "created_at": r.get("created_at"),
+                        "score": score,
+                        "snippet": _snippet(content, query),
+                    }
+                )
+        hits.sort(
+            key=lambda x: (
+                int(x.get("score") or 0),
+                str(x.get("session_updated_at") or ""),
+                int(x.get("message_id") or 0),
+            ),
+            reverse=True,
+        )
+        picked = hits[:top_k]
+
+    if not picked:
         return ToolResult(content="(no history hits)", metadata={"items": []})
 
-    hits.sort(
-        key=lambda x: (
-            int(x.get("score") or 0),
-            str(x.get("session_updated_at") or ""),
-            int(x.get("message_id") or 0),
-        ),
-        reverse=True,
-    )
-    picked = hits[:top_k]
     lines = [
         (
             f"- [{h['session_title']}]({h['session_id']}) "

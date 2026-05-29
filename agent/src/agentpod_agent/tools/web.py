@@ -7,8 +7,11 @@ P0 简化：
 
 from __future__ import annotations
 
+import asyncio
+import ipaddress
 import os
 import re
+import socket
 from html.parser import HTMLParser
 from typing import Any
 
@@ -20,6 +23,56 @@ USER_AGENT = "Mozilla/5.0 (compatible; AgentPodAgent/0.1)"
 TIMEOUT = httpx.Timeout(connect=5.0, read=15.0, write=5.0, pool=5.0)
 MAX_HTML_BYTES = 1 * 1024 * 1024
 MAX_TEXT_CHARS = 12_000
+MAX_REDIRECTS = 5
+
+
+def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """拒绝非公网地址：私有/回环/链路本地/保留/多播/未指定（含等价 IPv6 段）。"""
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    )
+
+
+async def _assert_public_host(host: str) -> None:
+    """解析主机的全部 IP，任一落入非公网段即拒绝（防 SSRF / 云元数据探测）。"""
+    loop = asyncio.get_running_loop()
+    try:
+        infos = await loop.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+    except socket.gaierror as exc:
+        raise ToolError(f"cannot resolve host: {host}") from exc
+    addrs = {info[4][0] for info in infos}
+    if not addrs:
+        raise ToolError(f"cannot resolve host: {host}")
+    for addr in addrs:
+        try:
+            ip = ipaddress.ip_address(addr)
+        except ValueError as exc:
+            raise ToolError(f"invalid resolved address: {addr}") from exc
+        if _is_blocked_ip(ip):
+            raise ToolError(f"blocked non-public address for host {host}: {addr}")
+
+
+async def _guarded_get(client: httpx.AsyncClient, url: str) -> httpx.Response:
+    """逐跳校验后 GET：禁用自动重定向，对每一跳目标重新解析并校验，防重定向绕过。"""
+    current = httpx.URL(url)
+    for _ in range(MAX_REDIRECTS + 1):
+        if current.scheme not in ("http", "https"):
+            raise ToolError("only http(s) urls allowed")
+        host = current.host
+        if not host:
+            raise ToolError("invalid url host")
+        await _assert_public_host(host)
+        resp = await client.get(current)
+        if resp.is_redirect and "location" in resp.headers:
+            current = current.join(resp.headers["location"])
+            continue
+        return resp
+    raise ToolError("too many redirects")
 
 
 async def _ddg_search(query: str, top_k: int) -> list[dict[str, str]]:
@@ -119,8 +172,10 @@ async def _web_extract(args: dict[str, Any]) -> ToolResult:
     url = str(args.get("url", "")).strip()
     if not url or not url.startswith(("http://", "https://")):
         raise ToolError("url must start with http(s)://")
-    async with httpx.AsyncClient(timeout=TIMEOUT, headers={"User-Agent": USER_AGENT}) as client:
-        resp = await client.get(url, follow_redirects=True)
+    async with httpx.AsyncClient(
+        timeout=TIMEOUT, headers={"User-Agent": USER_AGENT}, follow_redirects=False
+    ) as client:
+        resp = await _guarded_get(client, url)
     ctype = resp.headers.get("content-type", "")
     if "html" not in ctype.lower():
         raise ToolError(f"non-HTML content-type: {ctype}")

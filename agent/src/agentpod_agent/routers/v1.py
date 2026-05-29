@@ -29,18 +29,23 @@ from ..core import (
     get_last_user_message,
     get_response,
     get_response_session_id,
+    get_session_system_prompt,
     list_messages,
     list_sessions,
+    maybe_generate_and_update_session_title,
     persist_openai_message,
     run_chat_loop,
     session_lock,
+    set_session_system_prompt,
+    truncate_after_last_user,
     update_run,
     upsert_session_meta,
 )
 from ..core.llm import get_llm_client
+from ..core.post_run import run_post_tasks
 from ..core.run_manager import ERROR, FINISHED, start_stream_run
 from ..logging import get_logger
-from ..memory import add_memory, enqueue_embedding, list_memories, recall
+from ..memory import add_memory, enqueue_embedding, list_memories
 from ..skills import list_skills
 
 router = APIRouter(prefix="/v1", tags=["v1"], dependencies=[Depends(verify_internal_token)])
@@ -60,15 +65,32 @@ def _schedule_remember(user_query: str, final_text: str, *, model: str | None) -
     task = asyncio.create_task(_run(), name="memory-autostore")
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
+
+
+def _schedule_post_run(
+    session_id: str,
+    *,
+    tool_calls_made: int,
+    model: str | None,
+    messages: list[dict[str, Any]] | None,
+) -> None:
+    task = asyncio.create_task(
+        run_post_tasks(
+            session_id=session_id,
+            tool_calls_made=tool_calls_made,
+            model=model,
+            messages=messages,
+        ),
+        name="post-run",
+    )
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 _TITLE_MAX_LEN = 28
 _REMEMBER_QUERY_MIN_LEN = 4
 _REMEMBER_ANSWER_MIN_LEN = 24
 _REMEMBER_RECENT_SCAN = 80
 _REMEMBER_ANSWER_MAX_LEN = 1200
 _REMEMBER_CANDIDATES_MAX = 1
-_REMEMBER_SKIP_QUERY_PATTERNS = (
-    re.compile(r"^(hi|hello|hey|你好|在吗|在么|test|测试)\W*$", re.IGNORECASE),
-)
 _MEM_KIND_LABELS = {
     "preference": "偏好",
     "constraint": "约束",
@@ -109,19 +131,46 @@ class ResponsesRequest(BaseModel):
     extra: dict[str, Any] | None = None
 
 
-def _build_system_prompt(user_query: str) -> tuple[str, list[str]]:
+_SNAPSHOT_MEMORY_LIMIT = 30
+
+
+async def _build_memory_snapshot() -> list[str]:
+    """构建 session 级冻结记忆快照：identity 优先，其后近期 experience，去重。
+
+    不依赖当轮 query；动态按 query 的召回交由 memory(action=recall)/session_recall 工具。
+    """
+    rows = await list_memories(limit=_SNAPSHOT_MEMORY_LIMIT)
+    if not rows:
+        return []
+    rows_sorted = sorted(rows, key=lambda r: 0 if str(r.get("anchor")) == "identity" else 1)
+    out: list[str] = []
+    seen: set[str] = set()
+    for r in rows_sorted:
+        text = str(r.get("content") or "").strip()
+        if text and text not in seen:
+            seen.add(text)
+            out.append(text)
+    return out
+
+
+async def _build_frozen_system_prompt() -> str:
+    """构建 session 首次注入的冻结 system prompt。
+
+    - 技能：仅注入紧凑索引；正文由模型按需 skill_view{name} 加载。
+    - 记忆：注入冻结快照；回指/引用历史时由模型按需 recall。
+    """
     skills = list_skills()
-    triggered = [s for s in skills if s.matches(user_query)]
     settings = get_settings()
     pieces = [
         f"You are an AI agent operating in a sandboxed container for user {settings.user_id}.",
-        "Use the provided tools (web_search/web_extract/memory/skill_view/skill_manage/manage_workspace) when appropriate.",
+        "Use the provided tools (web_search/web_extract/memory/skill_view/skill_manage/manage_workspace/session_recall) when appropriate.",
         "Workspace files live under /data/workspace; private skills live under /data/skills.",
         "Do not perform any file CRUD operations: no file read/list/search/create/update/patch/delete in container or workspace.",
         "The user cannot directly retrieve container/server files from the web UI.",
         "By default, do not create or modify files in workspace.",
         "Deliver outputs directly in chat as inline text, code blocks, and step-by-step instructions.",
-        "Proactively check reusable skills before implementing. If the request is non-trivial, call skill_view with empty name once to inspect available skills, then open relevant skill(s) with skill_view{name}.",
+        "A compact skills catalog is listed below. When a skill is relevant to the current task, call skill_view{name} to load its full body on demand; do not assume its content.",
+        "A frozen long-term memory snapshot is included below. When the user refers to a previous conversation or an earlier conclusion not covered by the snapshot, use memory(action=recall) or session_recall to retrieve it instead of guessing.",
     ]
     if skills:
         pieces.append("\n## Available Skills Catalog")
@@ -129,11 +178,21 @@ def _build_system_prompt(user_query: str) -> tuple[str, list[str]]:
             triggers = ", ".join(s.triggers[:5]) if s.triggers else "-"
             desc = (s.description or "").strip() or "(no description)"
             pieces.append(f"- {s.name} [{s.source}] triggers: {triggers} · {desc}")
-    if triggered:
-        pieces.append("\n## Triggered Skills")
-        for s in triggered:
-            pieces.append(f"### {s.name}\n{s.description}\n\n{s.body}")
-    return "\n".join(pieces), [s.name for s in triggered]
+    snapshot = await _build_memory_snapshot()
+    if snapshot:
+        pieces.append("\n## Memory (frozen snapshot)")
+        pieces.extend(f"- {m}" for m in snapshot)
+    return "\n".join(pieces)
+
+
+async def _get_or_create_system_prompt(session_id: str) -> str:
+    """读取 session 冻结快照；首次缺失时构建并落库，后续复用以保住 prefix cache。"""
+    cached = await get_session_system_prompt(session_id)
+    if cached:
+        return cached
+    prompt = await _build_frozen_system_prompt()
+    await set_session_system_prompt(session_id, prompt)
+    return prompt
 
 
 def _tool_kind(name: str | None) -> str:
@@ -233,32 +292,30 @@ def _last_user_content(messages: list[dict[str, Any]]) -> str | None:
     return None
 
 
-async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, Any]], str, list[str]]:
+async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, Any]], str]:
     new_user = _extract_new_user_message(req)
     if not new_user:
         raise ValueError("missing user message")
 
     if req.session_id:
-        db_msgs = await build_llm_messages(sid)
         last_db_user = await get_last_user_message(sid)
-        if last_db_user != new_user:
+        if last_db_user == new_user:
+            # 同一句重发即"重新生成 / 失败重试"：先清掉上一轮(可能中断的)助手输出再重跑
+            await truncate_after_last_user(sid)
+        else:
             await append_message(sid, "user", new_user)
-            db_msgs.append({"role": "user", "content": new_user})
+        db_msgs = await build_llm_messages(sid)
         user_query = new_user
     else:
         db_msgs = [{"role": "user", "content": new_user}]
         await append_message(sid, "user", new_user)
-        await upsert_session_meta(sid, title=_title_from_first_user_message(new_user))
+        # 标题留给运行结束后由 LLM 生成（默认 "新对话"），失败时回退首句裁剪
         user_query = new_user
 
-    system_prompt, triggered_skills = _build_system_prompt(user_query)
-    recalled = await recall(user_query, top_k=5) if user_query else []
-    if recalled:
-        system_prompt += "\n\n## Recalled Memory\n" + "\n".join(f"- {m}" for m in recalled)
-
+    system_prompt = await _get_or_create_system_prompt(sid)
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     messages.extend(db_msgs)
-    return messages, user_query, triggered_skills
+    return messages, user_query
 
 
 async def _persist_loop_messages(
@@ -302,7 +359,7 @@ async def chat_completions(req: ChatRequest, request: Request):
             )
 
         try:
-            messages, user_query, triggered_skills = await _prepare_messages(req, sid)
+            messages, user_query = await _prepare_messages(req, sid)
         except ValueError as exc:
             return JSONResponse(
                 {"error": {"code": "bad_request", "message": str(exc)}},
@@ -333,6 +390,13 @@ async def chat_completions(req: ChatRequest, request: Request):
                     assistant_message_id=last_assistant_id,
                 )
                 await upsert_session_meta(sid, tokens_delta=result.total_tokens)
+                if user_query:
+                    await maybe_generate_and_update_session_title(
+                        sid,
+                        user_query=user_query,
+                        assistant_text=result.final_text,
+                        model=chosen_model,
+                    )
                 if user_query and result.final_text:
                     try:
                         mids = await _maybe_remember(
@@ -344,6 +408,12 @@ async def chat_completions(req: ChatRequest, request: Request):
                             await enqueue_embedding(mid)
                     except Exception as exc:
                         log.warning("memory_autostore_failed", error=str(exc))
+                _schedule_post_run(
+                    sid,
+                    tool_calls_made=result.tool_calls_made,
+                    model=chosen_model,
+                    messages=final_messages,
+                )
 
                 payload = {
                     "id": chat_id,
@@ -361,7 +431,6 @@ async def chat_completions(req: ChatRequest, request: Request):
                     ],
                     "usage": {"total_tokens": result.total_tokens},
                     "x_tool_calls_made": result.tool_calls_made,
-                    "x_triggered_skills": triggered_skills,
                 }
                 return JSONResponse(payload)
             except Exception as exc:
@@ -376,6 +445,7 @@ async def chat_completions(req: ChatRequest, request: Request):
                     registry=registry,
                     model=chosen_model,
                     extra=req.extra,
+                    auto_title_user_query=user_query,
                 )
             except Exception as exc:
                 await update_run(run_id, status="failed", error_message=str(exc))
@@ -394,21 +464,6 @@ async def chat_completions(req: ChatRequest, request: Request):
 
     async def _stream():
         yield _chunk({"role": "assistant"}, session_id=sid, run_id=run_id)
-        for idx, skill_name in enumerate(triggered_skills):
-            tool_call_id = f"skill-auto-{idx}"
-            yield _chunk(
-                {},
-                x_event="tool_call",
-                x_tool_name=skill_name,
-                x_tool_kind="skill",
-                x_tool_id=tool_call_id,
-            )
-            yield _chunk(
-                {},
-                x_event="tool_result",
-                x_tool_call_id=tool_call_id,
-                x_preview="已自动匹配并注入技能上下文",
-            )
         try:
             stream_final_text = ""
             while True:
@@ -520,15 +575,12 @@ async def responses(req: ResponsesRequest):
                 db_msgs.append({"role": "user", "content": new_user})
         user_query = new_user
 
-        system_prompt, triggered_skills = _build_system_prompt(user_query)
-        recalled = await recall(user_query, top_k=5) if user_query else []
-        if recalled:
-            system_prompt += "\n\n## Recalled Memory\n" + "\n".join(f"- {m}" for m in recalled)
-
-        if req.instructions and req.instructions.strip():
-            system_prompt += "\n\n## Additional Instructions\n" + req.instructions.strip()
-
+        system_prompt = await _get_or_create_system_prompt(sid)
         messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+        if req.instructions and req.instructions.strip():
+            messages.append(
+                {"role": "system", "content": "## Additional Instructions\n" + req.instructions.strip()}
+            )
         messages.extend(db_msgs)
 
         from ..tools import registry
@@ -562,6 +614,12 @@ async def responses(req: ResponsesRequest):
                         await enqueue_embedding(mid)
                 except Exception as exc:
                     log.warning("memory_autostore_failed", error=str(exc))
+            _schedule_post_run(
+                sid,
+                tool_calls_made=result.tool_calls_made,
+                model=chosen_model,
+                messages=final_messages,
+            )
             response_id = await create_response(
                 sid,
                 run_id=run_id,
@@ -591,7 +649,6 @@ async def responses(req: ResponsesRequest):
                     "output_text": result.final_text,
                     "usage": {"total_tokens": result.total_tokens},
                     "x_tool_calls_made": result.tool_calls_made,
-                    "x_triggered_skills": triggered_skills,
                     "session_id": sid,
                     "run_id": run_id,
                 }
@@ -742,9 +799,6 @@ async def _maybe_remember(_query: str, _answer: str, *, model: str | None = None
         return []
     if len(query) < _REMEMBER_QUERY_MIN_LEN and len(answer) < _REMEMBER_ANSWER_MIN_LEN:
         return []
-    for p in _REMEMBER_SKIP_QUERY_PATTERNS:
-        if p.match(query):
-            return []
 
     answer = answer[:_REMEMBER_ANSWER_MAX_LEN].strip()
     candidates = await _extract_memory_candidates(query, answer, model=model)

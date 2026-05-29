@@ -114,12 +114,25 @@ uv run uvicorn agentpod_agent.main:app --reload --port 8000
 
 原则：只重建受影响层，避免全量重建。
 
-### 1) 只改前端静态资源（无需重建）
+### 1) 只改前端（无需重建 host 镜像）
 
-`host/src/agentpod_host/web/static/*` 与 `host/src/agentpod_host/web/templates/*` 已通过 volume 挂载到 `host` 容器。
+前端为独立的 React SPA（`web/`，Vite + React + TypeScript + Tailwind v4 + assistant-ui），构建产物输出到 `host/src/agentpod_host/web/spa/`，并通过 volume 挂载到 `host` 容器。产物已提交，运行时不依赖 Node。
 
-- 操作：浏览器强制刷新（`Cmd+Shift+R`）
-- 说明：通常不需要 `docker compose build`
+```bash
+cd web
+
+# 首次安装依赖（仅本地/CI，node_modules 不进镜像）
+npm install
+
+# 开发：Vite dev server，/api 与 /health 代理到本地 host
+npm run dev   # 默认 http://127.0.0.1:5173
+
+# 构建产物到 host/.../web/spa（提交后由容器挂载）
+npm run build
+```
+
+- 改前端后：`cd web && npm run build`，再浏览器强制刷新（`Cmd+Shift+R`），无需 `docker compose build`。
+- 鉴权由前端 `AuthProvider` 处理：访问任意页面拉取 `/api/me`，401 自动跳 `/login`（GitHub OAuth）。
 
 ### 2) 使用重建脚本（推荐）
 
