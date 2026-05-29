@@ -31,6 +31,10 @@ from .naming import container_name_for, network_name_for, volume_name_for
 
 log = get_logger("orchestrator")
 
+HEALTH_TIMEOUT_COLD_START = 30.0
+HEALTH_TIMEOUT_RESUME = 30.0
+HEALTH_TIMEOUT_RUNNING = 5.0
+
 _user_locks: dict[int, asyncio.Lock] = {}
 _locks_guard = asyncio.Lock()
 
@@ -302,7 +306,7 @@ async def ensure_user_container(user_id: int, *, force_recreate: bool = False) -
         try:
             await _create_container(user)
             container_name = container_name_for(user_id)
-            ok = await _wait_health(container_name, timeout=10.0)
+            ok = await _wait_health(container_name, timeout=HEALTH_TIMEOUT_COLD_START)
             if not ok:
                 raise RuntimeError("容器启动后健康探测超时")
             await _set_user_status(
@@ -499,7 +503,7 @@ async def ensure_container_ready(user_id: int) -> tuple[ContainerStatus, dict[st
             status = ContainerStatus.ABSENT
         elif docker_status == "running":
             await _run_blocking(lambda: _connect_self_to_network(network))
-            ok = await _wait_health(name, timeout=3.0)
+            ok = await _wait_health(name, timeout=HEALTH_TIMEOUT_RUNNING)
             if not ok:
                 log.warning("container_health_degraded", user_id=user_id, container=name)
             return ContainerStatus.RUNNING, {"container_name": name}
@@ -543,7 +547,7 @@ async def ensure_container_ready(user_id: int) -> tuple[ContainerStatus, dict[st
 
         from_state = status.value
         await _run_blocking(_ensure_running_blocking)
-        ok = await _wait_health(name, timeout=10.0)
+        ok = await _wait_health(name, timeout=HEALTH_TIMEOUT_RESUME)
         if not ok:
             await _set_user_status(user_id, container_status=ContainerStatus.STOPPED)
             raise RuntimeError("容器恢复后健康探测失败")

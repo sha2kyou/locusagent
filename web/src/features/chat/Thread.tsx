@@ -279,9 +279,18 @@ function CopyButton({ text }: { text: string }) {
 
 function UserMessage() {
   const text = useMessageText();
+  const archived = useMessage((m) => (m.metadata as { archived?: boolean } | undefined)?.archived);
   return (
     <MessagePrimitive.Root className="group mb-5 flex flex-col items-end">
-      <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-secondary px-4 py-2.5 text-sm">
+      <div
+        className={cn(
+          "max-w-[80%] rounded-2xl rounded-br-sm bg-secondary px-4 py-2.5 text-sm",
+          archived && "opacity-55",
+        )}
+      >
+        {archived ? (
+          <p className="mb-1 text-[11px] text-muted-foreground">已压缩（不再带入上下文）</p>
+        ) : null}
         <MessagePrimitive.Parts components={{ Text: UserText }} />
       </div>
       <div className="mt-0.5 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
@@ -294,8 +303,12 @@ function UserMessage() {
 function AssistantMessage() {
   const { regenerate, canRegenerate, lastErrored } = useChat();
   const text = useMessageText();
+  const archived = useMessage((m) => (m.metadata as { archived?: boolean } | undefined)?.archived);
   return (
-    <MessagePrimitive.Root className={cn("group mb-6 flex flex-col gap-1 text-sm")}>
+    <MessagePrimitive.Root className={cn("group mb-6 flex flex-col gap-1 text-sm", archived && "opacity-55")}>
+      {archived ? (
+        <p className="text-[11px] text-muted-foreground">已压缩（不再带入上下文）</p>
+      ) : null}
       <div className="flex items-end gap-1">
         <div className="min-w-0 flex-1">
           <MessagePrimitive.Parts

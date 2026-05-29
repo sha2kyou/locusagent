@@ -7,7 +7,12 @@ type Part = Extract<ThreadMessageLike["content"], readonly unknown[]>[number];
 export function convertMessage(message: ChatMessage): ThreadMessageLike {
   if (message.role === "user") {
     const text = message.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
-    return { role: "user", id: message.id, content: [{ type: "text", text }] };
+    return {
+      role: "user",
+      id: message.id,
+      metadata: message.archived ? ({ archived: true } as never) : undefined,
+      content: [{ type: "text", text }],
+    };
   }
 
   const content: Part[] = [];
@@ -21,7 +26,6 @@ export function convertMessage(message: ChatMessage): ThreadMessageLike {
         toolName: p.toolName,
         argsText: "",
         args: { kind: p.toolKind, startedAt: p.startedAt },
-        // result 存在即视为完成；running 时保持 undefined
         result: p.running ? undefined : (p.preview ?? ""),
       });
     }
@@ -31,5 +35,10 @@ export function convertMessage(message: ChatMessage): ThreadMessageLike {
   }
   if (content.length === 0) content.push({ type: "text", text: "" });
 
-  return { role: "assistant", id: message.id, content };
+  return {
+    role: "assistant",
+    id: message.id,
+    metadata: message.archived ? ({ archived: true } as never) : undefined,
+    content,
+  };
 }

@@ -20,8 +20,9 @@ from openai.types.chat import ChatCompletion
 from ..config import get_settings
 from ..logging import get_logger
 from ..tools import ToolError, ToolRegistry
-from .context import compress, compress_with_report
+from .context import compress_with_report
 from .llm import get_llm_client
+from .persistence import persist_context_compression
 
 log = get_logger("loop")
 
@@ -162,12 +163,61 @@ async def _finalize_without_tools(
     return msg_dict, str(msg.content or ""), usage_tokens
 
 
+def _compression_preview(
+    *,
+    mode: str,
+    before_tokens: int,
+    after_tokens: int,
+    summary_text: str,
+) -> str:
+    if summary_text:
+        return (
+            f"【自动上下文压缩】mode={mode}, tokens: {before_tokens} -> {after_tokens}\n\n"
+            f"{summary_text}"
+        )
+    return (
+        f"【自动上下文压缩】mode={mode}, tokens: {before_tokens} -> {after_tokens}\n"
+        "本次未生成可展示摘要（已进行截断保留）。"
+    )
+
+
+async def _persist_compression_if_needed(
+    session_id: str | None,
+    run_id: str | None,
+    working: list[dict[str, Any]],
+    compression_report: dict[str, Any],
+) -> None:
+    if not session_id or not compression_report.get("triggered"):
+        return
+    archive_ids = list(compression_report.get("archive_message_ids") or [])
+    if not archive_ids:
+        return
+    summary_id = await persist_context_compression(
+        session_id,
+        archive_message_ids=archive_ids,
+        summary_text=str(compression_report.get("summary") or ""),
+        mode=str(compression_report.get("mode") or "truncate"),
+        before_tokens=int(compression_report.get("before_tokens") or 0),
+        after_tokens=int(compression_report.get("after_tokens") or 0),
+        run_id=run_id,
+    )
+    if not summary_id:
+        return
+    for m in working:
+        content = str(m.get("content") or "")
+        if m.get("role") == "system" and "历史对话摘要" in content:
+            m["id"] = summary_id
+            break
+
+
 async def run_chat_loop(
     messages: list[dict[str, Any]],
     *,
     registry: ToolRegistry,
     model: str | None = None,
     extra: dict[str, Any] | None = None,
+    session_id: str | None = None,
+    run_id: str | None = None,
 ) -> tuple[LoopResult, list[dict[str, Any]]]:
     settings = get_settings()
     chosen_model = model or settings.llm_model
@@ -184,7 +234,7 @@ async def run_chat_loop(
     final_text = ""
 
     for round_idx in range(1, max_rounds + 1):
-        working = await compress(
+        working, compression_report = await compress_with_report(
             working,
             max_tokens=token_limit,
             client=client,
@@ -192,6 +242,7 @@ async def run_chat_loop(
             keep_last=settings.context_keep_last,
             min_middle=settings.context_distill_min_middle,
         )
+        await _persist_compression_if_needed(session_id, run_id, working, compression_report)
         log.info(
             "loop_round_start",
             round=round_idx,
@@ -319,6 +370,8 @@ async def run_chat_loop_stream(
     registry: ToolRegistry,
     model: str | None = None,
     extra: dict[str, Any] | None = None,
+    session_id: str | None = None,
+    run_id: str | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """流式 chat loop。
 
@@ -351,50 +404,32 @@ async def run_chat_loop_stream(
             keep_last=settings.context_keep_last,
             min_middle=settings.context_distill_min_middle,
         )
+        await _persist_compression_if_needed(session_id, run_id, working, compression_report)
         if compression_report.get("triggered"):
             call_id = f"auto-summarize-r{round_idx}"
             mode = str(compression_report.get("mode") or "truncate")
             before_tokens = int(compression_report.get("before_tokens") or 0)
             after_tokens = int(compression_report.get("after_tokens") or 0)
             summary_text = str(compression_report.get("summary") or "").strip()
-            tool_args = json.dumps(
-                {
-                    "text": f"[auto-context-compress mode={mode} before={before_tokens} after={after_tokens}]",
-                    "max_tokens": 500,
-                },
-                ensure_ascii=False,
+            tool_content = _compression_preview(
+                mode=mode,
+                before_tokens=before_tokens,
+                after_tokens=after_tokens,
+                summary_text=summary_text,
             )
             yield {
-                "type": "assistant_tools",
-                "message": {
-                    "role": "assistant",
-                    "tool_calls": [
-                        {
-                            "id": call_id,
-                            "type": "function",
-                            "function": {"name": "summarize", "arguments": tool_args},
-                        }
-                    ],
-                    "content": "已自动执行上下文压缩。",
-                },
+                "type": "tool_call",
+                "name": "summarize",
+                "id": call_id,
+                "ephemeral": True,
             }
-            yield {"type": "tool_call", "name": "summarize", "id": call_id}
-            if summary_text:
-                tool_content = (
-                    f"【自动上下文压缩】mode={mode}, tokens: {before_tokens} -> {after_tokens}\n\n"
-                    f"{summary_text}"
-                )
-            else:
-                tool_content = (
-                    f"【自动上下文压缩】mode={mode}, tokens: {before_tokens} -> {after_tokens}\n"
-                    "本次未生成可展示摘要（已进行截断保留）。"
-                )
             yield {
                 "type": "tool_result",
                 "tool_call_id": call_id,
                 "name": "summarize",
                 "preview": tool_content[:1000],
                 "content": tool_content,
+                "ephemeral": True,
             }
         log.info(
             "loop_round_start",

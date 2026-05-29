@@ -7,8 +7,40 @@ function truncate(s: string): string {
   return s.length > PREVIEW_MAX ? s.slice(0, PREVIEW_MAX) : s;
 }
 
-function isOpenAIToolCall(tc: OpenAIToolCall | LegacyToolMeta): tc is OpenAIToolCall {
+function isOpenAIToolCall(tc: OpenAIToolCall | LegacyToolMeta | Record<string, unknown>): tc is OpenAIToolCall {
   return "function" in tc && !!(tc as OpenAIToolCall).function;
+}
+
+function isArchived(msg: Message): boolean {
+  return msg.context_state === "archived";
+}
+
+function compressionMeta(msg: Message): Record<string, unknown> | undefined {
+  const raw = msg.tool_calls;
+  if (!raw) return undefined;
+  if (Array.isArray(raw)) {
+    return (raw[0] as { compression?: Record<string, unknown> } | undefined)?.compression;
+  }
+  if (typeof raw === "object" && "compression" in raw) {
+    return (raw as { compression?: Record<string, unknown> }).compression;
+  }
+  return undefined;
+}
+
+function compressionPreview(msg: Message): string {
+  const meta = compressionMeta(msg);
+  const mode = String(meta?.mode ?? "distill");
+  const before = Number(meta?.before_tokens ?? 0);
+  const after = Number(meta?.after_tokens ?? 0);
+  const body = (msg.content || "").trim();
+  const header = `【自动上下文压缩】mode=${mode}, tokens: ${before} -> ${after}`;
+  return body ? `${header}\n\n${body}` : `${header}\n本次未生成可展示摘要（已进行截断保留）。`;
+}
+
+function flushAssistant(result: ChatMessage[], cur: ChatMessage | null, curArchived: boolean) {
+  if (!cur) return;
+  if (curArchived) cur.archived = true;
+  result.push(cur);
 }
 
 /**
@@ -18,6 +50,7 @@ function isOpenAIToolCall(tc: OpenAIToolCall | LegacyToolMeta): tc is OpenAITool
 export function coalesceHistory(items: Message[]): ChatMessage[] {
   const result: ChatMessage[] = [];
   let cur: ChatMessage | null = null;
+  let curArchived = false;
 
   const findTool = (id?: string | null): ToolPart | undefined => {
     if (!cur || !id) return undefined;
@@ -28,24 +61,58 @@ export function coalesceHistory(items: Message[]): ChatMessage[] {
     return undefined;
   };
 
+  const startAssistant = () => {
+    if (!cur) {
+      cur = { id: uid("a"), role: "assistant", parts: [] };
+      curArchived = false;
+    }
+  };
+
   for (const msg of items) {
+    if (msg.role === "context_summary") {
+      flushAssistant(result, cur, curArchived);
+      cur = null;
+      curArchived = false;
+      result.push({
+        id: uid("a"),
+        role: "assistant",
+        parts: [
+          {
+            type: "tool",
+            id: uid("t"),
+            toolName: "summarize",
+            toolKind: "tool",
+            running: false,
+            preview: compressionPreview(msg),
+            startedAt: 0,
+          },
+        ],
+      });
+      continue;
+    }
+
     if (msg.role === "user") {
-      if (cur) {
-        result.push(cur);
-        cur = null;
-      }
-      result.push({ id: uid("u"), role: "user", parts: [{ type: "text", text: msg.content || "" }] });
+      flushAssistant(result, cur, curArchived);
+      cur = null;
+      curArchived = false;
+      result.push({
+        id: uid("u"),
+        role: "user",
+        archived: isArchived(msg),
+        parts: [{ type: "text", text: msg.content || "" }],
+      });
       continue;
     }
     if (msg.role === "system") continue;
 
-    if (!cur) cur = { id: uid("a"), role: "assistant", parts: [] };
+    startAssistant();
+    if (isArchived(msg)) curArchived = true;
 
     if (msg.role === "assistant") {
-      if (msg.content) cur.parts.push({ type: "text", text: msg.content });
+      if (msg.content) cur!.parts.push({ type: "text", text: msg.content });
       for (const tc of msg.tool_calls ?? []) {
         if (isOpenAIToolCall(tc)) {
-          cur.parts.push({
+          cur!.parts.push({
             type: "tool",
             id: tc.id,
             toolName: tc.function.name,
@@ -66,7 +133,7 @@ export function coalesceHistory(items: Message[]): ChatMessage[] {
         if (meta?.tool_name) existing.toolName = meta.tool_name;
         if (meta?.tool_kind) existing.toolKind = meta.tool_kind;
       } else {
-        cur.parts.push({
+        cur!.parts.push({
           type: "tool",
           id: id ?? uid("t"),
           toolName: meta?.tool_name ?? "tool",
@@ -79,9 +146,8 @@ export function coalesceHistory(items: Message[]): ChatMessage[] {
     }
   }
 
-  if (cur) result.push(cur);
+  flushAssistant(result, cur, curArchived);
 
-  // 历史中残留的 running 工具一律置为完成（无 spinner）
   for (const m of result) {
     for (const p of m.parts) {
       if (p.type === "tool" && p.running) p.running = false;

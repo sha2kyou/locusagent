@@ -122,19 +122,16 @@ _DISTILL_SYSTEM_PROMPT = (
 )
 
 
-def _drop_leading_tool(msgs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """确保序列不以 tool 消息开头（否则缺少配对的 assistant tool_calls 会报错）。"""
-    out = list(msgs)
-    while out and out[0].get("role") == "tool":
-        out.pop(0)
-    return out
-
-
 async def _distill_messages(messages: list[dict[str, Any]], *, client, model: str) -> str:
     convo: list[str] = []
     for m in messages:
         role = str(m.get("role") or "")
         if role == "system":
+            continue
+        if role == "context_summary":
+            content = str(m.get("content") or "").strip()
+            if content:
+                convo.append(f"[历史摘要] {content[:1200]}")
             continue
         content = str(m.get("content") or "").strip()
         tool_calls = m.get("tool_calls") or []
@@ -252,17 +249,32 @@ async def compress_with_report(
         except Exception as exc:
             log.warning("context_distill_failed", error=str(exc))
 
+    archived_candidates = list(middle)
     while len(tail) > 1 and estimate_tokens(head + summary_msgs + tail) > max_tokens:
-        tail = _drop_leading_tool(tail[1:])
+        archived_candidates.append(tail[0])
+        tail = tail[1:]
+        # tail 不能以 tool 开头：这些孤立 tool 也视为被压缩掉，需一起归档。
+        while tail and tail[0].get("role") == "tool":
+            archived_candidates.append(tail[0])
+            tail = tail[1:]
         if not tail:
             break
     out = head + summary_msgs + tail
     after_tokens = estimate_tokens(out)
     mode = "distill" if summary_text else "truncate"
+    archive_message_ids: list[int] = []
+    for m in archived_candidates:
+        mid = m.get("id")
+        if mid is not None:
+            try:
+                archive_message_ids.append(int(mid))
+            except (TypeError, ValueError):
+                pass
     return out, {
         "triggered": True,
         "mode": mode,
         "before_tokens": before_tokens,
         "after_tokens": after_tokens,
         "summary": summary_text,
+        "archive_message_ids": archive_message_ids,
     }

@@ -123,10 +123,10 @@ CREATE TRIGGER IF NOT EXISTS messages_fts_ai AFTER INSERT ON messages BEGIN
     INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
 END;
 CREATE TRIGGER IF NOT EXISTS messages_fts_ad AFTER DELETE ON messages BEGIN
-    INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
+    DELETE FROM messages_fts WHERE rowid = old.id;
 END;
 CREATE TRIGGER IF NOT EXISTS messages_fts_au AFTER UPDATE ON messages BEGIN
-    INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
+    DELETE FROM messages_fts WHERE rowid = old.id;
     INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
 END;
 """
@@ -136,10 +136,10 @@ CREATE TRIGGER IF NOT EXISTS memory_fts_ai AFTER INSERT ON memory BEGIN
     INSERT INTO memory_fts(rowid, content) VALUES (new.id, new.content);
 END;
 CREATE TRIGGER IF NOT EXISTS memory_fts_ad AFTER DELETE ON memory BEGIN
-    INSERT INTO memory_fts(memory_fts, rowid, content) VALUES('delete', old.id, old.content);
+    DELETE FROM memory_fts WHERE rowid = old.id;
 END;
 CREATE TRIGGER IF NOT EXISTS memory_fts_au AFTER UPDATE ON memory BEGIN
-    INSERT INTO memory_fts(memory_fts, rowid, content) VALUES('delete', old.id, old.content);
+    DELETE FROM memory_fts WHERE rowid = old.id;
     INSERT INTO memory_fts(rowid, content) VALUES (new.id, new.content);
 END;
 """
@@ -149,10 +149,10 @@ CREATE TRIGGER IF NOT EXISTS env_vars_fts_ai AFTER INSERT ON env_vars BEGIN
     INSERT INTO env_vars_fts(rowid, name, description) VALUES (new.id, new.name, new.description);
 END;
 CREATE TRIGGER IF NOT EXISTS env_vars_fts_ad AFTER DELETE ON env_vars BEGIN
-    INSERT INTO env_vars_fts(env_vars_fts, rowid, name, description) VALUES('delete', old.id, old.name, old.description);
+    DELETE FROM env_vars_fts WHERE rowid = old.id;
 END;
 CREATE TRIGGER IF NOT EXISTS env_vars_fts_au AFTER UPDATE ON env_vars BEGIN
-    INSERT INTO env_vars_fts(env_vars_fts, rowid, name, description) VALUES('delete', old.id, old.name, old.description);
+    DELETE FROM env_vars_fts WHERE rowid = old.id;
     INSERT INTO env_vars_fts(rowid, name, description) VALUES (new.id, new.name, new.description);
 END;
 """
@@ -162,13 +162,50 @@ CREATE TRIGGER IF NOT EXISTS artifacts_fts_ai AFTER INSERT ON artifacts BEGIN
     INSERT INTO artifacts_fts(rowid, title, content, artifact_id) VALUES (new.rowid, new.title, new.content, new.id);
 END;
 CREATE TRIGGER IF NOT EXISTS artifacts_fts_ad AFTER DELETE ON artifacts BEGIN
-    INSERT INTO artifacts_fts(artifacts_fts, rowid, title, content, artifact_id) VALUES('delete', old.rowid, old.title, old.content, old.id);
+    DELETE FROM artifacts_fts WHERE rowid = old.rowid;
 END;
 CREATE TRIGGER IF NOT EXISTS artifacts_fts_au AFTER UPDATE ON artifacts BEGIN
-    INSERT INTO artifacts_fts(artifacts_fts, rowid, title, content, artifact_id) VALUES('delete', old.rowid, old.title, old.content, old.id);
+    DELETE FROM artifacts_fts WHERE rowid = old.rowid;
     INSERT INTO artifacts_fts(rowid, title, content, artifact_id) VALUES (new.rowid, new.title, new.content, new.id);
 END;
 """
+
+
+def _drop_fts_triggers(c: sqlite3.Connection) -> None:
+    for name in (
+        "messages_fts_ai",
+        "messages_fts_ad",
+        "messages_fts_au",
+        "memory_fts_ai",
+        "memory_fts_ad",
+        "memory_fts_au",
+        "env_vars_fts_ai",
+        "env_vars_fts_ad",
+        "env_vars_fts_au",
+        "artifacts_fts_ai",
+        "artifacts_fts_ad",
+        "artifacts_fts_au",
+    ):
+        c.execute(f"DROP TRIGGER IF EXISTS {name}")
+
+
+def _table_exists(c: sqlite3.Connection, name: str) -> bool:
+    row = c.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (name,),
+    ).fetchone()
+    return row is not None
+
+
+def _restore_fts_triggers(c: sqlite3.Connection) -> None:
+    if _table_exists(c, "messages_fts"):
+        c.executescript(_MESSAGES_FTS_TRIGGERS)
+    if _table_exists(c, "memory_fts"):
+        c.executescript(_MEMORY_FTS_TRIGGERS)
+    if _table_exists(c, "env_vars_fts"):
+        c.executescript(_ENV_VARS_FTS_TRIGGERS)
+    if _table_exists(c, "artifacts_fts"):
+        c.executescript(_ARTIFACTS_FTS_TRIGGERS)
 
 
 def _init_messages_fts(c: sqlite3.Connection) -> None:
@@ -304,6 +341,8 @@ def init_db() -> None:
             stmt = stmt.strip()
             if stmt:
                 c.execute(stmt)
+        # 兼容历史坏触发器：先清掉，避免迁移期间 UPDATE 触发 SQL logic error。
+        _drop_fts_triggers(c)
         # 兼容老库：若 memory.anchor 不存在则补充（SQLite 无 IF NOT EXISTS 列语法）
         cols = c.execute("PRAGMA table_info(memory)").fetchall()
         col_names = {str(r["name"]) for r in cols}
@@ -347,6 +386,18 @@ def init_db() -> None:
         c.execute("CREATE INDEX IF NOT EXISTS idx_env_vars_embed_state ON env_vars(embedding_state)")
         if msg_cols and "embedding" not in msg_cols:
             c.execute("ALTER TABLE messages ADD COLUMN embedding BLOB")
+        if msg_cols and "context_state" not in msg_cols:
+            c.execute(
+                "ALTER TABLE messages ADD COLUMN context_state TEXT NOT NULL DEFAULT 'active'"
+            )
+        if msg_cols and "archive_batch_id" not in msg_cols:
+            c.execute("ALTER TABLE messages ADD COLUMN archive_batch_id TEXT")
+        if msg_cols and "archived_at" not in msg_cols:
+            c.execute("ALTER TABLE messages ADD COLUMN archived_at TIMESTAMP")
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_messages_context "
+            "ON messages(session_id, context_state, id)"
+        )
         if msg_cols and "embedding_state" not in msg_cols:
             c.execute(
                 "ALTER TABLE messages ADD COLUMN embedding_state TEXT NOT NULL DEFAULT 'pending'"
@@ -377,6 +428,7 @@ def init_db() -> None:
         _init_memory_fts(c)
         _init_env_vars_fts(c)
         _init_artifacts_fts(c)
+        _restore_fts_triggers(c)
         for stmt in (
             """
             CREATE TABLE IF NOT EXISTS runs (

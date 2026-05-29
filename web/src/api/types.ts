@@ -37,13 +37,16 @@ export interface LegacyToolMeta {
 
 export interface Message {
   id: number;
-  role: "user" | "assistant" | "tool" | "system";
+  role: "user" | "assistant" | "tool" | "system" | "context_summary";
   content: string;
-  tool_calls?: (OpenAIToolCall | LegacyToolMeta)[] | null;
+  tool_calls?: (OpenAIToolCall | LegacyToolMeta | Record<string, unknown>)[] | null;
   tool_call_id?: string | null;
   run_id?: string | null;
   tokens?: number | null;
   created_at: string;
+  context_state?: "active" | "archived";
+  archive_batch_id?: string | null;
+  archived_at?: string | null;
 }
 
 export interface ActiveRun {

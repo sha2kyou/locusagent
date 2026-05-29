@@ -368,19 +368,77 @@ async def persist_openai_message(
     raise ValueError(f"unsupported role for persist: {role}")
 
 
+async def persist_context_compression(
+    session_id: str,
+    *,
+    archive_message_ids: list[int],
+    summary_text: str,
+    mode: str,
+    before_tokens: int,
+    after_tokens: int,
+    run_id: str | None = None,
+) -> int:
+    """归档中间消息并写入 context_summary（原消息保留，仅标记 archived）。"""
+    if not archive_message_ids:
+        return 0
+    batch_id = f"cmp_{secrets.token_urlsafe(8)}"
+    body = summary_text.strip() or "（中间对话已归档；本次未生成可展示摘要）"
+    meta = {
+        "compression": {
+            "mode": mode,
+            "before_tokens": before_tokens,
+            "after_tokens": after_tokens,
+            "archive_batch_id": batch_id,
+            "archived_message_ids": archive_message_ids,
+        }
+    }
+
+    def _do() -> int:
+        with conn_scope(load_vec=False) as c:
+            c.execute("BEGIN")
+            try:
+                placeholders = ",".join("?" * len(archive_message_ids))
+                c.execute(
+                    f"UPDATE messages SET context_state='archived', archive_batch_id=?, "
+                    f"archived_at=datetime('now') "
+                    f"WHERE session_id=? AND context_state='active' AND id IN ({placeholders})",
+                    (batch_id, session_id, *archive_message_ids),
+                )
+                cur = c.execute(
+                    "INSERT INTO messages("
+                    "session_id, role, content, tool_calls, run_id, context_state"
+                    ") VALUES (?, 'context_summary', ?, ?, ?, 'active')",
+                    (
+                        session_id,
+                        body,
+                        json.dumps(meta, ensure_ascii=False),
+                        run_id,
+                    ),
+                )
+                c.execute("COMMIT")
+                return int(cur.lastrowid or 0)
+            except Exception:
+                c.execute("ROLLBACK")
+                raise
+
+    return await run_in_thread(_do)
+
+
 async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
-    """从 DB 重建 OpenAI 格式上下文（跳过 legacy UI 伪 tool 消息）。"""
+    """从 DB 重建 OpenAI 格式上下文（仅 active 消息；跳过 legacy UI 伪 tool 消息）。"""
 
     def _do() -> list[dict[str, Any]]:
         with conn_scope(load_vec=False) as c:
             rows = c.execute(
-                "SELECT role, content, tool_calls, tool_call_id "
-                "FROM messages WHERE session_id = ? ORDER BY id ASC",
+                "SELECT id, role, content, tool_calls, tool_call_id "
+                "FROM messages WHERE session_id = ? AND context_state = 'active' "
+                "ORDER BY id ASC",
                 (session_id,),
             ).fetchall()
 
         out: list[dict[str, Any]] = []
         for r in rows:
+            msg_id = int(r["id"])
             role = r["role"]
             content = r["content"] or ""
             tool_calls_raw = r["tool_calls"]
@@ -391,14 +449,25 @@ async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
                 except json.JSONDecodeError:
                     tool_calls = None
 
+            if role == "context_summary":
+                if content:
+                    out.append(
+                        {
+                            "role": "system",
+                            "content": "## 历史对话摘要（更早的消息已压缩）\n" + content,
+                            "id": msg_id,
+                        }
+                    )
+                continue
+
             if role == "user":
-                out.append({"role": "user", "content": content})
+                out.append({"role": "user", "content": content, "id": msg_id})
                 continue
 
             if role == "assistant":
                 if _is_legacy_event_meta(tool_calls):
                     continue
-                d: dict[str, Any] = {"role": "assistant"}
+                d: dict[str, Any] = {"role": "assistant", "id": msg_id}
                 if content:
                     d["content"] = content
                 if _is_openai_tool_calls(tool_calls):
@@ -413,11 +482,25 @@ async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
                         tc_id = tool_calls[0].get("tool_call_id") or ""
                         preview = content or (tool_calls[0].get("preview") or "")
                         if tc_id:
-                            out.append({"role": "tool", "tool_call_id": tc_id, "content": preview})
+                            out.append(
+                                {
+                                    "role": "tool",
+                                    "tool_call_id": tc_id,
+                                    "content": preview,
+                                    "id": msg_id,
+                                }
+                            )
                     continue
                 tc_id = r["tool_call_id"] or ""
                 if tc_id:
-                    out.append({"role": "tool", "tool_call_id": tc_id, "content": content})
+                    out.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc_id,
+                            "content": content,
+                            "id": msg_id,
+                        }
+                    )
         return out
 
     return await run_in_thread(_do)
@@ -441,7 +524,7 @@ async def truncate_after_last_user(session_id: str) -> int:
             if row is None:
                 return 0
             cur = c.execute(
-                "DELETE FROM messages WHERE session_id = ? AND id > ?",
+                "DELETE FROM messages WHERE session_id = ? AND id > ? AND context_state = 'active'",
                 (session_id, row["id"]),
             )
             return int(cur.rowcount or 0)
@@ -521,7 +604,8 @@ async def list_messages(session_id: str) -> list[dict]:
     def _do() -> list[dict]:
         with conn_scope(load_vec=False) as c:
             rows = c.execute(
-                "SELECT id, role, content, tool_calls, tool_call_id, run_id, tokens, created_at "
+                "SELECT id, role, content, tool_calls, tool_call_id, run_id, tokens, created_at, "
+                "context_state, archive_batch_id, archived_at "
                 "FROM messages WHERE session_id = ? ORDER BY id ASC",
                 (session_id,),
             ).fetchall()

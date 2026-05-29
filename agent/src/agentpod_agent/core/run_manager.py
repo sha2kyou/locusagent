@@ -55,6 +55,8 @@ async def _persist_event(
     ev: dict[str, Any],
     state: dict[str, Any],
 ) -> None:
+    if ev.get("ephemeral"):
+        return
     t = ev["type"]
     if t == "delta":
         delta = str(ev.get("content") or "")
@@ -223,6 +225,8 @@ async def _worker(
             registry=registry,
             model=model,
             extra=extra,
+            session_id=handle.session_id,
+            run_id=handle.run_id,
         ):
             public = dict(ev)
             et = str(public.get("type") or "")

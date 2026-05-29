@@ -24,6 +24,7 @@ export interface ChatMessage {
   parts: ChatPart[];
   sourceText?: string;
   error?: string;
+  archived?: boolean;
 }
 
 let counter = 0;

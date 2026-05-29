@@ -372,6 +372,8 @@ async def chat_completions(req: ChatRequest, request: Request):
                     registry=registry,
                     model=chosen_model,
                     extra=req.extra,
+                    session_id=sid,
+                    run_id=run_id,
                 )
                 last_assistant_id = await _persist_loop_messages(
                     sid, final_messages, initial_len, run_id=run_id
@@ -585,6 +587,8 @@ async def responses(req: ResponsesRequest):
                 registry=registry,
                 model=chosen_model,
                 extra=req.extra,
+                session_id=sid,
+                run_id=run_id,
             )
             last_assistant_id = await _persist_loop_messages(
                 sid, final_messages, initial_len, run_id=run_id
