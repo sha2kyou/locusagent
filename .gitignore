@@ -24,3 +24,4 @@ data/
 .cursor-cache/
 .cursor-tmp/
 .history/
+host/src/agentpod_host/web/spa/

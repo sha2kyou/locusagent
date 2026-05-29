@@ -18,6 +18,19 @@ Usage:
 EOF
 }
 
+build_frontend_spa() {
+  if [[ ! -f "web/package.json" ]]; then
+    echo "web/package.json not found"
+    exit 1
+  fi
+
+  (
+    cd "web"
+    npm install
+    npm run build
+  )
+}
+
 ensure_user_container() {
   local user_id="${1:-}"
   if [[ -z "$user_id" ]]; then
@@ -46,6 +59,7 @@ PY"
 cmd="${1:-}"
 case "$cmd" in
   host)
+    build_frontend_spa
     docker compose build "host"
     docker compose up -d --no-deps "host"
     ;;
@@ -56,6 +70,7 @@ case "$cmd" in
     ;;
   full)
     user_id="${2:-}"
+    build_frontend_spa
     docker compose down
     docker build -f "agent/Dockerfile" -t "agentpod-agent:latest" "."
     docker compose build "host"
