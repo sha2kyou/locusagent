@@ -249,6 +249,8 @@ async def _create_container(user: User) -> str:
                 "INTERNAL_TOKEN": internal_token,
                 "EMBEDDING_BASE_URL": _host_embedding_proxy_url(),
                 "EMBEDDING_MODEL": settings.embedding_model,
+                "ENABLE_TERMINAL": "1" if settings.enable_terminal else "0",
+                "TERMINAL_WHITELIST": settings.terminal_whitelist,
             },
             mem_limit=settings.agent_memory_limit,
             cpu_quota=settings.agent_cpu_quota,

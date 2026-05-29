@@ -28,6 +28,8 @@ class Settings(BaseSettings):
 
     docker_host: str = Field(default="unix:///var/run/docker.sock", alias="DOCKER_HOST")
     agent_image: str = Field(default="agentpod-agent:latest", alias="AGENT_IMAGE")
+    enable_terminal: bool = Field(default=False, alias="ENABLE_TERMINAL")
+    terminal_whitelist: str = Field(default="", alias="TERMINAL_WHITELIST")
 
     embedding_base_url: str = Field(
         default="http://tei:80",
