@@ -5,6 +5,7 @@ import "./index.css";
 import { ToastProvider } from "@/components/ui/toast";
 import { DialogProvider } from "@/components/ui/dialogs";
 import { AuthProvider } from "@/app/auth";
+import { ThemeProvider } from "@/app/theme";
 import { AppShell } from "@/app/AppShell";
 import { LoginRoute } from "@/routes/LoginRoute";
 
@@ -52,10 +53,12 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ToastProvider>
-      <DialogProvider>
-        <RouterProvider router={router} />
-      </DialogProvider>
-    </ToastProvider>
+    <ThemeProvider>
+      <ToastProvider>
+        <DialogProvider>
+          <RouterProvider router={router} />
+        </DialogProvider>
+      </ToastProvider>
+    </ThemeProvider>
   </StrictMode>,
 );

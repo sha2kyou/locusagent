@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { useAuth } from "@/app/auth";
+import { useTheme, type ThemePreference } from "@/app/theme";
+import { cn } from "@/lib/utils";
 import {
   deleteAccount,
   getLLMConfig,
@@ -14,6 +16,13 @@ import {
   rotateApiKey,
 } from "@/api/endpoints";
 import type { LLMConfig } from "@/api/types";
+
+const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
+  { value: "system", label: "跟随系统" },
+  { value: "light", label: "浅色" },
+  { value: "dark", label: "深色" },
+];
+const THEME_OPTION_VALUES = THEME_OPTIONS.map((opt) => opt.value);
 
 interface Props {
   open: boolean;
@@ -26,6 +35,7 @@ export function SettingsModal({ open, onClose, onLogout, required = false }: Pro
   const toast = useToast();
   const { confirm } = useDialogs();
   const { me, reload } = useAuth();
+  const { preference: themePreference, setPreference: setThemePreference } = useTheme();
 
   const [cfg, setCfg] = useState<LLMConfig | null>(null);
   const [baseUrl, setBaseUrl] = useState("");
@@ -35,6 +45,13 @@ export function SettingsModal({ open, onClose, onLogout, required = false }: Pro
 
   const [flashKey, setFlashKey] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const themeIndex = THEME_OPTION_VALUES.indexOf(themePreference);
+
+  const selectThemeByOffset = (offset: number) => {
+    const len = THEME_OPTION_VALUES.length;
+    const next = (themeIndex + offset + len) % len;
+    setThemePreference(THEME_OPTION_VALUES[next]);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -97,12 +114,70 @@ export function SettingsModal({ open, onClose, onLogout, required = false }: Pro
         open={open}
         onClose={onClose}
         title="设置"
-        description={mustConfigure ? "首次使用请先完成模型配置，完成前无法关闭。" : "配置对话模型与外部访问"}
+        description={mustConfigure ? "首次使用请先完成模型配置，完成前无法关闭。" : "配置主题、对话模型与外部访问"}
         size="lg"
         showClose={!mustConfigure}
         closeDisabled={mustConfigure}
       >
         <div className="space-y-5">
+          {/* 主题 */}
+          <section className="rounded-lg border border-border bg-surface/40 p-4">
+            <h3 className="mb-3 text-sm font-semibold">主题</h3>
+            <div
+              className="grid grid-cols-3 gap-1 rounded-lg border border-border bg-muted p-1"
+              role="radiogroup"
+              aria-label="主题"
+            >
+              {THEME_OPTIONS.map((opt) => {
+                const selected = themePreference === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    tabIndex={selected ? 0 : -1}
+                    onClick={() => setThemePreference(opt.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+                        e.preventDefault();
+                        selectThemeByOffset(1);
+                        return;
+                      }
+                      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+                        e.preventDefault();
+                        selectThemeByOffset(-1);
+                        return;
+                      }
+                      if (e.key === "Home") {
+                        e.preventDefault();
+                        setThemePreference(THEME_OPTION_VALUES[0]);
+                        return;
+                      }
+                      if (e.key === "End") {
+                        e.preventDefault();
+                        setThemePreference(THEME_OPTION_VALUES[THEME_OPTION_VALUES.length - 1]);
+                        return;
+                      }
+                      if (e.key === " " || e.key === "Enter") {
+                        e.preventDefault();
+                        setThemePreference(opt.value);
+                      }
+                    }}
+                    className={cn(
+                      "rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
+                      selected
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-secondary-foreground hover:bg-secondary hover:text-foreground",
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
           {/* LLM */}
           <section className="rounded-lg border border-border bg-surface/40 p-4">
             <div className="mb-1 flex items-center gap-2">

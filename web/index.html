@@ -5,6 +5,16 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232b2b2b' stroke-width='1.6'%3E%3Cpath d='M12 2 L4 7 v10 l8 5 l8-5 V7 z'/%3E%3Cpath d='M12 22 V12'/%3E%3Cpath d='M4 7 L12 12 L20 7'/%3E%3C/svg%3E" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AgentPod</title>
+    <script>
+      (function () {
+        var stored = localStorage.getItem("apod-theme");
+        var dark =
+          stored === "dark" ||
+          (stored !== "light" &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches);
+        if (dark) document.documentElement.classList.add("dark");
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -98,7 +98,7 @@ export function Modal({
         aria-modal="true"
         tabIndex={-1}
         className={cn(
-          "relative w-full rounded-xl border border-border-strong bg-popover p-5 shadow-2xl apod-enter-up",
+          "relative flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden rounded-xl border border-border-strong bg-popover p-5 shadow-2xl apod-enter-up",
           sizes[size],
         )}
       >
@@ -117,8 +117,10 @@ export function Modal({
             )}
           </div>
         )}
-        {children}
-        {footer && <div className="mt-5 flex justify-end gap-2">{footer}</div>}
+        <div className="min-h-0 overflow-y-auto">
+          {children}
+        </div>
+        {footer && <div className="mt-5 flex shrink-0 justify-end gap-2">{footer}</div>}
       </div>
     </div>,
     document.body,
