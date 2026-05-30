@@ -11,9 +11,13 @@ import type {
   MemoryAnchor,
   MemoryEntry,
   Message,
+  NotificationEntry,
   SessionMeta,
   Skill,
+  ScheduledTask,
+  ScheduleKind,
   TavilyConfig,
+  TimezoneConfig,
   ToolToggleOverview,
 } from "./types";
 
@@ -40,6 +44,39 @@ export const getTavilyConfig = () => apiGet<TavilyConfig>("/api/settings/tavily"
 
 export const putTavilyConfig = (body: { api_key: string }) =>
   apiSend<TavilyConfig>("/api/settings/tavily", "PUT", body);
+
+export const getTimezoneConfig = () => apiGet<TimezoneConfig>("/api/settings/timezone");
+
+export const putTimezoneConfig = (body: { timezone: string }) =>
+  apiSend<TimezoneConfig>("/api/settings/timezone", "PUT", body);
+
+// ---- 定时任务 ----
+export const listScheduledTasks = () => apiGet<{ items: ScheduledTask[] }>("/api/scheduled-tasks");
+
+export const createScheduledTask = (body: {
+  title: string;
+  prompt: string;
+  schedule_kind: ScheduleKind;
+  enabled?: boolean;
+  notify?: boolean;
+  cron_expr?: string;
+  run_at?: string;
+}) => apiSend<{ item: ScheduledTask }>("/api/scheduled-tasks", "POST", body);
+
+export const updateScheduledTask = (
+  id: number,
+  body: {
+    title?: string;
+    prompt?: string;
+    enabled?: boolean;
+    notify?: boolean;
+    cron_expr?: string;
+    run_at?: string;
+  },
+) => apiSend<{ item: ScheduledTask }>(`/api/scheduled-tasks/${id}`, "PUT", body);
+
+export const deleteScheduledTask = (id: number) =>
+  apiSend<{ deleted: boolean }>(`/api/scheduled-tasks/${id}`, "DELETE");
 
 // ---- 会话 ----
 export const listSessions = (limit = 50) =>
@@ -129,8 +166,8 @@ export const recallEnvVars = (body: { query: string; top_k?: number }) =>
 export const listArtifactCategories = () =>
   apiGet<{ items: ArtifactCategory[] }>("/api/workspace/artifact-categories");
 
-export const createArtifactCategory = (name: string) =>
-  apiSend<ArtifactCategory>("/api/workspace/artifact-categories", "POST", { name });
+export const createArtifactCategory = (name: string, description = "") =>
+  apiSend<ArtifactCategory>("/api/workspace/artifact-categories", "POST", { name, description });
 
 export const deleteArtifactCategory = (id: string) =>
   apiSend<{ deleted: boolean }>(
@@ -156,3 +193,21 @@ export const updateArtifact = (
 
 export const deleteArtifact = (id: string) =>
   apiSend<{ deleted: boolean }>(`/api/workspace/artifacts/${encodeURIComponent(id)}`, "DELETE");
+
+// ---- 站内通知 ----
+export const listNotifications = (limit = 50) =>
+  apiGet<{ items: NotificationEntry[]; unread_count: number }>(
+    `/api/notifications?limit=${limit}`,
+  );
+
+export const getUnreadNotificationCount = () =>
+  apiGet<{ count: number }>("/api/notifications/unread-count");
+
+export const markNotificationRead = (id: number) =>
+  apiSend<{ ok: boolean }>(`/api/notifications/${id}/read`, "POST", {});
+
+export const markAllNotificationsRead = () =>
+  apiSend<{ updated: number }>("/api/notifications/read-all", "POST", {});
+
+export const deleteNotification = (id: number) =>
+  apiSend<{ deleted: boolean }>(`/api/notifications/${id}`, "DELETE");

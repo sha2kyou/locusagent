@@ -85,6 +85,7 @@ CREATE INDEX IF NOT EXISTS idx_responses_session ON responses(session_id, create
 CREATE TABLE IF NOT EXISTS artifact_categories (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL UNIQUE,
+    description TEXT NOT NULL DEFAULT '',
     created_at  TIMESTAMP NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -369,6 +370,13 @@ def init_db() -> None:
         c.execute(
             "CREATE INDEX IF NOT EXISTS idx_artifacts_embed_state ON artifacts(embedding_state)"
         )
+        cat_cols = {
+            str(r["name"]) for r in c.execute("PRAGMA table_info(artifact_categories)").fetchall()
+        }
+        if cat_cols and "description" not in cat_cols:
+            c.execute(
+                "ALTER TABLE artifact_categories ADD COLUMN description TEXT NOT NULL DEFAULT ''"
+            )
         env_cols = {str(r["name"]) for r in c.execute("PRAGMA table_info(env_vars)").fetchall()}
         if env_cols and "description" not in env_cols:
             c.execute("ALTER TABLE env_vars ADD COLUMN description TEXT NOT NULL DEFAULT ''")

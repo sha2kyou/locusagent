@@ -485,6 +485,7 @@ async def workspace_delete_session(session_id: str) -> dict:
 
 class CategoryIn(BaseModel):
     name: str
+    description: str = ""
 
 
 class ArtifactIn(BaseModel):
@@ -510,7 +511,7 @@ async def workspace_create_category(payload: CategoryIn) -> dict:
     name = payload.name.strip()
     if not name:
         raise WsError("category_empty", "name is empty", status_code=400)
-    return await create_category(name)
+    return await create_category(name, payload.description.strip())
 
 
 @router.delete("/artifact-categories/{category_id}")

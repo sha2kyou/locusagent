@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Download, Plus, Trash2 } from "lucide-react";
+import { jsPDF } from "jspdf";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
@@ -29,9 +30,19 @@ const EXPORT_FORMAT: Record<ArtifactType, { ext: string; mime: string }> = {
   text: { ext: "txt", mime: "text/plain" },
 };
 
-function downloadArtifact(a: ArtifactEntry): void {
+function safeFileTitle(title: string): string {
+  return (title || "artifact").replace(/[\\/:*?"<>|]/g, "_").trim().slice(0, 80) || "artifact";
+}
+
+function artifactToText(a: ArtifactEntry): string {
+  if (a.type !== "html") return a.content;
+  const doc = new DOMParser().parseFromString(a.content, "text/html");
+  return (doc.body.textContent || "").trim();
+}
+
+function downloadArtifactOriginal(a: ArtifactEntry): void {
   const fmt = EXPORT_FORMAT[a.type] ?? EXPORT_FORMAT.text;
-  const safeTitle = (a.title || "artifact").replace(/[\\/:*?"<>|]/g, "_").trim().slice(0, 80);
+  const safeTitle = safeFileTitle(a.title);
   const blob = new Blob([a.content], { type: `${fmt.mime};charset=utf-8` });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -41,6 +52,108 @@ function downloadArtifact(a: ArtifactEntry): void {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function downloadArtifactPdf(a: ArtifactEntry): void {
+  const safeTitle = safeFileTitle(a.title);
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  const margin = 40;
+  const pageWidthPt = doc.internal.pageSize.getWidth();
+  const pageHeightPt = doc.internal.pageSize.getHeight();
+  const scale = 2;
+  const pageWidthPx = Math.round(pageWidthPt * scale);
+  const pageHeightPx = Math.round(pageHeightPt * scale);
+  const marginPx = Math.round(margin * scale);
+  const contentWidthPx = pageWidthPx - marginPx * 2;
+  const lineHeightPx = 32;
+  const titleLineHeightPx = 42;
+  const paragraphGapPx = 14;
+  const pageMaxY = pageHeightPx - marginPx;
+  const fontFamily = "PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif";
+
+  const text = artifactToText(a) || "(empty)";
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const wrapLine = (input: string, maxWidth: number): string[] => {
+    if (!input) return [""];
+    const out: string[] = [];
+    let current = "";
+    for (const ch of input) {
+      const next = current + ch;
+      if (ctx.measureText(next).width <= maxWidth || current.length === 0) {
+        current = next;
+      } else {
+        out.push(current);
+        current = ch;
+      }
+    }
+    if (current) out.push(current);
+    return out;
+  };
+
+  ctx.font = `700 30px ${fontFamily}`;
+  const titleLines = wrapLine(a.title || "artifact", contentWidthPx);
+
+  ctx.font = `400 26px ${fontFamily}`;
+  const bodyLines: string[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trimEnd();
+    const wrapped = wrapLine(line, contentWidthPx);
+    bodyLines.push(...wrapped);
+    bodyLines.push("");
+  }
+  if (bodyLines.length > 0 && bodyLines[bodyLines.length - 1] === "") {
+    bodyLines.pop();
+  }
+
+  const pages: { title: string[]; body: string[] }[] = [];
+  let lineIndex = 0;
+  let firstPage = true;
+  while (lineIndex < bodyLines.length || (firstPage && bodyLines.length === 0)) {
+    const titleBlock = firstPage ? titleLines : [];
+    const startY = marginPx + titleBlock.length * titleLineHeightPx + (firstPage ? paragraphGapPx * 2 : 0);
+    const availableBodyLines = Math.max(0, Math.floor((pageMaxY - startY) / lineHeightPx));
+    const bodyBlock =
+      availableBodyLines > 0 ? bodyLines.slice(lineIndex, lineIndex + availableBodyLines) : [];
+    pages.push({ title: titleBlock, body: bodyBlock });
+    lineIndex += bodyBlock.length;
+    if (availableBodyLines === 0) break;
+    firstPage = false;
+  }
+  if (pages.length === 0) pages.push({ title: titleLines, body: ["(empty)"] });
+
+  pages.forEach((page, i) => {
+    if (i > 0) doc.addPage();
+    canvas.width = pageWidthPx;
+    canvas.height = pageHeightPx;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    let y = marginPx;
+    if (page.title.length > 0) {
+      ctx.fillStyle = "#111111";
+      ctx.font = `700 30px ${fontFamily}`;
+      for (const line of page.title) {
+        ctx.fillText(line || " ", marginPx, y);
+        y += titleLineHeightPx;
+      }
+      y += paragraphGapPx;
+    }
+
+    ctx.fillStyle = "#111111";
+    ctx.font = `400 26px ${fontFamily}`;
+    for (const line of page.body) {
+      ctx.fillText(line || " ", marginPx, y);
+      y += lineHeightPx;
+    }
+
+    const imageData = canvas.toDataURL("image/jpeg", 0.92);
+    doc.addImage(imageData, "JPEG", 0, 0, pageWidthPt, pageHeightPt, undefined, "FAST");
+  });
+
+  doc.save(`${safeTitle}.pdf`);
 }
 
 function notifyCategoriesChanged() {
@@ -196,8 +309,16 @@ export function ArtifactsRoute() {
       })
     )?.trim();
     if (!name) return;
+    const description =
+      (
+        await prompt({
+          title: "类目描述（可选）",
+          placeholder: "例如：用于保存广告文案、投放创意与渠道素材",
+          confirmText: "确定",
+        })
+      )?.trim() ?? "";
     try {
-      await createArtifactCategory(name);
+      await createArtifactCategory(name, description);
       await loadCategories();
       notifyCategoriesChanged();
       toast("已新增类目", "success");
@@ -316,14 +437,14 @@ export function ArtifactsRoute() {
         }
         actions={
           selected && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => downloadArtifact(selected)}
-              title="导出为文件"
-            >
-              <Download className="size-4" /> 导出
-            </Button>
+            <>
+              <Button variant="ghost" size="sm" onClick={() => downloadArtifactOriginal(selected)} title="按原始类型导出">
+                <Download className="size-4" /> 原始类型
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => downloadArtifactPdf(selected)} title="导出为 PDF">
+                <Download className="size-4" /> PDF
+              </Button>
+            </>
           )
         }
       >

@@ -77,25 +77,26 @@ async def list_categories() -> list[dict[str, Any]]:
     def _do() -> list[dict[str, Any]]:
         with conn_scope(load_vec=False) as c:
             rows = c.execute(
-                "SELECT id, name, created_at FROM artifact_categories ORDER BY created_at ASC"
+                "SELECT id, name, description, created_at FROM artifact_categories ORDER BY created_at ASC"
             ).fetchall()
             return [dict(r) for r in rows]
 
     return await run_in_thread(_do)
 
 
-async def create_category(name: str) -> dict[str, Any]:
+async def create_category(name: str, description: str = "") -> dict[str, Any]:
     cid = _new_category_id()
+    desc = str(description or "").strip()
 
     def _do() -> dict[str, Any]:
         with conn_scope(load_vec=False) as c:
             # 幂等且并发安全：同名已存在则忽略，统一按名回查
             c.execute(
-                "INSERT OR IGNORE INTO artifact_categories(id, name) VALUES (?, ?)",
-                (cid, name),
+                "INSERT OR IGNORE INTO artifact_categories(id, name, description) VALUES (?, ?, ?)",
+                (cid, name, desc),
             )
             row = c.execute(
-                "SELECT id, name, created_at FROM artifact_categories WHERE name = ?",
+                "SELECT id, name, description, created_at FROM artifact_categories WHERE name = ?",
                 (name,),
             ).fetchone()
             return dict(row)
@@ -190,6 +191,14 @@ async def create_artifact(
     from ..memory.queue import enqueue_artifact_embedding
 
     await enqueue_artifact_embedding(aid)
+
+    try:
+        from ..host_notify import notify_artifact_saved
+
+        await notify_artifact_saved(art)
+    except Exception as exc:
+        log.warning("artifact_notify_failed", artifact_id=aid, error=str(exc))
+
     return art
 
 
@@ -366,5 +375,22 @@ async def resolve_category_id(name: str) -> str | None:
                 (name,),
             ).fetchone()
             return str(row["id"]) if row else None
+
+    return await run_in_thread(_do)
+
+
+async def get_category_name(category_id: str | None) -> str | None:
+    """按类目 id 查名称；不存在返回 None。"""
+
+    if not category_id:
+        return None
+
+    def _do() -> str | None:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT name FROM artifact_categories WHERE id = ?",
+                (category_id,),
+            ).fetchone()
+            return str(row["name"]) if row else None
 
     return await run_in_thread(_do)

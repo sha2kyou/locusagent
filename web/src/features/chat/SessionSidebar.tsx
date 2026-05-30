@@ -233,13 +233,34 @@ export function SessionSidebar({
                     "group flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm transition-colors",
                     s.id === currentId ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary/60",
                   )}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    if (batchMode) {
+                      toggleSelect(s.id);
+                      return;
+                    }
+                    handleSelect(s.id);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter" && e.key !== " ") return;
+                    e.preventDefault();
+                    if (batchMode) {
+                      toggleSelect(s.id);
+                      return;
+                    }
+                    handleSelect(s.id);
+                  }}
                 >
                   {batchMode ? (
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      onClick={() => toggleSelect(s.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelect(s.id);
+                      }}
                       className={cn(selectedIds.has(s.id) ? "text-brand" : "text-muted-foreground")}
                       aria-label={selectedIds.has(s.id) ? "取消选择" : "选择会话"}
                     >
@@ -250,24 +271,16 @@ export function SessionSidebar({
                       )}
                     </Button>
                   ) : null}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (batchMode) {
-                        toggleSelect(s.id);
-                        return;
-                      }
-                      handleSelect(s.id);
-                    }}
-                    className="min-w-0 flex-1 truncate text-left"
-                    title={s.title}
-                  >
+                  <span className="min-w-0 flex-1 truncate text-left" title={s.title}>
                     {s.title || "新对话"}
-                  </button>
+                  </span>
                   {!batchMode ? (
                     <button
                       type="button"
-                      onClick={() => onDelete(s)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void onDelete(s);
+                      }}
                       className="shrink-0 rounded p-1 text-muted-foreground opacity-100 transition hover:text-destructive md:opacity-0 md:group-hover:opacity-100"
                       aria-label="删除"
                     >

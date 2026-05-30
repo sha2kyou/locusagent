@@ -171,9 +171,49 @@ export interface TavilyConfig {
   configured: boolean;
 }
 
+export interface TimezoneConfig {
+  timezone: string;
+}
+
+export type ScheduleKind = "once" | "cron";
+
+export interface ScheduledTask {
+  id: number;
+  title: string;
+  prompt: string;
+  schedule_kind: ScheduleKind;
+  cron_expr: string | null;
+  run_at: string | null;
+  enabled: boolean;
+  notify: boolean;
+  next_run_at: string | null;
+  last_run_at: string | null;
+  last_run_status: string | null;
+  last_session_id: string | null;
+  last_error: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type NotificationKind = "info" | "success" | "warning" | "error";
+
+export interface NotificationEntry {
+  id: number;
+  kind: NotificationKind;
+  category: string | null;
+  title: string;
+  body: string;
+  link: string | null;
+  read: boolean;
+  created_at: string;
+  read_at: string | null;
+}
+
 export interface ArtifactCategory {
   id: string;
   name: string;
+  description: string;
   created_at: string;
 }
 
