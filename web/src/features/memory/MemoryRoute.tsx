@@ -179,22 +179,24 @@ export function MemoryRoute() {
             <div className="space-y-2">
               {filtered.map((m) => {
                 const emb = EMB_LABEL[m.embedding_state];
-                const expandable = isExpandable(m.content);
                 return (
                   <ListCard key={m.id} className="p-0 overflow-hidden">
                     <div className="flex items-start justify-between gap-3 px-4 py-3">
-                      <div className="min-w-0 flex-1">
-                        <div
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">记忆 #{m.id}</span>
+                          <Badge variant={emb.variant}>{emb.text}</Badge>
+                        </div>
+                        <p
                           className={cn(
-                            "whitespace-pre-wrap text-sm text-muted-foreground",
-                            expandable && "line-clamp-2",
+                            "mt-1 max-w-[56ch] whitespace-pre-wrap text-sm text-muted-foreground",
+                            isExpandable(m.content) && "line-clamp-2",
                           )}
                         >
                           {m.content}
-                        </div>
+                        </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
-                        <Badge variant={emb.variant}>{emb.text}</Badge>
                         <Button variant="ghost" size="icon-sm" onClick={() => move(m)} aria-label="切换分类">
                           {m.anchor === "identity" ? <ArrowDown /> : <ArrowUp />}
                         </Button>
@@ -206,13 +208,11 @@ export function MemoryRoute() {
                         </Button>
                       </div>
                     </div>
-                    {expandable ? (
-                      <CollapsibleSection summary="完整内容">
-                        <pre className="max-h-[40vh] overflow-y-auto whitespace-pre-wrap text-sm text-foreground">
-                          {m.content}
-                        </pre>
-                      </CollapsibleSection>
-                    ) : null}
+                    <CollapsibleSection summary="说明">
+                      <pre className="max-h-[40vh] overflow-y-auto whitespace-pre-wrap text-sm text-foreground">
+                        {m.content}
+                      </pre>
+                    </CollapsibleSection>
                   </ListCard>
                 );
               })}

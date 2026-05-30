@@ -1,12 +1,6 @@
 import type { LegacyToolMeta, Message, OpenAIToolCall, ToolKind } from "@/api/types";
 import { type ChatMessage, type ToolPart, uid } from "./model";
 
-const PREVIEW_MAX = 1000;
-
-function truncate(s: string): string {
-  return s.length > PREVIEW_MAX ? s.slice(0, PREVIEW_MAX) : s;
-}
-
 function isOpenAIToolCall(tc: OpenAIToolCall | LegacyToolMeta | Record<string, unknown>): tc is OpenAIToolCall {
   return "function" in tc && !!(tc as OpenAIToolCall).function;
 }
@@ -126,7 +120,7 @@ export function coalesceHistory(items: Message[]): ChatMessage[] {
       const meta = (msg.tool_calls?.[0] as LegacyToolMeta | undefined);
       const id = msg.tool_call_id ?? meta?.tool_call_id;
       const existing = findTool(id);
-      const preview = meta?.preview ?? truncate(msg.content || "");
+      const preview = meta?.preview ?? (msg.content || "");
       if (existing) {
         existing.running = false;
         existing.preview = preview;

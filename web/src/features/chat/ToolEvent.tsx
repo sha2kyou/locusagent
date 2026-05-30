@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useMessage, type ToolCallMessagePartComponent } from "@assistant-ui/react";
-import { Blocks, Brain, HelpCircle, Loader2, Send, Sparkles, Wrench } from "lucide-react";
+import { Blocks, Brain, ChevronDown, HelpCircle, Loader2, Send, Sparkles, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { CollapsibleSection } from "@/components/ui/panel";
+import { ListCard } from "@/components/ui/panel";
 import type { ToolKind } from "@/api/types";
 import { useChat } from "./ChatProvider";
 
@@ -133,28 +133,65 @@ const GenericToolEvent: ToolCallMessagePartComponent = ({ toolName, args, result
   const preview = typeof result === "string" ? result : result ? JSON.stringify(result) : "";
   const elapsed = startedAt ? fmtElapsed((running ? now : Date.now()) - startedAt) : null;
   const hasResult = preview.trim().length > 0;
+  const [open, setOpen] = useState(false);
+
+  const toggleResult = (triggerEl: HTMLButtonElement) => {
+    const scroller = findScrollParent(triggerEl);
+    const prevTop = scroller?.scrollTop ?? 0;
+    setOpen((v) => !v);
+    // assistant-ui 在消息尺寸变化时可能触发自动跟随到底部，这里强制恢复用户当前阅读位置。
+    requestAnimationFrame(() => {
+      if (scroller) scroller.scrollTop = prevTop;
+      setTimeout(() => {
+        if (scroller) scroller.scrollTop = prevTop;
+      }, 0);
+    });
+  };
 
   return (
-    <div className="my-1.5 flex items-start gap-2 rounded-lg border border-border bg-surface/40 px-3 py-2 text-[13px]">
-      <span className={cn("mt-0.5 shrink-0", running ? "text-brand" : "text-muted-foreground")}>
-        {running ? <Loader2 className="size-4 animate-spin" /> : <Icon className="size-4" />}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-foreground">{toolName}</span>
-          {running ? (
-            <span className="text-muted-foreground">执行中…</span>
-          ) : null}
-          {elapsed && <span className="ml-auto shrink-0 text-xs text-muted-foreground/70">{elapsed}</span>}
-        </div>
-        {!running && hasResult && (
-          <div className="mt-2 -mx-3">
-            <CollapsibleSection summary="结果">
-              <pre className="max-h-[40vh] overflow-y-auto whitespace-pre-wrap text-sm text-foreground">{preview}</pre>
-            </CollapsibleSection>
+    <ListCard className="my-1.5 overflow-hidden p-0">
+      <div className="flex items-start justify-between gap-3 px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className={cn("shrink-0", running ? "text-brand" : "text-muted-foreground")}>
+              {running ? <Loader2 className="size-4 animate-spin" /> : <Icon className="size-4" />}
+            </span>
+            <span className="truncate font-medium text-foreground">{toolName}</span>
+            {running ? <span className="text-sm text-muted-foreground">执行中…</span> : null}
           </div>
-        )}
+        </div>
+        {elapsed && <span className="shrink-0 text-xs text-muted-foreground/70">{elapsed}</span>}
       </div>
-    </div>
+      {!running && hasResult ? (
+        <>
+          <button
+            type="button"
+            onClick={(e) => toggleResult(e.currentTarget)}
+            className="flex w-full items-center justify-between border-t border-border px-4 py-2.5 text-left"
+          >
+            <span className="text-xs text-muted-foreground">结果</span>
+            <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
+          </button>
+          {open ? (
+            <div className="border-t border-border px-4 py-3">
+              <pre className="max-h-[40vh] overflow-y-auto whitespace-pre-wrap text-sm text-foreground">{preview}</pre>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </ListCard>
   );
 };
+
+function findScrollParent(el: HTMLElement | null): HTMLElement | null {
+  let node: HTMLElement | null = el;
+  while (node) {
+    const style = window.getComputedStyle(node);
+    const overflowY = style.overflowY;
+    if ((overflowY === "auto" || overflowY === "scroll") && node.scrollHeight > node.clientHeight) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
+}

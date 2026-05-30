@@ -2,9 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
 import { Cron, type Locale as CronLocale } from "react-js-cron";
-import DatePicker from "react-datepicker";
 import "react-js-cron/styles.css";
-import "react-datepicker/dist/react-datepicker.css";
 import { PageContainer } from "@/components/PageContainer";
 import { ReadyGate } from "@/components/ReadyGate";
 import { Badge } from "@/components/ui/badge";
@@ -91,17 +89,6 @@ function toDatetimeLocal(iso: string | null, tz: string): string {
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
-}
-
-function parseDatetimeLocalToDate(value: string): Date | null {
-  if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function formatDateToDatetimeLocal(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function statusBadge(task: ScheduledTask) {
@@ -214,19 +201,6 @@ export function ScheduledTasksRoute() {
     }
   };
 
-  const toggleEnabled = async (task: ScheduledTask) => {
-    if (task.completed_at) return;
-    setBusy(true);
-    try {
-      await updateScheduledTask(task.id, { enabled: !task.enabled });
-      await load();
-    } catch (e) {
-      toast((e as Error).message, "error");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const remove = async (task: ScheduledTask) => {
     if (!(await confirm({ title: "删除定时任务", body: `确定删除「${task.title}」？`, danger: true, confirmText: "删除" }))) return;
     setBusy(true);
@@ -287,14 +261,6 @@ export function ScheduledTasksRoute() {
                       <div className="flex shrink-0 items-center gap-1">
                         {!task.completed_at ? (
                           <>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              disabled={busy}
-                              onClick={() => void toggleEnabled(task)}
-                            >
-                              {task.enabled ? "停用" : "启用"}
-                            </Button>
                             <Button variant="ghost" size="icon-sm" disabled={busy} onClick={() => startEdit(task)}>
                               <Pencil className="size-3.5" />
                             </Button>
@@ -380,14 +346,12 @@ export function ScheduledTasksRoute() {
                 ) : (
                   <div className="grid gap-1.5">
                     <Label>执行时间</Label>
-                    <DatePicker
-                      selected={parseDatetimeLocalToDate(runAt)}
-                      onChange={(date: Date | null) => setRunAt(date ? formatDateToDatetimeLocal(date) : "")}
-                      showTimeSelect
-                      timeIntervals={5}
-                      dateFormat="yyyy-MM-dd HH:mm"
-                      placeholderText="点击选择日期和时间"
-                      customInput={<Input className="h-9 w-72" />}
+                    <Input
+                      type="datetime-local"
+                      step={300}
+                      value={runAt}
+                      onChange={(e) => setRunAt(e.target.value)}
+                      className="max-w-sm"
                     />
                     <p className="text-xs text-muted-foreground">
                       按设置时区（{userTimezone}）填写，例如 2026-06-01 09:00

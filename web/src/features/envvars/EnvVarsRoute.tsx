@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Eye, EyeOff, KeyRound, Pencil, Trash2 } from "lucide-react";
+import { Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { ReadyGate } from "@/components/ReadyGate";
 import { Badge } from "@/components/ui/badge";
@@ -124,7 +124,6 @@ export function EnvVarsRoute() {
                     <div className="flex items-start justify-between gap-3 px-4 py-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <KeyRound className="size-4 text-muted-foreground" />
                           <span className="font-medium">{item.name}</span>
                           <Badge variant={emb.variant}>{emb.text}</Badge>
                         </div>

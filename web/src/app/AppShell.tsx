@@ -9,6 +9,7 @@ import {
   Menu,
   MessagesSquare,
   PanelLeft,
+  Plug,
   KeyRound,
   Settings,
   Sparkles,
@@ -42,7 +43,7 @@ const NAV_PRIMARY: NavEntry[] = [{ to: "/chat", label: "对话", icon: MessagesS
 // 能力扩展
 const NAV_CAPABILITIES: NavEntry[] = [
   { to: "/skills", label: "技能", icon: Sparkles },
-  { to: "/mcp", label: "MCP", icon: Blocks },
+  { to: "/mcp", label: "MCP", icon: Plug },
   { to: "/tools", label: "工具", icon: Wrench },
 ];
 // 上下文与密钥

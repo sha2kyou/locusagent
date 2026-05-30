@@ -504,7 +504,7 @@ async def run_chat_loop_stream(
                 "type": "tool_result",
                 "tool_call_id": call_id,
                 "name": "summarize",
-                "preview": tool_content[:1000],
+                "preview": tool_content,
                 "content": tool_content,
                 "ephemeral": True,
             }
@@ -620,7 +620,7 @@ async def run_chat_loop_stream(
                 yield {"type": "tool_call", "name": stub.function.name, "id": stub.id}
             tool_results = await _execute_tool_calls(registry, stub_calls)
             for stub, r in zip(stub_calls, tool_results):
-                preview = (r.get("content") or "")[:1000]
+                preview = r.get("content") or ""
                 yield {
                     "type": "tool_result",
                     "tool_call_id": r["tool_call_id"],
