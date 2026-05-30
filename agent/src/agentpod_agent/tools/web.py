@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import ipaddress
+import os
 import re
 import socket
 from html.parser import HTMLParser
@@ -19,6 +20,7 @@ TIMEOUT = httpx.Timeout(connect=5.0, read=15.0, write=5.0, pool=5.0)
 MAX_HTML_BYTES = 1 * 1024 * 1024
 MAX_TEXT_CHARS = 12_000
 MAX_REDIRECTS = 5
+TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 
 
 def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
@@ -95,17 +97,58 @@ async def _ddg_search(query: str, top_k: int) -> list[dict[str, str]]:
     return results
 
 
+async def _tavily_search(query: str, top_k: int, api_key: str) -> list[dict[str, str]]:
+    payload = {
+        "query": query,
+        "search_depth": "basic",
+        "max_results": top_k,
+        "include_answer": False,
+        "include_raw_content": False,
+    }
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=TIMEOUT, headers=headers) as client:
+        resp = await client.post(TAVILY_SEARCH_URL, json=payload)
+    if resp.status_code != 200:
+        raise ToolError(f"tavily http {resp.status_code}")
+    data = resp.json()
+    raw_results = data.get("results")
+    if not isinstance(raw_results, list):
+        return []
+    out: list[dict[str, str]] = []
+    for item in raw_results:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "").strip()
+        url = str(item.get("url") or "").strip()
+        snippet = str(item.get("content") or "").strip()
+        snippet = re.sub(r"\s+", " ", snippet)
+        out.append({"title": title, "url": url, "snippet": snippet})
+        if len(out) >= top_k:
+            break
+    return out
+
+
 async def _web_search(args: dict[str, Any]) -> ToolResult:
     query = str(args.get("query", "")).strip()
     top_k = int(args.get("limit", args.get("top_k", 5)) or 5)
     top_k = max(1, min(100, top_k))
     if not query:
         raise ToolError("query is required")
-    results = await _ddg_search(query, top_k)
+    tavily_api_key = str(os.getenv("TAVILY_API_KEY", "")).strip()
+    if tavily_api_key:
+        results = await _tavily_search(query, top_k, tavily_api_key)
+        search_source = "tavily"
+    else:
+        results = await _ddg_search(query, top_k)
+        search_source = "duckduckgo"
     if not results:
         return ToolResult(content="no results")
     lines = [f"{i+1}. {r['title']}\n   {r['url']}\n   {r['snippet']}" for i, r in enumerate(results)]
-    return ToolResult(content="\n\n".join(lines), metadata={"results": results})
+    return ToolResult(content="\n\n".join(lines), metadata={"results": results, "source": search_source})
 
 
 class _TextExtractor(HTMLParser):
@@ -185,7 +228,7 @@ register_builtin(
     Tool(
         name="web_search",
         description=(
-            "网页搜索，返回标题/URL/摘要。使用 DuckDuckGo。"
+            "网页搜索，返回标题/URL/摘要。配置了 TAVILY_API_KEY 时使用 Tavily；未配置时使用 DuckDuckGo。"
         ),
         parameters={
             "type": "object",
