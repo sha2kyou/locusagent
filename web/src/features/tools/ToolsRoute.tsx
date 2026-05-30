@@ -8,10 +8,11 @@ import { listToolToggles } from "@/api/endpoints";
 import type { ToolToggleOverview } from "@/api/types";
 import { Empty, Loading } from "@/features/skills/SkillsRoute";
 
-function getBriefDescription(description?: string): string {
-  if (!description?.trim()) return "暂无说明";
+function getDescriptionMeta(description?: string): { brief: string; isTruncated: boolean; full: string } {
+  if (!description?.trim()) return { brief: "暂无说明", isTruncated: false, full: "暂无说明" };
   const compact = description.replace(/\s+/g, " ").trim();
-  return compact.length > 56 ? `${compact.slice(0, 56)}...` : compact;
+  if (compact.length <= 56) return { brief: compact, isTruncated: false, full: description.trim() };
+  return { brief: `${compact.slice(0, 56)}...`, isTruncated: true, full: description.trim() };
 }
 
 export function ToolsRoute() {
@@ -51,26 +52,26 @@ export function ToolsRoute() {
               <Empty text="暂无条目" />
             ) : (
               data.builtin_tools.map((item) => {
+                const desc = getDescriptionMeta(item.description);
                 return (
                   <ListCard key={item.name} className="p-0 overflow-hidden">
-                    <div className="flex items-start justify-between gap-3 px-4 py-3">
+                    <div className="flex items-start gap-3 px-4 py-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{item.name}</span>
                         </div>
                         <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-                          {getBriefDescription(item.description)}
+                          {desc.brief}
                         </p>
                       </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <Badge variant="outline">{item.enabled ? "已启用" : "已停用"}</Badge>
-                      </div>
                     </div>
-                    <CollapsibleSection summary="详情">
-                      <div className="space-y-2 text-sm">
-                        <p className="whitespace-pre-wrap text-foreground">{item.description?.trim() || "暂无说明"}</p>
-                      </div>
-                    </CollapsibleSection>
+                    {desc.isTruncated ? (
+                      <CollapsibleSection summary="详情">
+                        <div className="space-y-2 text-sm">
+                          <p className="whitespace-pre-wrap text-foreground">{desc.full}</p>
+                        </div>
+                      </CollapsibleSection>
+                    ) : null}
                   </ListCard>
                 );
               })

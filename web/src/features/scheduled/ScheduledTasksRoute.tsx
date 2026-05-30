@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Loader2, Pencil, Trash2 } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Loader2, Pencil, Trash2 } from "lucide-react";
 import { Cron, type Locale as CronLocale } from "react-js-cron";
 import "react-js-cron/styles.css";
 import { PageContainer } from "@/components/PageContainer";
 import { ReadyGate } from "@/components/ReadyGate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Textarea } from "@/components/ui/field";
+import { Input, Label, Select, Textarea } from "@/components/ui/field";
 import { CollapsiblePanel, CollapsibleSection, ListCard } from "@/components/ui/panel";
 import { useDialogs } from "@/components/ui/dialogs";
 import { useToast } from "@/components/ui/toast";
@@ -89,6 +89,203 @@ function toDatetimeLocal(iso: string | null, tz: string): string {
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function parseDateTimeLocal(value: string): { y: number; m: number; d: number; hh: number; mm: number } | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value.trim());
+  if (!m) return null;
+  return {
+    y: Number(m[1]),
+    m: Number(m[2]),
+    d: Number(m[3]),
+    hh: Number(m[4]),
+    mm: Number(m[5]),
+  };
+}
+
+function formatDateTimeLocal(parts: { y: number; m: number; d: number; hh: number; mm: number }): string {
+  return `${parts.y}-${pad2(parts.m)}-${pad2(parts.d)}T${pad2(parts.hh)}:${pad2(parts.mm)}`;
+}
+
+function daysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
+function DateTimePicker({
+  value,
+  onChange,
+  timezone,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  timezone: string;
+}) {
+  const now = new Date();
+  const parsed = parseDateTimeLocal(value);
+  const [open, setOpen] = useState(false);
+  const [viewY, setViewY] = useState(parsed?.y ?? now.getFullYear());
+  const [viewM, setViewM] = useState(parsed?.m ?? now.getMonth() + 1);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const p = parseDateTimeLocal(value);
+    if (p) {
+      setViewY(p.y);
+      setViewM(p.m);
+    }
+  }, [open, value]);
+
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      const t = e.target as Node | null;
+      if (!t) return;
+      if (rootRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  const shiftMonth = (delta: number) => {
+    const d = new Date(viewY, viewM - 1 + delta, 1);
+    setViewY(d.getFullYear());
+    setViewM(d.getMonth() + 1);
+  };
+
+  const firstWeekday = new Date(viewY, viewM - 1, 1).getDay();
+  const totalDays = daysInMonth(viewY, viewM);
+  const selected = parsed;
+
+  const applyDate = (day: number) => {
+    const base = selected ?? { y: viewY, m: viewM, d: day, hh: 9, mm: 0 };
+    onChange(formatDateTimeLocal({ ...base, y: viewY, m: viewM, d: day }));
+  };
+
+  const applyTime = (nextHour: number | null, nextMinute: number | null) => {
+    const base = selected ?? { y: viewY, m: viewM, d: 1, hh: 9, mm: 0 };
+    onChange(
+      formatDateTimeLocal({
+        ...base,
+        hh: nextHour ?? base.hh,
+        mm: nextMinute ?? base.mm,
+      }),
+    );
+  };
+
+  const display = selected
+    ? `${selected.y}-${pad2(selected.m)}-${pad2(selected.d)} ${pad2(selected.hh)}:${pad2(selected.mm)}`
+    : "";
+
+  return (
+    <div ref={rootRef} className="relative max-w-sm">
+      <Input
+        readOnly
+        value={display}
+        onClick={() => setOpen((v) => !v)}
+        placeholder="点击选择日期和时间"
+        className="cursor-pointer pr-10"
+      />
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="absolute right-1 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary"
+        aria-label="打开日历"
+      >
+        <CalendarDays className="size-4" />
+      </button>
+      {open ? (
+        <ListCard className="absolute z-20 mt-2 w-[320px] overflow-hidden p-0 shadow-lg">
+          <div className="flex items-center justify-between px-4 py-3">
+            <Button variant="ghost" size="icon-sm" onClick={() => shiftMonth(-1)} aria-label="上个月">
+              <ChevronLeft className="size-4" />
+            </Button>
+            <span className="text-sm font-medium">
+              {viewY}年{viewM}月
+            </span>
+            <Button variant="ghost" size="icon-sm" onClick={() => shiftMonth(1)} aria-label="下个月">
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
+          <div className="grid grid-cols-7 gap-1 px-4 pb-1 text-center text-xs text-muted-foreground">
+            {["日", "一", "二", "三", "四", "五", "六"].map((w) => (
+              <span key={w}>{w}</span>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-1 px-4 pb-3">
+            {Array.from({ length: firstWeekday }).map((_, i) => (
+              <span key={`e-${i}`} />
+            ))}
+            {Array.from({ length: totalDays }).map((_, i) => {
+              const day = i + 1;
+              const isActive = !!selected && selected.y === viewY && selected.m === viewM && selected.d === day;
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => applyDate(day)}
+                  className={cn(
+                    "h-8 rounded-md text-sm transition",
+                    isActive ? "bg-brand text-brand-foreground" : "hover:bg-secondary text-foreground",
+                  )}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+          <CollapsibleSection summary="时间设置" defaultOpen>
+            <div className="grid gap-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="grid gap-1">
+                  <Label>小时</Label>
+                  <Select
+                    value={String(selected?.hh ?? 9)}
+                    onChange={(e) => applyTime(Number(e.target.value), null)}
+                  >
+                    {Array.from({ length: 24 }).map((_, h) => (
+                      <option key={h} value={h}>
+                        {pad2(h)}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="grid gap-1">
+                  <Label>分钟</Label>
+                  <Select
+                    value={String(selected?.mm ?? 0)}
+                    onChange={(e) => applyTime(null, Number(e.target.value))}
+                  >
+                    {Array.from({ length: 12 }).map((_, i) => {
+                      const m = i * 5;
+                      return (
+                        <option key={m} value={m}>
+                          {pad2(m)}
+                        </option>
+                      );
+                    })}
+                  </Select>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">按设置时区（{timezone}）解释该时间。</p>
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={() => onChange("")}>
+                  清空
+                </Button>
+                <Button variant="secondary" size="sm" onClick={() => setOpen(false)}>
+                  完成
+                </Button>
+              </div>
+            </div>
+          </CollapsibleSection>
+        </ListCard>
+      ) : null}
+    </div>
+  );
 }
 
 function statusBadge(task: ScheduledTask) {
@@ -301,24 +498,30 @@ export function ScheduledTasksRoute() {
                 </div>
                 <div className="grid gap-2">
                   <Label>类型</Label>
-                  <div className="flex flex-wrap gap-2">
+                  <div
+                    className={cn(
+                      "inline-flex w-fit overflow-hidden rounded-lg border border-border",
+                      editingId && "opacity-60",
+                    )}
+                  >
                     {(
                       [
                         ["cron", "重复（Cron）"],
                         ["once", "单次"],
                       ] as const
-                    ).map(([kind, label]) => (
+                    ).map(([kind, label], idx) => (
                       <button
                         key={kind}
                         type="button"
                         disabled={!!editingId}
                         onClick={() => setScheduleKind(kind)}
                         className={cn(
-                          "rounded-lg border px-3 py-1.5 text-sm transition",
+                          "px-3 py-1.5 text-sm transition",
+                          idx > 0 && "border-l border-border",
                           scheduleKind === kind
-                            ? "border-brand bg-brand/10 text-foreground"
-                            : "border-border text-muted-foreground hover:bg-surface",
-                          editingId && "opacity-60",
+                            ? "bg-brand/10 text-foreground"
+                            : "text-muted-foreground hover:bg-surface",
+                          editingId && "cursor-not-allowed",
                         )}
                       >
                         {label}
@@ -346,13 +549,7 @@ export function ScheduledTasksRoute() {
                 ) : (
                   <div className="grid gap-1.5">
                     <Label>执行时间</Label>
-                    <Input
-                      type="datetime-local"
-                      step={300}
-                      value={runAt}
-                      onChange={(e) => setRunAt(e.target.value)}
-                      className="max-w-sm"
-                    />
+                    <DateTimePicker value={runAt} onChange={setRunAt} timezone={userTimezone} />
                     <p className="text-xs text-muted-foreground">
                       按设置时区（{userTimezone}）填写，例如 2026-06-01 09:00
                     </p>
@@ -365,7 +562,7 @@ export function ScheduledTasksRoute() {
                   </label>
                   <label className="flex items-center gap-2 text-sm">
                     <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
-                    完成后通知（成功与失败）
+                    通知
                   </label>
                 </div>
                 <div className="flex gap-2">

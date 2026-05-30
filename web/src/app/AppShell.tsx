@@ -1,7 +1,6 @@
 import { createContext, Suspense, useContext, useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
-  Blocks,
   Brain,
   ChevronsLeft,
   Clock,

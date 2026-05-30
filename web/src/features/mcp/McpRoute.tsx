@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Pencil, Plug, RefreshCw, Trash2 } from "lucide-react";
+import { Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/field";
@@ -177,7 +177,6 @@ export function McpRoute() {
                   <div className="flex items-start justify-between gap-3 px-4 py-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <Plug className="size-4 text-muted-foreground" />
                         <span className="font-medium">{s.name}</span>
                         <Badge variant={s.connected ? "success" : "danger"}>
                           <Dot className={s.connected ? "bg-success" : "bg-destructive"} />
