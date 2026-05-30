@@ -169,6 +169,9 @@ export const listArtifactCategories = () =>
 export const createArtifactCategory = (name: string, description = "") =>
   apiSend<ArtifactCategory>("/api/workspace/artifact-categories", "POST", { name, description });
 
+export const updateArtifactCategory = (id: string, body: { name?: string; description?: string }) =>
+  apiSend<{ updated: boolean }>(`/api/workspace/artifact-categories/${encodeURIComponent(id)}`, "PUT", body);
+
 export const deleteArtifactCategory = (id: string) =>
   apiSend<{ deleted: boolean }>(
     `/api/workspace/artifact-categories/${encodeURIComponent(id)}`,

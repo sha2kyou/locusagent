@@ -69,9 +69,6 @@ export function ToolsRoute() {
                         <div className="flex items-center gap-2">
                           <Wrench className="size-4 text-muted-foreground" />
                           <span className="font-medium">{item.name}</span>
-                          <Badge variant={item.enabled ? "success" : "outline"}>
-                            {item.enabled ? "已启用" : "已禁用"}
-                          </Badge>
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
@@ -86,12 +83,12 @@ export function ToolsRoute() {
                           }}
                           className={`relative inline-flex h-6 w-11 items-center rounded-full border transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${
                             item.enabled
-                              ? "border-brand bg-brand/90"
-                              : "border-border-strong bg-secondary"
+                              ? "border-brand bg-brand/80 dark:border-brand/35 dark:bg-brand/30"
+                              : "border-border-strong bg-secondary dark:border-border dark:bg-surface-2"
                           }`}
                         >
                           <span
-                            className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                            className={`inline-block h-4 w-4 rounded-full bg-background shadow-sm transition-transform dark:bg-surface ${
                               item.enabled ? "translate-x-6" : "translate-x-1"
                             }`}
                           />
@@ -101,7 +98,9 @@ export function ToolsRoute() {
                     </div>
                     {item.description ? (
                       <CollapsibleSection summary="说明">
-                        <p className="text-sm text-foreground">{item.description}</p>
+                        <pre className="max-h-[40vh] overflow-y-auto whitespace-pre-wrap text-sm text-foreground">
+                          {item.description}
+                        </pre>
                       </CollapsibleSection>
                     ) : null}
                   </ListCard>

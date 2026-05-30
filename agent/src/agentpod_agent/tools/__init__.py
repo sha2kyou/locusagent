@@ -11,6 +11,7 @@ from . import clarify as _clarify  # noqa: F401
 from . import context_distill as _summarize  # noqa: F401
 from . import fs as _fs  # noqa: F401
 from . import memory as _memory  # noqa: F401
+from . import scheduled_tasks as _scheduled_tasks  # noqa: F401
 from . import env_vars as _env_vars  # noqa: F401
 from . import execute_code as _execute_code  # noqa: F401
 from . import session_recall as _session_recall  # noqa: F401

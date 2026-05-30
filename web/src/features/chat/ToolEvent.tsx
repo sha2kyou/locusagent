@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useMessage, type ToolCallMessagePartComponent } from "@assistant-ui/react";
-import { Blocks, Brain, ChevronRight, HelpCircle, Loader2, Send, Sparkles, Wrench } from "lucide-react";
+import { Blocks, Brain, HelpCircle, Loader2, Send, Sparkles, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { CollapsibleSection } from "@/components/ui/panel";
 import type { ToolKind } from "@/api/types";
 import { useChat } from "./ChatProvider";
 
@@ -131,8 +132,7 @@ const GenericToolEvent: ToolCallMessagePartComponent = ({ toolName, args, result
 
   const preview = typeof result === "string" ? result : result ? JSON.stringify(result) : "";
   const elapsed = startedAt ? fmtElapsed((running ? now : Date.now()) - startedAt) : null;
-  const [open, setOpen] = useState(false);
-  const long = preview.length > 120;
+  const hasResult = preview.trim().length > 0;
 
   return (
     <div className="my-1.5 flex items-start gap-2 rounded-lg border border-border bg-surface/40 px-3 py-2 text-[13px]">
@@ -144,25 +144,15 @@ const GenericToolEvent: ToolCallMessagePartComponent = ({ toolName, args, result
           <span className="font-mono text-foreground">{toolName}</span>
           {running ? (
             <span className="text-muted-foreground">执行中…</span>
-          ) : (
-            preview && !long && <span className="truncate text-muted-foreground">{preview}</span>
-          )}
+          ) : null}
           {elapsed && <span className="ml-auto shrink-0 text-xs text-muted-foreground/70">{elapsed}</span>}
         </div>
-        {!running && long && (
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            className="mt-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")} />
-            {open ? "收起" : "查看结果"}
-          </button>
-        )}
-        {!running && long && open && (
-          <pre className="mt-1.5 max-h-72 overflow-auto rounded-md border border-border bg-surface-2 p-2 text-xs text-muted-foreground">
-            {preview}
-          </pre>
+        {!running && hasResult && (
+          <div className="mt-2 -mx-3">
+            <CollapsibleSection summary="结果">
+              <pre className="max-h-[40vh] overflow-y-auto whitespace-pre-wrap text-sm text-foreground">{preview}</pre>
+            </CollapsibleSection>
+          </div>
         )}
       </div>
     </div>

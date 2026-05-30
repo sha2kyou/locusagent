@@ -19,6 +19,7 @@ from ..artifacts import (
     get_artifact,
     list_artifacts,
     list_categories,
+    update_category,
     update_artifact,
 )
 from ..core import (
@@ -488,6 +489,11 @@ class CategoryIn(BaseModel):
     description: str = ""
 
 
+class CategoryUpdateIn(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
 class ArtifactIn(BaseModel):
     title: str
     content: str
@@ -512,6 +518,20 @@ async def workspace_create_category(payload: CategoryIn) -> dict:
     if not name:
         raise WsError("category_empty", "name is empty", status_code=400)
     return await create_category(name, payload.description.strip())
+
+
+@router.put("/artifact-categories/{category_id}")
+async def workspace_update_category(category_id: str, payload: CategoryUpdateIn) -> dict:
+    if payload.name is None and payload.description is None:
+        raise WsError("category_update_empty", "nothing to update", status_code=400)
+    ok = await update_category(
+        category_id,
+        name=payload.name.strip() if payload.name is not None else None,
+        description=payload.description.strip() if payload.description is not None else None,
+    )
+    if not ok:
+        raise WsError("category_not_found", "category not found", status_code=404)
+    return {"updated": True}
 
 
 @router.delete("/artifact-categories/{category_id}")

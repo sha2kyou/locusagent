@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
+import { Cron, type Locale as CronLocale } from "react-js-cron";
+import DatePicker from "react-datepicker";
+import "react-js-cron/styles.css";
+import "react-datepicker/dist/react-datepicker.css";
 import { PageContainer } from "@/components/PageContainer";
 import { ReadyGate } from "@/components/ReadyGate";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +23,40 @@ import {
 import type { ScheduledTask, ScheduleKind } from "@/api/types";
 import { Empty, Loading } from "@/features/skills/SkillsRoute";
 import { cn } from "@/lib/utils";
+
+const CRON_LOCALE_ZH: CronLocale = {
+  everyText: "每",
+  emptyMonths: "每月",
+  emptyMonthDays: "每天",
+  emptyMonthDaysShort: "天",
+  emptyWeekDays: "每周",
+  emptyWeekDaysShort: "周",
+  emptyHours: "每小时",
+  emptyMinutes: "每分钟",
+  emptyMinutesForHourPeriod: "分钟",
+  yearOption: "年",
+  monthOption: "月",
+  weekOption: "周",
+  dayOption: "日",
+  hourOption: "小时",
+  minuteOption: "分钟",
+  rebootOption: "重启后",
+  prefixPeriod: "周期",
+  prefixMonths: "在",
+  prefixMonthDays: "在",
+  prefixWeekDays: "在",
+  prefixWeekDaysForMonthAndYearPeriod: "在",
+  prefixHours: "在",
+  prefixMinutes: "在",
+  prefixMinutesForHourPeriod: "在",
+  suffixMinutesForHourPeriod: "分钟",
+  errorInvalidCron: "Cron 表达式无效",
+  clearButtonText: "清空",
+  weekDays: ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
+  months: ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"],
+  altWeekDays: ["日", "一", "二", "三", "四", "五", "六"],
+  altMonths: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"],
+};
 
 function formatWhen(iso: string | null, tz: string): string {
   if (!iso) return "—";
@@ -53,6 +91,17 @@ function toDatetimeLocal(iso: string | null, tz: string): string {
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
+}
+
+function parseDatetimeLocalToDate(value: string): Date | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatDateToDatetimeLocal(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function statusBadge(task: ScheduledTask) {
@@ -268,7 +317,7 @@ export function ScheduledTasksRoute() {
           <div ref={formRef}>
             <CollapsiblePanel
               summary={<span>{editingId ? "编辑任务" : "新建任务"}</span>}
-              defaultOpen={items?.length === 0}
+              defaultOpen={!!editingId || items?.length === 0}
             >
               <div className="grid gap-3">
                 <div className="grid gap-1.5">
@@ -316,19 +365,30 @@ export function ScheduledTasksRoute() {
                 </div>
                 {scheduleKind === "cron" ? (
                   <div className="grid gap-1.5">
-                    <Label>Cron 表达式（5 段：分 时 日 月 周）</Label>
-                    <Input
+                    <Label>Cron 选择器</Label>
+                    <Cron
                       value={cronExpr}
-                      onChange={(e) => setCronExpr(e.target.value)}
-                      placeholder="0 9 * * *"
-                      className="font-mono text-sm"
+                      setValue={(next: string) => setCronExpr(next || "")}
+                      clearButton={false}
+                      humanizeLabels
+                      locale={CRON_LOCALE_ZH}
                     />
-                    <p className="text-xs text-muted-foreground">按设置中的时区解释，例如每天 9:00 为 0 9 * * *</p>
+                    <p className="text-xs text-muted-foreground">
+                      按设置中的时区解释。可视化选择后会自动生成 Cron 表达式。
+                    </p>
                   </div>
                 ) : (
                   <div className="grid gap-1.5">
                     <Label>执行时间</Label>
-                    <Input type="datetime-local" value={runAt} onChange={(e) => setRunAt(e.target.value)} />
+                    <DatePicker
+                      selected={parseDatetimeLocalToDate(runAt)}
+                      onChange={(date: Date | null) => setRunAt(date ? formatDateToDatetimeLocal(date) : "")}
+                      showTimeSelect
+                      timeIntervals={5}
+                      dateFormat="yyyy-MM-dd HH:mm"
+                      placeholderText="点击选择日期和时间"
+                      customInput={<Input className="h-9 w-72" />}
+                    />
                     <p className="text-xs text-muted-foreground">
                       按设置时区（{userTimezone}）填写，例如 2026-06-01 09:00
                     </p>

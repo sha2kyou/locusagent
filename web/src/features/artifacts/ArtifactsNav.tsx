@@ -46,7 +46,7 @@ export function ArtifactsNav({
     <div>
       <div className="relative">
         <NavLink
-          to="/artifacts"
+          to="/artifacts/manage"
           end
           title="产物"
           onClick={onNavigate}
@@ -61,18 +61,8 @@ export function ArtifactsNav({
             )
           }
         >
-          {({ isActive }) => (
-            <>
-              <span
-                className={cn(
-                  "absolute left-0 h-5 w-0.5 rounded-full bg-brand transition-opacity",
-                  isActive ? "opacity-100" : "opacity-0",
-                )}
-              />
-              <Package className="size-[18px] shrink-0" />
-              <span className={cn("truncate", !expanded && "md:hidden")}>产物</span>
-            </>
-          )}
+          <Package className="size-[18px] shrink-0" />
+          <span className={cn("truncate", !expanded && "md:hidden")}>产物</span>
         </NavLink>
         {expanded && categories.length > 0 && (
           <button

@@ -10,6 +10,7 @@ from .store import (
     list_categories,
     recall_artifacts,
     resolve_category_id,
+    update_category,
     update_artifact,
 )
 
@@ -23,5 +24,6 @@ __all__ = [
     "list_categories",
     "recall_artifacts",
     "resolve_category_id",
+    "update_category",
     "update_artifact",
 ]

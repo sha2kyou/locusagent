@@ -1,24 +1,25 @@
-import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
-import { Download, Plus, Trash2 } from "lucide-react";
-import { jsPDF } from "jspdf";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useParams } from "react-router-dom";
+import { Download, Pencil, Plus, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/field";
+import { Input, Label, Textarea } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
-import { ListCard } from "@/components/ui/panel";
+import { CollapsiblePanel, CollapsibleSection, ListCard } from "@/components/ui/panel";
 import { Drawer } from "@/components/ui/drawer";
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
 import { Empty, Loading } from "@/features/skills/SkillsRoute";
 import { HtmlRender, Markdown } from "@/features/chat/Markdown";
+import { cn } from "@/lib/utils";
 import {
   createArtifactCategory,
   deleteArtifact,
   deleteArtifactCategory,
   listArtifactCategories,
   listArtifacts,
+  updateArtifactCategory,
 } from "@/api/endpoints";
 import type { ArtifactCategory, ArtifactEntry, ArtifactType } from "@/api/types";
 
@@ -34,12 +35,6 @@ function safeFileTitle(title: string): string {
   return (title || "artifact").replace(/[\\/:*?"<>|]/g, "_").trim().slice(0, 80) || "artifact";
 }
 
-function artifactToText(a: ArtifactEntry): string {
-  if (a.type !== "html") return a.content;
-  const doc = new DOMParser().parseFromString(a.content, "text/html");
-  return (doc.body.textContent || "").trim();
-}
-
 function downloadArtifactOriginal(a: ArtifactEntry): void {
   const fmt = EXPORT_FORMAT[a.type] ?? EXPORT_FORMAT.text;
   const safeTitle = safeFileTitle(a.title);
@@ -52,108 +47,6 @@ function downloadArtifactOriginal(a: ArtifactEntry): void {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
-}
-
-function downloadArtifactPdf(a: ArtifactEntry): void {
-  const safeTitle = safeFileTitle(a.title);
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const margin = 40;
-  const pageWidthPt = doc.internal.pageSize.getWidth();
-  const pageHeightPt = doc.internal.pageSize.getHeight();
-  const scale = 2;
-  const pageWidthPx = Math.round(pageWidthPt * scale);
-  const pageHeightPx = Math.round(pageHeightPt * scale);
-  const marginPx = Math.round(margin * scale);
-  const contentWidthPx = pageWidthPx - marginPx * 2;
-  const lineHeightPx = 32;
-  const titleLineHeightPx = 42;
-  const paragraphGapPx = 14;
-  const pageMaxY = pageHeightPx - marginPx;
-  const fontFamily = "PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif";
-
-  const text = artifactToText(a) || "(empty)";
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-
-  const wrapLine = (input: string, maxWidth: number): string[] => {
-    if (!input) return [""];
-    const out: string[] = [];
-    let current = "";
-    for (const ch of input) {
-      const next = current + ch;
-      if (ctx.measureText(next).width <= maxWidth || current.length === 0) {
-        current = next;
-      } else {
-        out.push(current);
-        current = ch;
-      }
-    }
-    if (current) out.push(current);
-    return out;
-  };
-
-  ctx.font = `700 30px ${fontFamily}`;
-  const titleLines = wrapLine(a.title || "artifact", contentWidthPx);
-
-  ctx.font = `400 26px ${fontFamily}`;
-  const bodyLines: string[] = [];
-  for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trimEnd();
-    const wrapped = wrapLine(line, contentWidthPx);
-    bodyLines.push(...wrapped);
-    bodyLines.push("");
-  }
-  if (bodyLines.length > 0 && bodyLines[bodyLines.length - 1] === "") {
-    bodyLines.pop();
-  }
-
-  const pages: { title: string[]; body: string[] }[] = [];
-  let lineIndex = 0;
-  let firstPage = true;
-  while (lineIndex < bodyLines.length || (firstPage && bodyLines.length === 0)) {
-    const titleBlock = firstPage ? titleLines : [];
-    const startY = marginPx + titleBlock.length * titleLineHeightPx + (firstPage ? paragraphGapPx * 2 : 0);
-    const availableBodyLines = Math.max(0, Math.floor((pageMaxY - startY) / lineHeightPx));
-    const bodyBlock =
-      availableBodyLines > 0 ? bodyLines.slice(lineIndex, lineIndex + availableBodyLines) : [];
-    pages.push({ title: titleBlock, body: bodyBlock });
-    lineIndex += bodyBlock.length;
-    if (availableBodyLines === 0) break;
-    firstPage = false;
-  }
-  if (pages.length === 0) pages.push({ title: titleLines, body: ["(empty)"] });
-
-  pages.forEach((page, i) => {
-    if (i > 0) doc.addPage();
-    canvas.width = pageWidthPx;
-    canvas.height = pageHeightPx;
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    let y = marginPx;
-    if (page.title.length > 0) {
-      ctx.fillStyle = "#111111";
-      ctx.font = `700 30px ${fontFamily}`;
-      for (const line of page.title) {
-        ctx.fillText(line || " ", marginPx, y);
-        y += titleLineHeightPx;
-      }
-      y += paragraphGapPx;
-    }
-
-    ctx.fillStyle = "#111111";
-    ctx.font = `400 26px ${fontFamily}`;
-    for (const line of page.body) {
-      ctx.fillText(line || " ", marginPx, y);
-      y += lineHeightPx;
-    }
-
-    const imageData = canvas.toDataURL("image/jpeg", 0.92);
-    doc.addImage(imageData, "JPEG", 0, 0, pageWidthPt, pageHeightPt, undefined, "FAST");
-  });
-
-  doc.save(`${safeTitle}.pdf`);
 }
 
 function notifyCategoriesChanged() {
@@ -231,17 +124,26 @@ function ArtifactBody({ artifact }: { artifact: ArtifactEntry }) {
 
 export function ArtifactsRoute() {
   const { categoryId } = useParams<{ categoryId?: string }>();
+  const location = useLocation();
   const toast = useToast();
-  const { confirm, prompt } = useDialogs();
+  const { confirm } = useDialogs();
   const [categories, setCategories] = useState<ArtifactCategory[]>([]);
   const [items, setItems] = useState<ArtifactEntry[] | null>(null);
   const [selected, setSelected] = useState<ArtifactEntry | null>(null);
   const [query, setQuery] = useState("");
+  const [addCategoryOpen, setAddCategoryOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<ArtifactCategory | null>(null);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryDesc, setNewCategoryDesc] = useState("");
+  const addCategoryRef = useRef<HTMLDivElement>(null);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
 
   const currentCategory = useMemo(
     () => categories.find((c) => c.id === categoryId) ?? null,
     [categories, categoryId],
   );
+  const manageMode = location.pathname === "/artifacts/manage" && !currentCategory;
 
   const loadCategories = async () => {
     try {
@@ -253,6 +155,10 @@ export function ArtifactsRoute() {
   };
 
   const loadArtifacts = async () => {
+    if (manageMode) {
+      setItems([]);
+      return;
+    }
     setItems(null);
     try {
       const { items } = await listArtifacts(categoryId);
@@ -271,7 +177,18 @@ export function ArtifactsRoute() {
   useEffect(() => {
     void loadArtifacts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryId]);
+  }, [categoryId, manageMode]);
+
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (exportMenuRef.current?.contains(target)) return;
+      setExportMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [exportMenuOpen]);
 
   const catName = (id: string | null) =>
     id ? (categories.find((c) => c.id === id)?.name ?? "未分类") : "未分类";
@@ -299,49 +216,70 @@ export function ArtifactsRoute() {
     if (uncat?.length) ordered.push({ id: null, name: "未分类", items: uncat });
     return ordered;
   }, [filtered, categories, currentCategory]);
+  const filteredCategories = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return categories.filter((c) =>
+      q ? c.name.toLowerCase().includes(q) || (c.description || "").toLowerCase().includes(q) : true,
+    );
+  }, [categories, query]);
+  const isDescriptionExpandable = (text: string) => {
+    const lines = text.split(/\r?\n/).length;
+    return lines > 2 || text.length > 140;
+  };
 
-  const addCategory = async () => {
-    const name = (
-      await prompt({
-        title: "新增类目",
-        placeholder: "类目名（子菜单），如「广告」「报告」",
-        confirmText: "新增",
-      })
-    )?.trim();
+  const addCategory = () => {
+    setEditingCategory(null);
+    setAddCategoryOpen(true);
+    requestAnimationFrame(() => addCategoryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
+  const submitAddCategory = async () => {
+    const name = newCategoryName.trim();
     if (!name) return;
-    const description =
-      (
-        await prompt({
-          title: "类目描述（可选）",
-          placeholder: "例如：用于保存广告文案、投放创意与渠道素材",
-          confirmText: "确定",
-        })
-      )?.trim() ?? "";
+    const description = newCategoryDesc.trim();
     try {
-      await createArtifactCategory(name, description);
+      if (editingCategory) {
+        await updateArtifactCategory(editingCategory.id, { name, description });
+        toast("已更新类目", "success");
+      } else {
+        await createArtifactCategory(name, description);
+        toast("已新增类目", "success");
+      }
       await loadCategories();
       notifyCategoriesChanged();
-      toast("已新增类目", "success");
+      setNewCategoryName("");
+      setNewCategoryDesc("");
+      setAddCategoryOpen(false);
+      setEditingCategory(null);
     } catch (e) {
       toast((e as Error).message, "error");
     }
   };
 
-  const removeCategory = async () => {
-    if (!currentCategory) return;
+  const startEditCategory = (c: ArtifactCategory) => {
+    setEditingCategory(c);
+    setNewCategoryName(c.name);
+    setNewCategoryDesc(c.description || "");
+    setAddCategoryOpen(true);
+    requestAnimationFrame(() => addCategoryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
+  const removeCategoryById = async (c: ArtifactCategory) => {
     if (
       !(await confirm({
         title: "删除类目",
-        body: `删除「${currentCategory.name}」？该类目下的产物会移至未分类。`,
+        body: `删除「${c.name}」？该类目下的产物会移至未分类。`,
         danger: true,
         confirmText: "删除",
       }))
-    )
+    ) {
       return;
+    }
     try {
-      await deleteArtifactCategory(currentCategory.id);
+      await deleteArtifactCategory(c.id);
       notifyCategoriesChanged();
-      window.location.href = "/artifacts";
+      await loadCategories();
+      toast("已删除类目", "success");
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -359,23 +297,30 @@ export function ArtifactsRoute() {
     }
   };
 
-  const title = currentCategory ? currentCategory.name : "全部产物";
-  const subtitle = currentCategory ? "该类目下的产物" : "AI 产出的成果，可按类目（子菜单）归档";
+  const title = currentCategory ? currentCategory.name : manageMode ? "产物类目管理" : "全部产物";
+  const subtitle = currentCategory
+    ? (currentCategory.description?.trim() || "该类目下的产物")
+    : manageMode
+      ? "管理产物类目与描述"
+      : "AI 产出的成果，可按类目（子菜单）归档";
+  const exportOriginalLabel = selected
+    ? selected.type === "html"
+      ? "HTML"
+      : selected.type === "markdown"
+        ? "Markdown"
+        : "Text"
+    : "原始类型";
 
   return (
     <PageContainer
       title={title}
       subtitle={subtitle}
       actions={
-        currentCategory ? (
-          <Button variant="ghost" size="sm" onClick={removeCategory}>
-            <Trash2 className="size-4" /> 删除类目
-          </Button>
-        ) : (
+        !currentCategory && !manageMode ? (
           <Button variant="secondary" size="sm" onClick={addCategory}>
             <Plus className="size-4" /> 新增类目
           </Button>
-        )
+        ) : undefined
       }
     >
       <ReadyGate>
@@ -384,6 +329,63 @@ export function ArtifactsRoute() {
 
           {items === null ? (
             <Loading />
+          ) : manageMode ? (
+            filteredCategories.length === 0 ? (
+              <Empty text={query ? "无匹配类目" : "暂无类目，先新增一个类目"} />
+            ) : (
+              <div className="space-y-2">
+                {filteredCategories.map((c) => {
+                  const desc = (c.description || "").trim();
+                  const expandable = !!desc && isDescriptionExpandable(desc);
+                  return (
+                    <ListCard key={c.id} className="p-0 overflow-hidden">
+                      <div className="flex items-start justify-between gap-3 px-4 py-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium text-foreground">{c.name}</div>
+                          {desc ? (
+                            <div
+                              className={cn(
+                                "mt-1 whitespace-pre-wrap text-sm text-muted-foreground",
+                                expandable && "line-clamp-2",
+                              )}
+                            >
+                              {desc}
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => startEditCategory(c)}
+                            aria-label="编辑类目"
+                          >
+                            <Pencil className="size-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => {
+                              void removeCategoryById(c);
+                            }}
+                            aria-label="删除类目"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                      {desc ? (
+                        <CollapsibleSection summary="展开更多">
+                          <pre className="max-h-[40vh] overflow-y-auto whitespace-pre-wrap text-sm text-foreground">
+                            {desc}
+                          </pre>
+                        </CollapsibleSection>
+                      ) : null}
+                    </ListCard>
+                  );
+                })}
+              </div>
+            )
           ) : filtered.length === 0 ? (
             <Empty
               text={
@@ -423,6 +425,54 @@ export function ArtifactsRoute() {
               ))}
             </div>
           )}
+
+          {!currentCategory ? (
+            <div ref={addCategoryRef}>
+              <CollapsiblePanel summary={editingCategory ? "编辑类目" : "新增类目"} defaultOpen={addCategoryOpen}>
+                <div className="grid gap-3">
+                  <div className="grid gap-1.5">
+                    <Label>类目名称</Label>
+                    <Input
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      placeholder="如：广告、报告、规划"
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label>类目描述（可选）</Label>
+                    <Textarea
+                      rows={3}
+                      value={newCategoryDesc}
+                      onChange={(e) => setNewCategoryDesc(e.target.value)}
+                      placeholder="用于指导 AI 选择该类目，例如：保存投放素材与广告文案"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="primary"
+                      disabled={!newCategoryName.trim()}
+                      onClick={() => {
+                        void submitAddCategory();
+                      }}
+                    >
+                      {editingCategory ? "保存" : "新增"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setEditingCategory(null);
+                        setAddCategoryOpen(false);
+                        setNewCategoryName("");
+                        setNewCategoryDesc("");
+                      }}
+                    >
+                      取消
+                    </Button>
+                  </div>
+                </div>
+              </CollapsiblePanel>
+            </div>
+          ) : null}
         </div>
       </ReadyGate>
 
@@ -437,19 +487,39 @@ export function ArtifactsRoute() {
         }
         actions={
           selected && (
-            <>
-              <Button variant="ghost" size="sm" onClick={() => downloadArtifactOriginal(selected)} title="按原始类型导出">
-                <Download className="size-4" /> 原始类型
+            <div ref={exportMenuRef} className="relative">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setExportMenuOpen((v) => !v)}
+                title="导出"
+                aria-label="导出"
+                aria-haspopup="menu"
+                aria-expanded={exportMenuOpen}
+              >
+                <Download className="size-4" />
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => downloadArtifactPdf(selected)} title="导出为 PDF">
-                <Download className="size-4" /> PDF
-              </Button>
-            </>
+              {exportMenuOpen && (
+                <div className="absolute right-0 top-[calc(100%+6px)] z-20 w-48 rounded-lg border border-border bg-card p-1 shadow-lg">
+                  <button
+                    type="button"
+                    className="block w-full rounded-md px-2.5 py-2 text-left text-sm text-foreground hover:bg-secondary"
+                    onClick={() => {
+                      downloadArtifactOriginal(selected);
+                      setExportMenuOpen(false);
+                    }}
+                  >
+                    {exportOriginalLabel}
+                  </button>
+                </div>
+              )}
+            </div>
           )
         }
       >
-        {selected && <ArtifactBody artifact={selected} />}
+        <div>{selected && <ArtifactBody artifact={selected} />}</div>
       </Drawer>
+
     </PageContainer>
   );
 }

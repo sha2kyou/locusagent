@@ -53,6 +53,7 @@ const router = createBrowserRouter([
       { path: "scheduled-tasks", element: <ScheduledTasksRoute /> },
       { path: "env-vars", element: <EnvVarsRoute /> },
       { path: "artifacts", element: <ArtifactsRoute /> },
+      { path: "artifacts/manage", element: <ArtifactsRoute /> },
       { path: "artifacts/c/:categoryId", element: <ArtifactsRoute /> },
       { path: "*", element: <Navigate to="/chat" replace /> },
     ],

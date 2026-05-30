@@ -339,12 +339,12 @@ async def _run_user_tasks(tasks: list[ScheduledTask]) -> None:
 
 
 async def scan_and_run_due_tasks() -> None:
-    try:
-        await asyncio.wait_for(_scan_lock.acquire(), timeout=0)
-    except TimeoutError:
+    # asyncio.wait_for(lock.acquire(), timeout=0) 会在可获取锁时也触发超时，
+    # 导致扫描被错误地长期跳过。这里改为显式检测并使用 async with 串行扫描。
+    if _scan_lock.locked():
         log.debug("scheduled_task_scan_skipped", reason="already_running")
         return
-    try:
+    async with _scan_lock:
         await recover_stale_running_tasks()
         due = await list_due_tasks()
         if not due:
@@ -353,8 +353,6 @@ async def scan_and_run_due_tasks() -> None:
         for task in due:
             by_user[task.user_id].append(task)
         await asyncio.gather(*(_run_user_tasks(items) for items in by_user.values()))
-    finally:
-        _scan_lock.release()
 
 
 def schedule_due_task_scan() -> None:

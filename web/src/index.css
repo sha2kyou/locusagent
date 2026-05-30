@@ -449,4 +449,190 @@
   .dark .hljs-property {
     color: oklch(0.74 0.05 280);
   }
+
+  /* react-datepicker: 统一到当前设计系统 */
+  .react-datepicker {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-card);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    box-shadow:
+      0 10px 18px -6px oklch(0 0 0 / 0.12),
+      0 4px 8px -4px oklch(0 0 0 / 0.1);
+  }
+  .react-datepicker__header {
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+  .react-datepicker__current-month,
+  .react-datepicker-time__header,
+  .react-datepicker-year-header {
+    color: var(--color-foreground);
+    font-weight: 600;
+  }
+  .react-datepicker__day-name,
+  .react-datepicker__day,
+  .react-datepicker__time-name {
+    color: var(--color-foreground);
+  }
+  .react-datepicker__day:hover,
+  .react-datepicker__month-text:hover,
+  .react-datepicker__quarter-text:hover,
+  .react-datepicker__year-text:hover {
+    background: var(--color-surface-2);
+    border-radius: 0.5rem;
+  }
+  .react-datepicker__day--keyboard-selected,
+  .react-datepicker__month-text--keyboard-selected,
+  .react-datepicker__quarter-text--keyboard-selected,
+  .react-datepicker__year-text--keyboard-selected {
+    background: var(--color-brand-soft);
+    color: var(--color-foreground);
+    border-radius: 0.5rem;
+  }
+  .react-datepicker__day--selected,
+  .react-datepicker__day--in-selecting-range,
+  .react-datepicker__day--in-range,
+  .react-datepicker__month-text--selected,
+  .react-datepicker__quarter-text--selected,
+  .react-datepicker__year-text--selected {
+    background: var(--color-brand);
+    color: var(--color-brand-foreground);
+    border-radius: 0.5rem;
+  }
+  .react-datepicker__day--today {
+    font-weight: 600;
+  }
+  .react-datepicker__triangle {
+    display: none;
+  }
+  .react-datepicker-popper[data-placement^="bottom"] .react-datepicker__triangle::before,
+  .react-datepicker-popper[data-placement^="bottom"] .react-datepicker__triangle::after {
+    border-bottom-color: var(--color-border);
+  }
+  .react-datepicker__time-container {
+    border-left: 1px solid var(--color-border);
+  }
+  .react-datepicker__time-container .react-datepicker__time {
+    background: var(--color-card);
+  }
+  .react-datepicker__time-container .react-datepicker__time .react-datepicker__time-box ul.react-datepicker__time-list li.react-datepicker__time-list-item {
+    color: var(--color-foreground);
+    height: 30px;
+    line-height: 30px;
+  }
+  .react-datepicker__time-container .react-datepicker__time .react-datepicker__time-box ul.react-datepicker__time-list li.react-datepicker__time-list-item:hover {
+    background: var(--color-surface-2);
+  }
+  .react-datepicker__time-container
+    .react-datepicker__time
+    .react-datepicker__time-box
+    ul.react-datepicker__time-list
+    li.react-datepicker__time-list-item--selected {
+    background: var(--color-brand);
+    color: var(--color-brand-foreground);
+    font-weight: 600;
+  }
+  .react-datepicker__navigation-icon::before {
+    border-color: var(--color-muted-foreground);
+  }
+  .react-datepicker__navigation:hover *::before {
+    border-color: var(--color-foreground);
+  }
+  .react-datepicker__input-container input {
+    color: var(--color-foreground);
+  }
+
+  /* react-js-cron: 统一到当前设计系统（内部基于 ant-select） */
+  .react-js-cron {
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    gap: 0.25rem;
+  }
+  .react-js-cron-field > span {
+    color: var(--color-muted-foreground);
+    font-size: 0.875rem;
+  }
+  .react-js-cron .react-js-cron-select.ant-select {
+    min-width: 86px;
+  }
+  .react-js-cron .react-js-cron-select.ant-select .ant-select-content {
+    min-height: 2.25rem;
+    border: 1px solid var(--color-input);
+    border-radius: var(--radius-md);
+    background: color-mix(in oklab, var(--color-surface-2) 60%, transparent);
+    color: var(--color-foreground);
+    padding: 0 0.75rem;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  }
+  .react-js-cron .react-js-cron-select.ant-select:hover .ant-select-content {
+    background: var(--color-surface-2);
+    border-color: var(--color-border-strong);
+  }
+  .react-js-cron .react-js-cron-select.ant-select.ant-select-focused .ant-select-content,
+  .react-js-cron .react-js-cron-select.ant-select.ant-select-open .ant-select-content {
+    border-color: color-mix(in oklab, var(--color-brand) 60%, var(--color-input));
+    box-shadow: 0 0 0 2px var(--color-ring);
+    outline: none;
+  }
+  .react-js-cron .react-js-cron-select.ant-select .ant-select-placeholder {
+    color: var(--color-muted-foreground);
+  }
+  .react-js-cron .react-js-cron-select.ant-select .ant-select-arrow {
+    color: var(--color-muted-foreground);
+  }
+  .react-js-cron .react-js-cron-select.ant-select.ant-select-disabled .ant-select-content {
+    background: var(--color-muted);
+    color: var(--color-muted-foreground);
+    opacity: 0.72;
+  }
+  .react-js-cron .react-js-cron-select.ant-select.ant-select-disabled .ant-select-arrow {
+    color: var(--color-muted-foreground);
+  }
+  .react-js-cron .react-js-cron-clear-button {
+    margin-left: 0.5rem;
+  }
+  .react-js-cron .react-js-cron-clear-button button {
+    height: 2.25rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-input);
+    background: var(--color-surface-2);
+    color: var(--color-foreground);
+    padding: 0 0.75rem;
+  }
+  .react-js-cron .react-js-cron-clear-button button:hover {
+    background: var(--color-surface);
+  }
+  .react-js-cron .react-js-cron-clear-button button:focus-visible {
+    border-color: color-mix(in oklab, var(--color-brand) 60%, var(--color-input));
+    box-shadow: 0 0 0 2px var(--color-ring);
+    outline: none;
+  }
+  .react-js-cron-custom-select-dropdown.ant-select-dropdown {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-popover);
+    box-shadow:
+      0 12px 20px -8px oklch(0 0 0 / 0.16),
+      0 6px 10px -6px oklch(0 0 0 / 0.12);
+  }
+  .react-js-cron-custom-select-dropdown.ant-select-dropdown .ant-select-item {
+    color: var(--color-foreground);
+    border-radius: 0.5rem;
+  }
+  .react-js-cron-custom-select-dropdown.ant-select-dropdown
+    .ant-select-item-option-active:not(.ant-select-item-option-disabled) {
+    background: var(--color-surface-2);
+  }
+  .react-js-cron-custom-select-dropdown.ant-select-dropdown .ant-select-item-option-selected {
+    background: var(--color-brand-soft);
+    color: var(--color-foreground);
+    font-weight: 600;
+  }
+  .react-js-cron-custom-select-dropdown.ant-select-dropdown .ant-select-item-option-disabled {
+    color: var(--color-muted-foreground);
+    opacity: 0.6;
+  }
+
 }

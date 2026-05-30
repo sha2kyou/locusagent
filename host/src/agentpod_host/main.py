@@ -17,6 +17,7 @@ from .routers import api_v1 as api_v1_router
 from .routers import embedding_proxy as embedding_proxy_router
 from .routers import internal as internal_router
 from .routers import internal_notifications as internal_notifications_router
+from .routers import internal_scheduled_tasks as internal_scheduled_tasks_router
 from .routers import me as me_router
 from .routers import notifications as notifications_router
 from .routers import oauth as oauth_router
@@ -96,6 +97,7 @@ app.include_router(settings_router.router)
 app.include_router(scheduled_tasks_router.router)
 app.include_router(internal_router.router)
 app.include_router(internal_notifications_router.router)
+app.include_router(internal_scheduled_tasks_router.router)
 app.include_router(embedding_proxy_router.router)
 app.include_router(api_v1_router.router)
 app.include_router(workspace_router.router)

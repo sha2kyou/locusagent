@@ -36,6 +36,11 @@ export function MemoryRoute() {
   const formRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<number | null>(null);
 
+  const isExpandable = (text: string) => {
+    const lines = text.split(/\r?\n/).length;
+    return lines > 2 || text.length > 140;
+  };
+
   const load = async (silent = false) => {
     try {
       const { items } = await listMemory(100);
@@ -174,10 +179,20 @@ export function MemoryRoute() {
             <div className="space-y-2">
               {filtered.map((m) => {
                 const emb = EMB_LABEL[m.embedding_state];
+                const expandable = isExpandable(m.content);
                 return (
                   <ListCard key={m.id} className="p-0 overflow-hidden">
                     <div className="flex items-start justify-between gap-3 px-4 py-3">
-                      <p className="min-w-0 flex-1 line-clamp-2 text-sm text-muted-foreground">{m.content}</p>
+                      <div className="min-w-0 flex-1">
+                        <div
+                          className={cn(
+                            "whitespace-pre-wrap text-sm text-muted-foreground",
+                            expandable && "line-clamp-2",
+                          )}
+                        >
+                          {m.content}
+                        </div>
+                      </div>
                       <div className="flex shrink-0 items-center gap-1">
                         <Badge variant={emb.variant}>{emb.text}</Badge>
                         <Button variant="ghost" size="icon-sm" onClick={() => move(m)} aria-label="切换分类">
@@ -191,9 +206,13 @@ export function MemoryRoute() {
                         </Button>
                       </div>
                     </div>
-                    <CollapsibleSection summary="内容">
-                      <pre className="max-h-[40vh] overflow-y-auto whitespace-pre-wrap text-sm text-foreground">{m.content}</pre>
-                    </CollapsibleSection>
+                    {expandable ? (
+                      <CollapsibleSection summary="完整内容">
+                        <pre className="max-h-[40vh] overflow-y-auto whitespace-pre-wrap text-sm text-foreground">
+                          {m.content}
+                        </pre>
+                      </CollapsibleSection>
+                    ) : null}
                   </ListCard>
                 );
               })}

@@ -104,6 +104,34 @@ async def create_category(name: str, description: str = "") -> dict[str, Any]:
     return await run_in_thread(_do)
 
 
+async def update_category(
+    category_id: str,
+    *,
+    name: str | None = None,
+    description: str | None = None,
+) -> bool:
+    def _do() -> bool:
+        with conn_scope(load_vec=False) as c:
+            updates = []
+            params: list[Any] = []
+            if name is not None:
+                updates.append("name = ?")
+                params.append(name)
+            if description is not None:
+                updates.append("description = ?")
+                params.append(description)
+            if not updates:
+                return False
+            params.append(category_id)
+            cur = c.execute(
+                f"UPDATE artifact_categories SET {', '.join(updates)} WHERE id = ?",
+                params,
+            )
+            return (cur.rowcount or 0) > 0
+
+    return await run_in_thread(_do)
+
+
 async def delete_category(category_id: str) -> bool:
     """删除类目；该类目下产物降级为未分类（category_id 置 NULL）。"""
 
