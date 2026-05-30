@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { Plus, Search, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CheckSquare, Plus, Search, Square, Trash2, X } from "lucide-react";
 import type { SessionMeta } from "@/api/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,8 @@ export function SessionSidebar({
   const { sessions, loadingSessions, currentId, query, setQuery, newSession, selectSession, deleteSession } = useChat();
   const { confirm } = useDialogs();
   const toast = useToast();
+  const [batchMode, setBatchMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const handleSelect = (id: string) => {
     selectSession(id);
@@ -54,6 +56,22 @@ export function SessionSidebar({
     }
     return ORDER.filter((k) => map.has(k)).map((k) => ({ label: k, items: map.get(k)! }));
   }, [sessions, query]);
+  const filteredSessions = useMemo(
+    () => groups.flatMap((g) => g.items),
+    [groups],
+  );
+  const selectableIds = useMemo(
+    () => new Set(filteredSessions.map((s) => s.id)),
+    [filteredSessions],
+  );
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Set(Array.from(prev).filter((id) => selectableIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [selectableIds]);
 
   const onDelete = async (s: SessionMeta) => {
     const ok = await confirm({
@@ -65,6 +83,46 @@ export function SessionSidebar({
     if (!ok) return;
     try {
       await deleteSession(s.id);
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      if (prev.size === filteredSessions.length) return new Set();
+      return new Set(filteredSessions.map((s) => s.id));
+    });
+  };
+
+  const deleteSelected = async () => {
+    if (selectedIds.size === 0) return;
+    const ok = await confirm({
+      title: "批量删除会话",
+      body: `确定删除已选 ${selectedIds.size} 个会话？此操作不可恢复。`,
+      danger: true,
+      confirmText: "删除",
+    });
+    if (!ok) return;
+    try {
+      const ids = Array.from(selectedIds);
+      const res = await Promise.allSettled(ids.map((id) => deleteSession(id)));
+      const failed = res.filter((r) => r.status === "rejected").length;
+      if (failed > 0) {
+        toast(`已删除 ${ids.length - failed} 个，失败 ${failed} 个`, "error");
+      } else {
+        toast(`已删除 ${ids.length} 个会话`, "success");
+      }
+      setSelectedIds(new Set());
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -84,9 +142,35 @@ export function SessionSidebar({
         )}
       >
       <div className="p-3">
-        <Button variant="primary" className="w-full" onClick={handleNew}>
-          <Plus className="size-4" /> 新对话
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="primary" className="flex-1" onClick={handleNew} disabled={batchMode}>
+            <Plus className="size-4" /> 新对话
+          </Button>
+          {!batchMode ? (
+            <Button
+              variant="secondary"
+              size="icon-sm"
+              onClick={() => setBatchMode(true)}
+              title="批量删除"
+              aria-label="批量删除"
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => {
+                setBatchMode(false);
+                setSelectedIds(new Set());
+              }}
+              title="取消批量删除"
+              aria-label="取消批量删除"
+            >
+              <X className="size-3.5" />
+            </Button>
+          )}
+        </div>
       </div>
       <div className="px-3 pb-2">
         <div className="relative">
@@ -99,6 +183,31 @@ export function SessionSidebar({
           />
         </div>
       </div>
+      {batchMode && filteredSessions.length > 0 && (
+        <div className="px-3 pb-2">
+          <div className="flex items-center justify-between rounded-lg border border-border bg-surface-2 px-2 py-1.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleSelectAll}
+            >
+              {selectedIds.size === filteredSessions.length ? "取消全选" : "全选"}
+            </Button>
+            <Button
+              variant="danger-ghost"
+              size="icon-sm"
+              disabled={selectedIds.size === 0}
+              onClick={() => {
+                void deleteSelected();
+              }}
+              title={`删除已选 (${selectedIds.size})`}
+              aria-label={`删除已选 (${selectedIds.size})`}
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto px-2 pb-3">
         {loadingSessions ? (
@@ -125,22 +234,46 @@ export function SessionSidebar({
                     s.id === currentId ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary/60",
                   )}
                 >
+                  {batchMode ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => toggleSelect(s.id)}
+                      className={cn(selectedIds.has(s.id) ? "text-brand" : "text-muted-foreground")}
+                      aria-label={selectedIds.has(s.id) ? "取消选择" : "选择会话"}
+                    >
+                      {selectedIds.has(s.id) ? (
+                        <CheckSquare className="size-4" />
+                      ) : (
+                        <Square className="size-4" />
+                      )}
+                    </Button>
+                  ) : null}
                   <button
                     type="button"
-                    onClick={() => handleSelect(s.id)}
+                    onClick={() => {
+                      if (batchMode) {
+                        toggleSelect(s.id);
+                        return;
+                      }
+                      handleSelect(s.id);
+                    }}
                     className="min-w-0 flex-1 truncate text-left"
                     title={s.title}
                   >
                     {s.title || "新对话"}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => onDelete(s)}
-                    className="shrink-0 rounded p-1 text-muted-foreground opacity-100 transition hover:text-destructive md:opacity-0 md:group-hover:opacity-100"
-                    aria-label="删除"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
+                  {!batchMode ? (
+                    <button
+                      type="button"
+                      onClick={() => onDelete(s)}
+                      className="shrink-0 rounded p-1 text-muted-foreground opacity-100 transition hover:text-destructive md:opacity-0 md:group-hover:opacity-100"
+                      aria-label="删除"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  ) : null}
                 </div>
               ))}
             </div>
