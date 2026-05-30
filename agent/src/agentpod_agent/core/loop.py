@@ -27,14 +27,85 @@ from .persistence import persist_context_compression
 log = get_logger("loop")
 
 MODEL_TOKEN_LIMITS: dict[str, int] = {
-    "gpt-4o": 128_000,
+    # Anthropic Claude
+    "claude-opus-4-8": 1_000_000,
+    "claude-opus-4.8": 1_000_000,
+    "claude-opus-4-7": 1_000_000,
+    "claude-opus-4.7": 1_000_000,
+    "claude-opus-4-6": 1_000_000,
+    "claude-opus-4.6": 1_000_000,
+    "claude-sonnet-4-6": 1_000_000,
+    "claude-sonnet-4.6": 1_000_000,
+    "claude": 200_000,
+    # OpenAI
+    "gpt-5.5": 1_050_000,
+    "gpt-5.4-nano": 400_000,
+    "gpt-5.4-mini": 400_000,
+    "gpt-5.4": 1_050_000,
+    "gpt-5.3-codex-spark": 128_000,
+    "gpt-5.1-chat": 128_000,
+    "gpt-5": 400_000,
+    "gpt-4.1": 1_047_576,
     "gpt-4o-mini": 128_000,
-    "gpt-4.1": 1_000_000,
-    "gpt-4.1-mini": 1_000_000,
+    "gpt-4o": 128_000,
     "gpt-4-turbo": 128_000,
+    "gpt-4": 128_000,
     "gpt-3.5-turbo": 16_000,
+    # Google
+    "gemini": 1_048_576,
+    "gemma-4-31b": 256_000,
+    "gemma-4": 256_000,
+    "gemma4": 256_000,
+    "gemma-3": 131_072,
+    "gemma": 8_192,
+    # DeepSeek
+    "deepseek-v4-pro": 1_000_000,
+    "deepseek-v4-flash": 1_000_000,
+    "deepseek-chat": 1_000_000,
+    "deepseek-reasoner": 1_000_000,
+    "deepseek": 128_000,
+    # Qwen
+    "qwen3.6-plus": 1_048_576,
+    "qwen3-coder-plus": 1_000_000,
+    "qwen3-coder": 262_144,
+    "qwen": 131_072,
+    # MiniMax / GLM / Kimi / Xiaomi MiMo
+    "minimax": 204_800,
+    "glm": 202_752,
+    "kimi": 262_144,
+    "xiaomimimo/mimo-v2-pro": 1_048_576,
+    "xiaomimimo/mimo-v2.5-pro": 1_048_576,
+    "xiaomimimo/mimo-v2.5": 1_048_576,
+    "xiaomimimo/mimo-v2-omni": 262_144,
+    "xiaomimimo/mimo-v2-flash": 262_144,
+    "mimo-v2-pro": 1_048_576,
+    "mimo-v2.5-pro": 1_048_576,
+    "mimo-v2.5": 1_048_576,
+    "mimo-v2-omni": 262_144,
+    "mimo-v2-flash": 262_144,
+    # xAI Grok
+    "grok-build": 256_000,
+    "grok-code-fast": 256_000,
+    "grok-2-vision": 8_192,
+    "grok-4-fast": 2_000_000,
+    "grok-4.20": 2_000_000,
+    "grok-4.3": 1_000_000,
+    "grok-4": 256_000,
+    "grok-3": 131_072,
+    "grok-2": 131_072,
+    "grok": 131_072,
+    # Other common families
+    "llama": 131_072,
+    "hy3-preview": 262_144,
+    "nemotron": 131_072,
+    "trinity": 262_144,
+    "elephant": 262_144,
+    "zai-org/glm-5": 202_752,
 }
-DEFAULT_TOKEN_LIMIT = 32_000
+_MODEL_TOKEN_LIMITS_SORTED: tuple[tuple[str, int], ...] = tuple(
+    sorted(MODEL_TOKEN_LIMITS.items(), key=lambda x: len(x[0]), reverse=True)
+)
+DEFAULT_TOKEN_LIMIT = 256_000
 _TOOL_ROUND_LIMIT_NOTICE = (
     "工具调用轮次已达到上限。请立即停止继续调用任何工具（包括 tool/mcp/skill/memory），"
     "基于当前已知信息给出最终结论，并明确说明剩余不确定项。"
@@ -42,7 +113,13 @@ _TOOL_ROUND_LIMIT_NOTICE = (
 
 
 def _model_limit(model: str) -> int:
-    return MODEL_TOKEN_LIMITS.get(model, DEFAULT_TOKEN_LIMIT)
+    normalized = model.strip().lower()
+    if not normalized:
+        return DEFAULT_TOKEN_LIMIT
+    for name, limit in _MODEL_TOKEN_LIMITS_SORTED:
+        if name in normalized:
+            return limit
+    return DEFAULT_TOKEN_LIMIT
 
 
 @dataclass(slots=True)
