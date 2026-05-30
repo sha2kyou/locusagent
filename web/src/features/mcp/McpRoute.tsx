@@ -35,6 +35,20 @@ function parseEnvJson(raw: string): Record<string, string> {
   return out;
 }
 
+function normalizeText(value: unknown, fallback: string): string {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed || fallback;
+  }
+  if (value == null) return fallback;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return fallback;
+  }
+}
+
 export function McpRoute() {
   const toast = useToast();
   const { confirm } = useDialogs();
@@ -297,13 +311,13 @@ export function McpRoute() {
             <section className="space-y-1">
               <h3 className="text-sm font-medium">描述</h3>
               <p className="whitespace-pre-wrap text-sm text-foreground">
-                {selectedTool.tool.description?.trim() || "无描述"}
+                {normalizeText(selectedTool.tool.description, "无描述")}
               </p>
             </section>
             <section className="space-y-1">
               <h3 className="text-sm font-medium">参数摘要</h3>
               <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                {selectedTool.tool.schema_summary?.trim() || "无参数摘要"}
+                {normalizeText(selectedTool.tool.schema_summary, "无参数摘要")}
               </p>
             </section>
             <section className="space-y-1">

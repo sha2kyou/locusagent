@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { Bell, X } from "lucide-react";
+import { Bell, BrushCleaning, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useNotifications } from "./NotificationProvider";
@@ -173,11 +173,12 @@ export function NotificationBell({
                 {unreadCount > 0 ? (
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size="icon-sm"
                     onClick={() => void markAllRead()}
                     aria-label="全部标记为已读"
+                    title="全部已读"
                   >
-                    全部已读
+                    <BrushCleaning className="size-4" />
                   </Button>
                 ) : null}
                 <Button variant="ghost" size="icon-sm" onClick={() => setOpen(false)} aria-label="关闭">

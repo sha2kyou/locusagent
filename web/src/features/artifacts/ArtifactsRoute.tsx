@@ -12,7 +12,6 @@ import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
 import { Empty, Loading } from "@/features/skills/SkillsRoute";
 import { HtmlRender, Markdown } from "@/features/chat/Markdown";
-import { cn } from "@/lib/utils";
 import {
   createArtifactCategory,
   deleteArtifact,
@@ -222,11 +221,6 @@ export function ArtifactsRoute() {
       q ? c.name.toLowerCase().includes(q) || (c.description || "").toLowerCase().includes(q) : true,
     );
   }, [categories, query]);
-  const isDescriptionExpandable = (text: string) => {
-    const lines = text.split(/\r?\n/).length;
-    return lines > 2 || text.length > 140;
-  };
-
   const addCategory = () => {
     setEditingCategory(null);
     setAddCategoryOpen(true);
@@ -336,19 +330,13 @@ export function ArtifactsRoute() {
               <div className="space-y-2">
                 {filteredCategories.map((c) => {
                   const desc = (c.description || "").trim();
-                  const expandable = !!desc && isDescriptionExpandable(desc);
                   return (
                     <ListCard key={c.id} className="p-0 overflow-hidden">
                       <div className="flex items-start justify-between gap-3 px-4 py-3">
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium text-foreground">{c.name}</div>
                           {desc ? (
-                            <div
-                              className={cn(
-                                "mt-1 whitespace-pre-wrap text-sm text-muted-foreground",
-                                expandable && "line-clamp-2",
-                              )}
-                            >
+                            <div className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-muted-foreground">
                               {desc}
                             </div>
                           ) : null}

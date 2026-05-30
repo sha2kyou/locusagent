@@ -8,11 +8,11 @@ import { listToolToggles } from "@/api/endpoints";
 import type { ToolToggleOverview } from "@/api/types";
 import { Empty, Loading } from "@/features/skills/SkillsRoute";
 
-function getDescriptionMeta(description?: string): { brief: string; isTruncated: boolean; full: string } {
-  if (!description?.trim()) return { brief: "暂无说明", isTruncated: false, full: "暂无说明" };
+function getDescriptionMeta(description?: string): { brief: string; full: string } {
+  if (!description?.trim()) return { brief: "暂无说明", full: "暂无说明" };
   const compact = description.replace(/\s+/g, " ").trim();
-  if (compact.length <= 56) return { brief: compact, isTruncated: false, full: description.trim() };
-  return { brief: `${compact.slice(0, 56)}...`, isTruncated: true, full: description.trim() };
+  if (compact.length <= 56) return { brief: compact, full: description.trim() };
+  return { brief: `${compact.slice(0, 56)}...`, full: description.trim() };
 }
 
 export function ToolsRoute() {
@@ -65,13 +65,11 @@ export function ToolsRoute() {
                         </p>
                       </div>
                     </div>
-                    {desc.isTruncated ? (
-                      <CollapsibleSection summary="详情">
-                        <div className="space-y-2 text-sm">
-                          <p className="whitespace-pre-wrap text-foreground">{desc.full}</p>
-                        </div>
-                      </CollapsibleSection>
-                    ) : null}
+                    <CollapsibleSection summary="详情">
+                      <div className="space-y-2 text-sm">
+                        <p className="whitespace-pre-wrap text-foreground">{desc.full}</p>
+                      </div>
+                    </CollapsibleSection>
                   </ListCard>
                 );
               })

@@ -36,11 +36,6 @@ export function MemoryRoute() {
   const formRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<number | null>(null);
 
-  const isExpandable = (text: string) => {
-    const lines = text.split(/\r?\n/).length;
-    return lines > 2 || text.length > 140;
-  };
-
   const load = async (silent = false) => {
     try {
       const { items } = await listMemory(100);
@@ -187,12 +182,7 @@ export function MemoryRoute() {
                           <span className="font-medium">记忆 #{m.id}</span>
                           <Badge variant={emb.variant}>{emb.text}</Badge>
                         </div>
-                        <p
-                          className={cn(
-                            "mt-1 max-w-[56ch] whitespace-pre-wrap text-sm text-muted-foreground",
-                            isExpandable(m.content) && "line-clamp-2",
-                          )}
-                        >
+                        <p className="mt-1 line-clamp-2 max-w-[56ch] whitespace-pre-wrap text-sm text-muted-foreground">
                           {m.content}
                         </p>
                       </div>
