@@ -184,6 +184,11 @@ def _cap_clarify_calls(calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
+def _all_calls_are(calls: Iterable[Any], tool_name: str) -> bool:
+    seq = list(calls)
+    return bool(seq) and all(getattr(c.function, "name", "") == tool_name for c in seq)
+
+
 async def _execute_one_tool_call(registry: ToolRegistry, tc: Any) -> dict[str, Any]:
     name = tc.function.name
     raw_args = tc.function.arguments or "{}"
@@ -388,6 +393,19 @@ async def run_chat_loop(
                 return (
                     LoopResult(
                         final_text=msg.content or "",
+                        rounds=round_idx,
+                        total_tokens=total_tokens,
+                        tool_calls_made=tool_calls_made,
+                    ),
+                    working,
+                )
+            # artifact_save 在一次 run 内应视为终结性动作，避免模型在同一轮持续重复保存副本
+            if _all_calls_are(stub_calls, "artifact_save"):
+                save_texts = [str(r.get("content") or "").strip() for r in tool_results]
+                final_text = "\n".join(t for t in save_texts if t) or "已完成保存。"
+                return (
+                    LoopResult(
+                        final_text=final_text,
                         rounds=round_idx,
                         total_tokens=total_tokens,
                         tool_calls_made=tool_calls_made,
@@ -634,6 +652,18 @@ async def run_chat_loop_stream(
                 yield {
                     "type": "done",
                     "final_text": accum_content,
+                    "rounds": round_idx,
+                    "total_tokens": total_tokens,
+                    "tool_calls_made": tool_calls_made,
+                }
+                return
+            # artifact_save 在一次 run 内应视为终结性动作，避免模型在同一轮持续重复保存副本
+            if _all_calls_are(stub_calls, "artifact_save"):
+                save_texts = [str(r.get("content") or "").strip() for r in tool_results]
+                final_text = "\n".join(t for t in save_texts if t) or "已完成保存。"
+                yield {
+                    "type": "done",
+                    "final_text": final_text,
                     "rounds": round_idx,
                     "total_tokens": total_tokens,
                     "tool_calls_made": tool_calls_made,
