@@ -55,6 +55,7 @@ class User(Base):
     llm_base_url: Mapped[str | None] = mapped_column(Text)
     llm_api_key_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
     llm_model: Mapped[str] = mapped_column(Text, default="gpt-4o", nullable=False)
+    tavily_api_key_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
 
     container_id: Mapped[str | None] = mapped_column(Text)
     container_status: Mapped[str] = mapped_column(

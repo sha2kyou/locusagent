@@ -44,16 +44,22 @@ export function ArtifactsNav({
 
   return (
     <div>
-      <div className={cn(rowBase, "pr-1", onArtifacts ? "text-foreground" : "text-muted-foreground")}>
+      <div className="relative">
         <NavLink
           to="/artifacts"
           end
           title="产物"
           onClick={onNavigate}
-          className={cn(
-            "flex min-w-0 flex-1 items-center gap-3",
-            !expanded && "md:justify-center",
-          )}
+          className={({ isActive }) =>
+            cn(
+              rowBase,
+              !expanded && "md:justify-center",
+              expanded && categories.length > 0 && "pr-8",
+              isActive
+                ? "bg-sidebar-accent text-foreground"
+                : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
+            )
+          }
         >
           {({ isActive }) => (
             <>
@@ -73,7 +79,7 @@ export function ArtifactsNav({
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-label={open ? "收起类目" : "展开类目"}
-            className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+            className="absolute right-1 top-1/2 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:text-foreground"
           >
             <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
           </button>

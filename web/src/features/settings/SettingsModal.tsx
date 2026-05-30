@@ -12,7 +12,9 @@ import { cn } from "@/lib/utils";
 import {
   deleteAccount,
   getLLMConfig,
+  getTavilyConfig,
   putLLMConfig,
+  putTavilyConfig,
   rotateApiKey,
 } from "@/api/endpoints";
 import type { LLMConfig } from "@/api/types";
@@ -42,6 +44,9 @@ export function SettingsModal({ open, onClose, onLogout, required = false }: Pro
   const [model, setModel] = useState("gpt-4o");
   const [apiKey, setApiKey] = useState("");
   const [saving, setSaving] = useState(false);
+  const [tavilyConfigured, setTavilyConfigured] = useState(false);
+  const [tavilyApiKey, setTavilyApiKey] = useState("");
+  const [tavilySaving, setTavilySaving] = useState(false);
 
   const [flashKey, setFlashKey] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -55,11 +60,13 @@ export function SettingsModal({ open, onClose, onLogout, required = false }: Pro
 
   useEffect(() => {
     if (!open) return;
-    void getLLMConfig().then((c) => {
+    void Promise.all([getLLMConfig(), getTavilyConfig()]).then(([c, tavily]) => {
       setCfg(c);
       setBaseUrl(c.base_url ?? "");
       setModel(c.model || "gpt-4o");
       setApiKey("");
+      setTavilyConfigured(tavily.configured);
+      setTavilyApiKey("");
     });
   }, [open]);
 
@@ -105,6 +112,25 @@ export function SettingsModal({ open, onClose, onLogout, required = false }: Pro
       await reload();
     } catch (e) {
       toast((e as Error).message, "error");
+    }
+  };
+
+  const saveTavily = async (clear = false) => {
+    const nextKey = clear ? "" : tavilyApiKey.trim();
+    if (!clear && nextKey.length > 0 && nextKey.length < 8) {
+      toast("Tavily API Key 至少 8 位", "error");
+      return;
+    }
+    setTavilySaving(true);
+    try {
+      const next = await putTavilyConfig({ api_key: nextKey });
+      setTavilyConfigured(next.configured);
+      setTavilyApiKey("");
+      toast(next.configured ? "Tavily Key 已保存" : "Tavily Key 已清空", "success");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setTavilySaving(false);
     }
   };
 
@@ -215,6 +241,42 @@ export function SettingsModal({ open, onClose, onLogout, required = false }: Pro
                 <Button variant="primary" disabled={!dirty || saving} onClick={save}>
                   {saving && <Loader2 className="size-4 animate-spin" />}
                   保存
+                </Button>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-border bg-surface/40 p-4">
+            <div className="mb-1 flex items-center gap-2">
+              <h3 className="text-sm font-semibold">Tavily API Key</h3>
+              <Badge variant="neutral">可选</Badge>
+              {tavilyConfigured ? <Badge variant="success">已配置</Badge> : <Badge>未配置</Badge>}
+            </div>
+            <p className="mb-3 text-xs text-muted-foreground">
+              可选配置，每个用户单独保存。输入新 Key 后保存；如需清空，点击「清空」。
+            </p>
+            <div className="grid gap-3">
+              <div className="grid gap-1.5">
+                <Label>API Key</Label>
+                <Input
+                  type="password"
+                  placeholder="tvly-..."
+                  autoComplete="off"
+                  value={tavilyApiKey}
+                  onChange={(e) => setTavilyApiKey(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="primary" disabled={tavilySaving} onClick={() => saveTavily(false)}>
+                  {tavilySaving && <Loader2 className="size-4 animate-spin" />}
+                  保存
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={tavilySaving || !tavilyConfigured}
+                  onClick={() => saveTavily(true)}
+                >
+                  清空
                 </Button>
               </div>
             </div>

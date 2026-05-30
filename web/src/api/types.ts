@@ -167,6 +167,10 @@ export interface LLMConfig {
   provision_action: "none" | "starting" | "applying";
 }
 
+export interface TavilyConfig {
+  configured: boolean;
+}
+
 export interface ArtifactCategory {
   id: string;
   name: string;

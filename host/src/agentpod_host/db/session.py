@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from ..config import get_settings
@@ -29,6 +30,10 @@ async def init_engine() -> AsyncEngine:
     _sessionmaker = async_sessionmaker(_engine, expire_on_commit=False, class_=AsyncSession)
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # P0 无迁移框架：在启动时补齐新增列，保证老库可用。
+        await conn.execute(
+            text("ALTER TABLE users ADD COLUMN IF NOT EXISTS tavily_api_key_enc BYTEA")
+        )
     return _engine
 
 

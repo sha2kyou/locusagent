@@ -309,18 +309,16 @@ function AssistantMessage() {
       {archived ? (
         <p className="text-[11px] text-muted-foreground">已压缩（不再带入上下文）</p>
       ) : null}
-      <div className="flex items-end gap-1">
-        <div className="min-w-0 flex-1">
-          <MessagePrimitive.Parts
-            components={{ Text: MarkdownText, tools: { Fallback: ToolEvent } }}
-          />
-        </div>
-        <MessagePrimitive.If last>
-          <ThreadPrimitive.If running>
-            <span className="apod-caret mb-1.5" aria-hidden />
-          </ThreadPrimitive.If>
-        </MessagePrimitive.If>
+      <div className="min-w-0">
+        <MessagePrimitive.Parts
+          components={{ Text: MarkdownText, tools: { Fallback: ToolEvent } }}
+        />
       </div>
+      <MessagePrimitive.If last>
+        <ThreadPrimitive.If running>
+          <span className="apod-caret mt-0.5" aria-hidden />
+        </ThreadPrimitive.If>
+      </MessagePrimitive.If>
 
       <MessagePrimitive.If last>
         {lastErrored ? (

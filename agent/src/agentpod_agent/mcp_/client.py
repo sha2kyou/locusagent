@@ -12,6 +12,8 @@
 from __future__ import annotations
 
 import asyncio
+import time
+from uuid import uuid4
 from contextlib import AsyncExitStack
 from typing import Any
 
@@ -19,6 +21,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamablehttp_client
 
+from ..config import get_settings
 from ..logging import get_logger
 from ..tool_settings import is_mcp_server_enabled
 from ..tools import Tool, ToolError, ToolResult
@@ -139,14 +142,65 @@ class MCPManager:
         tool_name: str,
         args: dict[str, Any],
     ) -> Any:
+        timeout_seconds = max(1.0, float(get_settings().mcp_call_timeout_seconds))
+        request_id = uuid4().hex[:12]
+
+        async def _call_with_timeout(sess: ClientSession, *, phase: str) -> Any:
+            started = time.monotonic()
+            log.info(
+                "mcp_call_started",
+                request_id=request_id,
+                server=server_name,
+                tool=tool_name,
+                phase=phase,
+                timeout_seconds=timeout_seconds,
+            )
+            try:
+                result = await asyncio.wait_for(sess.call_tool(tool_name, args), timeout=timeout_seconds)
+            except TimeoutError:
+                elapsed = round(time.monotonic() - started, 3)
+                log.warning(
+                    "mcp_call_timeout",
+                    request_id=request_id,
+                    server=server_name,
+                    tool=tool_name,
+                    phase=phase,
+                    elapsed_seconds=elapsed,
+                    timeout_seconds=timeout_seconds,
+                )
+                raise
+            except Exception as exc:
+                elapsed = round(time.monotonic() - started, 3)
+                log.warning(
+                    "mcp_call_failed",
+                    request_id=request_id,
+                    server=server_name,
+                    tool=tool_name,
+                    phase=phase,
+                    elapsed_seconds=elapsed,
+                    error=str(exc),
+                )
+                raise
+            elapsed = round(time.monotonic() - started, 3)
+            log.info(
+                "mcp_call_succeeded",
+                request_id=request_id,
+                server=server_name,
+                tool=tool_name,
+                phase=phase,
+                elapsed_seconds=elapsed,
+            )
+            return result
+
         session = self._sessions.get(server_name)
         if session is None:
             raise RuntimeError(f"mcp server not connected: {server_name}")
         try:
-            return await session.call_tool(tool_name, args)
+            return await _call_with_timeout(session, phase="initial")
         except Exception as first_exc:
             log.warning(
                 "mcp_call_failed_retrying",
+                request_id=request_id,
                 server=server_name,
                 tool=tool_name,
                 error=str(first_exc),
@@ -155,7 +209,13 @@ class MCPManager:
             session2 = self._sessions.get(server_name)
             if session2 is None:
                 raise first_exc
-            return await session2.call_tool(tool_name, args)
+            try:
+                return await _call_with_timeout(session2, phase="retry")
+            except TimeoutError as retry_timeout:
+                raise TimeoutError(
+                    f"mcp tool call timeout after {timeout_seconds:.1f}s "
+                    f"(server={server_name}, tool={tool_name})"
+                ) from retry_timeout
 
     async def add_server(self, cfg: MCPServerConfig) -> dict[str, Any]:
         try:

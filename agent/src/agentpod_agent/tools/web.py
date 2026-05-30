@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import ipaddress
-import os
 import re
 import socket
 from html.parser import HTMLParser
@@ -96,37 +95,13 @@ async def _ddg_search(query: str, top_k: int) -> list[dict[str, str]]:
     return results
 
 
-async def _brave_search(query: str, top_k: int, key: str) -> list[dict[str, str]]:
-    url = "https://api.search.brave.com/res/v1/web/search"
-    params = {"q": query, "count": str(top_k), "country": "us"}
-    headers = {"X-Subscription-Token": key, "Accept": "application/json"}
-    async with httpx.AsyncClient(timeout=TIMEOUT, headers=headers) as client:
-        resp = await client.get(url, params=params)
-        if resp.status_code != 200:
-            raise ToolError(f"brave http {resp.status_code}: {resp.text[:200]}")
-        data = resp.json()
-    items = (data.get("web") or {}).get("results") or []
-    return [
-        {
-            "title": i.get("title", ""),
-            "url": i.get("url", ""),
-            "snippet": i.get("description", ""),
-        }
-        for i in items[:top_k]
-    ]
-
-
 async def _web_search(args: dict[str, Any]) -> ToolResult:
     query = str(args.get("query", "")).strip()
     top_k = int(args.get("limit", args.get("top_k", 5)) or 5)
     top_k = max(1, min(100, top_k))
     if not query:
         raise ToolError("query is required")
-    brave_key = os.environ.get("BRAVE_API_KEY")
-    if brave_key:
-        results = await _brave_search(query, top_k, brave_key)
-    else:
-        results = await _ddg_search(query, top_k)
+    results = await _ddg_search(query, top_k)
     if not results:
         return ToolResult(content="no results")
     lines = [f"{i+1}. {r['title']}\n   {r['url']}\n   {r['snippet']}" for i, r in enumerate(results)]
@@ -210,7 +185,7 @@ register_builtin(
     Tool(
         name="web_search",
         description=(
-            "网页搜索，返回标题/URL/摘要。默认使用 DuckDuckGo；配置 BRAVE_API_KEY 后走 Brave。"
+            "网页搜索，返回标题/URL/摘要。使用 DuckDuckGo。"
         ),
         parameters={
             "type": "object",

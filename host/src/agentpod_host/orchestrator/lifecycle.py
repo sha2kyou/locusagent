@@ -219,6 +219,9 @@ async def _create_container(user: User) -> str:
 
     internal_token = secrets.token_urlsafe(32)
     llm_api_key = decrypt_str(user.llm_api_key_enc)
+    tavily_api_key = (
+        decrypt_str(user.tavily_api_key_enc) if user.tavily_api_key_enc is not None else ""
+    )
 
     def _do_create() -> str:
         _ensure_network(network)
@@ -251,6 +254,7 @@ async def _create_container(user: User) -> str:
                 "EMBEDDING_MODEL": settings.embedding_model,
                 "ENABLE_TERMINAL": "1" if settings.enable_terminal else "0",
                 "TERMINAL_WHITELIST": settings.terminal_whitelist,
+                "TAVILY_API_KEY": tavily_api_key,
             },
             mem_limit=settings.agent_memory_limit,
             cpu_quota=settings.agent_cpu_quota,

@@ -12,7 +12,9 @@ from . import context_distill as _summarize  # noqa: F401
 from . import fs as _fs  # noqa: F401
 from . import memory as _memory  # noqa: F401
 from . import env_vars as _env_vars  # noqa: F401
+from . import execute_code as _execute_code  # noqa: F401
 from . import session_recall as _session_recall  # noqa: F401
+from . import session_search as _session_search  # noqa: F401
 from . import skills as _skills  # noqa: F401
 from . import manage_workspace as _manage_workspace  # noqa: F401
 from . import terminal as _terminal  # noqa: F401

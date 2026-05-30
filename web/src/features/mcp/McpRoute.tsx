@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, Pencil, Plug, RefreshCw, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Select } from "@/components/ui/field";
+import { Input, Label, Select, Textarea } from "@/components/ui/field";
 import { Badge, Dot } from "@/components/ui/badge";
 import { CollapsiblePanel, ListCard } from "@/components/ui/panel";
 import { useToast } from "@/components/ui/toast";
@@ -11,6 +11,28 @@ import { ReadyGate } from "@/components/ReadyGate";
 import { Empty, Loading } from "@/features/skills/SkillsRoute";
 import { createMcp, deleteMcp, listMcp, reconnectMcp, testMcp, updateMcp } from "@/api/endpoints";
 import type { McpInput, McpServer } from "@/api/types";
+
+function parseEnvJson(raw: string): Record<string, string> {
+  const source = raw.trim() || "{}";
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+  } catch {
+    throw new Error("环境变量 JSON 解析失败");
+  }
+  if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
+    throw new Error("环境变量必须是 JSON 对象");
+  }
+  const entries = Object.entries(parsed as Record<string, unknown>);
+  const out: Record<string, string> = {};
+  for (const [k, v] of entries) {
+    const key = k.trim();
+    if (!key) throw new Error("环境变量 key 不能为空");
+    if (typeof v !== "string") throw new Error(`环境变量 ${key} 的值必须是字符串`);
+    out[key] = v;
+  }
+  return out;
+}
 
 export function McpRoute() {
   const toast = useToast();
@@ -22,8 +44,10 @@ export function McpRoute() {
   const [transport, setTransport] = useState<"stdio" | "http">("stdio");
   const [command, setCommand] = useState("");
   const [url, setUrl] = useState("");
+  const [envJson, setEnvJson] = useState("{}");
   const [busy, setBusy] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
+  const [envError, setEnvError] = useState<string | null>(null);
 
   const load = async () => {
     try {
@@ -39,10 +63,21 @@ export function McpRoute() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const buildPayload = (): McpInput =>
-    transport === "stdio"
-      ? { name, transport, command: command.trim().split(/\s+/).filter(Boolean), args: [], env: {} }
-      : { name, transport, url: url.trim() };
+  useEffect(() => {
+    try {
+      parseEnvJson(envJson);
+      setEnvError(null);
+    } catch (e) {
+      setEnvError((e as Error).message);
+    }
+  }, [envJson]);
+
+  const buildPayload = (): McpInput => {
+    const env = parseEnvJson(envJson);
+    return transport === "stdio"
+      ? { name, transport, command: command.trim().split(/\s+/).filter(Boolean), args: [], env }
+      : { name, transport, url: url.trim(), env };
+  };
 
   const reset = () => {
     setEditing(null);
@@ -50,6 +85,8 @@ export function McpRoute() {
     setTransport("stdio");
     setCommand("");
     setUrl("");
+    setEnvJson("{}");
+    setEnvError(null);
   };
 
   const startEdit = (s: McpServer) => {
@@ -58,7 +95,16 @@ export function McpRoute() {
     setTransport(s.transport);
     setCommand((s.command ?? []).join(" "));
     setUrl(s.url ?? "");
+    setEnvJson(JSON.stringify(s.env ?? {}, null, 2));
     requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
+  const formatEnvJson = () => {
+    try {
+      setEnvJson(JSON.stringify(parseEnvJson(envJson), null, 2));
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
   };
 
   const submit = async () => {
@@ -142,6 +188,7 @@ export function McpRoute() {
                       <p className="mt-1 truncate text-xs text-muted-foreground">
                         {s.transport === "http" ? s.url : (s.command ?? []).join(" ")}
                       </p>
+                      <p className="mt-1 text-xs text-muted-foreground">env: {Object.keys(s.env ?? {}).length}</p>
                       {s.runtime_error && <p className="mt-1 text-xs text-destructive">{s.runtime_error}</p>}
                       {s.tools.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
@@ -191,12 +238,28 @@ export function McpRoute() {
                   <Input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com/mcp" />
                 </div>
               )}
+              <div className="grid gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <Label>环境变量（JSON）</Label>
+                  <Button variant="ghost" size="sm" onClick={formatEnvJson}>
+                    格式化
+                  </Button>
+                </div>
+                <Textarea
+                  rows={8}
+                  value={envJson}
+                  onChange={(e) => setEnvJson(e.target.value)}
+                  placeholder={'{\n  "API_KEY": "xxx"\n}'}
+                  className="font-mono text-xs"
+                />
+                {envError ? <p className="text-xs text-destructive">{envError}</p> : null}
+              </div>
               <div className="flex gap-2">
-                <Button variant="primary" disabled={busy || !name.trim()} onClick={submit}>
+                <Button variant="primary" disabled={busy || !name.trim() || !!envError} onClick={submit}>
                   {busy && <Loader2 className="size-4 animate-spin" />}
                   {editing ? "保存" : "添加"}
                 </Button>
-                <Button variant="secondary" disabled={busy} onClick={test}>测试连接</Button>
+                <Button variant="secondary" disabled={busy || !!envError} onClick={test}>测试连接</Button>
                 {editing && <Button variant="ghost" onClick={reset}>取消编辑</Button>}
               </div>
             </div>

@@ -1,4 +1,4 @@
-"""文件类工具：read_file / search_files（限定 workspace 内）。"""
+"""文件类工具：read_file / search_files / write_file / patch（限定 workspace 内）。"""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from ..db import run_in_thread
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 MAX_READ_BYTES = 512 * 1024
+MAX_WRITE_BYTES = 2 * 1024 * 1024
 
 
 def _root() -> Path:
@@ -152,6 +153,70 @@ async def _search_files(args: dict[str, Any]) -> ToolResult:
     return ToolResult(content=await run_in_thread(_do_content))
 
 
+async def _write_file(args: dict[str, Any]) -> ToolResult:
+    rel = str(args.get("path") or args.get("file_path") or "").strip()
+    content = args.get("content")
+    if content is None:
+        content = args.get("file_content")
+    if content is None:
+        raise ToolError("content is required")
+    text = str(content)
+    append = bool(args.get("append", False))
+    create_dirs = bool(args.get("create_dirs", True))
+    if len(text.encode("utf-8")) > MAX_WRITE_BYTES:
+        raise ToolError(f"content too large (> {MAX_WRITE_BYTES} bytes)")
+    p = _resolve(rel)
+    if p.exists() and p.is_dir():
+        raise ToolError(f"path is a directory: {rel}")
+
+    def _do() -> str:
+        if create_dirs:
+            p.parent.mkdir(parents=True, exist_ok=True)
+        elif not p.parent.exists():
+            raise ToolError(f"parent directory not found: {p.parent}")
+        mode = "a" if append else "w"
+        with p.open(mode, encoding="utf-8") as f:
+            f.write(text)
+        return f"{'appended' if append else 'written'}: {p.relative_to(_root())}"
+
+    return ToolResult(content=await run_in_thread(_do))
+
+
+async def _patch_file(args: dict[str, Any]) -> ToolResult:
+    rel = str(args.get("path") or args.get("file_path") or "").strip()
+    old_string = args.get("old_string")
+    new_string = args.get("new_string")
+    replace_all = bool(args.get("replace_all", False))
+    if not rel:
+        raise ToolError("path is required")
+    if old_string is None or str(old_string) == "":
+        raise ToolError("old_string is required")
+    if new_string is None:
+        raise ToolError("new_string is required (use empty string to delete)")
+    p = _resolve(rel)
+    if not p.is_file():
+        raise ToolError(f"not a file: {rel}")
+
+    def _do() -> str:
+        text = p.read_text(encoding="utf-8", errors="ignore")
+        needle = str(old_string)
+        replacement = str(new_string)
+        count = text.count(needle)
+        if count < 1:
+            raise ToolError("old_string not found")
+        if not replace_all and count > 1:
+            raise ToolError("old_string matched multiple sections; provide more context or set replace_all=true")
+        patched = text.replace(needle, replacement, -1 if replace_all else 1)
+        p.write_text(patched, encoding="utf-8")
+        applied = count if replace_all else 1
+        return (
+            f"patched: {p.relative_to(_root())} "
+            f"({applied} replacement{'s' if applied != 1 else ''})"
+        )
+
+    return ToolResult(content=await run_in_thread(_do))
+
+
 register_builtin(
     Tool(
         name="read_file",
@@ -199,5 +264,50 @@ register_builtin(
             "required": ["pattern"],
         },
         handler=_search_files,
+    )
+)
+
+register_builtin(
+    Tool(
+        name="write_file",
+        description=(
+            "写入工作区文件。支持覆盖写入或追加写入；默认自动创建父目录。"
+            "路径必须位于 workspace 内。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "相对 workspace 的目标文件路径"},
+                "file_path": {"type": "string", "description": "path 的别名（兼容）。"},
+                "content": {"type": "string", "description": "写入内容"},
+                "file_content": {"type": "string", "description": "content 的别名（兼容）。"},
+                "append": {"type": "boolean", "default": False},
+                "create_dirs": {"type": "boolean", "default": True},
+            },
+            "required": ["content"],
+        },
+        handler=_write_file,
+    )
+)
+
+register_builtin(
+    Tool(
+        name="patch",
+        description=(
+            "对工作区文件做定点文本替换。默认仅替换一次；replace_all=true 时替换全部匹配。"
+            "路径必须位于 workspace 内。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "相对 workspace 的目标文件路径"},
+                "file_path": {"type": "string", "description": "path 的别名（兼容）。"},
+                "old_string": {"type": "string", "description": "待替换原文本"},
+                "new_string": {"type": "string", "description": "替换后文本；可为空字符串表示删除"},
+                "replace_all": {"type": "boolean", "default": False},
+            },
+            "required": ["old_string", "new_string"],
+        },
+        handler=_patch_file,
     )
 )

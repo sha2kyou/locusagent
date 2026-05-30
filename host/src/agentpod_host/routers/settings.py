@@ -41,6 +41,14 @@ class LLMConfigOut(BaseModel):
     provision_action: ProvisionAction = "none"
 
 
+class TavilyConfigIn(BaseModel):
+    api_key: str = Field(default="", description="留空表示清空 Tavily API Key")
+
+
+class TavilyConfigOut(BaseModel):
+    configured: bool
+
+
 def _llm_config_changed(
     user: User,
     *,
@@ -164,3 +172,33 @@ async def save_llm(
         configured=True,
         provision_action=provision_action,
     )
+
+
+@router.get("/tavily", response_model=TavilyConfigOut)
+async def read_tavily(ctx: AuthContext = Depends(require_session)) -> TavilyConfigOut:
+    return TavilyConfigOut(configured=ctx.user.tavily_api_key_enc is not None)
+
+
+@router.put("/tavily", response_model=TavilyConfigOut)
+async def save_tavily(
+    payload: TavilyConfigIn,
+    request: Request,
+    ctx: AuthContext = Depends(require_session),
+) -> TavilyConfigOut:
+    api_key = payload.api_key.strip()
+    if api_key and len(api_key) < 8:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Tavily API Key 长度至少 8 位")
+
+    async with get_session() as session:
+        stmt = select(User).where(User.id == ctx.user.id)
+        db_user = (await session.execute(stmt)).scalar_one()
+        db_user.tavily_api_key_enc = encrypt_str(api_key) if api_key else None
+        await record_event(
+            session,
+            "tavily.configured",
+            user_id=db_user.id,
+            detail={"configured": bool(api_key)},
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+    return TavilyConfigOut(configured=bool(api_key))

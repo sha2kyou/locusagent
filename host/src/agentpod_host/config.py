@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import AliasChoices, Field
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,10 +31,7 @@ class Settings(BaseSettings):
     enable_terminal: bool = Field(default=False, alias="ENABLE_TERMINAL")
     terminal_whitelist: str = Field(default="", alias="TERMINAL_WHITELIST")
 
-    embedding_base_url: str = Field(
-        default="http://tei:80",
-        validation_alias=AliasChoices("EMBEDDING_BASE_URL", "OLLAMA_BASE_URL"),
-    )
+    embedding_base_url: str = Field(default="http://tei:80", alias="EMBEDDING_BASE_URL")
     embedding_model: str = Field(default="BAAI/bge-small-zh-v1.5", alias="EMBEDDING_MODEL")
 
     agent_memory_limit: str = Field(default="512m", alias="AGENT_MEMORY_LIMIT")

@@ -127,17 +127,6 @@ export function AppShell() {
 
           {/* 底部：agent 状态 + 用户 */}
           <div className="relative border-t border-sidebar-border p-3">
-            <div
-              className={cn(
-                "mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-muted-foreground",
-                !expanded && "md:justify-center",
-              )}
-              title={`Agent ${readiness.label}`}
-            >
-              <span className={cn("size-2 shrink-0 rounded-full", toneColor)} />
-              <span className={cn("truncate", !expanded && "md:hidden")}>{readiness.label}</span>
-            </div>
-
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
@@ -145,10 +134,15 @@ export function AppShell() {
                 "flex w-full items-center gap-2.5 rounded-lg p-1.5 transition-colors hover:bg-sidebar-accent/60",
                 !expanded && "md:justify-center",
               )}
+              title={`Agent ${readiness.label}`}
             >
               <Avatar me={me} />
               <span className={cn("min-w-0 flex-1 text-left", !expanded && "md:hidden")}>
                 <span className="block truncate text-sm font-medium">{me?.username ?? "—"}</span>
+                <span className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] text-muted-foreground">
+                  <span className={cn("size-1.5 shrink-0 rounded-full", toneColor)} />
+                  <span className="truncate">Agent · {readiness.label}</span>
+                </span>
               </span>
             </button>
 

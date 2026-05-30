@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Pencil, Trash2 } from "lucide-react";
+import { ChevronRight, Loader2, Pencil, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { SkeletonList } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
 import { createSkill, deleteSkill, listSkills, updateSkill } from "@/api/endpoints";
 import type { Skill } from "@/api/types";
+import { cn } from "@/lib/utils";
 
 export function SkillsRoute() {
   const toast = useToast();
@@ -18,6 +19,7 @@ export function SkillsRoute() {
   const [items, setItems] = useState<Skill[] | null>(null);
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Skill | null>(null);
+  const [expandedSkill, setExpandedSkill] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
@@ -118,28 +120,52 @@ export function SkillsRoute() {
             <div className="space-y-2">
               {[...priv, ...pub].map((s) => (
                 <ListCard key={`${s.source}-${s.name}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{s.name}</span>
-                        {s.source === "public" ? <Badge>公共</Badge> : <Badge variant="brand">私有</Badge>}
-                      </div>
-                      {s.description && <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>}
-                      {s.triggers.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {s.triggers.map((t) => (
-                            <span key={t} className="rounded bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground">{t}</span>
-                          ))}
+                  {(() => {
+                    const skillKey = `${s.source}-${s.name}`;
+                    const expanded = expandedSkill === skillKey;
+                    return (
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{s.name}</span>
+                              {s.source === "public" ? <Badge>公共</Badge> : <Badge variant="brand">私有</Badge>}
+                            </div>
+                            {s.description && <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>}
+                            {s.triggers.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {s.triggers.map((t) => (
+                                  <span key={t} className="rounded bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground">{t}</span>
+                                ))}
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setExpandedSkill(expanded ? null : skillKey)}
+                              className="mt-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                            >
+                              <ChevronRight className={cn("size-3 transition-transform", expanded && "rotate-90")} />
+                              {expanded ? "收起正文" : "查看正文"}
+                            </button>
+                          </div>
+                          {s.source === "private" && (
+                            <div className="flex shrink-0 gap-1">
+                              <Button variant="ghost" size="icon-sm" onClick={() => startEdit(s)} aria-label="编辑"><Pencil /></Button>
+                              <Button variant="ghost" size="icon-sm" onClick={() => remove(s)} aria-label="删除"><Trash2 /></Button>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                    {s.source === "private" && (
-                      <div className="flex shrink-0 gap-1">
-                        <Button variant="ghost" size="icon-sm" onClick={() => startEdit(s)} aria-label="编辑"><Pencil /></Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => remove(s)} aria-label="删除"><Trash2 /></Button>
+                        {expanded && (
+                          <pre
+                            className="w-full overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-surface-2 p-3 text-xs text-foreground"
+                            style={{ maxHeight: "40vh" }}
+                          >
+                            {s.body || "（无正文）"}
+                          </pre>
+                        )}
                       </div>
-                    )}
-                  </div>
+                    );
+                  })()}
                 </ListCard>
               ))}
               {filtered.length === 0 && <Empty text={query ? "无匹配技能" : "暂无技能"} />}

@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import AliasChoices, Field
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,10 +19,7 @@ class Settings(BaseSettings):
     llm_api_key: str = Field(default="", alias="LLM_API_KEY")
     llm_model: str = Field(default="gpt-4o", alias="LLM_MODEL")
 
-    embedding_base_url: str = Field(
-        default="http://tei:80",
-        validation_alias=AliasChoices("EMBEDDING_BASE_URL", "OLLAMA_BASE_URL"),
-    )
+    embedding_base_url: str = Field(default="http://tei:80", alias="EMBEDDING_BASE_URL")
     embedding_model: str = Field(default="BAAI/bge-small-zh-v1.5", alias="EMBEDDING_MODEL")
 
     data_dir: Path = Field(default=Path("/data"), alias="DATA_DIR")
@@ -49,6 +46,9 @@ class Settings(BaseSettings):
 
     # 向量召回：余弦距离上限（距离越小越相关），超过则视为不相关丢弃
     recall_max_distance: float = Field(default=0.6, alias="RECALL_MAX_DISTANCE")
+
+    # MCP 工具调用超时（秒）：避免上游插件异常时调用长期挂起
+    mcp_call_timeout_seconds: float = Field(default=45.0, alias="MCP_CALL_TIMEOUT_SECONDS")
 
 
 @lru_cache

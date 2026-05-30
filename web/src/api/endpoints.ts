@@ -13,6 +13,7 @@ import type {
   Message,
   SessionMeta,
   Skill,
+  TavilyConfig,
   ToolToggleOverview,
 } from "./types";
 
@@ -34,6 +35,11 @@ export const getLLMConfig = () => apiGet<LLMConfig>("/api/settings/llm");
 
 export const putLLMConfig = (body: { base_url: string; model: string; api_key?: string }) =>
   apiSend<LLMConfig>("/api/settings/llm", "PUT", body);
+
+export const getTavilyConfig = () => apiGet<TavilyConfig>("/api/settings/tavily");
+
+export const putTavilyConfig = (body: { api_key: string }) =>
+  apiSend<TavilyConfig>("/api/settings/tavily", "PUT", body);
 
 // ---- 会话 ----
 export const listSessions = (limit = 50) =>
