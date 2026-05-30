@@ -4,7 +4,7 @@ import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
-import { CollapsiblePanel, ListCard } from "@/components/ui/panel";
+import { CollapsiblePanel, CollapsibleSection, ListCard } from "@/components/ui/panel";
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
@@ -159,7 +159,7 @@ export function MemoryRoute() {
                   tab === t.anchor ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                {t.label} <span className="opacity-60">{counts[t.anchor]}</span>
+                {t.label}
               </button>
             ))}
           </div>
@@ -175,9 +175,9 @@ export function MemoryRoute() {
               {filtered.map((m) => {
                 const emb = EMB_LABEL[m.embedding_state];
                 return (
-                  <ListCard key={m.id}>
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="min-w-0 flex-1 whitespace-pre-wrap text-sm">{m.content}</p>
+                  <ListCard key={m.id} className="p-0 overflow-hidden">
+                    <div className="flex items-start justify-between gap-3 px-4 py-3">
+                      <p className="min-w-0 flex-1 line-clamp-2 text-sm text-muted-foreground">{m.content}</p>
                       <div className="flex shrink-0 items-center gap-1">
                         <Badge variant={emb.variant}>{emb.text}</Badge>
                         <Button variant="ghost" size="icon-sm" onClick={() => move(m)} aria-label="切换分类">
@@ -191,6 +191,9 @@ export function MemoryRoute() {
                         </Button>
                       </div>
                     </div>
+                    <CollapsibleSection summary="内容">
+                      <pre className="max-h-[40vh] overflow-y-auto whitespace-pre-wrap text-sm text-foreground">{m.content}</pre>
+                    </CollapsibleSection>
                   </ListCard>
                 );
               })}

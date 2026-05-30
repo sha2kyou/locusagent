@@ -16,8 +16,11 @@ from .orchestrator import lifecycle_loop, reattach_self_to_user_networks, run_or
 from .routers import api_v1 as api_v1_router
 from .routers import embedding_proxy as embedding_proxy_router
 from .routers import internal as internal_router
+from .routers import internal_notifications as internal_notifications_router
 from .routers import me as me_router
+from .routers import notifications as notifications_router
 from .routers import oauth as oauth_router
+from .routers import scheduled_tasks as scheduled_tasks_router
 from .routers import settings as settings_router
 from .routers import workspace as workspace_router
 from .web import install_pages
@@ -51,6 +54,15 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         log.warning("startup_orphan_cleanup_failed", error=str(exc))
 
+    try:
+        from .scheduled_tasks.executor import recover_stale_running_tasks
+
+        n = await recover_stale_running_tasks()
+        if n:
+            log.info("scheduled_tasks_stale_recovered", count=n)
+    except Exception as exc:
+        log.warning("scheduled_tasks_startup_recover_failed", error=str(exc))
+
     stop_event = asyncio.Event()
     loop_task = asyncio.create_task(lifecycle_loop(stop_event), name="lifecycle-loop")
     try:
@@ -79,8 +91,11 @@ install_auth_isolation(app)
 
 app.include_router(oauth_router.router)
 app.include_router(me_router.router)
+app.include_router(notifications_router.router)
 app.include_router(settings_router.router)
+app.include_router(scheduled_tasks_router.router)
 app.include_router(internal_router.router)
+app.include_router(internal_notifications_router.router)
 app.include_router(embedding_proxy_router.router)
 app.include_router(api_v1_router.router)
 app.include_router(workspace_router.router)

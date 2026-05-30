@@ -60,7 +60,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             className={cn(
-              "pointer-events-auto flex items-center gap-2.5 rounded-lg border border-border-strong bg-popover px-3.5 py-2.5 text-sm text-popover-foreground shadow-xl",
+              "pointer-events-auto flex items-center gap-2.5 rounded-lg border border-border-strong bg-card px-3.5 py-2.5 text-sm text-card-foreground shadow-xl backdrop-blur-0",
               "apod-enter-up",
             )}
           >

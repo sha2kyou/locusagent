@@ -23,7 +23,6 @@ services:
     volumes:
       - ./shared-skills:/seed/shared-skills:ro
       - shared-skills:/srv/shared-skills
-      - ./host/src/agentpod_host/web/spa:/usr/local/lib/python3.11/site-packages/agentpod_host/web/spa:ro
     environment:
       GITHUB_CLIENT_ID:     ${GITHUB_CLIENT_ID}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}

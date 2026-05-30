@@ -199,11 +199,15 @@ async def _wait_health(container_name: str, *, port: int = 8000, timeout: float 
     return False
 
 
-def _host_embedding_proxy_url() -> str:
-    """用户容器经宿主网络别名访问 embedding 代理（用户网络不可直达 TEI）。"""
+def _host_internal_base_url() -> str:
+    """用户容器经宿主网络别名访问 internal API（用户网络不可直达 TEI 等）。"""
     host_self = _get_self_container()
     name = host_self.name if host_self is not None else "host"
-    return f"http://{name}:8080/internal/embedding"
+    return f"http://{name}:8080"
+
+
+def _host_embedding_proxy_url() -> str:
+    return f"{_host_internal_base_url()}/internal/embedding"
 
 
 async def _create_container(user: User) -> str:
@@ -252,6 +256,7 @@ async def _create_container(user: User) -> str:
                 "INTERNAL_TOKEN": internal_token,
                 "EMBEDDING_BASE_URL": _host_embedding_proxy_url(),
                 "EMBEDDING_MODEL": settings.embedding_model,
+                "HOST_INTERNAL_URL": _host_internal_base_url(),
                 "ENABLE_TERMINAL": "1" if settings.enable_terminal else "0",
                 "TERMINAL_WHITELIST": settings.terminal_whitelist,
                 "TAVILY_API_KEY": tavily_api_key,

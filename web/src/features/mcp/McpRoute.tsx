@@ -4,7 +4,7 @@ import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/field";
 import { Badge, Dot } from "@/components/ui/badge";
-import { CollapsiblePanel, ListCard } from "@/components/ui/panel";
+import { CollapsiblePanel, CollapsibleSection, ListCard } from "@/components/ui/panel";
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
@@ -173,8 +173,8 @@ export function McpRoute() {
           ) : (
             <div className="space-y-2">
               {items.map((s) => (
-                <ListCard key={s.name}>
-                  <div className="flex items-start justify-between gap-3">
+                <ListCard key={s.name} className="p-0 overflow-hidden">
+                  <div className="flex items-start justify-between gap-3 px-4 py-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <Plug className="size-4 text-muted-foreground" />
@@ -188,10 +188,28 @@ export function McpRoute() {
                       <p className="mt-1 truncate text-xs text-muted-foreground">
                         {s.transport === "http" ? s.url : (s.command ?? []).join(" ")}
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">env: {Object.keys(s.env ?? {}).length}</p>
-                      {s.runtime_error && <p className="mt-1 text-xs text-destructive">{s.runtime_error}</p>}
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      <Button variant="ghost" size="icon-sm" onClick={() => reconnect(s)} aria-label="重连"><RefreshCw /></Button>
+                      <Button variant="ghost" size="icon-sm" onClick={() => startEdit(s)} aria-label="编辑"><Pencil /></Button>
+                      <Button variant="ghost" size="icon-sm" onClick={() => remove(s)} aria-label="删除"><Trash2 /></Button>
+                    </div>
+                  </div>
+                  <CollapsibleSection summary="连接详情">
+                    <div className="space-y-2 text-sm">
+                      <p className="break-all text-foreground">
+                        {s.transport === "http" ? s.url : (s.command ?? []).join(" ")}
+                      </p>
+                      {Object.keys(s.env ?? {}).length > 0 ? (
+                        <pre className="max-h-32 overflow-y-auto whitespace-pre-wrap rounded-md bg-surface-2 p-2 font-mono text-xs text-foreground">
+                          {JSON.stringify(s.env, null, 2)}
+                        </pre>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">无环境变量</p>
+                      )}
+                      {s.runtime_error && <p className="text-xs text-destructive">{s.runtime_error}</p>}
                       {s.tools.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
+                        <div className="flex flex-wrap gap-1">
                           {s.tools.map((t) => (
                             <span key={t.full_name} title={t.description} className="rounded bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground">
                               {t.name}
@@ -200,12 +218,7 @@ export function McpRoute() {
                         </div>
                       )}
                     </div>
-                    <div className="flex shrink-0 gap-1">
-                      <Button variant="ghost" size="icon-sm" onClick={() => reconnect(s)} aria-label="重连"><RefreshCw /></Button>
-                      <Button variant="ghost" size="icon-sm" onClick={() => startEdit(s)} aria-label="编辑"><Pencil /></Button>
-                      <Button variant="ghost" size="icon-sm" onClick={() => remove(s)} aria-label="删除"><Trash2 /></Button>
-                    </div>
-                  </div>
+                  </CollapsibleSection>
                 </ListCard>
               ))}
             </div>

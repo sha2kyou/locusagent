@@ -15,7 +15,7 @@ from ..audit import record_event
 from ..auth import AuthContext, require_session
 from ..db import ContainerStatus, User, get_session
 from ..logging import get_logger
-from ..orchestrator import ensure_user_container
+from ..scheduled_tasks import recalc_user_task_schedules, validate_timezone
 from ..security import decrypt_str, encrypt_str
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -47,6 +47,14 @@ class TavilyConfigIn(BaseModel):
 
 class TavilyConfigOut(BaseModel):
     configured: bool
+
+
+class TimezoneConfigIn(BaseModel):
+    timezone: str = Field(..., min_length=1, max_length=64)
+
+
+class TimezoneConfigOut(BaseModel):
+    timezone: str
 
 
 def _llm_config_changed(
@@ -202,3 +210,36 @@ async def save_tavily(
             user_agent=request.headers.get("user-agent"),
         )
     return TavilyConfigOut(configured=bool(api_key))
+
+
+@router.get("/timezone", response_model=TimezoneConfigOut)
+async def read_timezone(ctx: AuthContext = Depends(require_session)) -> TimezoneConfigOut:
+    return TimezoneConfigOut(timezone=ctx.user.timezone or "UTC")
+
+
+@router.put("/timezone", response_model=TimezoneConfigOut)
+async def save_timezone(
+    payload: TimezoneConfigIn,
+    request: Request,
+    ctx: AuthContext = Depends(require_session),
+) -> TimezoneConfigOut:
+    try:
+        tz = validate_timezone(payload.timezone)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    async with get_session() as session:
+        stmt = select(User).where(User.id == ctx.user.id)
+        db_user = (await session.execute(stmt)).scalar_one()
+        db_user.timezone = tz
+        await record_event(
+            session,
+            "timezone.updated",
+            user_id=db_user.id,
+            detail={"timezone": tz},
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+
+    await recalc_user_task_schedules(ctx.user.id)
+    return TimezoneConfigOut(timezone=tz)

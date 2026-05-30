@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     embedding_base_url: str = Field(default="http://tei:80", alias="EMBEDDING_BASE_URL")
     embedding_model: str = Field(default="BAAI/bge-small-zh-v1.5", alias="EMBEDDING_MODEL")
 
+    host_internal_url: str = Field(default="", alias="HOST_INTERNAL_URL")
+
     data_dir: Path = Field(default=Path("/data"), alias="DATA_DIR")
     shared_skills_dir: Path = Field(default=Path("/app/skills"), alias="SHARED_SKILLS_DIR")
 

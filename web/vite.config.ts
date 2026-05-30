@@ -34,6 +34,7 @@ export default defineConfig({
       '/api': {
         target: API_TARGET,
         changeOrigin: true,
+        ws: true,
         // SSE：禁用代理缓冲，保证 chat/completions 流式逐包透传
         configure: (proxy) => {
           proxy.on('proxyRes', (proxyRes) => {

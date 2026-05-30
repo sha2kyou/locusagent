@@ -58,6 +58,13 @@ async def _scan_once() -> None:
     except Exception as exc:
         log.warning("orphan_cleanup_scan_failed", error=str(exc))
 
+    try:
+        from ..scheduled_tasks.executor import schedule_due_task_scan
+
+        schedule_due_task_scan()
+    except Exception as exc:
+        log.warning("scheduled_tasks_scan_failed", error=str(exc))
+
 
 async def lifecycle_loop(stop_event: asyncio.Event) -> None:
     log.info("lifecycle_loop_started", interval=SCAN_INTERVAL)

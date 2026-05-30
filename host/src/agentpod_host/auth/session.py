@@ -46,9 +46,8 @@ def clear_session(response: Response) -> None:
     response.delete_cookie(SESSION_COOKIE_NAME, path="/")
 
 
-def read_session(request: Request) -> int | None:
-    """从 cookie 解出 user_id；签名失败/过期返回 None。"""
-    raw = request.cookies.get(SESSION_COOKIE_NAME)
+def parse_session_user_id(raw: str | None) -> int | None:
+    """从 session cookie 解出 user_id；签名失败/过期返回 None。"""
     if not raw:
         return None
     try:
@@ -59,6 +58,11 @@ def read_session(request: Request) -> int | None:
         return None
     uid = payload.get("uid")
     return int(uid) if isinstance(uid, int) else None
+
+
+def read_session(request: Request) -> int | None:
+    """从 cookie 解出 user_id；签名失败/过期返回 None。"""
+    return parse_session_user_id(request.cookies.get(SESSION_COOKIE_NAME))
 
 
 def issue_state_cookie(response: Response, state: str) -> None:

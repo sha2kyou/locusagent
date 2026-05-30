@@ -1,7 +1,7 @@
 """前端托管：单页应用（React SPA）。
 
-构建产物位于 ``web/spa``（由 Vite 输出）。鉴权完全交由前端 ``AuthProvider``
-处理：访问任意页面时前端拉取 ``/api/me``，401 自动跳转 ``/login``。
+构建产物位于 ``web/spa``（Vite 本地输出或 host 镜像多阶段构建写入）。
+鉴权完全交由前端 ``AuthProvider`` 处理：访问任意页面时前端拉取 ``/api/me``，401 自动跳转 ``/login``。
 """
 
 from __future__ import annotations

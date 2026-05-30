@@ -34,6 +34,12 @@ async def init_engine() -> AsyncEngine:
         await conn.execute(
             text("ALTER TABLE users ADD COLUMN IF NOT EXISTS tavily_api_key_enc BYTEA")
         )
+        await conn.execute(
+            text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS category VARCHAR(64)")
+        )
+        await conn.execute(
+            text("ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(64) DEFAULT 'UTC'")
+        )
     return _engine
 
 

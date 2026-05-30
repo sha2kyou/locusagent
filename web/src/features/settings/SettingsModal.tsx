@@ -13,8 +13,10 @@ import {
   deleteAccount,
   getLLMConfig,
   getTavilyConfig,
+  getTimezoneConfig,
   putLLMConfig,
   putTavilyConfig,
+  putTimezoneConfig,
   rotateApiKey,
 } from "@/api/endpoints";
 import type { LLMConfig } from "@/api/types";
@@ -25,6 +27,17 @@ const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: "dark", label: "深色" },
 ];
 const THEME_OPTION_VALUES = THEME_OPTIONS.map((opt) => opt.value);
+
+const TIMEZONE_OPTIONS = [
+  "UTC",
+  "Asia/Shanghai",
+  "Asia/Tokyo",
+  "Asia/Hong_Kong",
+  "Europe/London",
+  "Europe/Berlin",
+  "America/New_York",
+  "America/Los_Angeles",
+];
 
 interface Props {
   open: boolean;
@@ -47,6 +60,8 @@ export function SettingsModal({ open, onClose, onLogout, required = false }: Pro
   const [tavilyConfigured, setTavilyConfigured] = useState(false);
   const [tavilyApiKey, setTavilyApiKey] = useState("");
   const [tavilySaving, setTavilySaving] = useState(false);
+  const [timezone, setTimezone] = useState("UTC");
+  const [timezoneSaving, setTimezoneSaving] = useState(false);
 
   const [flashKey, setFlashKey] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -60,13 +75,14 @@ export function SettingsModal({ open, onClose, onLogout, required = false }: Pro
 
   useEffect(() => {
     if (!open) return;
-    void Promise.all([getLLMConfig(), getTavilyConfig()]).then(([c, tavily]) => {
+    void Promise.all([getLLMConfig(), getTavilyConfig(), getTimezoneConfig()]).then(([c, tavily, tz]) => {
       setCfg(c);
       setBaseUrl(c.base_url ?? "");
       setModel(c.model || "gpt-4o");
       setApiKey("");
       setTavilyConfigured(tavily.configured);
       setTavilyApiKey("");
+      setTimezone(tz.timezone || "UTC");
     });
   }, [open]);
 
@@ -131,6 +147,19 @@ export function SettingsModal({ open, onClose, onLogout, required = false }: Pro
       toast((e as Error).message, "error");
     } finally {
       setTavilySaving(false);
+    }
+  };
+
+  const saveTimezone = async () => {
+    setTimezoneSaving(true);
+    try {
+      const next = await putTimezoneConfig({ timezone: timezone.trim() || "UTC" });
+      setTimezone(next.timezone);
+      toast("时区已保存", "success");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setTimezoneSaving(false);
     }
   };
 
@@ -201,6 +230,35 @@ export function SettingsModal({ open, onClose, onLogout, required = false }: Pro
                   </button>
                 );
               })}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-border bg-surface/40 p-4">
+            <h3 className="mb-1 text-sm font-semibold">时区</h3>
+            <p className="mb-3 text-xs text-muted-foreground">
+              用于定时任务 Cron 与单次执行时间，默认 UTC。
+            </p>
+            <div className="grid gap-3">
+              <div className="grid gap-1.5">
+                <Label>IANA 时区</Label>
+                <Input
+                  list="timezone-options"
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                  placeholder="UTC"
+                />
+                <datalist id="timezone-options">
+                  {TIMEZONE_OPTIONS.map((tz) => (
+                    <option key={tz} value={tz} />
+                  ))}
+                </datalist>
+              </div>
+              <div>
+                <Button variant="primary" disabled={timezoneSaving} onClick={() => void saveTimezone()}>
+                  {timezoneSaving && <Loader2 className="size-4 animate-spin" />}
+                  保存时区
+                </Button>
+              </div>
             </div>
           </section>
 

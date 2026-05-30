@@ -1,6 +1,6 @@
 """产物工具：artifact_save 归档产出，artifact_recall 按标题语义召回。
 
-类目按名匹配；不存在时自动创建，对应前端「产物」下的一个子菜单。
+类目仅允许按现有名称匹配；不存在时拒绝保存并提示用户先在前端创建类目。
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from typing import Any
 
 from ..artifacts import (
     create_artifact,
-    create_category,
+    list_categories,
     recall_artifacts,
     resolve_category_id,
 )
@@ -39,8 +39,19 @@ async def _artifact_save(args: dict[str, Any]) -> ToolResult:
     if category:
         category_id = await resolve_category_id(category)
         if category_id is None:
-            created = await create_category(category)
-            category_id = str(created["id"])
+            existing = await list_categories()
+            names = [str(c.get("name") or "").strip() for c in existing]
+            names = [n for n in names if n]
+            if names:
+                raise ToolError(
+                    "category_not_found: "
+                    f"'{category}' does not exist. Existing categories: {', '.join(names)}. "
+                    "Create the category in UI first."
+                )
+            raise ToolError(
+                "category_not_found: no categories exist yet. "
+                "Create a category in UI first, then save artifacts into it."
+            )
 
     art = await create_artifact(
         title=title, content=content, type=art_type, category_id=category_id
@@ -108,7 +119,7 @@ register_builtin(
         description=(
             "将本轮结果保存为可复用产物，供后续检索、复用与迭代。"
             "适用于有“交付物”属性的输出：报告、方案、文案、脚本、页面片段等。"
-            "category 用于归档分类（如“广告”“报告”）；不存在时自动创建。"
+            "category 用于归档分类（如“广告”“报告”）；仅允许使用已有类目，不会自动创建。"
             "不用于临时解释或一次性对话回复。"
         ),
         parameters={

@@ -1,0 +1,15 @@
+.git
+.gitignore
+**/__pycache__
+**/*.py[cod]
+**/.venv
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+web/node_modules
+host/src/agentpod_host/web/spa
+.env
+.env.*
+!.env.example
+agent-transcripts
+.cursor

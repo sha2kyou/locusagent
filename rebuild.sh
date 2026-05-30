@@ -8,7 +8,7 @@ usage() {
   cat <<'EOF'
 Usage:
   ./rebuild.sh host
-      Rebuild and restart host only (without dependencies).
+      Rebuild host image (含前端 SPA) and restart host only.
 
   ./rebuild.sh agent <user_id>
       Rebuild agent image and recreate one user isolated container.
@@ -16,19 +16,6 @@ Usage:
   ./rebuild.sh full [user_id]
       Rebuild full compose stack, then optionally recreate one user container.
 EOF
-}
-
-build_frontend_spa() {
-  if [[ ! -f "web/package.json" ]]; then
-    echo "web/package.json not found"
-    exit 1
-  fi
-
-  (
-    cd "web"
-    npm install
-    npm run build
-  )
 }
 
 ensure_user_container() {
@@ -59,7 +46,6 @@ PY"
 cmd="${1:-}"
 case "$cmd" in
   host)
-    build_frontend_spa
     docker compose build "host"
     docker compose up -d --no-deps "host"
     ;;
@@ -70,7 +56,6 @@ case "$cmd" in
     ;;
   full)
     user_id="${2:-}"
-    build_frontend_spa
     docker compose down
     docker build -f "agent/Dockerfile" -t "agentpod-agent:latest" "."
     docker compose build "host"

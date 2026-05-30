@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Loader2, Wrench } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { Badge } from "@/components/ui/badge";
-import { ListCard } from "@/components/ui/panel";
+import { CollapsibleSection, ListCard } from "@/components/ui/panel";
 import { useToast } from "@/components/ui/toast";
 import { ReadyGate } from "@/components/ReadyGate";
 import { listToolToggles, updateBuiltinToolToggle } from "@/api/endpoints";
@@ -63,8 +63,8 @@ export function ToolsRoute() {
               data.builtin_tools.map((item) => {
                 const busy = busyName === item.name;
                 return (
-                  <ListCard key={item.name}>
-                    <div className="flex items-start justify-between gap-3">
+                  <ListCard key={item.name} className="p-0 overflow-hidden">
+                    <div className="flex items-start justify-between gap-3 px-4 py-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <Wrench className="size-4 text-muted-foreground" />
@@ -73,9 +73,6 @@ export function ToolsRoute() {
                             {item.enabled ? "已启用" : "已禁用"}
                           </Badge>
                         </div>
-                        {item.description ? (
-                          <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
-                        ) : null}
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         <button
@@ -102,6 +99,11 @@ export function ToolsRoute() {
                         {busy ? <Loader2 className="size-4 animate-spin text-muted-foreground" /> : null}
                       </div>
                     </div>
+                    {item.description ? (
+                      <CollapsibleSection summary="说明">
+                        <p className="text-sm text-foreground">{item.description}</p>
+                      </CollapsibleSection>
+                    ) : null}
                   </ListCard>
                 );
               })

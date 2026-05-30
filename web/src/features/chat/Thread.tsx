@@ -162,7 +162,7 @@ function Composer({ blocked }: { blocked: boolean }) {
   };
 
   return (
-    <div className="border-t border-border bg-background/80 px-4 py-3 backdrop-blur">
+    <div className="bg-background/80 px-4 py-3 backdrop-blur">
       {pendingAttachments.length > 0 ? (
         <div className="mx-auto mb-2 flex w-full max-w-3xl flex-wrap gap-1.5">
           {pendingAttachments.map((file) => (

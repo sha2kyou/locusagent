@@ -31,6 +31,7 @@ SESSION_ONLY_PREFIXES = (
     "/api/workspace/",
     "/api/me",
     "/api/settings/",
+    "/api/notifications/",
     "/internal/",
 )
 

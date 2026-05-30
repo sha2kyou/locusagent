@@ -4,6 +4,7 @@ import {
   Blocks,
   Brain,
   ChevronsLeft,
+  Clock,
   LogOut,
   Menu,
   MessagesSquare,
@@ -19,6 +20,7 @@ import { ArtifactsNav } from "@/features/artifacts/ArtifactsNav";
 import { useAuth } from "./auth";
 import { BrandMark } from "./Brand";
 import { ApiKeyFlashModal, SettingsModal } from "@/features/settings/SettingsModal";
+import { NotificationBell } from "@/features/notifications/NotificationBell";
 import { flashApiKey } from "@/api/endpoints";
 
 interface ShellApi {
@@ -37,14 +39,19 @@ type NavEntry = { to: string; label: string; icon: typeof MessagesSquare };
 
 // 内容类：日常产出与消费
 const NAV_PRIMARY: NavEntry[] = [{ to: "/chat", label: "对话", icon: MessagesSquare }];
-// 配置类：能力与上下文管理
-const NAV_SECONDARY: NavEntry[] = [
-  { to: "/tools", label: "工具", icon: Wrench },
+// 能力扩展
+const NAV_CAPABILITIES: NavEntry[] = [
   { to: "/skills", label: "技能", icon: Sparkles },
   { to: "/mcp", label: "MCP", icon: Blocks },
+  { to: "/tools", label: "工具", icon: Wrench },
+];
+// 上下文与密钥
+const NAV_CONTEXT: NavEntry[] = [
   { to: "/memory", label: "记忆", icon: Brain },
   { to: "/env-vars", label: "环境变量", icon: KeyRound },
 ];
+// 自动化：独立展示于配置组下方
+const NAV_AUTOMATION: NavEntry[] = [{ to: "/scheduled-tasks", label: "定时任务", icon: Clock }];
 
 const EXPAND_KEY = "apod-nav-expanded";
 
@@ -107,9 +114,10 @@ export function AppShell() {
             <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">
               <BrandMark />
             </div>
-            <span className={cn("truncate text-[15px] font-semibold tracking-tight", !expanded && "md:hidden")}>
+            <span className={cn("min-w-0 flex-1 truncate text-[15px] font-semibold tracking-tight", !expanded && "md:hidden")}>
               AgentPod
             </span>
+            <NotificationBell className={cn(!expanded && "md:hidden")} menuAlign="start" />
           </div>
 
           <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
@@ -120,13 +128,25 @@ export function AppShell() {
 
             <div className="mx-1 my-1.5 border-t border-sidebar-border/70" />
 
-            {NAV_SECONDARY.map((item) => (
+            {NAV_CAPABILITIES.map((item) => (
+              <NavRow key={item.to} {...item} expanded={expanded} onNavigate={() => setNavOpen(false)} />
+            ))}
+
+            <div className="mx-1 my-1.5 border-t border-sidebar-border/70" />
+
+            {NAV_CONTEXT.map((item) => (
+              <NavRow key={item.to} {...item} expanded={expanded} onNavigate={() => setNavOpen(false)} />
+            ))}
+
+            <div className="mx-1 my-1.5 border-t border-sidebar-border/70" />
+
+            {NAV_AUTOMATION.map((item) => (
               <NavRow key={item.to} {...item} expanded={expanded} onNavigate={() => setNavOpen(false)} />
             ))}
           </nav>
 
           {/* 底部：agent 状态 + 用户 */}
-          <div className="relative border-t border-sidebar-border p-3">
+          <div className="relative p-3">
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
@@ -214,7 +234,10 @@ export function AppShell() {
               <Menu className="size-5" />
             </button>
             <span className="text-sm font-semibold tracking-tight">AgentPod</span>
-            <div className="ml-auto flex items-center">{mobileAction}</div>
+            <div className="ml-auto flex items-center gap-1">
+              <NotificationBell />
+              {mobileAction}
+            </div>
           </div>
           <main className="min-w-0 flex-1 overflow-hidden">
             <Suspense fallback={<RouteFallback />}>

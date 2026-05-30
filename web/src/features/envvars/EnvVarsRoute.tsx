@@ -5,7 +5,7 @@ import { ReadyGate } from "@/components/ReadyGate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
-import { CollapsiblePanel, ListCard } from "@/components/ui/panel";
+import { CollapsiblePanel, CollapsibleSection, ListCard } from "@/components/ui/panel";
 import { useDialogs } from "@/components/ui/dialogs";
 import { useToast } from "@/components/ui/toast";
 import { createEnvVar, deleteEnvVar, listEnvVars, updateEnvVar } from "@/api/endpoints";
@@ -120,34 +120,45 @@ export function EnvVarsRoute() {
               {items.map((item) => {
                 const emb = EMB_LABEL[item.embedding_state];
                 return (
-                  <ListCard key={item.id}>
-                    <div className="flex items-start justify-between gap-3">
+                  <ListCard key={item.id} className="p-0 overflow-hidden">
+                    <div className="flex items-start justify-between gap-3 px-4 py-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <KeyRound className="size-4 text-muted-foreground" />
                           <span className="font-medium">{item.name}</span>
                           <Badge variant={emb.variant}>{emb.text}</Badge>
                         </div>
-                        <p className="mt-1 break-all text-sm text-muted-foreground">
-                          {revealed[item.id] ? item.value : maskValue(item.value)}
-                        </p>
                         {item.description ? (
-                          <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>
+                          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
                         ) : null}
                       </div>
                       <div className="flex shrink-0 gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => setRevealed((s) => ({ ...s, [item.id]: !s[item.id] }))}
-                          aria-label={revealed[item.id] ? "隐藏值" : "显示值"}
-                        >
-                          {revealed[item.id] ? <EyeOff /> : <Eye />}
-                        </Button>
                         <Button variant="ghost" size="icon-sm" onClick={() => startEdit(item)} aria-label="编辑"><Pencil /></Button>
                         <Button variant="ghost" size="icon-sm" onClick={() => remove(item)} aria-label="删除"><Trash2 /></Button>
                       </div>
                     </div>
+                    <CollapsibleSection summary="值与描述">
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="min-w-0 break-all text-sm text-foreground">
+                            {revealed[item.id] ? item.value : maskValue(item.value)}
+                          </p>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => setRevealed((s) => ({ ...s, [item.id]: !s[item.id] }))}
+                            aria-label={revealed[item.id] ? "隐藏值" : "显示值"}
+                          >
+                            {revealed[item.id] ? <EyeOff /> : <Eye />}
+                          </Button>
+                        </div>
+                        {item.description ? (
+                          <p className="text-xs text-muted-foreground">{item.description}</p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">（无描述）</p>
+                        )}
+                      </div>
+                    </CollapsibleSection>
                   </ListCard>
                 );
               })}
