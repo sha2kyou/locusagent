@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Check, Pencil, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Loader2, Pencil, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/field";
+import { Input, Label, Textarea } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
-import { ListCard } from "@/components/ui/panel";
+import { CollapsiblePanel, ListCard } from "@/components/ui/panel";
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
@@ -30,9 +30,10 @@ export function MemoryRoute() {
   const [items, setItems] = useState<MemoryEntry[] | null>(null);
   const [tab, setTab] = useState<MemoryAnchor>("identity");
   const [query, setQuery] = useState("");
+  const [editing, setEditing] = useState<MemoryEntry | null>(null);
   const [content, setContent] = useState("");
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editingText, setEditingText] = useState("");
+  const [saving, setSaving] = useState(false);
+  const formRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<number | null>(null);
 
   const load = async (silent = false) => {
@@ -49,7 +50,6 @@ export function MemoryRoute() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // embedding pending 时静默轮询
   useEffect(() => {
     const hasPending = (items ?? []).some((m) => m.embedding_state === "pending");
     if (hasPending && !pollRef.current) {
@@ -81,24 +81,35 @@ export function MemoryRoute() {
       .filter((m) => (q ? m.content.toLowerCase().includes(q) : true));
   }, [items, tab, query]);
 
-  const add = async () => {
-    if (!content.trim()) return;
-    try {
-      await createMemory({ content: content.trim(), anchor: tab });
-      setContent("");
-      await load();
-    } catch (e) {
-      toast((e as Error).message, "error");
-    }
+  const resetForm = () => {
+    setEditing(null);
+    setContent("");
   };
 
-  const saveEdit = async (id: number) => {
+  const startEdit = (m: MemoryEntry) => {
+    setEditing(m);
+    setContent(m.content);
+    requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
+  const submit = async () => {
+    const text = content.trim();
+    if (!text) return;
+    setSaving(true);
     try {
-      await updateMemory(id, { content: editingText });
-      setEditingId(null);
+      if (editing) {
+        await updateMemory(editing.id, { content: text });
+        toast("已更新", "success");
+      } else {
+        await createMemory({ content: text, anchor: tab });
+        toast("已添加", "success");
+      }
+      resetForm();
       await load();
     } catch (e) {
       toast((e as Error).message, "error");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -116,6 +127,7 @@ export function MemoryRoute() {
     if (!(await confirm({ title: "删除记忆", body: "确定删除该条记忆？", danger: true, confirmText: "删除" }))) return;
     try {
       await deleteMemory(m.id);
+      if (editing?.id === m.id) resetForm();
       await load();
     } catch (e) {
       toast((e as Error).message, "error");
@@ -123,7 +135,17 @@ export function MemoryRoute() {
   };
 
   return (
-    <PageContainer title="记忆" subtitle="长期记忆条目管理">
+    <PageContainer
+      title="记忆"
+      subtitle="长期记忆条目管理"
+      actions={
+        items && (
+          <Badge variant="outline">
+            常驻 {counts.identity} / 检索 {counts.experience}
+          </Badge>
+        )
+      }
+    >
       <ReadyGate>
         <div className="space-y-4">
           <div className="inline-flex rounded-lg border border-border bg-surface/40 p-1">
@@ -142,16 +164,6 @@ export function MemoryRoute() {
             ))}
           </div>
 
-          <div className="flex gap-2">
-            <Input
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && add()}
-              placeholder={tab === "identity" ? "添加到「常驻记忆」…" : "添加到「按需检索」…"}
-            />
-            <Button variant="primary" onClick={add} disabled={!content.trim()}>添加</Button>
-          </div>
-
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索记忆…" />
 
           {items === null ? (
@@ -165,32 +177,18 @@ export function MemoryRoute() {
                 return (
                   <ListCard key={m.id}>
                     <div className="flex items-start justify-between gap-3">
-                      {editingId === m.id ? (
-                        <Input
-                          autoFocus
-                          value={editingText}
-                          onChange={(e) => setEditingText(e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && saveEdit(m.id)}
-                        />
-                      ) : (
-                        <p className="min-w-0 flex-1 text-sm">{m.content}</p>
-                      )}
+                      <p className="min-w-0 flex-1 whitespace-pre-wrap text-sm">{m.content}</p>
                       <div className="flex shrink-0 items-center gap-1">
-                        {editingId === m.id ? (
-                          <>
-                            <Button variant="ghost" size="icon-sm" onClick={() => saveEdit(m.id)} aria-label="保存"><Check /></Button>
-                            <Button variant="ghost" size="icon-sm" onClick={() => setEditingId(null)} aria-label="取消"><X /></Button>
-                          </>
-                        ) : (
-                          <>
-                            <Badge variant={emb.variant}>{emb.text}</Badge>
-                            <Button variant="ghost" size="icon-sm" onClick={() => move(m)} aria-label="切换分类">
-                              {m.anchor === "identity" ? <ArrowDown /> : <ArrowUp />}
-                            </Button>
-                            <Button variant="ghost" size="icon-sm" onClick={() => { setEditingId(m.id); setEditingText(m.content); }} aria-label="编辑"><Pencil /></Button>
-                            <Button variant="ghost" size="icon-sm" onClick={() => remove(m)} aria-label="删除"><Trash2 /></Button>
-                          </>
-                        )}
+                        <Badge variant={emb.variant}>{emb.text}</Badge>
+                        <Button variant="ghost" size="icon-sm" onClick={() => move(m)} aria-label="切换分类">
+                          {m.anchor === "identity" ? <ArrowDown /> : <ArrowUp />}
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" onClick={() => startEdit(m)} aria-label="编辑">
+                          <Pencil />
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" onClick={() => remove(m)} aria-label="删除">
+                          <Trash2 />
+                        </Button>
                       </div>
                     </div>
                   </ListCard>
@@ -198,6 +196,33 @@ export function MemoryRoute() {
               })}
             </div>
           )}
+
+          <div ref={formRef}>
+            <CollapsiblePanel summary={editing ? `编辑记忆 #${editing.id}` : "添加记忆"} defaultOpen={!!editing}>
+              <div className="grid gap-3">
+                <div className="grid gap-1.5">
+                  <Label>内容</Label>
+                  <Textarea
+                    rows={5}
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder="输入要记住的内容…"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="primary" disabled={saving || !content.trim()} onClick={submit}>
+                    {saving && <Loader2 className="size-4 animate-spin" />}
+                    {editing ? "保存" : "添加"}
+                  </Button>
+                  {editing && (
+                    <Button variant="ghost" onClick={resetForm}>
+                      取消编辑
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CollapsiblePanel>
+          </div>
         </div>
       </ReadyGate>
     </PageContainer>

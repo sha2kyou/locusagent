@@ -38,6 +38,7 @@ const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <Navigate to="/chat" replace /> },
+      { path: "chat/:sessionId", element: <ChatRoute /> },
       { path: "chat", element: <ChatRoute /> },
       { path: "tools", element: <ToolsRoute /> },
       { path: "skills", element: <SkillsRoute /> },

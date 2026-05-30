@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { AssistantRuntimeProvider, useExternalStoreRuntime } from "@assistant-ui/react";
 import {
   cancelRun,
@@ -72,9 +73,15 @@ const MAX_FILE_SIZE = 256 * 1024;
 const MAX_TOTAL_ATTACHMENTS = 1;
 const MAX_ATTACHMENT_CHARS = 16000;
 
+function chatPath(sessionId: string | null): string {
+  return sessionId ? `/chat/${encodeURIComponent(sessionId)}` : "/chat";
+}
+
 export function ChatProvider({ children }: { children: ReactNode }) {
   const toast = useToast();
   const { readiness } = useAuth();
+  const navigate = useNavigate();
+  const urlSessionId = useParams().sessionId ?? null;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -91,6 +98,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const pendingAttachmentsRef = useRef<PendingAttachment[]>([]);
   const mountedRef = useRef(true);
   const titlePollTimerRef = useRef<number | null>(null);
+  const prevUrlSessionRef = useRef<string | null | undefined>(undefined);
+  const loadTokenRef = useRef(0);
 
   useEffect(() => {
     pendingAttachmentsRef.current = pendingAttachments;
@@ -202,6 +211,65 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     pollTokenRef.current++;
   };
 
+  const resetToNewChat = () => {
+    abortChat();
+    stopActiveRunPoll();
+    stopTitlePoll();
+    setCurrent(null);
+    setMessages([]);
+    setIsRunning(false);
+    setPendingAttachments([]);
+    setLastErrored(false);
+  };
+
+  const loadSessionFromUrl = (id: string) => {
+    const token = ++loadTokenRef.current;
+    abortChat();
+    stopActiveRunPoll();
+    stopTitlePoll();
+    setCurrent(id);
+    setIsRunning(false);
+    setPendingAttachments([]);
+    setLastErrored(false);
+    void (async () => {
+      try {
+        const { items } = await getSessionMessages(id);
+        if (token !== loadTokenRef.current || !mountedRef.current || currentIdRef.current !== id) {
+          return;
+        }
+        setMessages(coalesceHistory(items));
+        const { run } = await getActiveRun(id);
+        if (token !== loadTokenRef.current || !mountedRef.current || currentIdRef.current !== id) {
+          return;
+        }
+        if (run?.status === "running") {
+          setIsRunning(true);
+          startActiveRunPoll(id);
+        }
+      } catch (e) {
+        if (token !== loadTokenRef.current || !mountedRef.current) return;
+        toast((e as Error).message || "会话不存在", "error");
+        resetToNewChat();
+        navigate("/chat", { replace: true });
+      }
+    })();
+  };
+
+  // URL 为会话单一真相源：刷新 / 前进后退 / 侧边栏切换均由此恢复
+  useEffect(() => {
+    const prev = prevUrlSessionRef.current;
+    prevUrlSessionRef.current = urlSessionId;
+
+    if (urlSessionId) {
+      if (currentIdRef.current === urlSessionId && messages.length > 0) return;
+      loadSessionFromUrl(urlSessionId);
+      return;
+    }
+
+    if (prev !== undefined) resetToNewChat();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlSessionId]);
+
   useEffect(() => {
     return () => {
       mountedRef.current = false;
@@ -249,8 +317,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         {
           onMessage: (chunk) => {
             if (!mountedRef.current || ac.signal.aborted) return;
-            if (chunk.session_id && !currentIdRef.current) {
-              setCurrent(chunk.session_id);
+            if (chunk.session_id) {
+              if (!currentIdRef.current) setCurrent(chunk.session_id);
+              const path = chatPath(chunk.session_id);
+              if (window.location.pathname !== path) {
+                navigate(path, { replace: true });
+              }
               void refreshSessions();
               watchTitle(chunk.session_id);
             }
@@ -354,47 +426,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // ---- 会话操作 ----
   const newSession = () => {
-    abortChat();
-    stopActiveRunPoll();
-    stopTitlePoll();
-    setCurrent(null);
-    setMessages([]);
-    setIsRunning(false);
-    setPendingAttachments([]);
+    navigate("/chat");
   };
 
   const selectSession = (id: string) => {
-    abortChat();
-    stopActiveRunPoll();
-    stopTitlePoll();
-    setCurrent(id);
-    setIsRunning(false);
-    setPendingAttachments([]);
-    void (async () => {
-      try {
-        const { items } = await getSessionMessages(id);
-        if (!mountedRef.current || currentIdRef.current !== id) return;
-        setMessages(coalesceHistory(items));
-        const { run } = await getActiveRun(id);
-        if (mountedRef.current && currentIdRef.current === id && run?.status === "running") {
-          setIsRunning(true);
-          startActiveRunPoll(id);
-        }
-      } catch (e) {
-        if (mountedRef.current) toast((e as Error).message, "error");
-      }
-    })();
+    navigate(chatPath(id));
   };
 
   const deleteSession = async (id: string) => {
-    if (currentIdRef.current === id) {
+    const wasCurrent = currentIdRef.current === id || urlSessionId === id;
+    if (wasCurrent) {
       abortChat();
       stopActiveRunPoll();
     }
     await apiDeleteSession(id);
     if (!mountedRef.current) return;
     await refreshSessions();
-    if (currentIdRef.current === id && mountedRef.current) newSession();
+    if (wasCurrent && mountedRef.current) navigate("/chat");
   };
 
   const removePendingAttachment = (id: string) => {
