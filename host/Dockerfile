@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY host/pyproject.toml ./host/pyproject.toml
 COPY host/src ./host/src
+COPY shared-skills /seed/shared-skills
 
 RUN pip install ./host
 

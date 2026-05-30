@@ -110,6 +110,10 @@ _TOOL_ROUND_LIMIT_NOTICE = (
     "工具调用轮次已达到上限。请立即停止继续调用任何工具（包括 tool/mcp/skill/memory），"
     "基于当前已知信息给出最终结论，并明确说明剩余不确定项。"
 )
+_ARTIFACT_SAVE_LOOP_NOTICE = (
+    "你刚完成过一次 artifact_save。请停止继续调用 artifact_save，"
+    "直接给用户简短确认结果。"
+)
 
 
 def _model_limit(model: str) -> int:
@@ -168,18 +172,27 @@ def _normalize_chat_tool_calls(
 
 
 def _cap_clarify_calls(calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """每轮最多保留一个 clarify 调用：一次只向用户抛出一个待选问题。
+    """每轮限制 clarify / artifact_save 重复调用。
+
+    - clarify：每轮最多 1 次（一次只抛一个问题）
+    - artifact_save：每轮最多 1 次（避免同轮批量保存副本）
 
     在拼装 assistant 消息与执行之前裁剪，被丢弃的调用不会进入 working，
     因此不会出现没有对应 tool 结果的悬空 tool_call。
     """
     out: list[dict[str, Any]] = []
     has_clarify = False
+    has_artifact_save = False
     for c in calls:
-        if (c.get("function") or {}).get("name") == "clarify":
+        fn_name = (c.get("function") or {}).get("name")
+        if fn_name == "clarify":
             if has_clarify:
                 continue
             has_clarify = True
+        elif fn_name == "artifact_save":
+            if has_artifact_save:
+                continue
+            has_artifact_save = True
         out.append(c)
     return out
 
@@ -313,6 +326,7 @@ async def run_chat_loop(
     total_tokens = 0
     tool_calls_made = 0
     tool_rounds_made = 0
+    artifact_save_rounds_made = 0
     final_text = ""
 
     for round_idx in range(1, max_rounds + 1):
@@ -386,26 +400,33 @@ async def run_chat_loop(
             tool_rounds_made += 1
             tool_calls_made += len(normalized_calls)
             stub_calls = [_ToolCallStub(raw) for raw in normalized_calls]
-            tool_results = await _execute_tool_calls(registry, stub_calls)
-            working.extend(tool_results)
-            # clarify 是终结性工具：执行后立即返回，不再续跑下一轮
-            if any(s.function.name == "clarify" for s in stub_calls):
+            if _all_calls_are(stub_calls, "artifact_save") and artifact_save_rounds_made >= 1:
+                final_msg, final_text, more_tokens = await _finalize_without_tools(
+                    client=client,
+                    model=chosen_model,
+                    working_messages=working + [{"role": "system", "content": _ARTIFACT_SAVE_LOOP_NOTICE}],
+                    extra=extra,
+                )
+                total_tokens += more_tokens
+                working.append(final_msg)
                 return (
                     LoopResult(
-                        final_text=msg.content or "",
+                        final_text=final_text or "已保存。",
                         rounds=round_idx,
                         total_tokens=total_tokens,
                         tool_calls_made=tool_calls_made,
                     ),
                     working,
                 )
-            # artifact_save 在一次 run 内应视为终结性动作，避免模型在同一轮持续重复保存副本
+            tool_results = await _execute_tool_calls(registry, stub_calls)
+            working.extend(tool_results)
             if _all_calls_are(stub_calls, "artifact_save"):
-                save_texts = [str(r.get("content") or "").strip() for r in tool_results]
-                final_text = "\n".join(t for t in save_texts if t) or "已完成保存。"
+                artifact_save_rounds_made += 1
+            # clarify 是终结性工具：执行后立即返回，不再续跑下一轮
+            if any(s.function.name == "clarify" for s in stub_calls):
                 return (
                     LoopResult(
-                        final_text=final_text,
+                        final_text=msg.content or "",
                         rounds=round_idx,
                         total_tokens=total_tokens,
                         tool_calls_made=tool_calls_made,
@@ -488,6 +509,7 @@ async def run_chat_loop_stream(
     total_tokens = 0
     tool_calls_made = 0
     tool_rounds_made = 0
+    artifact_save_rounds_made = 0
     final_text = ""
 
     for round_idx in range(1, max_rounds + 1):
@@ -633,6 +655,26 @@ async def run_chat_loop_stream(
             tool_rounds_made += 1
             tool_calls_made += len(normalized_tool_calls)
             stub_calls = [_ToolCallStub(raw) for raw in normalized_tool_calls]
+            if _all_calls_are(stub_calls, "artifact_save") and artifact_save_rounds_made >= 1:
+                final_msg, capped_text, more_tokens = await _finalize_without_tools(
+                    client=client,
+                    model=chosen_model,
+                    working_messages=working + [{"role": "system", "content": _ARTIFACT_SAVE_LOOP_NOTICE}],
+                    extra=extra,
+                )
+                total_tokens += more_tokens
+                working.append(final_msg)
+                if capped_text:
+                    yield {"type": "delta", "content": capped_text}
+                final_text = capped_text or "已保存。"
+                yield {
+                    "type": "done",
+                    "final_text": final_text,
+                    "rounds": round_idx,
+                    "total_tokens": total_tokens,
+                    "tool_calls_made": tool_calls_made,
+                }
+                return
             yield {"type": "assistant_tools", "message": msg_dict}
             for stub in stub_calls:
                 yield {"type": "tool_call", "name": stub.function.name, "id": stub.id}
@@ -647,23 +689,13 @@ async def run_chat_loop_stream(
                     "content": r.get("content") or "",
                 }
             working.extend(tool_results)
+            if _all_calls_are(stub_calls, "artifact_save"):
+                artifact_save_rounds_made += 1
             # clarify 是终结性工具：抛出选项卡片后立即收尾，不再续跑下一轮，等待用户选择
             if any(s.function.name == "clarify" for s in stub_calls):
                 yield {
                     "type": "done",
                     "final_text": accum_content,
-                    "rounds": round_idx,
-                    "total_tokens": total_tokens,
-                    "tool_calls_made": tool_calls_made,
-                }
-                return
-            # artifact_save 在一次 run 内应视为终结性动作，避免模型在同一轮持续重复保存副本
-            if _all_calls_are(stub_calls, "artifact_save"):
-                save_texts = [str(r.get("content") or "").strip() for r in tool_results]
-                final_text = "\n".join(t for t in save_texts if t) or "已完成保存。"
-                yield {
-                    "type": "done",
-                    "final_text": final_text,
                     "rounds": round_idx,
                     "total_tokens": total_tokens,
                     "tool_calls_made": tool_calls_made,

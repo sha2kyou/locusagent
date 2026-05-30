@@ -21,7 +21,6 @@ services:
     image: agentpod-host:latest
     restart: unless-stopped
     volumes:
-      - ./shared-skills:/seed/shared-skills:ro
       - shared-skills:/srv/shared-skills
     environment:
       GITHUB_CLIENT_ID:     ${GITHUB_CLIENT_ID}
