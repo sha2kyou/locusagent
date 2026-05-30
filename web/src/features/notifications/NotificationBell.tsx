@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { Bell, CheckCheck, Trash2, X } from "lucide-react";
+import { Bell, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useNotifications } from "./NotificationProvider";
@@ -55,11 +55,9 @@ function displayTitle(item: NotificationEntry): string {
 function NotificationRow({
   item,
   onOpen,
-  onRemove,
 }: {
   item: NotificationEntry;
   onOpen: () => void;
-  onRemove: () => void;
 }) {
   const category = displayCategory(item);
   const title = displayTitle(item);
@@ -96,18 +94,6 @@ function NotificationRow({
           <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{item.body}</p>
         ) : null}
       </div>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        className="mr-1.5 mt-2 shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100"
-        onClick={(e) => {
-          e.stopPropagation();
-          onRemove();
-        }}
-        aria-label="删除"
-      >
-        <Trash2 className="size-3.5" />
-      </Button>
     </div>
   );
 }
@@ -121,7 +107,7 @@ export function NotificationBell({
   menuAlign?: "start" | "end";
 }) {
   const navigate = useNavigate();
-  const { items, unreadCount, loading, markRead, markAllRead, remove } = useNotifications();
+  const { items, unreadCount, loading, markRead, markAllRead } = useNotifications();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -184,17 +170,16 @@ export function NotificationBell({
                 )}
               </div>
               <div className="flex items-center gap-0.5">
-                {unreadCount > 0 && (
+                {unreadCount > 0 ? (
                   <Button
                     variant="ghost"
-                    size="icon-sm"
+                    size="sm"
                     onClick={() => void markAllRead()}
-                    aria-label="全部已读"
-                    title="全部已读"
+                    aria-label="全部标记为已读"
                   >
-                    <CheckCheck className="size-4" />
+                    全部已读
                   </Button>
-                )}
+                ) : null}
                 <Button variant="ghost" size="icon-sm" onClick={() => setOpen(false)} aria-label="关闭">
                   <X className="size-4" />
                 </Button>
@@ -216,7 +201,6 @@ export function NotificationBell({
                       key={item.id}
                       item={item}
                       onOpen={() => void onOpenItem(item)}
-                      onRemove={() => void remove(item.id)}
                     />
                   ))}
                 </div>

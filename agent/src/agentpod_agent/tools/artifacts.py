@@ -119,7 +119,7 @@ register_builtin(
         description=(
             "将本轮结果保存为可复用产物，供后续检索、复用与迭代。"
             "适用于有“交付物”属性的输出：报告、方案、文案、脚本、页面片段等。"
-            "category 用于归档分类（如“广告”“报告”）；仅允许使用已有类目，不会自动创建。"
+            "category 用于归档分类（如“内容”“报告”）；仅允许使用已有类目，不会自动创建。"
             "不用于临时解释或一次性对话回复。"
         ),
         parameters={
@@ -134,7 +134,7 @@ register_builtin(
                 },
                 "category": {
                     "type": "string",
-                    "description": "归档类目名（如“广告”“报告”）。为空则保存到未分类。",
+                    "description": "归档类目名（如“内容”“报告”）。为空则保存到未分类。",
                 },
             },
             "required": ["title", "content"],

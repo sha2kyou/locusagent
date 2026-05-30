@@ -8,7 +8,6 @@ import {
   type ReactNode,
 } from "react";
 import {
-  deleteNotification,
   markAllNotificationsRead,
   markNotificationRead,
 } from "@/api/endpoints";
@@ -23,7 +22,6 @@ interface NotificationContextValue {
   loading: boolean;
   markRead: (id: number) => Promise<void>;
   markAllRead: () => Promise<void>;
-  remove: (id: number) => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextValue | null>(null);
@@ -61,7 +59,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   );
 
   const applySync = useCallback((nextItems: NotificationEntry[], count: number) => {
-    setItems(nextItems);
+    setItems(nextItems.filter((i) => !i.read));
     setUnreadCount(count);
     knownUnreadRef.current = count;
     setLoading(false);
@@ -138,38 +136,26 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const markRead = useCallback(async (id: number) => {
     await markNotificationRead(id);
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, read: true } : i)));
-    setUnreadCount((c) => {
-      const next = Math.max(0, c - 1);
-      knownUnreadRef.current = next;
-      return next;
+    setItems((prev) => {
+      if (!prev.some((i) => i.id === id)) return prev;
+      setUnreadCount((c) => {
+        const next = Math.max(0, c - 1);
+        knownUnreadRef.current = next;
+        return next;
+      });
+      return prev.filter((i) => i.id !== id);
     });
   }, []);
 
   const markAllRead = useCallback(async () => {
     await markAllNotificationsRead();
-    setItems((prev) => prev.map((i) => ({ ...i, read: true })));
+    setItems([]);
     setUnreadCount(0);
     knownUnreadRef.current = 0;
   }, []);
 
-  const remove = useCallback(async (id: number) => {
-    await deleteNotification(id);
-    setItems((prev) => {
-      const removed = prev.find((i) => i.id === id);
-      if (removed && !removed.read) {
-        setUnreadCount((c) => {
-          const next = Math.max(0, c - 1);
-          knownUnreadRef.current = next;
-          return next;
-        });
-      }
-      return prev.filter((i) => i.id !== id);
-    });
-  }, []);
-
   return (
-    <NotificationContext.Provider value={{ items, unreadCount, loading, markRead, markAllRead, remove }}>
+    <NotificationContext.Provider value={{ items, unreadCount, loading, markRead, markAllRead }}>
       {children}
     </NotificationContext.Provider>
   );

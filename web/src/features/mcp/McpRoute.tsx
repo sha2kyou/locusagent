@@ -5,12 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/field";
 import { Badge, Dot } from "@/components/ui/badge";
 import { CollapsiblePanel, CollapsibleSection, ListCard } from "@/components/ui/panel";
+import { Drawer } from "@/components/ui/drawer";
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
 import { Empty, Loading } from "@/features/skills/SkillsRoute";
 import { createMcp, deleteMcp, listMcp, reconnectMcp, testMcp, updateMcp } from "@/api/endpoints";
-import type { McpInput, McpServer } from "@/api/types";
+import type { McpInput, McpServer, McpTool } from "@/api/types";
 
 function parseEnvJson(raw: string): Record<string, string> {
   const source = raw.trim() || "{}";
@@ -46,6 +47,7 @@ export function McpRoute() {
   const [url, setUrl] = useState("");
   const [envJson, setEnvJson] = useState("{}");
   const [busy, setBusy] = useState(false);
+  const [selectedTool, setSelectedTool] = useState<{ serverName: string; tool: McpTool } | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
   const [envError, setEnvError] = useState<string | null>(null);
 
@@ -210,9 +212,14 @@ export function McpRoute() {
                       {s.tools.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {s.tools.map((t) => (
-                            <span key={t.full_name} title={t.description} className="rounded bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground">
+                            <button
+                              key={t.full_name}
+                              type="button"
+                              onClick={() => setSelectedTool({ serverName: s.name, tool: t })}
+                              className="rounded bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground transition hover:bg-secondary/80"
+                            >
                               {t.name}
-                            </span>
+                            </button>
                           ))}
                         </div>
                       )}
@@ -279,6 +286,35 @@ export function McpRoute() {
           </div>
         </div>
       </ReadyGate>
+      <Drawer
+        open={!!selectedTool}
+        onClose={() => setSelectedTool(null)}
+        title={selectedTool?.tool.name}
+        description={selectedTool ? `${selectedTool.serverName} · ${selectedTool.tool.full_name}` : undefined}
+      >
+        {selectedTool ? (
+          <div className="space-y-4">
+            <section className="space-y-1">
+              <h3 className="text-sm font-medium">描述</h3>
+              <p className="whitespace-pre-wrap text-sm text-foreground">
+                {selectedTool.tool.description?.trim() || "无描述"}
+              </p>
+            </section>
+            <section className="space-y-1">
+              <h3 className="text-sm font-medium">参数摘要</h3>
+              <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                {selectedTool.tool.schema_summary?.trim() || "无参数摘要"}
+              </p>
+            </section>
+            <section className="space-y-1">
+              <h3 className="text-sm font-medium">输入 Schema</h3>
+              <pre className="max-h-[45vh] overflow-auto whitespace-pre-wrap rounded-md bg-surface-2 p-3 font-mono text-xs text-foreground">
+                {JSON.stringify(selectedTool.tool.input_schema ?? {}, null, 2)}
+              </pre>
+            </section>
+          </div>
+        ) : null}
+      </Drawer>
     </PageContainer>
   );
 }

@@ -62,15 +62,15 @@ async def create_notification(
     return item
 
 
-async def list_notifications(user_id: int, *, limit: int = 50) -> list[dict]:
+async def list_notifications(user_id: int, *, limit: int = 50, unread_only: bool = False) -> list[dict]:
     limit = max(1, min(int(limit), 200))
     async with get_session() as session:
+        stmt = select(Notification).where(Notification.user_id == user_id)
+        if unread_only:
+            stmt = stmt.where(Notification.read_at.is_(None))
         rows = (
             await session.execute(
-                select(Notification)
-                .where(Notification.user_id == user_id)
-                .order_by(Notification.created_at.desc())
-                .limit(limit)
+                stmt.order_by(Notification.created_at.desc()).limit(limit)
             )
         ).scalars().all()
         return [_row_to_dict(r) for r in rows]

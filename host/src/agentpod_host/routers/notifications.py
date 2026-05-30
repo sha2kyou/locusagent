@@ -36,7 +36,7 @@ async def get_notifications(
     ctx: AuthContext = Depends(require_session),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> dict:
-    items = await list_notifications(ctx.user.id, limit=limit)
+    items = await list_notifications(ctx.user.id, limit=limit, unread_only=True)
     count = await unread_count(ctx.user.id)
     return {"items": items, "unread_count": count}
 
@@ -106,7 +106,7 @@ async def notifications_ws(websocket: WebSocket) -> None:
 
     await hub.connect(user.id, websocket)
     try:
-        items = await list_notifications(user.id, limit=50)
+        items = await list_notifications(user.id, limit=50, unread_only=True)
         count = await unread_count(user.id)
         await websocket.send_json({"type": "sync", "items": items, "unread_count": count})
         while True:

@@ -391,7 +391,7 @@ export function ArtifactsRoute() {
               text={
                 query
                   ? "无匹配产物"
-                  : "暂无产物，在对话中让 AI 产出成果（如「创建一条广告」）即可归档到这里"
+                  : "暂无产物，在对话中让 AI 产出成果（如「创建一条内容」）即可归档到这里"
               }
             />
           ) : currentCategory ? (
@@ -435,7 +435,7 @@ export function ArtifactsRoute() {
                     <Input
                       value={newCategoryName}
                       onChange={(e) => setNewCategoryName(e.target.value)}
-                      placeholder="如：广告、报告、规划"
+                      placeholder="如：内容、报告、规划"
                     />
                   </div>
                   <div className="grid gap-1.5">
@@ -444,7 +444,7 @@ export function ArtifactsRoute() {
                       rows={3}
                       value={newCategoryDesc}
                       onChange={(e) => setNewCategoryDesc(e.target.value)}
-                      placeholder="用于指导 AI 选择该类目，例如：保存投放素材与广告文案"
+                      placeholder="用于指导 AI 选择该类目，例如：保存发布资料与内容文案"
                     />
                   </div>
                   <div className="flex gap-2">
