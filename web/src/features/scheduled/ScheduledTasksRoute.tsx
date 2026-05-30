@@ -118,11 +118,9 @@ function daysInMonth(year: number, month: number): number {
 function DateTimePicker({
   value,
   onChange,
-  timezone,
 }: {
   value: string;
   onChange: (next: string) => void;
-  timezone: string;
 }) {
   const now = new Date();
   const parsed = parseDateTimeLocal(value);
@@ -199,7 +197,7 @@ function DateTimePicker({
         <CalendarDays className="size-4" />
       </button>
       {open ? (
-        <ListCard className="absolute z-20 mt-2 w-[320px] overflow-hidden p-0 shadow-lg">
+        <ListCard className="absolute bottom-full left-0 z-20 mb-2 w-[320px] overflow-hidden p-0 shadow-lg bg-surface!">
           <div className="flex items-center justify-between px-4 py-3">
             <Button variant="ghost" size="icon-sm" onClick={() => shiftMonth(-1)} aria-label="上个月">
               <ChevronLeft className="size-4" />
@@ -238,50 +236,47 @@ function DateTimePicker({
               );
             })}
           </div>
-          <CollapsibleSection summary="时间设置" defaultOpen>
-            <div className="grid gap-3">
-              <div className="grid grid-cols-2 gap-2">
-                <div className="grid gap-1">
-                  <Label>小时</Label>
-                  <Select
-                    value={String(selected?.hh ?? 9)}
-                    onChange={(e) => applyTime(Number(e.target.value), null)}
-                  >
-                    {Array.from({ length: 24 }).map((_, h) => (
-                      <option key={h} value={h}>
-                        {pad2(h)}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                <div className="grid gap-1">
-                  <Label>分钟</Label>
-                  <Select
-                    value={String(selected?.mm ?? 0)}
-                    onChange={(e) => applyTime(null, Number(e.target.value))}
-                  >
-                    {Array.from({ length: 12 }).map((_, i) => {
-                      const m = i * 5;
-                      return (
-                        <option key={m} value={m}>
-                          {pad2(m)}
-                        </option>
-                      );
-                    })}
-                  </Select>
-                </div>
+          <div className="grid gap-3 px-4 pb-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="grid gap-1">
+                <Label>小时</Label>
+                <Select
+                  value={String(selected?.hh ?? 9)}
+                  onChange={(e) => applyTime(Number(e.target.value), null)}
+                >
+                  {Array.from({ length: 24 }).map((_, h) => (
+                    <option key={h} value={h}>
+                      {pad2(h)}
+                    </option>
+                  ))}
+                </Select>
               </div>
-              <p className="text-xs text-muted-foreground">按设置时区（{timezone}）解释该时间。</p>
-              <div className="flex justify-end gap-2">
-                <Button variant="ghost" size="sm" onClick={() => onChange("")}>
-                  清空
-                </Button>
-                <Button variant="secondary" size="sm" onClick={() => setOpen(false)}>
-                  完成
-                </Button>
+              <div className="grid gap-1">
+                <Label>分钟</Label>
+                <Select
+                  value={String(selected?.mm ?? 0)}
+                  onChange={(e) => applyTime(null, Number(e.target.value))}
+                >
+                  {Array.from({ length: 12 }).map((_, i) => {
+                    const m = i * 5;
+                    return (
+                      <option key={m} value={m}>
+                        {pad2(m)}
+                      </option>
+                    );
+                  })}
+                </Select>
               </div>
             </div>
-          </CollapsibleSection>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={() => onChange("")}>
+                清空
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setOpen(false)}>
+                完成
+              </Button>
+            </div>
+          </div>
         </ListCard>
       ) : null}
     </div>
@@ -549,7 +544,7 @@ export function ScheduledTasksRoute() {
                 ) : (
                   <div className="grid gap-1.5">
                     <Label>执行时间</Label>
-                    <DateTimePicker value={runAt} onChange={setRunAt} timezone={userTimezone} />
+                    <DateTimePicker value={runAt} onChange={setRunAt} />
                     <p className="text-xs text-muted-foreground">
                       按设置时区（{userTimezone}）填写，例如 2026-06-01 09:00
                     </p>
