@@ -55,6 +55,11 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        from .core.run_manager import shutdown_run_manager
+        from .routers.v1 import shutdown_v1_background_tasks
+
+        await shutdown_v1_background_tasks()
+        await shutdown_run_manager()
         try:
             await stop_mcp()
         except Exception as exc:

@@ -92,34 +92,54 @@ async def upsert_session_meta(
 STALE_RUN_SECONDS = 600
 
 
+async def expire_stale_run_ids(
+    session_id: str | None = None,
+    *,
+    max_age_seconds: int = STALE_RUN_SECONDS,
+) -> list[str]:
+    """将超时 run 标记为 failed，并返回受影响 run_id 列表。"""
+
+    def _do() -> list[str]:
+        with conn_scope(load_vec=False) as c:
+            if session_id:
+                rows = c.execute(
+                    "SELECT id FROM runs WHERE session_id=? AND status='running' "
+                    "AND updated_at < datetime('now', ?)",
+                    (session_id, f"-{int(max_age_seconds)} seconds"),
+                ).fetchall()
+            else:
+                rows = c.execute(
+                    "SELECT id FROM runs WHERE status='running' "
+                    "AND updated_at < datetime('now', ?)",
+                    (f"-{int(max_age_seconds)} seconds",),
+                ).fetchall()
+            run_ids = [str(r["id"]) for r in rows]
+            if not run_ids:
+                return []
+            placeholders = ",".join("?" for _ in run_ids)
+            c.execute(
+                "UPDATE runs SET status='failed', error_message='stale run expired', "
+                "updated_at=datetime('now') "
+                f"WHERE id IN ({placeholders})",
+                run_ids,
+            )
+            return run_ids
+
+    return await run_in_thread(_do)
+
+
 async def expire_stale_runs(
     session_id: str | None = None,
     *,
     max_age_seconds: int = STALE_RUN_SECONDS,
 ) -> int:
     """将超时未更新的 running run 标为 failed，返回清理数量。"""
-
-    def _do() -> int:
-        with conn_scope(load_vec=False) as c:
-            if session_id:
-                cur = c.execute(
-                    "UPDATE runs SET status='failed', error_message='stale run expired', "
-                    "updated_at=datetime('now') "
-                    "WHERE session_id=? AND status='running' "
-                    "AND updated_at < datetime('now', ?)",
-                    (session_id, f"-{int(max_age_seconds)} seconds"),
-                )
-            else:
-                cur = c.execute(
-                    "UPDATE runs SET status='failed', error_message='stale run expired', "
-                    "updated_at=datetime('now') "
-                    "WHERE status='running' "
-                    "AND updated_at < datetime('now', ?)",
-                    (f"-{int(max_age_seconds)} seconds",),
-                )
-            return int(cur.rowcount or 0)
-
-    return await run_in_thread(_do)
+    return len(
+        await expire_stale_run_ids(
+            session_id,
+            max_age_seconds=max_age_seconds,
+        )
+    )
 
 
 async def create_run(session_id: str) -> str:
@@ -280,7 +300,8 @@ async def append_message(
         with conn_scope(load_vec=False) as c:
             cur = c.execute(
                 "INSERT INTO messages(session_id, role, content, tool_calls, tool_call_id, run_id, tokens) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "SELECT ?, ?, ?, ?, ?, ?, ? "
+                "WHERE EXISTS(SELECT 1 FROM sessions WHERE id = ?)",
                 (
                     session_id,
                     role,
@@ -289,11 +310,14 @@ async def append_message(
                     tool_call_id,
                     run_id,
                     tokens,
+                    session_id,
                 ),
             )
             return int(cur.lastrowid or 0)
 
     message_id = await run_in_thread(_do)
+    if message_id <= 0:
+        return 0
     if role in {"user", "assistant"}:
         from ..memory.queue import enqueue_message_embedding
 
@@ -632,4 +656,8 @@ async def delete_session(session_id: str) -> bool:
             cur = c.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
             return (cur.rowcount or 0) > 0
 
-    return await run_in_thread(_do)
+    deleted = await run_in_thread(_do)
+    if deleted:
+        async with _locks_guard:
+            _session_locks.pop(session_id, None)
+    return deleted

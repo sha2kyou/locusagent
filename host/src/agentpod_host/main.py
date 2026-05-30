@@ -61,6 +61,7 @@ async def lifespan(app: FastAPI):
             await asyncio.wait_for(loop_task, timeout=2.0)
         except TimeoutError:
             loop_task.cancel()
+            await asyncio.gather(loop_task, return_exceptions=True)
         await dispose_engine()
         log.info("host_stopped")
 

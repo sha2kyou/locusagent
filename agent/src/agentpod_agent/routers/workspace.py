@@ -38,6 +38,7 @@ from ..env_vars import (
     update_env_var,
 )
 from ..errors import WsError
+from ..core.run_manager import reconcile_session_active_handles
 from ..mcp_ import (
     MCPServerConfig,
     add_mcp_server,
@@ -458,6 +459,7 @@ async def workspace_session_messages(session_id: str) -> dict:
 
 @router.get("/sessions/{session_id}/active-run")
 async def workspace_session_active_run(session_id: str) -> dict:
+    await reconcile_session_active_handles(session_id)
     run = await get_active_run(session_id)
     return {"run": run}
 

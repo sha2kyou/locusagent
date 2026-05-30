@@ -11,6 +11,7 @@ from ..tools import ToolRegistry
 from .loop import run_chat_loop_stream
 from .persistence import (
     append_message,
+    expire_stale_run_ids,
     get_active_run,
     update_message,
     update_run,
@@ -311,8 +312,54 @@ def get_run_handle(run_id: str) -> StreamRunHandle | None:
     return _active.get(run_id)
 
 
+async def reconcile_session_active_handles(session_id: str) -> int:
+    """对齐内存活跃任务与 DB 活跃 run，取消多余/陈旧 worker。"""
+    stale_ids = await expire_stale_run_ids(session_id)
+    active_run = await get_active_run(session_id)
+    keep_run_id = str(active_run.get("id") or "") if active_run else ""
+    cancelled = 0
+    stale_set = set(stale_ids)
+    for handle in list(_active.values()):
+        if handle.session_id != session_id:
+            continue
+        if keep_run_id and handle.run_id == keep_run_id and handle.run_id not in stale_set:
+            continue
+        if not handle.task.done():
+            handle.task.cancel()
+            cancelled += 1
+    return cancelled
+
+
+async def shutdown_run_manager(*, timeout_seconds: float = 3.0) -> None:
+    """在应用关闭时取消活跃 run 与 post-run 任务并等待收敛。"""
+    active_handles = list(_active.values())
+    for handle in active_handles:
+        if not handle.task.done():
+            handle.task.cancel()
+    if active_handles:
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*(h.task for h in active_handles), return_exceptions=True),
+                timeout=timeout_seconds,
+            )
+        except TimeoutError:
+            pass
+    _active.clear()
+
+    post_tasks = [t for t in list(_post_tasks) if not t.done()]
+    for task in post_tasks:
+        task.cancel()
+    if post_tasks:
+        try:
+            await asyncio.wait_for(asyncio.gather(*post_tasks, return_exceptions=True), timeout=timeout_seconds)
+        except TimeoutError:
+            pass
+    _post_tasks.clear()
+
+
 async def cancel_active_run(session_id: str) -> bool:
     """取消会话当前运行中的 run。"""
+    await reconcile_session_active_handles(session_id)
     run = await get_active_run(session_id)
     if not run:
         return False

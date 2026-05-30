@@ -40,7 +40,7 @@ from ..core import (
 )
 from ..core.memory_autostore import maybe_remember
 from ..core.post_run import run_post_tasks
-from ..core.run_manager import ERROR, FINISHED, start_stream_run
+from ..core.run_manager import ERROR, FINISHED, reconcile_session_active_handles, start_stream_run
 from ..artifacts import list_categories
 from ..logging import get_logger
 from ..memory import enqueue_embedding, list_memories
@@ -52,6 +52,18 @@ router = APIRouter(prefix="/v1", tags=["v1"], dependencies=[Depends(verify_inter
 router.include_router(sessions_router)
 log = get_logger("v1")
 _background_tasks: set[asyncio.Task] = set()
+
+
+async def shutdown_v1_background_tasks(*, timeout_seconds: float = 3.0) -> None:
+    pending = [task for task in list(_background_tasks) if not task.done()]
+    for task in pending:
+        task.cancel()
+    if pending:
+        try:
+            await asyncio.wait_for(asyncio.gather(*pending, return_exceptions=True), timeout=timeout_seconds)
+        except TimeoutError:
+            pass
+    _background_tasks.clear()
 
 
 def _schedule_remember(user_query: str, final_text: str, *, model: str | None) -> None:
@@ -337,6 +349,7 @@ async def chat_completions(req: ChatRequest, request: Request):
     handle = None
     lock = await session_lock(sid)
     async with lock:
+        await reconcile_session_active_handles(sid)
         active = await get_active_run(sid)
         if active is not None:
             return JSONResponse(
@@ -545,6 +558,7 @@ async def responses(req: ResponsesRequest):
 
     lock = await session_lock(sid)
     async with lock:
+        await reconcile_session_active_handles(sid)
         active = await get_active_run(sid)
         if active is not None:
             return JSONResponse(

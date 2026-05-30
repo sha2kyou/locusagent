@@ -202,6 +202,7 @@ async def stop_embedding_worker() -> None:
             await asyncio.wait_for(_task, timeout=2.0)
         except TimeoutError:
             _task.cancel()
+            await asyncio.gather(_task, return_exceptions=True)
     _task = None
     _queued.clear()
     log.info("embedding_worker_stopped")

@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { CheckCircle2, Info, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,17 +33,29 @@ const icons: Record<ToastType, ReactNode> = {
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const timeoutIdsRef = useRef<number[]>([]);
+
+  useEffect(() => {
+    return () => {
+      for (const timerId of timeoutIdsRef.current) window.clearTimeout(timerId);
+      timeoutIdsRef.current = [];
+    };
+  }, []);
 
   const show = useCallback((message: string, type: ToastType = "info") => {
     const id = Date.now() + Math.random();
     setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3400);
+    const timerId = window.setTimeout(() => {
+      timeoutIdsRef.current = timeoutIdsRef.current.filter((t) => t !== timerId);
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3400);
+    timeoutIdsRef.current.push(timerId);
   }, []);
 
   return (
     <ToastContext.Provider value={show}>
       {children}
-      <div className="pointer-events-none fixed bottom-5 left-1/2 z-[100] flex w-full max-w-sm -translate-x-1/2 flex-col gap-2 px-4">
+      <div className="pointer-events-none fixed bottom-5 left-1/2 z-100 flex w-full max-w-sm -translate-x-1/2 flex-col gap-2 px-4">
         {toasts.map((t) => (
           <div
             key={t.id}

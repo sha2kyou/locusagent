@@ -16,6 +16,28 @@ export interface StreamHandlers {
 
 const MAX_RETRIES = 5;
 
+async function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) {
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, ms);
+    });
+    return;
+  }
+  if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+  await new Promise<void>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      window.clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 /**
  * 调用 POST /api/workspace/chat/completions 并解析 SSE 流。
  * 移植自老前端 streamChatCompletion：fetch + ReadableStream，按 \n\n 切事件，
@@ -50,7 +72,7 @@ export async function streamChatCompletion(
       const retryAfter = Number(res.headers.get("Retry-After")) || 2;
       attempt += 1;
       handlers.onRetry?.(attempt, retryAfter);
-      await new Promise((r) => setTimeout(r, retryAfter * 1000));
+      await sleepWithAbort(retryAfter * 1000, opts.signal);
       continue;
     }
 

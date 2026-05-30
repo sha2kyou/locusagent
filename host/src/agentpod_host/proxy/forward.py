@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import httpx
@@ -24,6 +25,7 @@ from ..security import decrypt_str
 log = get_logger("proxy")
 
 AGENT_PORT = 8000
+STREAM_TOUCH_INTERVAL_SECONDS = 30.0
 
 HOP_HEADERS = {
     "connection",
@@ -129,10 +131,31 @@ async def proxy_to_user_container(
         response_headers.setdefault("X-Accel-Buffering", "no")
 
     async def _stream():
+        stop_touch = None
+        touch_task = None
+        if is_sse:
+            stop_touch = asyncio.Event()
+
+            async def _keep_touch() -> None:
+                while not stop_touch.is_set():
+                    try:
+                        await asyncio.wait_for(stop_touch.wait(), timeout=STREAM_TOUCH_INTERVAL_SECONDS)
+                    except TimeoutError:
+                        try:
+                            await touch_last_active(user.id)
+                        except Exception as exc:
+                            log.warning("touch_last_active_failed", user_id=user.id, error=str(exc))
+
+            touch_task = asyncio.create_task(_keep_touch(), name=f"sse-touch-{user.id}")
         try:
             async for chunk in upstream.aiter_raw():
                 yield chunk
         finally:
+            if stop_touch is not None:
+                stop_touch.set()
+            if touch_task is not None:
+                touch_task.cancel()
+                await asyncio.gather(touch_task, return_exceptions=True)
             await upstream.aclose()
             await client.aclose()
 

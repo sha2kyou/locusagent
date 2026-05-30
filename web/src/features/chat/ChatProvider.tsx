@@ -89,6 +89,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const abortRef = useRef<AbortController | null>(null);
   const pollTokenRef = useRef(0);
   const pendingAttachmentsRef = useRef<PendingAttachment[]>([]);
+  const mountedRef = useRef(true);
+  const titlePollTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     pendingAttachmentsRef.current = pendingAttachments;
@@ -104,11 +106,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     try {
       const { items } = await listSessions();
       items.sort((a, b) => (b.updated_at || b.created_at).localeCompare(a.updated_at || a.created_at));
-      setSessions(items);
+      if (mountedRef.current) setSessions(items);
     } catch {
       /* 容器未就绪等：忽略，由就绪提示兜底 */
     } finally {
-      setLoadingSessions(false);
+      if (mountedRef.current) setLoadingSessions(false);
     }
   };
 
@@ -143,17 +145,31 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     abortRef.current = null;
   };
 
+  const stopTitlePoll = () => {
+    if (titlePollTimerRef.current !== null) {
+      window.clearInterval(titlePollTimerRef.current);
+      titlePollTimerRef.current = null;
+    }
+  };
+
   // ---- 标题自动生成轮询 ----
   const watchTitle = (sid: string) => {
+    stopTitlePoll();
     let tries = 0;
     const timer = window.setInterval(async () => {
+      if (!mountedRef.current) {
+        stopTitlePoll();
+        return;
+      }
       tries += 1;
       await refreshSessions();
       const found = (await listSessions().catch(() => ({ items: [] as SessionMeta[] }))).items.find((s) => s.id === sid);
       if (tries >= 12 || (found && found.title && found.title !== DEFAULT_TITLE)) {
         clearInterval(timer);
+        titlePollTimerRef.current = null;
       }
     }, 2500);
+    titlePollTimerRef.current = timer;
   };
 
   // ---- active-run 轮询恢复 ----
@@ -185,6 +201,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const stopActiveRunPoll = () => {
     pollTokenRef.current++;
   };
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      abortRef.current?.abort();
+      abortRef.current = null;
+      pollTokenRef.current++;
+      if (titlePollTimerRef.current !== null) {
+        window.clearInterval(titlePollTimerRef.current);
+        titlePollTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // ---- 发送 / 重跑 ----
   // appendUser=false 用于"重新生成 / 重试"：复用最后一条用户消息重跑，
@@ -219,6 +248,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         body,
         {
           onMessage: (chunk) => {
+            if (!mountedRef.current || ac.signal.aborted) return;
             if (chunk.session_id && !currentIdRef.current) {
               setCurrent(chunk.session_id);
               void refreshSessions();
@@ -290,7 +320,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         if (firstToken) updateLastAssistant((p) => appendText(p, "（已停止生成）"));
       } else if (err.code === "run_in_progress") {
         toast("该会话仍在生成中", "info");
-        if (currentIdRef.current) startActiveRunPoll(currentIdRef.current);
+        if (mountedRef.current && currentIdRef.current) startActiveRunPoll(currentIdRef.current);
         return;
       } else {
         updateLastAssistant((p) => p, err.message || "请求失败");
@@ -298,6 +328,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
     } finally {
       if (abortRef.current === ac) abortRef.current = null;
+      if (!mountedRef.current) return;
       setIsRunning(false);
       void refreshSessions();
     }
@@ -325,6 +356,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const newSession = () => {
     abortChat();
     stopActiveRunPoll();
+    stopTitlePoll();
     setCurrent(null);
     setMessages([]);
     setIsRunning(false);
@@ -334,29 +366,35 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const selectSession = (id: string) => {
     abortChat();
     stopActiveRunPoll();
+    stopTitlePoll();
     setCurrent(id);
     setIsRunning(false);
     setPendingAttachments([]);
     void (async () => {
       try {
         const { items } = await getSessionMessages(id);
-        if (currentIdRef.current !== id) return;
+        if (!mountedRef.current || currentIdRef.current !== id) return;
         setMessages(coalesceHistory(items));
         const { run } = await getActiveRun(id);
-        if (currentIdRef.current === id && run?.status === "running") {
+        if (mountedRef.current && currentIdRef.current === id && run?.status === "running") {
           setIsRunning(true);
           startActiveRunPoll(id);
         }
       } catch (e) {
-        toast((e as Error).message, "error");
+        if (mountedRef.current) toast((e as Error).message, "error");
       }
     })();
   };
 
   const deleteSession = async (id: string) => {
+    if (currentIdRef.current === id) {
+      abortChat();
+      stopActiveRunPoll();
+    }
     await apiDeleteSession(id);
+    if (!mountedRef.current) return;
     await refreshSessions();
-    if (currentIdRef.current === id) newSession();
+    if (currentIdRef.current === id && mountedRef.current) newSession();
   };
 
   const removePendingAttachment = (id: string) => {
