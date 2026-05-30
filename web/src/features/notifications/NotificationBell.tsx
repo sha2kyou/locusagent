@@ -63,10 +63,7 @@ function NotificationRow({
   const title = displayTitle(item);
   return (
     <div
-      className={cn(
-        "group flex gap-1 rounded-lg transition-colors",
-        !item.read ? "bg-surface-2" : "hover:bg-surface/80",
-      )}
+      className="group flex gap-1 rounded-lg transition-colors hover:bg-surface/80"
       role="button"
       tabIndex={0}
       onClick={onOpen}
@@ -87,7 +84,7 @@ function NotificationRow({
             {formatWhen(item.created_at)}
           </span>
         </div>
-        <p className={cn("mt-1 text-sm leading-snug text-foreground", !item.read && "font-medium")}>
+        <p className="mt-1 text-sm leading-snug text-foreground">
           {title}
         </p>
         {item.body ? (

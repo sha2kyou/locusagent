@@ -35,6 +35,12 @@ export function useNotifications() {
 const WS_RETRY_MS = 3_000;
 const WS_PING_MS = 25_000;
 
+function toastTypeFromKind(kind: NotificationEntry["kind"]): "info" | "success" | "error" {
+  if (kind === "error") return "error";
+  if (kind === "success") return "success";
+  return "info";
+}
+
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const { me } = useAuth();
   const toast = useToast();
@@ -45,13 +51,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const notifyNew = useCallback(
     (count: number, item?: NotificationEntry) => {
-      if (knownUnreadRef.current !== null && count > knownUnreadRef.current) {
+      if (item) {
+        toast(item.title, toastTypeFromKind(item.kind), { sticky: true });
+      } else if (knownUnreadRef.current !== null && count > knownUnreadRef.current) {
         const delta = count - knownUnreadRef.current;
-        if (item && delta === 1) {
-          toast(item.title, item.kind === "error" ? "error" : item.kind === "success" ? "success" : "info");
-        } else {
-          toast(delta === 1 ? "你有 1 条新消息" : `你有 ${delta} 条新消息`, "info");
-        }
+        toast(delta === 1 ? "你有 1 条新消息" : `你有 ${delta} 条新消息`, "info", { sticky: true });
       }
       knownUnreadRef.current = count;
     },
@@ -59,11 +63,21 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   );
 
   const applySync = useCallback((nextItems: NotificationEntry[], count: number) => {
-    setItems(nextItems.filter((i) => !i.read));
+    const unreadItems = nextItems.filter((i) => !i.read);
+    const prev = knownUnreadRef.current;
+    if (prev !== null && count > prev) {
+      const delta = count - prev;
+      if (delta === 1 && unreadItems[0]) {
+        toast(unreadItems[0].title, toastTypeFromKind(unreadItems[0].kind), { sticky: true });
+      } else {
+        toast(delta === 1 ? "你有 1 条新消息" : `你有 ${delta} 条新消息`, "info", { sticky: true });
+      }
+    }
+    setItems(unreadItems);
     setUnreadCount(count);
     knownUnreadRef.current = count;
     setLoading(false);
-  }, []);
+  }, [toast]);
 
   const applyPush = useCallback(
     (item: NotificationEntry, count: number) => {

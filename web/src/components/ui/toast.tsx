@@ -7,17 +7,21 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { CheckCircle2, Info, XCircle } from "lucide-react";
+import { CheckCircle2, Info, Trash2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ToastType = "info" | "success" | "error";
+type ToastOptions = { sticky?: boolean };
 interface ToastItem {
   id: number;
   message: string;
   type: ToastType;
+  sticky: boolean;
 }
 
-const ToastContext = createContext<((message: string, type?: ToastType) => void) | null>(null);
+const ToastContext = createContext<((message: string, type?: ToastType, options?: ToastOptions) => void) | null>(
+  null,
+);
 
 export function useToast() {
   const ctx = useContext(ToastContext);
@@ -33,29 +37,40 @@ const icons: Record<ToastType, ReactNode> = {
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const timeoutIdsRef = useRef<number[]>([]);
+  const timeoutIdsRef = useRef(new Map<number, number>());
 
   useEffect(() => {
     return () => {
-      for (const timerId of timeoutIdsRef.current) window.clearTimeout(timerId);
-      timeoutIdsRef.current = [];
+      for (const timerId of timeoutIdsRef.current.values()) window.clearTimeout(timerId);
+      timeoutIdsRef.current.clear();
     };
   }, []);
 
-  const show = useCallback((message: string, type: ToastType = "info") => {
+  const removeToast = useCallback((id: number) => {
+    const timerId = timeoutIdsRef.current.get(id);
+    if (timerId) {
+      window.clearTimeout(timerId);
+      timeoutIdsRef.current.delete(id);
+    }
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const show = useCallback((message: string, type: ToastType = "info", options?: ToastOptions) => {
     const id = Date.now() + Math.random();
-    setToasts((prev) => [...prev, { id, message, type }]);
+    const sticky = !!options?.sticky;
+    setToasts((prev) => [...prev, { id, message, type, sticky }]);
+    if (sticky) return;
     const timerId = window.setTimeout(() => {
-      timeoutIdsRef.current = timeoutIdsRef.current.filter((t) => t !== timerId);
+      timeoutIdsRef.current.delete(id);
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 3400);
-    timeoutIdsRef.current.push(timerId);
+    timeoutIdsRef.current.set(id, timerId);
   }, []);
 
   return (
     <ToastContext.Provider value={show}>
       {children}
-      <div className="pointer-events-none fixed bottom-5 left-1/2 z-100 flex w-full max-w-sm -translate-x-1/2 flex-col gap-2 px-4">
+      <div className="pointer-events-none fixed bottom-auto left-auto right-4 top-4 z-100 flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2">
         {toasts.map((t) => (
           <div
             key={t.id}
@@ -64,6 +79,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               "apod-enter-up",
             )}
           >
+            {t.sticky ? (
+              <button
+                type="button"
+                className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                onClick={() => removeToast(t.id)}
+                aria-label="删除通知"
+                title="删除"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            ) : null}
             {icons[t.type]}
             <span className="flex-1">{t.message}</span>
           </div>
