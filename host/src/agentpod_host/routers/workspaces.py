@@ -23,6 +23,11 @@ class WorkspaceCreateIn(BaseModel):
     description: str = Field(default="", max_length=200)
 
 
+class WorkspaceUpdateIn(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=25)
+    description: str | None = Field(default=None, max_length=200)
+
+
 @router.get("")
 async def list_workspaces(ctx: AuthContext = Depends(require_session)) -> dict:
     async with get_session() as session:
@@ -112,6 +117,44 @@ async def set_default_workspace(
         row.is_default = True
         await session.flush()
     return {"default_workspace_id": workspace_id}
+
+
+@router.put("/{workspace_id}")
+async def update_workspace(
+    workspace_id: str,
+    payload: WorkspaceUpdateIn,
+    ctx: AuthContext = Depends(require_session),
+) -> dict:
+    async with get_session() as session:
+        await ensure_default_workspace(session, ctx.user.id)
+        row = (
+            await session.execute(
+                select(Workspace).where(
+                    Workspace.user_id == ctx.user.id,
+                    Workspace.id == workspace_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="workspace not found")
+        if payload.name is None and payload.description is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="nothing to update")
+        if payload.name is not None:
+            row.name = normalize_workspace_name(payload.name)
+        if payload.description is not None:
+            row.description = normalize_workspace_description(payload.description)
+        await session.flush()
+        await session.refresh(row)
+        return {
+            "item": {
+                "id": row.id,
+                "name": row.name,
+                "description": row.description,
+                "is_default": bool(row.is_default),
+                "created_at": row.created_at,
+                "updated_at": row.updated_at,
+            }
+        }
 
 
 @router.delete("/{workspace_id}")

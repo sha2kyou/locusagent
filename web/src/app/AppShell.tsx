@@ -44,13 +44,13 @@ type NavEntry = { to: string; label: string; icon: typeof MessagesSquare };
 const NAV_PRIMARY: NavEntry[] = [{ to: "/chat", label: "对话", icon: MessagesSquare }];
 // 能力扩展
 const NAV_CAPABILITIES: NavEntry[] = [
-  { to: "/workspaces", label: "工作区", icon: FolderOpen },
   { to: "/skills", label: "技能", icon: Sparkles },
   { to: "/mcp", label: "MCP", icon: Plug },
   { to: "/tools", label: "工具", icon: Wrench },
 ];
 // 上下文与密钥
 const NAV_CONTEXT: NavEntry[] = [
+  { to: "/workspaces", label: "工作区", icon: FolderOpen },
   { to: "/memory", label: "记忆", icon: Brain },
   { to: "/env-vars", label: "环境变量", icon: KeyRound },
 ];
@@ -73,6 +73,8 @@ export function AppShell() {
   const [mobileAction, setMobileAction] = useState<ReactNode>(null);
   const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
   const menuRootRef = useRef<HTMLDivElement>(null);
+  const navListRef = useRef<HTMLElement>(null);
+  const [menuScrollable, setMenuScrollable] = useState(false);
   const forceModelSetup = !!me && !me.llm_configured;
   const defaultWorkspaceId = workspaces.find((w) => w.is_default)?.id ?? "";
   const currentWorkspace = workspaces.find((w) => w.id === me?.current_workspace_id) ?? null;
@@ -136,6 +138,22 @@ export function AppShell() {
     return () => document.removeEventListener("mousedown", onDocMouseDown);
   }, [menuOpen]);
 
+  useEffect(() => {
+    const el = navListRef.current;
+    if (!el) return;
+    const updateScrollable = () => {
+      setMenuScrollable(el.scrollHeight > el.clientHeight + 1);
+    };
+    updateScrollable();
+    const ro = new ResizeObserver(updateScrollable);
+    ro.observe(el);
+    window.addEventListener("resize", updateScrollable);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", updateScrollable);
+    };
+  }, [expanded, location.pathname, workspaces.length]);
+
   return (
     <ShellContext.Provider value={{ openSettings: () => setSettingsOpen(true), setMobileAction }}>
       <div className="flex h-full">
@@ -163,7 +181,10 @@ export function AppShell() {
             <NotificationBell className={cn(!expanded && "md:hidden")} menuAlign="start" />
           </div>
 
-          <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
+          <nav
+            ref={navListRef}
+            className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-2"
+          >
             {NAV_PRIMARY.map((item) => (
               <NavRow
                 key={item.to}
@@ -213,7 +234,13 @@ export function AppShell() {
           </nav>
 
           {/* 底部：agent 状态 + 用户 */}
-          <div ref={menuRootRef} className="relative p-3">
+          <div
+            ref={menuRootRef}
+            className={cn(
+              "relative shrink-0 p-3",
+              menuScrollable && "border-t border-sidebar-border/90 bg-sidebar shadow-[0_-10px_16px_-12px_rgba(2,6,23,0.8)]",
+            )}
+          >
             {!isDefaultWorkspace && (
               <div
                 className={cn(
@@ -285,7 +312,7 @@ export function AppShell() {
           </div>
 
           {/* 收起按钮：仅桌面 */}
-          <div className="hidden border-t border-sidebar-border p-2 md:block">
+          <div className="hidden shrink-0 border-t border-sidebar-border p-2 md:block">
             <Button
               variant="ghost"
               size="icon-sm"

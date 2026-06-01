@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, Loader2, Trash2 } from "lucide-react";
+import { Check, Pencil, Plus, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { ReadyGate } from "@/components/ReadyGate";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import {
   createWorkspace,
   deleteWorkspace,
   listWorkspaces,
+  updateWorkspace,
 } from "@/api/endpoints";
 import { setWorkspaceId } from "@/api/client";
 import type { WorkspaceItem } from "@/api/types";
@@ -27,7 +28,9 @@ export function WorkspacesRoute() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [query, setQuery] = useState("");
+  const [editingWorkspace, setEditingWorkspace] = useState<WorkspaceItem | null>(null);
   const [saving, setSaving] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
 
   const currentWorkspaceId = me?.current_workspace_id || "";
   const defaultWorkspaceId = useMemo(
@@ -76,10 +79,17 @@ export function WorkspacesRoute() {
     }
     setSaving(true);
     try {
-      await createWorkspace({ name: nextName, description: description.trim() });
+      if (editingWorkspace) {
+        await updateWorkspace(editingWorkspace.id, { name: nextName, description: description.trim() });
+        toast("已更新", "success");
+      } else {
+        await createWorkspace({ name: nextName, description: description.trim() });
+        toast("已添加", "success");
+      }
       setName("");
       setDescription("");
-      toast("已添加", "success");
+      setFormOpen(false);
+      setEditingWorkspace(null);
       await load();
     } catch (e) {
       toast((e as Error).message, "error");
@@ -110,8 +120,30 @@ export function WorkspacesRoute() {
     }
   };
 
+  const startCreate = () => {
+    setEditingWorkspace(null);
+    setName("");
+    setDescription("");
+    setFormOpen(true);
+  };
+
+  const startEdit = (workspace: WorkspaceItem) => {
+    setEditingWorkspace(workspace);
+    setName(workspace.name);
+    setDescription(workspace.description || "");
+    setFormOpen(true);
+  };
+
   return (
-    <PageContainer title="工作区" subtitle="创建、切换与管理工作区">
+    <PageContainer
+      title="工作区"
+      subtitle="创建、切换与管理工作区"
+      actions={
+        <Button variant="secondary" size="sm" onClick={startCreate}>
+          <Plus className="size-4" /> 新建工作区
+        </Button>
+      }
+    >
       <ReadyGate>
         <div className="space-y-4">
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索工作区…" />
@@ -125,7 +157,7 @@ export function WorkspacesRoute() {
               {filtered.map((w) => {
                 const isCurrent = w.id === currentWorkspaceId;
                 return (
-                  <ListCard key={w.id}>
+                  <ListCard key={w.id} className="group">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
@@ -139,15 +171,34 @@ export function WorkspacesRoute() {
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
                         {!isCurrent && (
-                          <Button variant="ghost" size="sm" title="选择" onClick={() => switchWorkspace(w.id)}>
-                            <Check className="size-4" /> 选择
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="text-muted-foreground opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                            title="切换到该工作区"
+                            aria-label="切换到该工作区"
+                            onClick={() => switchWorkspace(w.id)}
+                          >
+                            <Check className="size-4" />
                           </Button>
                         )}
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-muted-foreground opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                          title="编辑工作区"
+                          aria-label="编辑工作区"
+                          onClick={() => startEdit(w)}
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
                         {!w.is_default && (
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            title="删除"
+                            className="text-muted-foreground opacity-100 hover:text-destructive md:opacity-0 md:group-hover:opacity-100"
+                            title="删除工作区"
+                            aria-label="删除工作区"
                             onClick={() => {
                               void removeWorkspace(w);
                             }}
@@ -163,7 +214,7 @@ export function WorkspacesRoute() {
             </div>
           )}
 
-          <CollapsiblePanel summary="添加工作区">
+          <CollapsiblePanel summary={editingWorkspace ? "编辑工作区" : "新建工作区"} defaultOpen={formOpen}>
             <div className="grid gap-3">
               <div className="grid gap-1.5">
                 <Label>名称（25 字内）</Label>
@@ -182,7 +233,7 @@ export function WorkspacesRoute() {
                   placeholder="输入工作区描述"
                 />
               </div>
-              <div>
+              <div className="flex gap-2">
                 <Button
                   variant="primary"
                   disabled={saving || !name.trim()}
@@ -190,8 +241,18 @@ export function WorkspacesRoute() {
                     void submit();
                   }}
                 >
-                  {saving && <Loader2 className="size-4 animate-spin" />}
-                  添加
+                  {editingWorkspace ? "保存" : "添加"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setEditingWorkspace(null);
+                    setFormOpen(false);
+                    setName("");
+                    setDescription("");
+                  }}
+                >
+                  取消
                 </Button>
               </div>
             </div>

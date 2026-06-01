@@ -1,6 +1,7 @@
 import { lazy, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { createBrowserRouter, Navigate, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, Navigate, RouterProvider, useLocation } from "react-router-dom";
+import { stripWorkspacePrefix, withWorkspacePrefix } from "@/app/workspace-route";
 import "./index.css";
 import { ToastProvider } from "@/components/ui/toast";
 import { DialogProvider } from "@/components/ui/dialogs";
@@ -34,6 +35,12 @@ const ArtifactsRoute = lazy(() =>
   import("@/features/artifacts/ArtifactsRoute").then((m) => ({ default: m.ArtifactsRoute })),
 );
 
+function ArtifactsManageRedirect() {
+  const location = useLocation();
+  const { workspaceId } = stripWorkspacePrefix(location.pathname);
+  return <Navigate to={withWorkspacePrefix("/artifacts", workspaceId)} replace />;
+}
+
 const shellChildren = [
   { index: true, element: <Navigate to="chat" replace /> },
   { path: "chat/:sessionId", element: <ChatRoute /> },
@@ -46,7 +53,7 @@ const shellChildren = [
   { path: "scheduled-tasks", element: <ScheduledTasksRoute /> },
   { path: "env-vars", element: <EnvVarsRoute /> },
   { path: "artifacts", element: <ArtifactsRoute /> },
-  { path: "artifacts/manage", element: <ArtifactsRoute /> },
+  { path: "artifacts/manage", element: <ArtifactsManageRedirect /> },
   { path: "artifacts/c/:categoryId", element: <ArtifactsRoute /> },
   { path: "*", element: <Navigate to="chat" replace /> },
 ];

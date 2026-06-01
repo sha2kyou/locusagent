@@ -19,6 +19,18 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (
+            id.includes('react-markdown') ||
+            id.includes('/remark-') ||
+            id.includes('/rehype-') ||
+            id.includes('micromark') ||
+            id.includes('/unified/')
+          ) {
+            return 'markdown-vendor'
+          }
+        },
         entryFileNames: 'assets/[name].js',
         chunkFileNames: 'assets/[name].js',
         assetFileNames: ({ name }) => {

@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useDialogs } from "@/components/ui/dialogs";
 import { useToast } from "@/components/ui/toast";
 import { useChat } from "./ChatProvider";
+import { SecondarySidebar } from "@/components/SecondarySidebar";
 
 function groupLabel(iso: string): string {
   const d = new Date(iso).getTime();
@@ -129,18 +130,7 @@ export function SessionSidebar({
   };
 
   return (
-    <>
-      {/* 移动端遮罩 */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={onClose} />
-      )}
-      <aside
-        className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-border bg-surface transition-transform duration-200 md:bg-surface/30",
-          mobileOpen ? "translate-x-0" : "-translate-x-full",
-          "md:static md:z-auto md:w-64 md:translate-x-0",
-        )}
-      >
+    <SecondarySidebar mobileOpen={mobileOpen} onClose={onClose}>
       <div className="p-3">
         <div className="flex items-center gap-2">
           <Button variant="primary" className="flex-1" onClick={handleNew} disabled={batchMode}>
@@ -293,7 +283,6 @@ export function SessionSidebar({
           ))
         )}
       </div>
-      </aside>
-    </>
+    </SecondarySidebar>
   );
 }

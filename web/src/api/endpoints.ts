@@ -42,6 +42,9 @@ export const listWorkspaces = () =>
 export const createWorkspace = (body: { name: string; description?: string }) =>
   apiSend<{ item: WorkspaceItem }>("/api/workspaces", "POST", body);
 
+export const updateWorkspace = (id: string, body: { name?: string; description?: string }) =>
+  apiSend<{ item: WorkspaceItem }>(`/api/workspaces/${encodeURIComponent(id)}`, "PUT", body);
+
 export const deleteWorkspace = (id: string) =>
   apiSend<{ deleted: boolean }>(`/api/workspaces/${encodeURIComponent(id)}`, "DELETE");
 
