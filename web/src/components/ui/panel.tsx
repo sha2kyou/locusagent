@@ -6,21 +6,29 @@ export function CollapsiblePanel({
   summary,
   children,
   defaultOpen = false,
+  onOpenChange,
 }: {
   summary: ReactNode;
   children: ReactNode;
   defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  // defaultOpen 由 false→true（如点击编辑）时自动展开，不影响用户手动折叠
   useEffect(() => {
-    if (defaultOpen) setOpen(true);
+    setOpen(defaultOpen);
   }, [defaultOpen]);
+  const toggle = () => {
+    setOpen((v) => {
+      const next = !v;
+      onOpenChange?.(next);
+      return next;
+    });
+  };
   return (
     <div className="rounded-xl border border-border bg-surface/40">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium"
       >
         {summary}

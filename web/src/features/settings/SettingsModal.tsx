@@ -299,14 +299,9 @@ function DeleteAccountModal({
       description="将永久删除你的 Agent、对话、记忆与技能等全部数据，无法恢复。"
       size="sm"
       footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            取消
-          </Button>
-          <Button variant="danger" disabled={typed !== username} onClick={submit}>
-            永久删除
-          </Button>
-        </>
+        <Button variant="danger" disabled={typed !== username} onClick={submit}>
+          永久删除
+        </Button>
       }
     >
       <div className="grid gap-1.5">

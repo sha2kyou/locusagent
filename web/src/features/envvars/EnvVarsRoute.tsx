@@ -161,7 +161,13 @@ export function EnvVarsRoute() {
           )}
 
           <div ref={formRef}>
-            <CollapsiblePanel summary={editingId ? "编辑环境变量" : "添加环境变量"} defaultOpen={!!editingId}>
+            <CollapsiblePanel
+              summary={editingId ? "编辑环境变量" : "添加环境变量"}
+              defaultOpen={!!editingId}
+              onOpenChange={(open) => {
+                if (!open && editingId) reset();
+              }}
+            >
               <div className="grid gap-3">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="grid gap-1.5">
@@ -182,7 +188,6 @@ export function EnvVarsRoute() {
                     {saving && <Loader2 className="size-4 animate-spin" />}
                     {editingId ? "保存" : "添加"}
                   </Button>
-                  {editingId ? <Button variant="ghost" onClick={reset}>取消编辑</Button> : null}
                 </div>
               </div>
             </CollapsiblePanel>

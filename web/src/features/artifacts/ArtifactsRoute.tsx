@@ -398,21 +398,16 @@ export function ArtifactsRoute() {
         closeDisabled={savingCategory}
         title={editingCategory ? "编辑类目" : "新建类目"}
         footer={
-          <>
-            <Button variant="ghost" disabled={savingCategory} onClick={closeCategoryDialog}>
-              {editingCategory ? "取消编辑" : "取消"}
-            </Button>
-            <Button
-              variant="primary"
-              disabled={savingCategory || !newCategoryName.trim()}
-              onClick={() => {
-                void submitCategory();
-              }}
-            >
-              {savingCategory && <Loader2 className="size-4 animate-spin" />}
-              {editingCategory ? "保存" : "添加"}
-            </Button>
-          </>
+          <Button
+            variant="primary"
+            disabled={savingCategory || !newCategoryName.trim()}
+            onClick={() => {
+              void submitCategory();
+            }}
+          >
+            {savingCategory && <Loader2 className="size-4 animate-spin" />}
+            {editingCategory ? "保存" : "添加"}
+          </Button>
         }
       >
         <div className="grid gap-3">

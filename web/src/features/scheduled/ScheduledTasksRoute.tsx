@@ -490,6 +490,9 @@ export function ScheduledTasksRoute() {
             <CollapsiblePanel
               summary={<span>{editingId ? "编辑任务" : "新建任务"}</span>}
               defaultOpen={!!editingId || items?.length === 0}
+              onOpenChange={(open) => {
+                if (!open && editingId) reset();
+              }}
             >
               <div className="grid gap-3">
                 <div className="grid gap-1.5">
@@ -558,11 +561,6 @@ export function ScheduledTasksRoute() {
                     {saving && <Loader2 className="size-4 animate-spin" />}
                     {editingId ? "保存" : "添加"}
                   </Button>
-                  {editingId ? (
-                    <Button variant="ghost" disabled={saving} onClick={reset}>
-                      取消编辑
-                    </Button>
-                  ) : null}
                 </div>
               </div>
             </CollapsiblePanel>

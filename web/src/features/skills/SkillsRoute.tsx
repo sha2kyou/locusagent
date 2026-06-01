@@ -156,7 +156,13 @@ export function SkillsRoute() {
           )}
 
           <div ref={formRef}>
-            <CollapsiblePanel summary={editing ? `编辑技能：${editing.name}` : "添加技能"} defaultOpen={!!editing}>
+            <CollapsiblePanel
+              summary={editing ? `编辑技能：${editing.name}` : "添加技能"}
+              defaultOpen={!!editing}
+              onOpenChange={(open) => {
+                if (!open && editing) resetForm();
+              }}
+            >
               <div className="grid gap-3">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="grid gap-1.5">
@@ -181,7 +187,6 @@ export function SkillsRoute() {
                     {saving && <Loader2 className="size-4 animate-spin" />}
                     {editing ? "保存" : "添加"}
                   </Button>
-                  {editing && <Button variant="ghost" onClick={resetForm}>取消编辑</Button>}
                 </div>
               </div>
             </CollapsiblePanel>

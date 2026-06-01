@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import subprocess
 from contextlib import asynccontextmanager
 from urllib.parse import urlsplit, urlunsplit
 
@@ -47,30 +46,20 @@ async def enqueue_scheduled_task(task_id: int) -> None:
     await run_scheduled_task.defer_async(task_id=int(task_id))
 
 
-def _apply_schema_blocking() -> None:
-    cmd = [
-        "procrastinate",
-        "--app=agentpod_host.scheduled_tasks.queue.task_queue",
-        "schema",
-        "--apply",
-    ]
-    subprocess.run(cmd, check=True, capture_output=True, text=True)
-
-
 async def ensure_queue_schema() -> None:
-    try:
-        await asyncio.to_thread(_apply_schema_blocking)
-    except subprocess.CalledProcessError as exc:
-        stderr = (exc.stderr or "").strip()
-        stdout = (exc.stdout or "").strip()
-        detail = stderr or stdout or str(exc)
-        raise RuntimeError(f"failed to apply procrastinate schema: {detail}") from exc
+    """仅在 procrastinate 表不存在时初始化 schema（已存在则跳过）。"""
+    if await task_queue.check_connection_async():
+        log.debug("procrastinate_schema_present")
+        return
+    log.info("procrastinate_schema_applying")
+    await task_queue.schema_manager.apply_schema_async()
+    log.info("procrastinate_schema_applied")
 
 
 @asynccontextmanager
 async def scheduled_task_worker_context():
-    await ensure_queue_schema()
     async with task_queue.open_async():
+        await ensure_queue_schema()
         worker = asyncio.create_task(
             task_queue.run_worker_async(
                 queues=["scheduled_tasks"],

@@ -220,7 +220,13 @@ export function WorkspacesRoute() {
           )}
 
           <div ref={formRef}>
-            <CollapsiblePanel summary={editing ? "编辑工作区" : "新建工作区"} defaultOpen={formOpen}>
+            <CollapsiblePanel
+              summary={editing ? "编辑工作区" : "新建工作区"}
+              defaultOpen={formOpen}
+              onOpenChange={(open) => {
+                if (!open) resetForm();
+              }}
+            >
               <div className="grid gap-3">
                 <div className="grid gap-1.5">
                   <Label>名称（25 字内）</Label>
@@ -250,11 +256,6 @@ export function WorkspacesRoute() {
                     {saving && <Loader2 className="size-4 animate-spin" />}
                     {editing ? "保存" : "添加"}
                   </Button>
-                  {(editing || formOpen) && (
-                    <Button variant="ghost" onClick={resetForm}>
-                      取消编辑
-                    </Button>
-                  )}
                 </div>
               </div>
             </CollapsiblePanel>

@@ -195,7 +195,13 @@ export function MemoryRoute() {
           )}
 
           <div ref={formRef}>
-            <CollapsiblePanel summary={editing ? `编辑记忆 #${editing.id}` : "添加记忆"} defaultOpen={!!editing}>
+            <CollapsiblePanel
+              summary={editing ? `编辑记忆 #${editing.id}` : "添加记忆"}
+              defaultOpen={!!editing}
+              onOpenChange={(open) => {
+                if (!open && editing) resetForm();
+              }}
+            >
               <div className="grid gap-3">
                 <div className="grid gap-1.5">
                   <Label>内容</Label>
@@ -211,11 +217,6 @@ export function MemoryRoute() {
                     {saving && <Loader2 className="size-4 animate-spin" />}
                     {editing ? "保存" : "添加"}
                   </Button>
-                  {editing && (
-                    <Button variant="ghost" onClick={resetForm}>
-                      取消编辑
-                    </Button>
-                  )}
                 </div>
               </div>
             </CollapsiblePanel>

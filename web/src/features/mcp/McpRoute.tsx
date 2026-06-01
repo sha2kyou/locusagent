@@ -246,7 +246,13 @@ export function McpRoute() {
           )}
 
           <div ref={formRef}>
-          <CollapsiblePanel summary={editing ? `编辑服务：${editing}` : "添加 MCP 服务"} defaultOpen={!!editing}>
+          <CollapsiblePanel
+            summary={editing ? `编辑服务：${editing}` : "添加 MCP 服务"}
+            defaultOpen={!!editing}
+            onOpenChange={(open) => {
+              if (!open && editing) reset();
+            }}
+          >
             <div className="grid gap-3">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="grid gap-1.5">
@@ -294,7 +300,6 @@ export function McpRoute() {
                   {editing ? "保存" : "添加"}
                 </Button>
                 <Button variant="secondary" disabled={saving || !!envError} onClick={test}>测试连接</Button>
-                {editing && <Button variant="ghost" onClick={reset}>取消编辑</Button>}
               </div>
             </div>
           </CollapsiblePanel>
