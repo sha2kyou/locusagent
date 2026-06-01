@@ -9,7 +9,6 @@ export function convertMessage(message: ChatMessage): ThreadMessageLike {
     const text = message.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
     const metadata = {
       ...(message.archived ? { archived: true } : {}),
-      ...(message.attachments?.length ? { attachments: message.attachments } : {}),
     };
     return {
       role: "user",

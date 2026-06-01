@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -56,6 +57,7 @@ interface ChatContextValue {
   isRunning: boolean;
   lastErrored: boolean;
   canRegenerate: boolean;
+  messageAttachments: Record<string, ChatAttachment[]>;
   pendingAttachments: PendingAttachment[];
   addPendingFiles: (files: FileList | File[]) => Promise<void>;
   removePendingAttachment: (id: string) => void;
@@ -116,6 +118,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  const messageAttachments = useMemo<Record<string, ChatAttachment[]>>(() => {
+    const map: Record<string, ChatAttachment[]> = {};
+    for (const msg of messages) {
+      if (msg.role !== "user" || !msg.attachments?.length) continue;
+      map[msg.id] = msg.attachments;
+    }
+    return map;
+  }, [messages]);
 
   const currentIdRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -649,6 +659,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         isRunning,
         lastErrored,
         canRegenerate: !isRunning && messages.some((m) => m.role === "user"),
+        messageAttachments,
         pendingAttachments,
         addPendingFiles,
         removePendingAttachment,

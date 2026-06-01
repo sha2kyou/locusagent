@@ -282,12 +282,11 @@ function CopyButton({ text }: { text: string }) {
 
 function UserMessage() {
   const toast = useToast();
+  const { messageAttachments } = useChat();
   const text = useMessageText();
+  const messageId = useMessage((m) => String(m.id ?? ""));
   const archived = useMessage((m) => (m.metadata as { archived?: boolean } | undefined)?.archived);
-  const rawAttachments = useMessage(
-    (m) => (m.metadata as { attachments?: ChatAttachment[] } | undefined)?.attachments,
-  );
-  const attachments = rawAttachments ?? EMPTY_ATTACHMENTS;
+  const attachments = messageAttachments[messageId] ?? EMPTY_ATTACHMENTS;
   const [selectedAttachment, setSelectedAttachment] = useState<ChatAttachment | null>(null);
   const hasText = text.length > 0;
   return (
@@ -353,10 +352,22 @@ function UserMessage() {
               <pre className="max-h-[65vh] overflow-auto whitespace-pre-wrap rounded-md bg-surface-2 p-3 font-mono text-xs text-foreground">
                 {selectedAttachment.text || "（空文件）"}
               </pre>
+            ) : selectedAttachment.processable && selectedAttachment.kind === "image" ? (
+              selectedAttachment.imageDataUrl ? (
+                <div className="max-h-[65vh] overflow-auto rounded-md bg-surface-2 p-2">
+                  <img
+                    src={selectedAttachment.imageDataUrl}
+                    alt={selectedAttachment.name}
+                    className="mx-auto max-h-[60vh] w-auto max-w-full rounded object-contain"
+                  />
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">图片附件缺少可渲染数据。</p>
+              )
             ) : (
               <p className="text-sm text-muted-foreground">
                 {selectedAttachment.processable
-                  ? "该附件不是文本类型，当前仅支持查看文本附件内容。"
+                  ? "该附件类型暂不支持预览。"
                   : selectedAttachment.unsupportedReason || "该附件当前不可解析，无法展示内容。"}
               </p>
             )}
