@@ -2,7 +2,15 @@ import type { ChatChunk } from "./types";
 import { ApiError, redirectToLogin } from "./client";
 
 export interface ChatRequestBody {
-  messages: { role: string; content: string }[];
+  messages: {
+    role: string;
+    content:
+      | string
+      | (
+          | { type: "text"; text: string }
+          | { type: "image_url"; image_url: { url: string } }
+        )[];
+  }[];
   stream: true;
   session_id?: string;
   model?: string;

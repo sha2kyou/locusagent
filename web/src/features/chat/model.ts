@@ -23,8 +23,20 @@ export interface ChatMessage {
   role: "user" | "assistant";
   parts: ChatPart[];
   sourceText?: string;
+  attachments?: ChatAttachment[];
   error?: string;
   archived?: boolean;
+}
+
+export interface ChatAttachment {
+  id: string;
+  name: string;
+  kind: "text" | "image" | "other";
+  mimeType?: string;
+  text?: string;
+  processable: boolean;
+  unsupportedReason?: string;
+  truncated?: boolean;
 }
 
 let counter = 0;
@@ -33,8 +45,18 @@ export function uid(prefix = "m"): string {
   return `${prefix}_${Date.now().toString(36)}_${counter}`;
 }
 
-export function userMessage(text: string, sourceText?: string): ChatMessage {
-  return { id: uid("u"), role: "user", parts: [{ type: "text", text }], sourceText };
+export function userMessage(
+  text: string,
+  sourceText?: string,
+  attachments?: ChatAttachment[],
+): ChatMessage {
+  return {
+    id: uid("u"),
+    role: "user",
+    parts: [{ type: "text", text }],
+    sourceText,
+    attachments: attachments?.length ? attachments : undefined,
+  };
 }
 
 export function emptyAssistant(): ChatMessage {

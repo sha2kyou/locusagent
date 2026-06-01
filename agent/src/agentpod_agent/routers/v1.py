@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import time
 import uuid
@@ -100,7 +101,7 @@ _TITLE_MAX_LEN = 28
 
 class ChatMessage(BaseModel):
     role: str
-    content: str | None = None
+    content: Any = None
     tool_calls: list[dict] | None = None
     tool_call_id: str | None = None
 
@@ -161,6 +162,42 @@ def _extract_text_content(content: Any) -> str:
     return ""
 
 
+def _has_image_content(content: Any) -> bool:
+    if not isinstance(content, list):
+        return False
+    for item in content:
+        if not isinstance(item, dict):
+            continue
+        item_type = str(item.get("type") or "").strip().lower()
+        if item_type in {"image_url", "input_image"}:
+            return True
+    return False
+
+
+def _image_signature(content: Any) -> str | None:
+    if not isinstance(content, list):
+        return None
+    values: list[str] = []
+    for item in content:
+        if not isinstance(item, dict):
+            continue
+        item_type = str(item.get("type") or "").strip().lower()
+        if item_type not in {"image_url", "input_image"}:
+            continue
+        raw = item.get("image_url")
+        if isinstance(raw, dict):
+            url = raw.get("url")
+            if isinstance(url, str) and url:
+                values.append(url)
+                continue
+        if isinstance(raw, str) and raw:
+            values.append(raw)
+    if not values:
+        return None
+    joined = "\n".join(values)
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:12]
+
+
 def _extract_new_user_message_from_response_input(raw_input: Any) -> str | None:
     if isinstance(raw_input, str):
         text = raw_input.strip()
@@ -194,10 +231,25 @@ async def _resolve_response_session(req: ResponsesRequest) -> tuple[str, bool]:
     return sid, True
 
 
-def _extract_new_user_message(req: ChatRequest) -> str | None:
+def _extract_latest_user_payload(req: ChatRequest) -> tuple[Any, str, str] | None:
     for m in reversed(req.messages):
-        if m.role == "user" and (m.content or "").strip():
-            return m.content.strip()
+        if m.role != "user":
+            continue
+        text = _extract_text_content(m.content)
+        has_image = _has_image_content(m.content)
+        if text or has_image:
+            user_query_text = text or "[image attachment]"
+            persisted_text = user_query_text
+            if has_image:
+                sig = _image_signature(m.content)
+                persisted_text = (
+                    f"{user_query_text}\n[image attachment:{sig}]"
+                    if sig
+                    else f"{user_query_text}\n[image attachment]"
+                )
+            if has_image and isinstance(m.content, list):
+                return m.content, persisted_text, user_query_text
+            return persisted_text, persisted_text, user_query_text
     return None
 
 
@@ -222,24 +274,28 @@ def _last_user_content(messages: list[dict[str, Any]]) -> str | None:
 
 
 async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, Any]], str]:
-    new_user = _extract_new_user_message(req)
-    if not new_user:
+    latest_user = _extract_latest_user_payload(req)
+    if latest_user is None:
         raise ValueError("missing user message")
+    new_user_content, persisted_user_text, user_query_text = latest_user
 
     if req.session_id:
         last_db_user = await get_last_user_message(sid)
-        if last_db_user == new_user:
+        if last_db_user == persisted_user_text:
             # 同一句重发即"重新生成 / 失败重试"：先清掉上一轮(可能中断的)助手输出再重跑
             await truncate_after_last_user(sid)
         else:
-            await append_message(sid, "user", new_user)
+            await append_message(sid, "user", persisted_user_text)
         db_msgs = await build_llm_messages(sid)
-        user_query = new_user
+        # 当前轮若带图片，需要用原始多模态 content 覆盖最后一条用户消息参与 LLM 推理。
+        if db_msgs and db_msgs[-1].get("role") == "user":
+            db_msgs[-1]["content"] = new_user_content
+        user_query = user_query_text
     else:
-        db_msgs = [{"role": "user", "content": new_user}]
-        await append_message(sid, "user", new_user)
+        db_msgs = [{"role": "user", "content": new_user_content}]
+        await append_message(sid, "user", persisted_user_text)
         # 标题留给运行结束后由 LLM 生成（默认 "新对话"），失败时回退首句裁剪
-        user_query = new_user
+        user_query = user_query_text
 
     system_prompt = await _get_or_create_system_prompt(sid)
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]

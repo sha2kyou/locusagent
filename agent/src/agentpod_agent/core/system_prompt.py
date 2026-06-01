@@ -45,7 +45,7 @@ async def build_frozen_system_prompt() -> str:
     settings = get_settings()
     pieces = [
         f"You are an AI agent operating in a sandboxed container for user {settings.user_id}.",
-        "Use the provided tools when appropriate. Available tools: web_search, web_extract, memory, env_vars, skill_view, skill_manage, manage_workspace, session_recall, clarify, artifact_save, artifact_recall, scheduled_task_view, scheduled_task_manage, get_current_user.",
+        "Use the provided tools when appropriate. Available tools: web_search, web_extract, memory, env_vars, skill_view, skill_manage, manage_workspace, session_recall, clarify, artifact_category_create, artifact_save, artifact_recall, scheduled_task_view, scheduled_task_manage, get_current_user.",
         "When a direction or preference would materially shape the output (e.g. naming, design style, scope, tech choice), ask the user via clarify{question, choices} (at most 3 options) before proceeding. Ask only ONE question per turn: call clarify at most once per turn, never in parallel; if several things need clarifying, ask them one at a time across turns. After calling clarify, end your turn immediately with no further output. Skip clarify when any reasonable choice is equally fine, or the user explicitly asks you to just proceed.",
         "Workspace files live under /data/workspace; skill files live under /data/skills.",
         "Do not perform direct filesystem operations. When file operations are required, use manage_workspace.",
@@ -55,7 +55,7 @@ async def build_frozen_system_prompt() -> str:
         "A frozen long-term memory snapshot is included below. When the user refers to a previous conversation or earlier conclusion not in the snapshot, use memory(action=recall) or session_recall to retrieve it. For credential/config KV management, use env_vars(action=add/list/update/delete/recall).",
         "Before executing code, verify required context (API keys, DB connections, timezone/path dependencies) only when the request has external dependencies. Use env_vars for credentials/config and get_current_user for runtime identity/timezone. Otherwise execute directly.",
         "When the user asks for the current date or time, use Current user local time from the Runtime Time Context system message. Do not fabricate or estimate time.",
-        "When the user explicitly requests a deliverable (e.g. create, generate-and-save, export, archive, artifact), call artifact_save{title, content, type, category} to archive it. Set type to markdown/html/text by content. Category must be an existing category name; never create categories via tools. Choose the closest existing category by intent. For html-render output, pass the full [HTML_RENDER]...[/HTML_RENDER] block as content with type=html. For code, use type=markdown and always wrap in a fenced block (```<lang>\\n...code...\\n```). When the user refers to a previously saved artifact, call artifact_recall{query} first.",
+        "When the user explicitly requests a deliverable (e.g. create, generate-and-save, export, archive, artifact), call artifact_save{title, content, type, category} to archive it. Set type to markdown/html/text by content. If the target category does not exist, call artifact_category_create{name, description} first. If artifact_category_create reports similar existing categories, call clarify before deciding to reuse or create. For html-render output, pass the full [HTML_RENDER]...[/HTML_RENDER] block as content with type=html. For code, use type=markdown and always wrap in a fenced block (```<lang>\\n...code...\\n```). When the user refers to a previously saved artifact, call artifact_recall{query} first.",
     ]
     if skills:
         pieces.append("\n## Available Skills Catalog")
@@ -66,7 +66,9 @@ async def build_frozen_system_prompt() -> str:
     categories = await list_categories()
     if categories:
         pieces.append("\n## Artifact Categories (existing)")
-        pieces.append("Reuse an existing category name only; do not create new categories via tools.")
+        pieces.append(
+            "Prefer reusing existing category names. Create a new one via artifact_category_create only when needed."
+        )
         for c in categories:
             name = str(c.get("name") or "").strip()
             if not name:

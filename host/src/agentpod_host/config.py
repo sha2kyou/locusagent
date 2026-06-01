@@ -33,6 +33,8 @@ class Settings(BaseSettings):
 
     embedding_base_url: str = Field(default="http://tei:80", alias="EMBEDDING_BASE_URL")
     embedding_model: str = Field(default="BAAI/bge-small-zh-v1.5", alias="EMBEDDING_MODEL")
+    # 聊天附件大小上限（字节），默认 1MB。
+    attachment_max_bytes: int = Field(default=1_048_576, alias="ATTACHMENT_MAX_BYTES")
 
     agent_memory_limit: str = Field(default="512m", alias="AGENT_MEMORY_LIMIT")
     agent_cpu_quota: int = Field(default=50000, alias="AGENT_CPU_QUOTA")

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ComposerPrimitive,
   MessagePrimitive,
@@ -16,12 +16,15 @@ import { Markdown } from "./Markdown";
 import { ToolEvent } from "./ToolEvent";
 import { useChat } from "./ChatProvider";
 import { useShell } from "@/app/AppShell";
+import type { ChatAttachment } from "./model";
+import { Drawer } from "@/components/ui/drawer";
 
 const PROMPT_CHIPS = [
   "帮我总结这个网页的要点",
   "用 Python 写一个快速排序",
   "记住：我偏好简洁的回答",
 ];
+const EMPTY_ATTACHMENTS: ChatAttachment[] = [];
 
 const MarkdownText: TextMessagePartComponent = ({ text }) => <Markdown text={text} />;
 
@@ -231,7 +234,7 @@ function Composer({ blocked }: { blocked: boolean }) {
         </ThreadPrimitive.If>
       </ComposerPrimitive.Root>
       <p className="mx-auto mt-2 max-w-3xl text-center text-xs text-muted-foreground/60">
-        Enter 发送 · Shift+Enter 换行 · 一次 1 个附件（非文本格式将提示无法处理）
+        Enter 发送 · Shift+Enter 换行 · 一次 1 个附件（支持文本与图片）
         <ThreadPrimitive.If running>
           <span> · Esc 停止</span>
         </ThreadPrimitive.If>
@@ -280,24 +283,82 @@ function CopyButton({ text }: { text: string }) {
 function UserMessage() {
   const text = useMessageText();
   const archived = useMessage((m) => (m.metadata as { archived?: boolean } | undefined)?.archived);
+  const rawAttachments = useMessage(
+    (m) => (m.metadata as { attachments?: ChatAttachment[] } | undefined)?.attachments,
+  );
+  const attachments = rawAttachments ?? EMPTY_ATTACHMENTS;
+  const [selectedAttachment, setSelectedAttachment] = useState<ChatAttachment | null>(null);
+  const hasText = text.length > 0;
   return (
     <MessagePrimitive.Root className="group mb-5 flex flex-col items-end">
-      <div
-        className={cn(
-          "max-w-[80%] rounded-2xl rounded-br-sm bg-secondary px-4 py-2.5 text-sm",
-          archived && "opacity-55",
-        )}
+      {hasText || archived ? (
+        <div
+          className={cn(
+            "max-w-[80%] rounded-2xl rounded-br-sm bg-secondary px-4 py-2.5 text-sm",
+            archived && "opacity-55",
+          )}
+        >
+          {archived ? (
+            <p className="mb-1 text-[11px] text-muted-foreground">已压缩（不再带入上下文）</p>
+          ) : null}
+          <MessagePrimitive.Parts components={{ Text: UserText }} />
+        </div>
+      ) : null}
+      {attachments.length > 0 ? (
+        <div className="mt-1.5 flex max-w-[80%] flex-wrap justify-end gap-1.5">
+          {attachments.map((file) => (
+            <button
+              type="button"
+              key={file.id}
+              onClick={() => setSelectedAttachment(file)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/70 px-2.5 py-1 text-xs text-muted-foreground transition hover:border-border-strong hover:bg-surface"
+              title={`查看 ${file.name} 内容`}
+            >
+              <Paperclip className="size-3" />
+              <span className="max-w-56 truncate">{file.name}</span>
+              {!file.processable ? <span className="text-warning">不可解析</span> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <Drawer
+        open={!!selectedAttachment}
+        onClose={() => setSelectedAttachment(null)}
+        title={selectedAttachment?.name}
+        description={selectedAttachment ? attachmentDescription(selectedAttachment) : undefined}
+        width="xl"
       >
-        {archived ? (
-          <p className="mb-1 text-[11px] text-muted-foreground">已压缩（不再带入上下文）</p>
+        {selectedAttachment ? (
+          <div className="space-y-4">
+            {selectedAttachment.processable && selectedAttachment.kind === "text" ? (
+              <pre className="max-h-[65vh] overflow-auto whitespace-pre-wrap rounded-md bg-surface-2 p-3 font-mono text-xs text-foreground">
+                {selectedAttachment.text || "（空文件）"}
+              </pre>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {selectedAttachment.processable
+                  ? "该附件不是文本类型，当前仅支持查看文本附件内容。"
+                  : selectedAttachment.unsupportedReason || "该附件当前不可解析，无法展示内容。"}
+              </p>
+            )}
+            {selectedAttachment.truncated ? (
+              <p className="text-xs text-warning">附件内容过长，已截断显示。</p>
+            ) : null}
+          </div>
         ) : null}
-        <MessagePrimitive.Parts components={{ Text: UserText }} />
-      </div>
+      </Drawer>
       <div className="mt-0.5 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
         <CopyButton text={text} />
       </div>
     </MessagePrimitive.Root>
   );
+}
+
+function attachmentDescription(file: ChatAttachment): string {
+  if (!file.processable) return "不可解析";
+  if (file.kind === "text") return file.truncated ? "文本附件（已截断）" : "文本附件";
+  if (file.kind === "image") return "图片附件";
+  return "附件";
 }
 
 function AssistantMessage() {

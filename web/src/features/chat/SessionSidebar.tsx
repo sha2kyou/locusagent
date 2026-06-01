@@ -75,7 +75,7 @@ export function SessionSidebar({
 
   const onDelete = async (s: SessionMeta) => {
     const ok = await confirm({
-      title: "删除会话",
+      title: "删除对话",
       body: `确定删除「${s.title}」？此操作不可恢复。`,
       danger: true,
       confirmText: "删除",
@@ -107,8 +107,8 @@ export function SessionSidebar({
   const deleteSelected = async () => {
     if (selectedIds.size === 0) return;
     const ok = await confirm({
-      title: "批量删除会话",
-      body: `确定删除已选 ${selectedIds.size} 个会话？此操作不可恢复。`,
+      title: "批量删除对话",
+      body: `确定删除已选 ${selectedIds.size} 个对话？此操作不可恢复。`,
       danger: true,
       confirmText: "删除",
     });
@@ -120,7 +120,7 @@ export function SessionSidebar({
       if (failed > 0) {
         toast(`已删除 ${ids.length - failed} 个，失败 ${failed} 个`, "error");
       } else {
-        toast(`已删除 ${ids.length} 个会话`, "success");
+        toast(`已删除 ${ids.length} 个对话`, "success");
       }
       setSelectedIds(new Set());
     } catch (e) {
@@ -178,7 +178,7 @@ export function SessionSidebar({
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索会话…"
+            placeholder="搜索对话…"
             className="pl-8"
           />
         </div>
@@ -218,7 +218,7 @@ export function SessionSidebar({
           </div>
         ) : groups.length === 0 ? (
           <p className="px-2 py-4 text-center text-xs text-muted-foreground">
-            {query ? "无匹配会话" : "暂无会话"}
+            {query ? "无匹配对话" : "暂无对话"}
           </p>
         ) : (
           groups.map((g) => (
@@ -262,7 +262,7 @@ export function SessionSidebar({
                         toggleSelect(s.id);
                       }}
                       className={cn(selectedIds.has(s.id) ? "text-brand" : "text-muted-foreground")}
-                      aria-label={selectedIds.has(s.id) ? "取消选择" : "选择会话"}
+                      aria-label={selectedIds.has(s.id) ? "取消选择" : "选择对话"}
                     >
                       {selectedIds.has(s.id) ? (
                         <CheckSquare className="size-4" />

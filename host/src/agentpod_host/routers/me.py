@@ -17,6 +17,7 @@ from sqlalchemy import select
 
 from ..audit import record_event
 from ..auth import AuthContext, clear_session, consume_apikey_flash, require_session
+from ..config import get_settings
 from ..db import User, get_session
 from ..logging import get_logger
 from ..orchestrator import teardown_container
@@ -33,6 +34,7 @@ class AccountDeleteIn(BaseModel):
 @router.get("")
 async def me(ctx: AuthContext = Depends(require_session)) -> dict:
     user = ctx.user
+    settings = get_settings()
     return {
         "id": user.id,
         "username": user.username,
@@ -43,6 +45,7 @@ async def me(ctx: AuthContext = Depends(require_session)) -> dict:
         "llm_base_url": user.llm_base_url,
         "llm_model": user.llm_model,
         "agent_api_key_configured": bool(user.agent_api_key_hash),
+        "attachment_max_bytes": settings.attachment_max_bytes,
     }
 
 

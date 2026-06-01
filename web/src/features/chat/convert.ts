@@ -7,10 +7,14 @@ type Part = Extract<ThreadMessageLike["content"], readonly unknown[]>[number];
 export function convertMessage(message: ChatMessage): ThreadMessageLike {
   if (message.role === "user") {
     const text = message.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
+    const metadata = {
+      ...(message.archived ? { archived: true } : {}),
+      ...(message.attachments?.length ? { attachments: message.attachments } : {}),
+    };
     return {
       role: "user",
       id: message.id,
-      metadata: message.archived ? ({ archived: true } as never) : undefined,
+      metadata: (Object.keys(metadata).length > 0 ? metadata : undefined) as never,
       content: [{ type: "text", text }],
     };
   }

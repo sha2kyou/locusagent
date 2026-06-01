@@ -14,7 +14,7 @@ export function ChatRoute() {
       <button
         type="button"
         onClick={() => setSessionsOpen(true)}
-        aria-label="会话列表"
+        aria-label="对话列表"
         className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground"
       >
         <PanelLeft className="size-5" />

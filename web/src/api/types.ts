@@ -10,6 +10,7 @@ export interface Me {
   llm_base_url: string | null;
   llm_model: string;
   agent_api_key_configured: boolean;
+  attachment_max_bytes: number;
 }
 
 export interface SessionMeta {

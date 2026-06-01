@@ -3,7 +3,7 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "1223:80"
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
@@ -35,6 +35,7 @@ services:
       TERMINAL_WHITELIST:   ${TERMINAL_WHITELIST:-}
       EMBEDDING_BASE_URL:   ${EMBEDDING_BASE_URL}
       EMBEDDING_MODEL:      ${EMBEDDING_MODEL}
+      ATTACHMENT_MAX_BYTES: ${ATTACHMENT_MAX_BYTES:-1048576}
       AGENT_MEMORY_LIMIT:   ${AGENT_MEMORY_LIMIT}
       AGENT_CPU_QUOTA:      ${AGENT_CPU_QUOTA}
       AGENT_PIDS_LIMIT:     ${AGENT_PIDS_LIMIT}
