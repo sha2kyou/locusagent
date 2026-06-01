@@ -6,7 +6,7 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
-from ..config import get_settings
+from ..workspace import workspace_data_dir
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 DEFAULT_TIMEOUT = 30.0
@@ -14,7 +14,7 @@ MAX_OUTPUT = 100 * 1024
 
 
 def _workspace_root() -> Path:
-    root = get_settings().data_dir / "workspace"
+    root = workspace_data_dir() / "workspace"
     root.mkdir(parents=True, exist_ok=True)
     return root
 

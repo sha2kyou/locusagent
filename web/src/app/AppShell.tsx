@@ -1,9 +1,10 @@
-import { createContext, Suspense, useContext, useEffect, useState, type ReactNode } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { createContext, Suspense, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Brain,
   ChevronsLeft,
   Clock,
+  FolderOpen,
   LogOut,
   Menu,
   MessagesSquare,
@@ -21,7 +22,9 @@ import { useAuth } from "./auth";
 import { BrandMark } from "./Brand";
 import { ApiKeyFlashModal, SettingsModal } from "@/features/settings/SettingsModal";
 import { NotificationBell } from "@/features/notifications/NotificationBell";
-import { flashApiKey } from "@/api/endpoints";
+import { flashApiKey, listWorkspaces } from "@/api/endpoints";
+import type { WorkspaceItem } from "@/api/types";
+import { stripWorkspacePrefix, withWorkspacePrefix } from "./workspace-route";
 
 interface ShellApi {
   openSettings: () => void;
@@ -41,6 +44,7 @@ type NavEntry = { to: string; label: string; icon: typeof MessagesSquare };
 const NAV_PRIMARY: NavEntry[] = [{ to: "/chat", label: "对话", icon: MessagesSquare }];
 // 能力扩展
 const NAV_CAPABILITIES: NavEntry[] = [
+  { to: "/workspaces", label: "工作区", icon: FolderOpen },
   { to: "/skills", label: "技能", icon: Sparkles },
   { to: "/mcp", label: "MCP", icon: Plug },
   { to: "/tools", label: "工具", icon: Wrench },
@@ -56,8 +60,9 @@ const NAV_AUTOMATION: NavEntry[] = [{ to: "/scheduled-tasks", label: "定时任�
 const EXPAND_KEY = "apod-nav-expanded";
 
 export function AppShell() {
-  const { me, readiness } = useAuth();
+  const { me } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [expanded, setExpanded] = useState(
     () => localStorage.getItem(EXPAND_KEY) !== "0",
   );
@@ -66,7 +71,15 @@ export function AppShell() {
   const [flashKey, setFlashKey] = useState<string | null>(null);
   const [navOpen, setNavOpen] = useState(false);
   const [mobileAction, setMobileAction] = useState<ReactNode>(null);
+  const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
+  const menuRootRef = useRef<HTMLDivElement>(null);
   const forceModelSetup = !!me && !me.llm_configured;
+  const defaultWorkspaceId = workspaces.find((w) => w.is_default)?.id ?? "";
+  const currentWorkspace = workspaces.find((w) => w.id === me?.current_workspace_id) ?? null;
+  const currentWorkspaceLabel = currentWorkspace?.name || "默认工作区";
+  const isDefaultWorkspace = !!currentWorkspace && currentWorkspace.is_default;
+  const routeWorkspace = stripWorkspacePrefix(location.pathname);
+  const workspacePrefix = me?.current_workspace_id && !isDefaultWorkspace ? `/w/${me.current_workspace_id}` : "";
 
   useEffect(() => {
     localStorage.setItem(EXPAND_KEY, expanded ? "1" : "0");
@@ -85,6 +98,43 @@ export function AppShell() {
   useEffect(() => {
     if (me && !me.llm_configured) setSettingsOpen(true);
   }, [me]);
+
+  useEffect(() => {
+    if (!me) return;
+    void listWorkspaces()
+      .then((res) => setWorkspaces(res.items))
+      .catch(() => setWorkspaces([]));
+  }, [me?.id, me?.current_workspace_id]);
+
+  useEffect(() => {
+    if (!me?.current_workspace_id || !defaultWorkspaceId) return;
+    const shouldUsePrefix = me.current_workspace_id !== defaultWorkspaceId;
+    const targetPath = routeWorkspace.path === "/" ? "/chat" : routeWorkspace.path;
+    if (shouldUsePrefix && !routeWorkspace.workspaceId) {
+      navigate(withWorkspacePrefix(targetPath, me.current_workspace_id), { replace: true });
+      return;
+    }
+    if (!shouldUsePrefix && routeWorkspace.workspaceId) {
+      navigate(targetPath, { replace: true });
+    }
+  }, [
+    defaultWorkspaceId,
+    me?.current_workspace_id,
+    navigate,
+    routeWorkspace.path,
+    routeWorkspace.workspaceId,
+  ]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDocMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (menuRootRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, [menuOpen]);
 
   return (
     <ShellContext.Provider value={{ openSettings: () => setSettingsOpen(true), setMobileAction }}>
@@ -115,31 +165,70 @@ export function AppShell() {
 
           <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
             {NAV_PRIMARY.map((item) => (
-              <NavRow key={item.to} {...item} expanded={expanded} onNavigate={() => setNavOpen(false)} />
+              <NavRow
+                key={item.to}
+                {...item}
+                basePrefix={workspacePrefix}
+                expanded={expanded}
+                onNavigate={() => setNavOpen(false)}
+              />
             ))}
-            <ArtifactsNav expanded={expanded} onNavigate={() => setNavOpen(false)} />
+            <ArtifactsNav basePrefix={workspacePrefix} expanded={expanded} onNavigate={() => setNavOpen(false)} />
 
             <div className="mx-1 my-1.5 border-t border-sidebar-border/70" />
 
             {NAV_CAPABILITIES.map((item) => (
-              <NavRow key={item.to} {...item} expanded={expanded} onNavigate={() => setNavOpen(false)} />
+              <NavRow
+                key={item.to}
+                {...item}
+                basePrefix={workspacePrefix}
+                expanded={expanded}
+                onNavigate={() => setNavOpen(false)}
+              />
             ))}
 
             <div className="mx-1 my-1.5 border-t border-sidebar-border/70" />
 
             {NAV_CONTEXT.map((item) => (
-              <NavRow key={item.to} {...item} expanded={expanded} onNavigate={() => setNavOpen(false)} />
+              <NavRow
+                key={item.to}
+                {...item}
+                basePrefix={workspacePrefix}
+                expanded={expanded}
+                onNavigate={() => setNavOpen(false)}
+              />
             ))}
 
             <div className="mx-1 my-1.5 border-t border-sidebar-border/70" />
 
             {NAV_AUTOMATION.map((item) => (
-              <NavRow key={item.to} {...item} expanded={expanded} onNavigate={() => setNavOpen(false)} />
+              <NavRow
+                key={item.to}
+                {...item}
+                basePrefix={workspacePrefix}
+                expanded={expanded}
+                onNavigate={() => setNavOpen(false)}
+              />
             ))}
           </nav>
 
           {/* 底部：agent 状态 + 用户 */}
-          <div className="relative p-3">
+          <div ref={menuRootRef} className="relative p-3">
+            {!isDefaultWorkspace && (
+              <div
+                className={cn(
+                  "mb-2 inline-flex w-fit max-w-full items-center gap-1.5 self-center rounded-md border border-border/70 bg-surface/60 px-2 py-1 text-[11px] text-muted-foreground",
+                  expanded && "justify-center",
+                  !expanded && "md:justify-center md:px-1 md:py-1",
+                )}
+                title={currentWorkspace?.description || currentWorkspaceLabel}
+              >
+                <span className={cn("max-w-full wrap-break-word text-center leading-4 whitespace-normal", !expanded && "md:hidden")}>
+                  {currentWorkspaceLabel}
+                </span>
+                {!expanded && <span className="hidden md:block">WS</span>}
+              </div>
+            )}
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
@@ -147,13 +236,10 @@ export function AppShell() {
                 "flex w-full items-center gap-2.5 rounded-lg p-1.5 transition-colors hover:bg-sidebar-accent/60",
                 !expanded && "md:justify-center",
               )}
-              title={`Agent ${readiness.label}`}
+              title="账户"
             >
               <Avatar me={me} />
               <span className={cn("min-w-0 flex-1 text-left", !expanded && "md:hidden")}>
-                <span className="block truncate text-[11px] text-muted-foreground">
-                  Agent · {readiness.label}
-                </span>
                 <span className="block truncate text-sm font-medium">{me?.username ?? "—"}</span>
                 <span className="block truncate text-[11px] text-muted-foreground">
                   {typeof me?.id === "number" ? `#${me.id}` : "#—"}
@@ -163,7 +249,6 @@ export function AppShell() {
 
             {menuOpen && (
               <>
-                <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
                 <div className="absolute bottom-16 left-3 right-3 z-20 overflow-hidden rounded-lg border border-border-strong bg-popover py-1 shadow-2xl apod-enter-up">
                   <button
                     type="button"
@@ -180,6 +265,7 @@ export function AppShell() {
                     <Settings className="size-4 shrink-0" />
                     <span className={cn(!expanded && "md:hidden")}>设置</span>
                   </button>
+                  <div className="my-1 border-t border-border" />
                   <form action="/api/oauth/github/logout" method="post">
                     <button
                       type="submit"
@@ -257,12 +343,13 @@ function NavRow({
   to,
   label,
   icon: Icon,
+  basePrefix,
   expanded,
   onNavigate,
-}: NavEntry & { expanded: boolean; onNavigate: () => void }) {
+}: NavEntry & { basePrefix: string; expanded: boolean; onNavigate: () => void }) {
   return (
     <NavLink
-      to={to}
+      to={`${basePrefix}${to}`}
       title={label}
       onClick={onNavigate}
       className={({ isActive }) =>

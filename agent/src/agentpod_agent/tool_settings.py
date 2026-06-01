@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from .config import get_settings
+from .workspace import workspace_data_dir
 
 
 @dataclass(slots=True)
@@ -25,7 +25,7 @@ class ToolSettings:
 
 
 def _settings_path() -> Path:
-    return get_settings().data_dir / "tool_settings.yaml"
+    return workspace_data_dir() / "tool_settings.yaml"
 
 
 def load_tool_settings() -> ToolSettings:

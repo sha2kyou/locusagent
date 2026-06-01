@@ -21,6 +21,7 @@ import {
   updateArtifactCategory,
 } from "@/api/endpoints";
 import type { ArtifactCategory, ArtifactEntry, ArtifactType } from "@/api/types";
+import { stripWorkspacePrefix } from "@/app/workspace-route";
 
 const CATEGORIES_CHANGED = "artifacts:categories-changed";
 
@@ -142,7 +143,8 @@ export function ArtifactsRoute() {
     () => categories.find((c) => c.id === categoryId) ?? null,
     [categories, categoryId],
   );
-  const manageMode = location.pathname === "/artifacts/manage" && !currentCategory;
+  const routePath = stripWorkspacePrefix(location.pathname).path;
+  const manageMode = routePath === "/artifacts/manage" && !currentCategory;
 
   const loadCategories = async () => {
     try {

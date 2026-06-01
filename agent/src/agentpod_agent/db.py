@@ -16,8 +16,8 @@ from typing import Any, TypeVar
 
 import sqlite_vec
 
-from .config import get_settings
 from .logging import get_logger
+from .workspace import workspace_data_dir
 
 T = TypeVar("T")
 log = get_logger("db")
@@ -332,12 +332,11 @@ def _init_artifacts_fts(c: sqlite3.Connection) -> None:
 
 
 def _db_path() -> Path:
-    return get_settings().data_dir / "agent.sqlite"
+    return workspace_data_dir() / "agent.sqlite"
 
 
 def _open_conn(load_vec: bool = True) -> sqlite3.Connection:
-    settings = get_settings()
-    settings.data_dir.mkdir(parents=True, exist_ok=True)
+    workspace_data_dir()
     conn = sqlite3.connect(_db_path(), isolation_level=None, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")

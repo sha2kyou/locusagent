@@ -16,6 +16,26 @@ export class ApiError extends Error {
   }
 }
 
+const WORKSPACE_ID_KEY = "apod-current-workspace-id";
+
+export function getWorkspaceId(): string {
+  if (typeof window === "undefined") return "";
+  const stored = (window.localStorage.getItem(WORKSPACE_ID_KEY) || "").trim();
+  if (stored) return stored;
+  const m = window.location.pathname.match(/^\/w\/(ws_[a-z0-9]+)/);
+  return m?.[1] || "";
+}
+
+export function setWorkspaceId(id: string | null | undefined): void {
+  if (typeof window === "undefined") return;
+  const value = String(id || "").trim();
+  if (!value) {
+    window.localStorage.removeItem(WORKSPACE_ID_KEY);
+    return;
+  }
+  window.localStorage.setItem(WORKSPACE_ID_KEY, value);
+}
+
 export function redirectToLogin() {
   if (window.location.pathname !== "/login") {
     window.location.href = "/login";
@@ -59,10 +79,12 @@ export interface RequestOptions extends RequestInit {
 
 export async function api<T = unknown>(url: string, opts: RequestOptions = {}): Promise<T> {
   const { noAuthRedirect, headers, ...rest } = opts;
+  const workspaceId = getWorkspaceId();
   const res = await fetch(url, {
     credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
+      ...(workspaceId ? { "X-Workspace-Id": workspaceId } : {}),
       ...headers,
     },
     ...rest,

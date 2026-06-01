@@ -29,6 +29,7 @@ from ..config import get_settings
 from ..db import ContainerStatus, ProvisionStatus, User, get_session
 from ..logging import get_logger
 from ..security import generate_agent_api_key, hash_agent_api_key
+from ..workspaces import ensure_default_workspace
 
 router = APIRouter(prefix="/api/oauth/github", tags=["oauth"])
 log = get_logger("oauth")
@@ -145,6 +146,7 @@ async def github_callback(request: Request, code: str = "", state: str = ""):
                 user_agent=request.headers.get("user-agent"),
             )
         user_id = user.id
+        await ensure_default_workspace(session, user_id)
 
     response = RedirectResponse("/chat", status_code=status.HTTP_302_FOUND)
     issue_session(response, user_id)

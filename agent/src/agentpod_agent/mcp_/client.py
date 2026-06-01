@@ -26,6 +26,7 @@ from ..logging import get_logger
 from ..tool_settings import is_mcp_server_enabled
 from ..tools import Tool, ToolError, ToolResult
 from ..tools import registry as tool_registry
+from ..workspace import workspace_data_dir
 from .config import MCPServerConfig, get_mcp_server, list_mcp_servers
 
 log = get_logger("mcp")
@@ -33,10 +34,11 @@ log = get_logger("mcp")
 
 def _stdio_env(cfg: MCPServerConfig) -> dict[str, str]:
     """只读根文件系统 + /tmp noexec：npx 缓存必须落在可执行的 /data volume。"""
+    data_dir = workspace_data_dir()
     base = {
-        "HOME": "/data",
-        "NPM_CONFIG_CACHE": "/data/.npm-cache",
-        "XDG_CACHE_HOME": "/data/.cache",
+        "HOME": str(data_dir),
+        "NPM_CONFIG_CACHE": str(data_dir / ".npm-cache"),
+        "XDG_CACHE_HOME": str(data_dir / ".cache"),
     }
     base.update(cfg.env or {})
     return base

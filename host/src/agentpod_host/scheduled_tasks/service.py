@@ -17,6 +17,7 @@ ScheduleKind = Literal["once", "cron"]
 def _row_to_dict(row: ScheduledTask, *, tz_name: str) -> dict[str, Any]:
     return {
         "id": row.id,
+        "workspace_id": row.workspace_id,
         "title": row.title,
         "prompt": row.prompt,
         "schedule_kind": row.schedule_kind,
@@ -58,29 +59,31 @@ async def _load_user_tz(user_id: int) -> str:
         return user.timezone or "UTC"
 
 
-async def list_tasks(user_id: int) -> list[dict[str, Any]]:
+async def list_tasks(user_id: int, *, workspace_id: str | None = None) -> list[dict[str, Any]]:
     tz_name = await _load_user_tz(user_id)
     async with get_session() as session:
+        stmt = select(ScheduledTask).where(ScheduledTask.user_id == user_id)
+        if workspace_id:
+            stmt = stmt.where(ScheduledTask.workspace_id == workspace_id)
         rows = (
             await session.execute(
-                select(ScheduledTask)
-                .where(ScheduledTask.user_id == user_id)
-                .order_by(ScheduledTask.created_at.desc())
+                stmt.order_by(ScheduledTask.created_at.desc())
             )
         ).scalars().all()
         return [_row_to_dict(r, tz_name=tz_name) for r in rows]
 
 
-async def get_task(user_id: int, task_id: int) -> dict[str, Any] | None:
+async def get_task(user_id: int, task_id: int, *, workspace_id: str | None = None) -> dict[str, Any] | None:
     tz_name = await _load_user_tz(user_id)
     async with get_session() as session:
+        stmt = select(ScheduledTask).where(
+            ScheduledTask.id == task_id,
+            ScheduledTask.user_id == user_id,
+        )
+        if workspace_id:
+            stmt = stmt.where(ScheduledTask.workspace_id == workspace_id)
         row = (
-            await session.execute(
-                select(ScheduledTask).where(
-                    ScheduledTask.id == task_id,
-                    ScheduledTask.user_id == user_id,
-                )
-            )
+            await session.execute(stmt)
         ).scalar_one_or_none()
         return _row_to_dict(row, tz_name=tz_name) if row else None
 
@@ -88,6 +91,7 @@ async def get_task(user_id: int, task_id: int) -> dict[str, Any] | None:
 async def create_task(
     user_id: int,
     *,
+    workspace_id: str,
     title: str,
     prompt: str,
     schedule_kind: ScheduleKind,
@@ -132,6 +136,7 @@ async def create_task(
     async with get_session() as session:
         row = ScheduledTask(
             user_id=user_id,
+            workspace_id=workspace_id,
             title=title,
             prompt=prompt,
             schedule_kind=schedule_kind,
@@ -151,6 +156,7 @@ async def update_task(
     user_id: int,
     task_id: int,
     *,
+    workspace_id: str | None = None,
     title: str | None = None,
     prompt: str | None = None,
     enabled: bool | None = None,
@@ -160,13 +166,14 @@ async def update_task(
 ) -> dict[str, Any] | None:
     tz_name = await _load_user_tz(user_id)
     async with get_session() as session:
+        stmt = select(ScheduledTask).where(
+            ScheduledTask.id == task_id,
+            ScheduledTask.user_id == user_id,
+        )
+        if workspace_id:
+            stmt = stmt.where(ScheduledTask.workspace_id == workspace_id)
         row = (
-            await session.execute(
-                select(ScheduledTask).where(
-                    ScheduledTask.id == task_id,
-                    ScheduledTask.user_id == user_id,
-                )
-            )
+            await session.execute(stmt)
         ).scalar_one_or_none()
         if row is None:
             return None
@@ -208,15 +215,16 @@ async def update_task(
         return _row_to_dict(row, tz_name=tz_name)
 
 
-async def delete_task(user_id: int, task_id: int) -> bool:
+async def delete_task(user_id: int, task_id: int, *, workspace_id: str | None = None) -> bool:
     async with get_session() as session:
+        stmt = select(ScheduledTask).where(
+            ScheduledTask.id == task_id,
+            ScheduledTask.user_id == user_id,
+        )
+        if workspace_id:
+            stmt = stmt.where(ScheduledTask.workspace_id == workspace_id)
         row = (
-            await session.execute(
-                select(ScheduledTask).where(
-                    ScheduledTask.id == task_id,
-                    ScheduledTask.user_id == user_id,
-                )
-            )
+            await session.execute(stmt)
         ).scalar_one_or_none()
         if row is None:
             return False

@@ -19,6 +19,7 @@ import type {
   TavilyConfig,
   TimezoneConfig,
   ToolToggleOverview,
+  WorkspaceItem,
 } from "./types";
 
 // ---- 用户 / 认证 ----
@@ -33,6 +34,16 @@ export const rotateApiKey = () =>
 
 export const deleteAccount = (confirm_username: string) =>
   apiSend<{ ok: boolean }>("/api/me", "DELETE", { confirm_username });
+
+// ---- 工作区 ----
+export const listWorkspaces = () =>
+  apiGet<{ default_workspace_id: string; items: WorkspaceItem[] }>("/api/workspaces");
+
+export const createWorkspace = (body: { name: string; description?: string }) =>
+  apiSend<{ item: WorkspaceItem }>("/api/workspaces", "POST", body);
+
+export const deleteWorkspace = (id: string) =>
+  apiSend<{ deleted: boolean }>(`/api/workspaces/${encodeURIComponent(id)}`, "DELETE");
 
 // ---- 设置 / LLM ----
 export const getLLMConfig = () => apiGet<LLMConfig>("/api/settings/llm");

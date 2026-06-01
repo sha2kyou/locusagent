@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from ..auth import AuthContext, require_session
 from ..scheduled_tasks import create_task, delete_task, get_task, list_tasks, update_task
+from ..db import get_session
+from ..workspaces import requested_workspace_id, resolve_workspace
 
 router = APIRouter(prefix="/api/scheduled-tasks", tags=["scheduled-tasks"])
 
@@ -32,20 +34,34 @@ class ScheduledTaskUpdateIn(BaseModel):
     run_at: str | None = Field(default=None, max_length=32)
 
 
+async def _workspace_for_request(request: Request, user_id: int) -> str:
+    async with get_session() as session:
+        ws = await resolve_workspace(
+            session,
+            user_id=user_id,
+            workspace_id=requested_workspace_id(request),
+        )
+        return ws.id
+
+
 @router.get("")
-async def list_scheduled_tasks(ctx: AuthContext = Depends(require_session)) -> dict:
-    items = await list_tasks(ctx.user.id)
+async def list_scheduled_tasks(request: Request, ctx: AuthContext = Depends(require_session)) -> dict:
+    workspace_id = await _workspace_for_request(request, ctx.user.id)
+    items = await list_tasks(ctx.user.id, workspace_id=workspace_id)
     return {"items": items}
 
 
 @router.post("", status_code=201)
 async def create_scheduled_task(
+    request: Request,
     payload: ScheduledTaskCreateIn,
     ctx: AuthContext = Depends(require_session),
 ) -> dict:
+    workspace_id = await _workspace_for_request(request, ctx.user.id)
     try:
         item = await create_task(
             ctx.user.id,
+            workspace_id=workspace_id,
             title=payload.title,
             prompt=payload.prompt,
             schedule_kind=payload.schedule_kind,
@@ -61,14 +77,17 @@ async def create_scheduled_task(
 
 @router.put("/{task_id}")
 async def update_scheduled_task(
+    request: Request,
     task_id: int,
     payload: ScheduledTaskUpdateIn,
     ctx: AuthContext = Depends(require_session),
 ) -> dict:
+    workspace_id = await _workspace_for_request(request, ctx.user.id)
     try:
         item = await update_task(
             ctx.user.id,
             task_id,
+            workspace_id=workspace_id,
             title=payload.title,
             prompt=payload.prompt,
             enabled=payload.enabled,
@@ -85,10 +104,12 @@ async def update_scheduled_task(
 
 @router.delete("/{task_id}")
 async def delete_scheduled_task(
+    request: Request,
     task_id: int,
     ctx: AuthContext = Depends(require_session),
 ) -> dict:
-    ok = await delete_task(ctx.user.id, task_id)
+    workspace_id = await _workspace_for_request(request, ctx.user.id)
+    ok = await delete_task(ctx.user.id, task_id, workspace_id=workspace_id)
     if not ok:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="task not found")
     return {"deleted": True}
@@ -96,10 +117,12 @@ async def delete_scheduled_task(
 
 @router.get("/{task_id}")
 async def read_scheduled_task(
+    request: Request,
     task_id: int,
     ctx: AuthContext = Depends(require_session),
 ) -> dict:
-    item = await get_task(ctx.user.id, task_id)
+    workspace_id = await _workspace_for_request(request, ctx.user.id)
+    item = await get_task(ctx.user.id, task_id, workspace_id=workspace_id)
     if item is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="task not found")
     return {"item": item}

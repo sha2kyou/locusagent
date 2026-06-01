@@ -8,7 +8,7 @@ from typing import Literal
 
 import yaml
 
-from ..config import get_settings
+from ..workspace import workspace_data_dir
 
 Transport = Literal["stdio", "http"]
 
@@ -28,7 +28,7 @@ class MCPServerConfig:
 
 
 def _config_path() -> Path:
-    return get_settings().data_dir / "mcp.yaml"
+    return workspace_data_dir() / "mcp.yaml"
 
 
 def load_mcp_config() -> list[MCPServerConfig]:

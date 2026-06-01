@@ -21,6 +21,7 @@ import type { SessionMeta } from "@/api/types";
 import { streamChatCompletion } from "@/api/stream";
 import { useToast } from "@/components/ui/toast";
 import { useAuth, type AgentReadiness } from "@/app/auth";
+import { withWorkspacePrefix } from "@/app/workspace-route";
 import {
   appendText,
   type ChatAttachment,
@@ -100,15 +101,18 @@ function isImageInputUnsupportedError(err: unknown): boolean {
   );
 }
 
-function chatPath(sessionId: string | null): string {
-  return sessionId ? `/chat/${encodeURIComponent(sessionId)}` : "/chat";
+function chatPath(sessionId: string | null, workspaceId?: string | null): string {
+  const base = sessionId ? `/chat/${encodeURIComponent(sessionId)}` : "/chat";
+  return withWorkspacePrefix(base, workspaceId);
 }
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const toast = useToast();
   const { readiness, me } = useAuth();
   const navigate = useNavigate();
-  const urlSessionId = useParams().sessionId ?? null;
+  const params = useParams();
+  const urlSessionId = params.sessionId ?? null;
+  const urlWorkspaceId = params.workspaceId ?? null;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -287,7 +291,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         if (token !== loadTokenRef.current || !mountedRef.current) return;
         toast((e as Error).message || "对话不存在", "error");
         resetToNewChat();
-        navigate("/chat", { replace: true });
+        navigate(chatPath(null, urlWorkspaceId), { replace: true });
       }
     })();
   };
@@ -374,7 +378,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             if (!mountedRef.current || ac.signal.aborted) return;
             if (chunk.session_id) {
               if (!currentIdRef.current) setCurrent(chunk.session_id);
-              const path = chatPath(chunk.session_id);
+              const path = chatPath(chunk.session_id, urlWorkspaceId);
               if (window.location.pathname !== path) {
                 navigate(path, { replace: true });
               }
@@ -497,11 +501,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // ---- 会话操作 ----
   const newSession = () => {
-    navigate("/chat");
+    navigate(chatPath(null, urlWorkspaceId));
   };
 
   const selectSession = (id: string) => {
-    navigate(chatPath(id));
+    navigate(chatPath(id, urlWorkspaceId));
   };
 
   const deleteSession = async (id: string) => {
@@ -513,7 +517,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     await apiDeleteSession(id);
     if (!mountedRef.current) return;
     await refreshSessions();
-    if (wasCurrent && mountedRef.current) navigate("/chat");
+    if (wasCurrent && mountedRef.current) navigate(chatPath(null, urlWorkspaceId));
   };
 
   const removePendingAttachment = (id: string) => {

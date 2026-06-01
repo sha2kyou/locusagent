@@ -22,6 +22,7 @@ from ..db import User, get_session
 from ..logging import get_logger
 from ..orchestrator import teardown_container
 from ..security import generate_agent_api_key, hash_agent_api_key
+from ..workspaces import requested_workspace_id, resolve_workspace
 
 router = APIRouter(prefix="/api/me", tags=["me"])
 log = get_logger("me")
@@ -32,13 +33,20 @@ class AccountDeleteIn(BaseModel):
 
 
 @router.get("")
-async def me(ctx: AuthContext = Depends(require_session)) -> dict:
+async def me(request: Request, ctx: AuthContext = Depends(require_session)) -> dict:
     user = ctx.user
     settings = get_settings()
+    async with get_session() as session:
+        workspace = await resolve_workspace(
+            session,
+            user_id=user.id,
+            workspace_id=requested_workspace_id(request),
+        )
     return {
         "id": user.id,
         "username": user.username,
         "avatar_url": user.avatar_url,
+        "current_workspace_id": workspace.id,
         "container_status": user.container_status,
         "provision_status": user.provision_status,
         "llm_configured": user.llm_api_key_enc is not None,

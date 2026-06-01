@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { getMe } from "@/api/endpoints";
+import { setWorkspaceId } from "@/api/client";
 import type { Me } from "@/api/types";
 
 export interface AgentReadiness {
@@ -61,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const reload = useCallback(async () => {
     try {
       const next = await getMe();
+      if (next.current_workspace_id) setWorkspaceId(next.current_workspace_id);
       setMe(next);
       return next;
     } catch {

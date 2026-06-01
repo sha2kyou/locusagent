@@ -42,7 +42,8 @@ class Settings(BaseSettings):
     s3_bucket: str = Field(default="agentpod-attachments", alias="S3_BUCKET")
     s3_region: str = Field(default="us-east-1", alias="S3_REGION")
     s3_use_ssl: bool = Field(default=False, alias="S3_USE_SSL")
-    agent_internal_network: str = Field(default="agentpod-internal", alias="AGENT_INTERNAL_NETWORK")
+    # 为空时自动探测名称以 "agentpod-internal" 结尾的网络。
+    agent_internal_network: str = Field(default="", alias="AGENT_INTERNAL_NETWORK")
 
     agent_memory_limit: str = Field(default="512m", alias="AGENT_MEMORY_LIMIT")
     agent_cpu_quota: int = Field(default=50000, alias="AGENT_CPU_QUOTA")

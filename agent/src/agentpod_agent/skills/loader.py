@@ -17,6 +17,7 @@ import yaml
 
 from ..config import get_settings
 from ..logging import get_logger
+from ..workspace import workspace_data_dir
 
 log = get_logger("skills")
 
@@ -87,7 +88,7 @@ def _scan_dir(root: Path, source: str) -> list[Skill]:
 def load_all_skills() -> list[Skill]:
     settings = get_settings()
     public = _scan_dir(settings.shared_skills_dir, "public")
-    private = _scan_dir(settings.data_dir / "skills", "private")
+    private = _scan_dir(workspace_data_dir() / "skills", "private")
     by_name: dict[str, Skill] = {s.name: s for s in public}
     for s in private:
         by_name[s.name] = s
@@ -97,4 +98,4 @@ def load_all_skills() -> list[Skill]:
 
 
 def private_skill_dir() -> Path:
-    return get_settings().data_dir / "skills"
+    return workspace_data_dir() / "skills"

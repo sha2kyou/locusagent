@@ -25,6 +25,7 @@ from .routers import oauth as oauth_router
 from .routers import scheduled_tasks as scheduled_tasks_router
 from .routers import settings as settings_router
 from .routers import workspace as workspace_router
+from .routers import workspaces as workspaces_router
 from .web import install_pages
 
 
@@ -103,6 +104,7 @@ app.include_router(internal_settings_router.router)
 app.include_router(embedding_proxy_router.router)
 app.include_router(api_v1_router.router)
 app.include_router(workspace_router.router)
+app.include_router(workspaces_router.router)
 
 install_pages(app)
 

@@ -1,5 +1,5 @@
 import type { ChatChunk } from "./types";
-import { ApiError, redirectToLogin } from "./client";
+import { ApiError, getWorkspaceId, redirectToLogin } from "./client";
 
 export interface ChatRequestBody {
   messages: {
@@ -60,12 +60,14 @@ export async function streamChatCompletion(
   let attempt = 0;
 
   for (;;) {
+    const workspaceId = getWorkspaceId();
     const res = await fetch("/api/workspace/chat/completions", {
       method: "POST",
       credentials: "same-origin",
       headers: {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
+        ...(workspaceId ? { "X-Workspace-Id": workspaceId } : {}),
       },
       body: JSON.stringify(body),
       signal: opts.signal,

@@ -4,6 +4,7 @@ import { ChevronDown, FolderOpen, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { listArtifactCategories } from "@/api/endpoints";
 import type { ArtifactCategory } from "@/api/types";
+import { stripWorkspacePrefix } from "@/app/workspace-route";
 
 const CATEGORIES_CHANGED = "artifacts:categories-changed";
 
@@ -11,14 +12,17 @@ const rowBase =
   "group relative flex h-10 items-center gap-3 rounded-lg px-2.5 text-sm font-medium transition-colors";
 
 export function ArtifactsNav({
+  basePrefix,
   expanded,
   onNavigate,
 }: {
+  basePrefix: string;
   expanded: boolean;
   onNavigate: () => void;
 }) {
   const location = useLocation();
-  const onArtifacts = location.pathname.startsWith("/artifacts");
+  const routePath = stripWorkspacePrefix(location.pathname).path;
+  const onArtifacts = routePath.startsWith("/artifacts");
   const [open, setOpen] = useState(onArtifacts);
   const [categories, setCategories] = useState<ArtifactCategory[]>([]);
 
@@ -46,7 +50,7 @@ export function ArtifactsNav({
     <div>
       <div className="relative">
         <NavLink
-          to="/artifacts/manage"
+          to={`${basePrefix}/artifacts/manage`}
           end
           title="产物"
           onClick={onNavigate}
@@ -81,7 +85,7 @@ export function ArtifactsNav({
           {categories.map((c) => (
             <NavLink
               key={c.id}
-              to={`/artifacts/c/${c.id}`}
+              to={`${basePrefix}/artifacts/c/${c.id}`}
               title={c.name}
               onClick={onNavigate}
               className={({ isActive }) =>

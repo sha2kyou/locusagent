@@ -11,7 +11,7 @@ from .persistence import get_session_system_prompt, set_session_system_prompt
 
 _SNAPSHOT_MEMORY_LIMIT = 30
 # 变更 build_frozen_system_prompt 模板时递增，使旧 session 缓存自动失效。
-FROZEN_SYSTEM_PROMPT_VERSION = 1
+FROZEN_SYSTEM_PROMPT_VERSION = 2
 _CACHE_PREFIX = f"agentpod:sp:v{FROZEN_SYSTEM_PROMPT_VERSION}:\n"
 
 
@@ -55,7 +55,7 @@ async def build_frozen_system_prompt() -> str:
         "A frozen long-term memory snapshot is included below. When the user refers to a previous conversation or earlier conclusion not in the snapshot, use memory(action=recall) or session_recall to retrieve it. For credential/config KV management, use env_vars(action=add/list/update/delete/recall).",
         "Before executing code, verify required context (API keys, DB connections, timezone/path dependencies) only when the request has external dependencies. Use env_vars for credentials/config and get_current_user for runtime identity/timezone. Otherwise execute directly.",
         "When the user asks for the current date or time, use Current user local time from the Runtime Time Context system message. Do not fabricate or estimate time.",
-        "When the user explicitly requests a deliverable (e.g. create, generate-and-save, export, archive, artifact), call artifact_save{title, content, type, category} to archive it. Set type to markdown/html/text by content. If the target category does not exist, call artifact_category_create{name, description} first. If artifact_category_create reports similar existing categories, call clarify before deciding to reuse or create. For html-render output, pass the full [HTML_RENDER]...[/HTML_RENDER] block as content with type=html. For code, use type=markdown and always wrap in a fenced block (```<lang>\\n...code...\\n```). When the user refers to a previously saved artifact, call artifact_recall{query} first.",
+        "When the user explicitly requests a deliverable (e.g. create, generate-and-save, export, archive, artifact), call artifact_save{title, content, type, category} to archive it. Set type to markdown/html/text by content. If category is provided, you MUST read and follow that category's description in 'Artifact Categories (existing)' when drafting content (this is prompt guidance, do not inject category description text into the artifact body unless the user asks for it). If the target category does not exist, call artifact_category_create{name, description} first. If artifact_category_create reports similar existing categories, call clarify before deciding to reuse or create. For html-render output, pass the full [HTML_RENDER]...[/HTML_RENDER] block as content with type=html. For code, use type=markdown and always wrap in a fenced block (```<lang>\\n...code...\\n```). When the user refers to a previously saved artifact, call artifact_recall{query} first.",
     ]
     if skills:
         pieces.append("\n## Available Skills Catalog")

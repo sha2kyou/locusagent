@@ -21,6 +21,7 @@ from ..db import ContainerStatus, User, get_session
 from ..logging import get_logger
 from ..orchestrator import container_name_for, ensure_container_ready, reconcile_container_state, touch_last_active
 from ..security import decrypt_str
+from ..workspaces import requested_workspace_id, resolve_workspace
 
 log = get_logger("proxy")
 
@@ -79,8 +80,14 @@ async def proxy_to_user_container(
         )
 
     # 容器自动重建时 INTERNAL_TOKEN 会更新；这里必须从 DB 重新读取，避免使用旧 token 导致 401。
+    workspace_id = requested_workspace_id(request)
     async with get_session() as session:
         latest_user = (await session.execute(select(User).where(User.id == user.id))).scalar_one()
+        workspace = await resolve_workspace(
+            session,
+            user_id=user.id,
+            workspace_id=workspace_id,
+        )
 
     if latest_user.internal_token_enc is None:
         return JSONResponse(
@@ -96,6 +103,7 @@ async def proxy_to_user_container(
     raw_headers = _filter_request_headers(dict(request.headers))
     raw_headers["X-Internal-Token"] = internal_token
     raw_headers["X-User-Id"] = str(user.id)
+    raw_headers["X-Workspace-Id"] = workspace.id
     if extra_headers:
         raw_headers.update(extra_headers)
 

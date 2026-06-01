@@ -6,8 +6,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ..config import get_settings
 from ..db import run_in_thread
+from ..workspace import workspace_data_dir
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 MAX_READ_BYTES = 512 * 1024
@@ -15,7 +15,7 @@ MAX_WRITE_BYTES = 2 * 1024 * 1024
 
 
 def _root() -> Path:
-    return get_settings().data_dir / "workspace"
+    return workspace_data_dir() / "workspace"
 
 
 def _resolve(rel: str) -> Path:

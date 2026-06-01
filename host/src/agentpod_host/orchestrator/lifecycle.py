@@ -210,6 +210,25 @@ def _host_embedding_proxy_url() -> str:
     return f"{_host_internal_base_url()}/internal/embedding"
 
 
+def _resolve_internal_network_name(client: Any, configured: str) -> str | None:
+    wanted = (configured or "").strip()
+    if wanted:
+        try:
+            client.networks.get(wanted)
+            return wanted
+        except NotFound:
+            return None
+    candidates = []
+    for net in client.networks.list():
+        name = str(net.name or "")
+        if name.endswith("agentpod-internal"):
+            candidates.append(name)
+    if not candidates:
+        return None
+    candidates.sort()
+    return candidates[0]
+
+
 async def _create_container(user: User) -> str:
     settings = get_settings()
     if user.llm_api_key_enc is None:
@@ -286,10 +305,14 @@ async def _create_container(user: User) -> str:
                 client.networks.get(network).connect(host_self)
             except APIError:
                 pass
-        try:
-            client.networks.get(settings.agent_internal_network).connect(container)
-        except APIError as exc:
-            raise RuntimeError(f"连接内部网络失败: {exc}") from exc
+        if settings.attachment_storage == "minio":
+            internal_network = _resolve_internal_network_name(client, settings.agent_internal_network)
+            if not internal_network:
+                raise RuntimeError("未找到 MinIO 内部网络，请检查 AGENT_INTERNAL_NETWORK")
+            try:
+                client.networks.get(internal_network).connect(container)
+            except APIError as exc:
+                raise RuntimeError(f"连接内部网络失败: {exc}") from exc
 
         return container.id
 

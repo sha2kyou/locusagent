@@ -4,6 +4,7 @@ export interface Me {
   id: number;
   username: string;
   avatar_url: string | null;
+  current_workspace_id?: string;
   container_status: string; // absent | creating | running | paused | stopped ...
   provision_status: string; // pending | ready | failed
   llm_configured: boolean;
@@ -11,6 +12,15 @@ export interface Me {
   llm_model: string;
   agent_api_key_configured: boolean;
   attachment_max_bytes: number;
+}
+
+export interface WorkspaceItem {
+  id: string;
+  name: string;
+  description: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface SessionMeta {

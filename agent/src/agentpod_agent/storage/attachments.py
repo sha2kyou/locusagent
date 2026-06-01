@@ -10,6 +10,14 @@ from minio import Minio
 from minio.error import S3Error
 
 from ..config import get_settings
+from ..workspace import get_workspace_id
+from ..logging import get_logger
+
+log = get_logger("attachment_storage")
+
+
+class AttachmentStorageError(RuntimeError):
+    """Raised when object storage operations fail."""
 
 
 @lru_cache
@@ -31,13 +39,16 @@ def _bucket() -> str:
 def _ensure_bucket() -> None:
     client = _client()
     bucket = _bucket()
-    if not client.bucket_exists(bucket):
-        client.make_bucket(bucket)
+    try:
+        if not client.bucket_exists(bucket):
+            client.make_bucket(bucket)
+    except Exception as exc:
+        raise AttachmentStorageError(f"ensure bucket failed: {exc}") from exc
 
 
 def _object_key(*, attachment_id: str, kind: str, name: str) -> str:
     digest = hashlib.sha256(name.encode("utf-8")).hexdigest()[:12]
-    return f"attachments/{attachment_id}/{kind}/{digest}"
+    return f"attachments/{get_workspace_id()}/{attachment_id}/{kind}/{digest}"
 
 
 def save_attachment_bytes(
@@ -48,16 +59,19 @@ def save_attachment_bytes(
     mime_type: str,
     data: bytes,
 ) -> dict[str, str]:
-    _ensure_bucket()
-    key = _object_key(attachment_id=attachment_id, kind=kind, name=name)
-    result = _client().put_object(
-        bucket_name=_bucket(),
-        object_name=key,
-        data=io.BytesIO(data),
-        length=len(data),
-        content_type=mime_type,
-    )
-    return {"object_key": key, "etag": str(result.etag or "").strip("\"")}
+    try:
+        _ensure_bucket()
+        key = _object_key(attachment_id=attachment_id, kind=kind, name=name)
+        result = _client().put_object(
+            bucket_name=_bucket(),
+            object_name=key,
+            data=io.BytesIO(data),
+            length=len(data),
+            content_type=mime_type,
+        )
+        return {"object_key": key, "etag": str(result.etag or "").strip("\"")}
+    except Exception as exc:
+        raise AttachmentStorageError(f"put object failed: {exc}") from exc
 
 
 def load_attachment_bytes(object_key: str) -> bytes | None:
@@ -68,7 +82,9 @@ def load_attachment_bytes(object_key: str) -> bytes | None:
     except S3Error as exc:
         if exc.code in {"NoSuchKey", "NoSuchBucket"}:
             return None
-        raise
+        raise AttachmentStorageError(f"get object failed: {exc}") from exc
+    except Exception as exc:
+        raise AttachmentStorageError(f"get object failed: {exc}") from exc
     try:
         return resp.read()
     finally:
@@ -87,4 +103,6 @@ def delete_attachment_objects(object_keys: list[str]) -> None:
             client.remove_object(bucket, key)
         except S3Error as exc:
             if exc.code not in {"NoSuchKey", "NoSuchBucket"}:
-                raise
+                log.warning("attachment_delete_failed", key=key, error=str(exc))
+        except Exception as exc:
+            log.warning("attachment_delete_failed", key=key, error=str(exc))

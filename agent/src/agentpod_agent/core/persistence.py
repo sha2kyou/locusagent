@@ -11,7 +11,15 @@ import secrets
 from typing import Any
 
 from ..db import conn_scope, run_in_thread
-from ..storage import delete_attachment_objects, load_attachment_bytes, save_attachment_bytes
+from ..logging import get_logger
+from ..storage import (
+    AttachmentStorageError,
+    delete_attachment_objects,
+    load_attachment_bytes,
+    save_attachment_bytes,
+)
+
+log = get_logger("persistence")
 
 _session_locks: dict[str, asyncio.Lock] = {}
 _locks_guard = asyncio.Lock()
@@ -60,30 +68,53 @@ def _encode_data_url(mime: str, data: bytes) -> str:
     return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
 
 
-def _to_chat_attachment_row(row: Any) -> dict[str, Any]:
-    mime_type = str(row["mime_type"] or "application/octet-stream")
-    object_key = str(row["object_key"] or "")
-    data = load_attachment_bytes(object_key) if object_key else None
-    text_content: str | None = None
-    image_data_url: str | None = None
-    kind = str(row["kind"] or "other")
-    if data is not None:
-        if kind == "text":
-            text_content = data.decode("utf-8", errors="replace")
-        elif kind == "image":
-            image_data_url = _encode_data_url(mime_type, data)
-
+def _to_attachment_meta_row(row: Any) -> dict[str, Any]:
     return {
         "id": str(row["id"]),
         "name": str(row["name"] or "附件"),
-        "kind": kind,
-        "mimeType": mime_type,
-        "text": text_content,
-        "imageDataUrl": image_data_url,
+        "kind": str(row["kind"] or "other"),
+        "mimeType": str(row["mime_type"] or "application/octet-stream"),
+        "objectKey": str(row["object_key"] or ""),
         "processable": bool(int(row["processable"] or 0)),
         "unsupportedReason": row["unsupported_reason"],
         "truncated": bool(int(row["truncated"] or 0)),
     }
+
+
+def _hydrate_attachment(meta: dict[str, Any]) -> dict[str, Any]:
+    out = {
+        "id": meta["id"],
+        "name": meta["name"],
+        "kind": meta["kind"],
+        "mimeType": meta["mimeType"],
+        "text": None,
+        "imageDataUrl": None,
+        "processable": bool(meta["processable"]),
+        "unsupportedReason": meta["unsupportedReason"],
+        "truncated": bool(meta["truncated"]),
+    }
+    object_key = str(meta.get("objectKey") or "")
+    if not object_key or not out["processable"]:
+        if not object_key and out["processable"] and out["kind"] in {"text", "image"}:
+            out["processable"] = False
+            out["unsupportedReason"] = "附件对象不存在"
+        return out
+    try:
+        data = load_attachment_bytes(object_key)
+    except AttachmentStorageError as exc:
+        log.warning("attachment_load_failed", attachment_id=out["id"], error=str(exc))
+        out["processable"] = False
+        out["unsupportedReason"] = "附件读取失败"
+        return out
+    if data is None:
+        out["processable"] = False
+        out["unsupportedReason"] = "附件对象不存在"
+        return out
+    if out["kind"] == "text":
+        out["text"] = data.decode("utf-8", errors="replace")
+    elif out["kind"] == "image":
+        out["imageDataUrl"] = _encode_data_url(str(out["mimeType"]), data)
+    return out
 
 
 def _load_message_attachments_map(c: Any, message_ids: list[int]) -> dict[int, list[dict[str, Any]]]:
@@ -102,7 +133,7 @@ def _load_message_attachments_map(c: Any, message_ids: list[int]) -> dict[int, l
     out: dict[int, list[dict[str, Any]]] = {}
     for row in rows:
         mid = int(row["message_id"])
-        out.setdefault(mid, []).append(_to_chat_attachment_row(row))
+        out.setdefault(mid, []).append(_to_attachment_meta_row(row))
     return out
 
 
@@ -471,16 +502,19 @@ async def create_attachment(
     object_etag = ""
     content_sha256 = ""
     if payload is not None:
-        uploaded = save_attachment_bytes(
-            attachment_id=attachment_id,
-            kind=kind,
-            name=name,
-            mime_type=clean_mime,
-            data=payload,
-        )
-        object_key = uploaded["object_key"]
-        object_etag = uploaded["etag"]
-        content_sha256 = hashlib.sha256(payload).hexdigest()
+        try:
+            uploaded = save_attachment_bytes(
+                attachment_id=attachment_id,
+                kind=kind,
+                name=name,
+                mime_type=clean_mime,
+                data=payload,
+            )
+            object_key = uploaded["object_key"]
+            object_etag = uploaded["etag"]
+            content_sha256 = hashlib.sha256(payload).hexdigest()
+        except AttachmentStorageError as exc:
+            raise RuntimeError(f"attachment storage upload failed: {exc}") from exc
 
     def _do() -> dict[str, Any]:
         with conn_scope(load_vec=False) as c:
@@ -509,9 +543,15 @@ async def create_attachment(
                 "unsupported_reason, truncated FROM attachments WHERE id = ?",
                 (attachment_id,),
             ).fetchone()
-            return _to_chat_attachment_row(row)
+            return _to_attachment_meta_row(row)
 
-    return await run_in_thread(_do)
+    try:
+        meta = await run_in_thread(_do)
+    except Exception:
+        if object_key:
+            await run_in_thread(delete_attachment_objects, [object_key])
+        raise
+    return _hydrate_attachment(meta)
 
 
 async def get_attachments_by_ids(attachment_ids: list[str]) -> list[dict[str, Any]]:
@@ -527,7 +567,7 @@ async def get_attachments_by_ids(attachment_ids: list[str]) -> list[dict[str, An
                 f"FROM attachments WHERE id IN ({placeholders})",
                 attachment_ids,
             ).fetchall()
-            by_id = {str(r["id"]): _to_chat_attachment_row(r) for r in rows}
+            by_id = {str(r["id"]): _to_attachment_meta_row(r) for r in rows}
             out: list[dict[str, Any]] = []
             for aid in attachment_ids:
                 item = by_id.get(aid)
@@ -535,7 +575,8 @@ async def get_attachments_by_ids(attachment_ids: list[str]) -> list[dict[str, An
                     out.append(item)
             return out
 
-    return await run_in_thread(_do)
+    metas = await run_in_thread(_do)
+    return await run_in_thread(lambda: [_hydrate_attachment(m) for m in metas])
 
 
 async def link_message_attachments(message_id: int, attachment_ids: list[str]) -> None:
@@ -683,7 +724,7 @@ async def persist_context_compression(
 async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
     """从 DB 重建 OpenAI 格式上下文（仅 active 消息；跳过 legacy UI 伪 tool 消息）。"""
 
-    def _do() -> list[dict[str, Any]]:
+    def _do() -> tuple[list[Any], dict[int, list[dict[str, Any]]]]:
         with conn_scope(load_vec=False) as c:
             rows = c.execute(
                 "SELECT id, role, content, tool_calls, tool_call_id "
@@ -692,10 +733,16 @@ async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
                 (session_id,),
             ).fetchall()
             mids = [int(r["id"]) for r in rows]
-            attachments_map = _load_message_attachments_map(c, mids)
+            attachments_meta_map = _load_message_attachments_map(c, mids)
+            return rows, attachments_meta_map
 
-        out: list[dict[str, Any]] = []
-        for r in rows:
+    rows, attachments_meta_map = await run_in_thread(_do)
+    attachments_map = await run_in_thread(
+        lambda: {mid: [_hydrate_attachment(m) for m in metas] for mid, metas in attachments_meta_map.items()}
+    )
+
+    out: list[dict[str, Any]] = []
+    for r in rows:
             msg_id = int(r["id"])
             role = r["role"]
             content = r["content"] or ""
@@ -766,9 +813,7 @@ async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
                             "id": msg_id,
                         }
                     )
-        return out
-
-    return await run_in_thread(_do)
+    return out
 
 
 async def truncate_after_last_user(session_id: str) -> int:
@@ -866,7 +911,7 @@ async def get_session_title(session_id: str) -> str | None:
 
 
 async def list_messages(session_id: str) -> list[dict]:
-    def _do() -> list[dict]:
+    def _do() -> tuple[list[Any], dict[int, list[dict[str, Any]]]]:
         with conn_scope(load_vec=False) as c:
             rows = c.execute(
                 "SELECT id, role, content, tool_calls, tool_call_id, run_id, tokens, created_at, "
@@ -875,24 +920,28 @@ async def list_messages(session_id: str) -> list[dict]:
                 (session_id,),
             ).fetchall()
             mids = [int(r["id"]) for r in rows]
-            attachments_map = _load_message_attachments_map(c, mids)
-            out: list[dict] = []
-            for r in rows:
-                d = dict(r)
-                if d.get("tool_calls"):
-                    try:
-                        d["tool_calls"] = json.loads(d["tool_calls"])
-                    except json.JSONDecodeError:
-                        d["tool_calls"] = None
-                d["attachments"] = attachments_map.get(int(d["id"]), [])
-                out.append(d)
-            return out
+            attachments_meta_map = _load_message_attachments_map(c, mids)
+            return rows, attachments_meta_map
 
-    return await run_in_thread(_do)
+    rows, attachments_meta_map = await run_in_thread(_do)
+    attachments_map = await run_in_thread(
+        lambda: {mid: [_hydrate_attachment(m) for m in metas] for mid, metas in attachments_meta_map.items()}
+    )
+    out: list[dict] = []
+    for r in rows:
+        d = dict(r)
+        if d.get("tool_calls"):
+            try:
+                d["tool_calls"] = json.loads(d["tool_calls"])
+            except json.JSONDecodeError:
+                d["tool_calls"] = None
+        d["attachments"] = attachments_map.get(int(d["id"]), [])
+        out.append(d)
+    return out
 
 
 async def delete_session(session_id: str) -> bool:
-    def _do() -> bool:
+    def _do() -> tuple[bool, list[str]]:
         with conn_scope(load_vec=False) as c:
             attachment_rows = c.execute(
                 "SELECT object_key FROM attachments WHERE session_id = ?",
@@ -915,11 +964,11 @@ async def delete_session(session_id: str) -> bool:
             c.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
             cur = c.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
             keys = [str(r["object_key"] or "") for r in attachment_rows]
-            if keys:
-                delete_attachment_objects(keys)
-            return (cur.rowcount or 0) > 0
+            return (cur.rowcount or 0) > 0, keys
 
-    deleted = await run_in_thread(_do)
+    deleted, object_keys = await run_in_thread(_do)
+    if object_keys:
+        await run_in_thread(delete_attachment_objects, object_keys)
     if deleted:
         async with _locks_guard:
             _session_locks.pop(session_id, None)

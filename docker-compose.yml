@@ -43,7 +43,7 @@ services:
       S3_BUCKET:            ${S3_BUCKET:-agentpod-attachments}
       S3_REGION:            ${S3_REGION:-us-east-1}
       S3_USE_SSL:           ${S3_USE_SSL:-0}
-      AGENT_INTERNAL_NETWORK: ${AGENT_INTERNAL_NETWORK:-agentpod-internal}
+      AGENT_INTERNAL_NETWORK: ${AGENT_INTERNAL_NETWORK:-}
       AGENT_MEMORY_LIMIT:   ${AGENT_MEMORY_LIMIT}
       AGENT_CPU_QUOTA:      ${AGENT_CPU_QUOTA}
       AGENT_PIDS_LIMIT:     ${AGENT_PIDS_LIMIT}

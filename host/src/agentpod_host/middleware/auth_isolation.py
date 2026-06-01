@@ -29,6 +29,7 @@ BEARER_ALLOWED_PREFIXES = (
 
 SESSION_ONLY_PREFIXES = (
     "/api/workspace/",
+    "/api/workspaces/",
     "/api/me",
     "/api/settings/",
     "/api/notifications/",

@@ -17,6 +17,7 @@ from .routers import internal as internal_router
 from .routers import v1 as v1_router
 from .routers import workspace as workspace_router
 from .tool_settings import load_tool_settings
+from .workspace_runtime import mark_workspace_runtime_bootstrapped
 
 
 @asynccontextmanager
@@ -49,6 +50,7 @@ async def lifespan(app: FastAPI):
 
     try:
         await start_mcp()
+        mark_workspace_runtime_bootstrapped()
     except Exception as exc:
         log.error("mcp_start_failed", error=str(exc))
 
