@@ -363,9 +363,22 @@ export function ScheduledTasksRoute() {
   };
 
   const submit = async () => {
-    if (!title.trim() || !prompt.trim()) return;
-    if (scheduleKind === "cron" && !cronExpr.trim()) return;
-    if (scheduleKind === "once" && !runAt.trim()) return;
+    if (!title.trim()) {
+      toast("请填写任务标题", "error");
+      return;
+    }
+    if (!prompt.trim()) {
+      toast("请填写要执行的指令", "error");
+      return;
+    }
+    if (scheduleKind === "cron" && !cronExpr.trim()) {
+      toast("请填写 Cron 表达式", "error");
+      return;
+    }
+    if (scheduleKind === "once" && !runAt.trim()) {
+      toast("请选择执行时间", "error");
+      return;
+    }
     setBusy(true);
     try {
       const body = {

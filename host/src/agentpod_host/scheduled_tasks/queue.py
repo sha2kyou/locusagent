@@ -50,7 +50,7 @@ async def enqueue_scheduled_task(task_id: int) -> None:
 def _apply_schema_blocking() -> None:
     cmd = [
         "procrastinate",
-        "--app=agentpod_host.scheduled_tasks.queue:task_queue",
+        "--app=agentpod_host.scheduled_tasks.queue.task_queue",
         "schema",
         "--apply",
     ]
