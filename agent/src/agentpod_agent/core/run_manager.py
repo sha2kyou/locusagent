@@ -200,7 +200,6 @@ async def _finalize_run(session_id: str, run_id: str, state: dict[str, Any], *, 
                 session_id,
                 user_query=auto_title_user_query,
                 assistant_text=content,
-                model=str(state.get("model") or "") or None,
             )
     except Exception as exc:
         log.warning("run_finalize_failed", run_id=run_id, error=str(exc))

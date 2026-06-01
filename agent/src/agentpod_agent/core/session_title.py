@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from ..config import get_settings
+import re
+
 from ..logging import get_logger
 from .llm import get_llm_client
 from .openai_fields import openai_completion_text
@@ -11,7 +12,15 @@ from .persistence import get_session_title, upsert_session_meta
 
 log = get_logger("session_title")
 
-_TITLE_MAX_LEN = 28
+_TITLE_MIN_LEN = 4
+_TITLE_MAX_LEN = 12
+_TITLE_MAX_TOKENS = 24
+
+# 去掉首尾与句读类符号，保留中英文、数字及中间必要的连接符
+_EDGE_PUNCT_RE = re.compile(
+    r'^[\s\-—_·•*#>「」『』\[\]（）()【】{}<>,，.。!！?？:：;；、/\\|\'"`~]+|'
+    r'[\s\-—_·•*#>「」『』\[\]（）()【】{}<>,，.。!！?？:：;；、/\\|\'"`~]+$'
+)
 
 
 def _is_default_title(title: str | None) -> bool:
@@ -19,15 +28,29 @@ def _is_default_title(title: str | None) -> bool:
     return not t or t == "新对话"
 
 
-def _sanitize_title(raw: str, *, fallback: str) -> str:
-    title = (raw or "").strip()
+def _normalize_title(raw: str) -> str:
+    title = (raw or "").strip().splitlines()[0].strip()
     title = title.replace("\n", " ").replace("\r", " ")
-    title = title.strip("\"'“”‘’` ")
-    if not title:
-        title = fallback
+    while True:
+        stripped = _EDGE_PUNCT_RE.sub("", title)
+        if stripped == title:
+            break
+        title = stripped
     if len(title) > _TITLE_MAX_LEN:
-        title = title[:_TITLE_MAX_LEN].rstrip()
-    return title or "新对话"
+        title = title[:_TITLE_MAX_LEN]
+    if len(title) < _TITLE_MIN_LEN:
+        return ""
+    return title
+
+
+_TITLE_SYSTEM_PROMPT = (
+    "根据用户与助手的对话，生成一个会话标题。\n"
+    "必须遵守：\n"
+    "1. 只输出标题，不要任何解释、前缀、后缀或标点\n"
+    "2. 中文为主，必要时可含英文/数字\n"
+    "3. 长度 4~12 个字\n"
+    "4. 用名词短语概括任务主题，不要复述用户原句"
+)
 
 
 async def maybe_generate_and_update_session_title(
@@ -35,43 +58,30 @@ async def maybe_generate_and_update_session_title(
     *,
     user_query: str,
     assistant_text: str,
-    model: str | None = None,
 ) -> str | None:
     query = (user_query or "").strip()
-    answer = (assistant_text or "").strip()
     if not query:
         return None
     current_title = await get_session_title(session_id)
     if not _is_default_title(current_title):
         return current_title
 
-    settings = get_settings()
     from .models import resolve_model
 
-    chosen_model = model or resolve_model("title_generation")
+    chosen_model = resolve_model("title_generation")
     client = get_llm_client()
-    fallback = query.splitlines()[0][:_TITLE_MAX_LEN].strip() or "新对话"
-    prompt = (
-        "你是会话命名助手。根据下面内容生成一个会话标题。\n"
-        "要求：\n"
-        "- 中文，8~18 字\n"
-        "- 准确概括任务主题\n"
-        "- 不要标点、引号、序号\n"
-        "- 只输出标题本身"
-    )
-    content = (
-        f"用户问题：{query[:500]}\n"
-        f"助手回复：{answer[:800]}"
-    )
     try:
         resp = await client.chat.completions.create(
             model=chosen_model,
             messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": content},
+                {"role": "system", "content": _TITLE_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": f"用户：{query[:500]}\n助手：{(assistant_text or '')[:800]}",
+                },
             ],
-            max_tokens=32,
-            temperature=0.2,
+            max_tokens=_TITLE_MAX_TOKENS,
+            temperature=0.1,
         )
         schedule_openai_usage(
             usage=resp.usage,
@@ -79,13 +89,11 @@ async def maybe_generate_and_update_session_title(
             model=chosen_model,
             session_id=session_id,
         )
-        raw_title = openai_completion_text(resp)
-        final_title = _sanitize_title(raw_title, fallback=fallback)
-        await upsert_session_meta(session_id, title=final_title)
-        return final_title
-    except Exception as exc:
-        # 标题生成失败不影响主流程，回退到首条用户消息裁剪值。
-        title = _sanitize_title(fallback, fallback="新对话")
-        log.warning("session_title_generate_failed", session_id=session_id, error=str(exc))
+        title = _normalize_title(openai_completion_text(resp))
+        if not title:
+            return None
         await upsert_session_meta(session_id, title=title)
         return title
+    except Exception as exc:
+        log.warning("session_title_generate_failed", session_id=session_id, error=str(exc))
+        return None

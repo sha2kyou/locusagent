@@ -99,7 +99,6 @@ def _schedule_post_run(
     )
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
-_TITLE_MAX_LEN = 28
 
 
 class ChatMessage(BaseModel):
@@ -273,17 +272,6 @@ async def _extract_latest_user_payload(req: ChatRequest) -> tuple[Any, str, str,
     return None
 
 
-def _title_from_first_user_message(text: str | None) -> str:
-    raw = (text or "").strip()
-    if not raw:
-        return "新对话"
-    title = raw.replace("\n", " ").replace("\r", " ").strip()
-    title = title.strip("\"'“”‘’` ")
-    if len(title) > _TITLE_MAX_LEN:
-        title = title[:_TITLE_MAX_LEN].rstrip()
-    return title or "新对话"
-
-
 def _last_user_content(messages: list[dict[str, Any]]) -> str | None:
     for msg in reversed(messages):
         if msg.get("role") == "user":
@@ -318,7 +306,7 @@ async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, 
         user_mid = await append_message(sid, "user", user_query_text, run_id=None)
         if user_mid > 0 and attachment_ids:
             await link_message_attachments(user_mid, attachment_ids)
-        # 标题留给运行结束后由 LLM 生成（默认 "新对话"），失败时回退首句裁剪
+        # 标题留给运行结束后由 LLM 生成；失败则保持「新对话」
         user_query = user_query_text or ""
 
     system_prompt = await _get_or_create_system_prompt(sid)
@@ -412,7 +400,6 @@ async def chat_completions(req: ChatRequest):
                         sid,
                         user_query=user_query,
                         assistant_text=result.final_text,
-                        model=chosen_model,
                     )
                 if user_query and result.final_text:
                     try:
@@ -590,7 +577,6 @@ async def responses(req: ResponsesRequest):
 
         if is_new_session:
             await append_message(sid, "user", new_user)
-            await upsert_session_meta(sid, title=_title_from_first_user_message(new_user))
             db_msgs: list[dict[str, Any]] = [{"role": "user", "content": new_user}]
         else:
             db_msgs = await build_llm_messages(sid)
@@ -630,6 +616,12 @@ async def responses(req: ResponsesRequest):
                 assistant_message_id=last_assistant_id,
             )
             await upsert_session_meta(sid, tokens_delta=result.total_tokens)
+            if user_query:
+                await maybe_generate_and_update_session_title(
+                    sid,
+                    user_query=user_query,
+                    assistant_text=result.final_text,
+                )
             if user_query and result.final_text:
                 try:
                     mids = await maybe_remember(
