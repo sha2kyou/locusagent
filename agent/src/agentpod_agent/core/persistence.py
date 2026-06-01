@@ -88,27 +88,26 @@ def _compose_user_content_with_attachments(text: str, attachments: list[dict[str
             if a.get("kind") == "image" and a.get("processable") and a.get("imageDataUrl"):
                 parts.append({"type": "image_url", "image_url": {"url": a["imageDataUrl"]}})
         if text_attachments:
-            extras: list[str] = []
             for i, a in enumerate(text_attachments, start=1):
-                extras.append(f"[附件 {i}] name={a.get('name')}\n{str(a.get('text') or '')}")
-            parts.append({"type": "text", "text": "以下是文本附件内容：\n\n" + "\n\n".join(extras)})
+                parts.append(
+                    {"type": "text", "text": f"[附件 {i}] name={a.get('name')}\n{str(a.get('text') or '')}"}
+                )
         if unsupported:
             names = ", ".join(str(a.get("name") or "附件") for a in unsupported)
             parts.append({"type": "text", "text": f"另有不可解析附件：{names}。"})
         return parts
 
-    lines: list[str] = []
-    if clean:
-        lines.append(clean)
+    text_parts: list[dict[str, Any]] = []
+    text_parts.append({"type": "text", "text": clean or "请结合附件内容回答。"})
     if text_attachments:
-        items: list[str] = []
         for i, a in enumerate(text_attachments, start=1):
-            items.append(f"[附件 {i}] name={a.get('name')}\n{str(a.get('text') or '')}")
-        lines.append("以下是用户上传的附件内容：\n\n" + "\n\n".join(items))
+            text_parts.append(
+                {"type": "text", "text": f"[附件 {i}] name={a.get('name')}\n{str(a.get('text') or '')}"}
+            )
     if unsupported:
         names = ", ".join(str(a.get("name") or "附件") for a in unsupported)
-        lines.append(f"用户还上传了不可解析附件：{names}。")
-    return "\n\n".join(lines).strip()
+        text_parts.append({"type": "text", "text": f"用户还上传了不可解析附件：{names}。"})
+    return text_parts
 
 
 def _is_legacy_event_meta(tool_calls: Any) -> bool:
