@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -11,14 +11,21 @@ from fastapi.responses import JSONResponse
 from .config import get_settings
 from .db import dispose_engine, init_engine
 from .logging import configure_logging, get_logger
-from .middleware import install_auth_isolation
+from .middleware import install_auth_isolation, install_internal_network_guard
+from .redis_client import close_redis, init_redis
+from .storage.validate import validate_attachment_storage
 from .orchestrator import lifecycle_loop, reattach_self_to_user_networks, run_orphan_cleanup_once, sync_shared_skills
+from .scheduled_tasks.queue import scheduled_task_worker_context
 from .routers import api_v1 as api_v1_router
 from .routers import embedding_proxy as embedding_proxy_router
+from .routers import attachments_proxy as attachments_proxy_router
+from .routers import llm_proxy as llm_proxy_router
+from .routers import tavily_proxy as tavily_proxy_router
 from .routers import internal as internal_router
 from .routers import internal_notifications as internal_notifications_router
 from .routers import internal_scheduled_tasks as internal_scheduled_tasks_router
 from .routers import internal_settings as internal_settings_router
+from .routers import internal_usage as internal_usage_router
 from .routers import me as me_router
 from .routers import notifications as notifications_router
 from .routers import oauth as oauth_router
@@ -31,13 +38,18 @@ from .web import install_pages
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    exit_stack = AsyncExitStack()
     configure_logging()
     log = get_logger("host")
     settings = get_settings()
     app.state.settings = settings
     log.info("host_starting", version=app.version)
+    validate_attachment_storage(settings)
     await init_engine()
     log.info("db_ready")
+    await init_redis()
+    log.info("redis_ready")
+    await exit_stack.enter_async_context(scheduled_task_worker_context())
 
     try:
         seeded = sync_shared_skills()
@@ -77,6 +89,8 @@ async def lifespan(app: FastAPI):
         except TimeoutError:
             loop_task.cancel()
             await asyncio.gather(loop_task, return_exceptions=True)
+        await exit_stack.aclose()
+        await close_redis()
         await dispose_engine()
         log.info("host_stopped")
 
@@ -91,6 +105,7 @@ app = FastAPI(
 )
 
 install_auth_isolation(app)
+install_internal_network_guard(app)
 
 app.include_router(oauth_router.router)
 app.include_router(me_router.router)
@@ -101,7 +116,11 @@ app.include_router(internal_router.router)
 app.include_router(internal_notifications_router.router)
 app.include_router(internal_scheduled_tasks_router.router)
 app.include_router(internal_settings_router.router)
+app.include_router(internal_usage_router.router)
 app.include_router(embedding_proxy_router.router)
+app.include_router(llm_proxy_router.router)
+app.include_router(tavily_proxy_router.router)
+app.include_router(attachments_proxy_router.router)
 app.include_router(api_v1_router.router)
 app.include_router(workspace_router.router)
 app.include_router(workspaces_router.router)

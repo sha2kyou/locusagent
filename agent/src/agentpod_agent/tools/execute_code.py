@@ -6,7 +6,13 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
-from ..workspace import workspace_data_dir
+from ..subprocess_sandbox import (
+    build_sandbox_preexec_fn,
+    resolve_workdir,
+    terminate_process_tree,
+    workspace_root_dir,
+)
+from ..subprocess_env import safe_subprocess_env
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 DEFAULT_TIMEOUT = 30.0
@@ -14,23 +20,14 @@ MAX_OUTPUT = 100 * 1024
 
 
 def _workspace_root() -> Path:
-    root = workspace_data_dir() / "workspace"
-    root.mkdir(parents=True, exist_ok=True)
-    return root
+    return workspace_root_dir()
 
 
 def _resolve_workdir(workdir: str | None) -> Path:
-    root = _workspace_root()
-    if not workdir:
-        return root
-    candidate = (root / workdir).resolve()
     try:
-        candidate.relative_to(root.resolve())
+        return resolve_workdir(workdir, restrict_to_workspace=True)
     except ValueError as exc:
-        raise ToolError(f"workdir escapes workspace: {workdir}") from exc
-    if not candidate.exists() or not candidate.is_dir():
-        raise ToolError(f"workdir not found: {workdir}")
-    return candidate
+        raise ToolError(str(exc)) from exc
 
 
 def _python_bin(root: Path) -> str:
@@ -53,21 +50,24 @@ async def _execute_code(args: dict[str, Any]) -> ToolResult:
     root = _workspace_root()
     cwd = _resolve_workdir(str(args.get("workdir", "") or "").strip() or None)
     py = _python_bin(root)
+    preexec_fn = build_sandbox_preexec_fn()
 
     proc = await asyncio.create_subprocess_exec(
         py,
         "-c",
         code,
         cwd=str(cwd),
+        env=safe_subprocess_env(),
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        start_new_session=True,
+        preexec_fn=preexec_fn,
     )
     try:
         out, err = await asyncio.wait_for(proc.communicate(stdin_text.encode("utf-8")), timeout=timeout)
     except TimeoutError:
-        proc.kill()
-        await proc.wait()
+        await terminate_process_tree(proc)
         raise ToolError(f"execution timed out after {timeout}s") from None
 
     stdout = (out or b"").decode("utf-8", errors="replace")
@@ -86,6 +86,7 @@ register_builtin(
         name="execute_code",
         description=(
             "执行代码片段（当前支持 Python）。默认在 workspace 下运行；若存在 .venv，优先使用 .venv/bin/python。"
+            "执行进程受资源限制与超时进程组回收约束。"
         ),
         parameters={
             "type": "object",
