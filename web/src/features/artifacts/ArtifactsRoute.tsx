@@ -160,6 +160,7 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
   };
 
   const loadArtifacts = async () => {
+    if (!categoryId) return;
     setItems(null);
     try {
       const { items: scoped } = await listArtifacts(categoryId);

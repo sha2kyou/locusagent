@@ -2,10 +2,14 @@
 
 Cookie 属性：HttpOnly + Secure(生产) + SameSite=Lax + Max-Age 7d。
 SESSION_SECRET 与 ENCRYPTION_KEY 互斥。
+
+OAuth state 使用 SESSION_SECRET 签名的 URL token（5 分钟有效），
+不依赖 cookie——Safari 在 302 跳转 GitHub 时可能丢弃 Set-Cookie。
 """
 
 from __future__ import annotations
 
+import secrets
 from functools import lru_cache
 
 from fastapi import Request, Response
@@ -65,27 +69,32 @@ def read_session(request: Request) -> int | None:
     return parse_session_user_id(request.cookies.get(SESSION_COOKIE_NAME))
 
 
-def issue_state_cookie(response: Response, state: str) -> None:
-    """OAuth state：5 分钟短时 cookie，回调比对后立即清除。"""
+OAUTH_STATE_MAX_AGE = 300  # 5 分钟
+OAUTH_STATE_SALT = "apod.oauth.state.v1"
+
+
+@lru_cache
+def _oauth_state_serializer() -> URLSafeTimedSerializer:
     settings = get_settings()
-    secure = settings.public_base_url.startswith("https://")
-    response.set_cookie(
-        "apod_oauth_state",
-        state,
-        max_age=300,
-        httponly=True,
-        secure=secure,
-        samesite="lax",
-        path="/",
-    )
+    if not settings.session_secret:
+        raise RuntimeError("SESSION_SECRET 未配置")
+    return URLSafeTimedSerializer(settings.session_secret, salt=OAUTH_STATE_SALT)
 
 
-def read_state_cookie(request: Request) -> str | None:
-    return request.cookies.get("apod_oauth_state")
+def issue_oauth_state() -> str:
+    """签发 OAuth state（签名 token，经 GitHub 回调 URL 原样带回）。"""
+    nonce = secrets.token_urlsafe(32)
+    return _oauth_state_serializer().dumps({"n": nonce})
 
 
-def clear_state_cookie(response: Response) -> None:
-    response.delete_cookie("apod_oauth_state", path="/")
+def verify_oauth_state(state: str) -> bool:
+    if not state:
+        return False
+    try:
+        payload = _oauth_state_serializer().loads(state, max_age=OAUTH_STATE_MAX_AGE)
+    except (BadSignature, SignatureExpired):
+        return False
+    return isinstance(payload, dict) and isinstance(payload.get("n"), str)
 
 
 FLASH_COOKIE_NAME = "apod_apikey_flash"

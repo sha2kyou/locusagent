@@ -10,8 +10,7 @@ import { NotificationProvider } from "@/features/notifications/NotificationProvi
 import { ThemeProvider } from "@/app/theme";
 import { AppShell } from "@/app/AppShell";
 import { LoginRoute } from "@/routes/LoginRoute";
-
-const ChatRoute = lazy(() => import("@/routes/ChatRoute").then((m) => ({ default: m.ChatRoute })));
+import { ChatRoute } from "@/routes/ChatRoute";
 const SkillsRoute = lazy(() =>
   import("@/features/skills/SkillsRoute").then((m) => ({ default: m.SkillsRoute })),
 );

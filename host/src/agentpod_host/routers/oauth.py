@@ -1,7 +1,7 @@
 """GitHub OAuth：login → 重定向 GitHub；callback → 校验 state → upsert 用户 → 签发 session。
 
 关键约束：
-- state：secrets.token_urlsafe(32)，写短时签名 cookie，回调比对后清除。
+- state：SESSION_SECRET 签名的短时 token，经回调 query 校验（不用 cookie）。
 - scope 最小化：仅 `read:user`。
 - access_token 仅用于一次拉取用户信息，**不入库**。
 - 新用户首次登录时生成 agent_api_key 明文一次性返回，落库仅哈希。
@@ -9,7 +9,6 @@
 
 from __future__ import annotations
 
-import secrets
 from urllib.parse import urlencode
 
 import httpx
@@ -18,13 +17,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 
 from ..audit import record_event
-from ..auth.session import (
-    clear_state_cookie,
-    issue_apikey_flash,
-    issue_session,
-    issue_state_cookie,
-    read_state_cookie,
-)
+from ..auth.session import issue_apikey_flash, issue_oauth_state, issue_session, verify_oauth_state
 from ..config import get_settings
 from ..db import ContainerStatus, ProvisionStatus, User, get_session
 from ..logging import get_logger
@@ -45,7 +38,7 @@ async def github_login() -> RedirectResponse:
     settings = get_settings()
     if not settings.github_client_id:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="OAuth not configured")
-    state = secrets.token_urlsafe(32)
+    state = issue_oauth_state()
     params = {
         "client_id": settings.github_client_id,
         "redirect_uri": settings.oauth_redirect_uri,
@@ -53,16 +46,13 @@ async def github_login() -> RedirectResponse:
         "state": state,
         "allow_signup": "true",
     }
-    response = RedirectResponse(f"{GITHUB_AUTHORIZE}?{urlencode(params)}")
-    issue_state_cookie(response, state)
-    return response
+    return RedirectResponse(f"{GITHUB_AUTHORIZE}?{urlencode(params)}")
 
 
 @router.get("/callback")
 async def github_callback(request: Request, code: str = "", state: str = ""):
     settings = get_settings()
-    expected_state = read_state_cookie(request)
-    if not state or not expected_state or not secrets.compare_digest(state, expected_state):
+    if not verify_oauth_state(state):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="invalid state")
     if not code:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="missing code")
@@ -148,7 +138,6 @@ async def github_callback(request: Request, code: str = "", state: str = ""):
 
     response = RedirectResponse("/chat", status_code=status.HTTP_302_FOUND)
     issue_session(response, user_id)
-    clear_state_cookie(response)
     if new_api_key_plain is not None:
         issue_apikey_flash(response, new_api_key_plain)
     log.info("oauth_callback_ok", user_id=user_id, new_user=new_api_key_plain is not None)

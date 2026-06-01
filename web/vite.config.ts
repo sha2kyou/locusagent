@@ -20,15 +20,32 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (!id.includes('node_modules')) return
+          const normalized = id.replace(/\\/g, '/')
+
+          if (normalized.includes('node_modules')) {
+            if (
+              normalized.includes('react-markdown') ||
+              normalized.includes('/remark-') ||
+              normalized.includes('/rehype-') ||
+              normalized.includes('micromark') ||
+              normalized.includes('/unified/')
+            ) {
+              return 'markdown-vendor'
+            }
+            return
+          }
+
+          // 懒加载路由 chunk 不得回引 entry（index.js），否则 Safari 动态 import 会失败。
+          if (/\/features\/[^/]+\/[^/]+Route\.(tsx|ts)$/.test(normalized)) return
+          if (/\/routes\/ChatRoute\.(tsx|ts)$/.test(normalized)) return
+
           if (
-            id.includes('react-markdown') ||
-            id.includes('/remark-') ||
-            id.includes('/rehype-') ||
-            id.includes('micromark') ||
-            id.includes('/unified/')
+            normalized.includes('/web/src/app/') ||
+            normalized.includes('/web/src/api/') ||
+            normalized.includes('/web/src/components/') ||
+            normalized.includes('/web/src/lib/')
           ) {
-            return 'markdown-vendor'
+            return 'app-shared'
           }
         },
         entryFileNames: 'assets/[name].js',
