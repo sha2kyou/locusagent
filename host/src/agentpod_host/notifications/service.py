@@ -8,11 +8,13 @@ from sqlalchemy import func, select, update
 
 from ..db.models import Notification
 from ..db import get_session
+from ..workspaces import ensure_user_default_workspace
 
 
 def _row_to_dict(row: Notification) -> dict:
     return {
         "id": row.id,
+        "workspace_id": row.workspace_id,
         "kind": row.kind,
         "category": row.category,
         "title": row.title,
@@ -27,6 +29,7 @@ def _row_to_dict(row: Notification) -> dict:
 async def create_notification(
     user_id: int,
     *,
+    workspace_id: str | None = None,
     title: str,
     body: str = "",
     kind: str = "info",
@@ -38,9 +41,12 @@ async def create_notification(
         raise ValueError("title is required")
     kind = kind if kind in {"info", "success", "warning", "error"} else "info"
     category = (category or "").strip() or None
+    if not workspace_id:
+        workspace_id = (await ensure_user_default_workspace(user_id)).id
     async with get_session() as session:
         row = Notification(
             user_id=user_id,
+            workspace_id=workspace_id,
             kind=kind,
             category=category,
             title=title,
@@ -52,20 +58,32 @@ async def create_notification(
         await session.refresh(row)
         item = _row_to_dict(row)
 
-    count = await unread_count(user_id)
+    count = await unread_count(user_id, workspace_id=workspace_id)
     from .hub import hub
 
     await hub.publish(
         user_id,
+        workspace_id,
         {"type": "notification", "item": item, "unread_count": count},
     )
     return item
 
 
-async def list_notifications(user_id: int, *, limit: int = 50, unread_only: bool = False) -> list[dict]:
+async def list_notifications(
+    user_id: int,
+    *,
+    workspace_id: str | None = None,
+    limit: int = 50,
+    unread_only: bool = False,
+) -> list[dict]:
+    if not workspace_id:
+        workspace_id = (await ensure_user_default_workspace(user_id)).id
     limit = max(1, min(int(limit), 200))
     async with get_session() as session:
-        stmt = select(Notification).where(Notification.user_id == user_id)
+        stmt = select(Notification).where(
+            Notification.user_id == user_id,
+            Notification.workspace_id == workspace_id,
+        )
         if unread_only:
             stmt = stmt.where(Notification.read_at.is_(None))
         rows = (
@@ -76,47 +94,68 @@ async def list_notifications(user_id: int, *, limit: int = 50, unread_only: bool
         return [_row_to_dict(r) for r in rows]
 
 
-async def unread_count(user_id: int) -> int:
+async def unread_count(user_id: int, *, workspace_id: str | None = None) -> int:
+    if not workspace_id:
+        workspace_id = (await ensure_user_default_workspace(user_id)).id
     async with get_session() as session:
         count = (
             await session.execute(
                 select(func.count())
                 .select_from(Notification)
-                .where(Notification.user_id == user_id, Notification.read_at.is_(None))
+                .where(
+                    Notification.user_id == user_id,
+                    Notification.workspace_id == workspace_id,
+                    Notification.read_at.is_(None),
+                )
             )
         ).scalar_one()
         return int(count or 0)
 
 
-async def mark_read(user_id: int, notification_id: int) -> bool:
+async def mark_read(user_id: int, notification_id: int, *, workspace_id: str | None = None) -> bool:
+    if not workspace_id:
+        workspace_id = (await ensure_user_default_workspace(user_id)).id
     now = datetime.now(timezone.utc)
     async with get_session() as session:
         result = await session.execute(
             update(Notification)
-            .where(Notification.id == notification_id, Notification.user_id == user_id)
+            .where(
+                Notification.id == notification_id,
+                Notification.user_id == user_id,
+                Notification.workspace_id == workspace_id,
+            )
             .values(read_at=now)
         )
         return (result.rowcount or 0) > 0
 
 
-async def mark_all_read(user_id: int) -> int:
+async def mark_all_read(user_id: int, *, workspace_id: str | None = None) -> int:
+    if not workspace_id:
+        workspace_id = (await ensure_user_default_workspace(user_id)).id
     now = datetime.now(timezone.utc)
     async with get_session() as session:
         result = await session.execute(
             update(Notification)
-            .where(Notification.user_id == user_id, Notification.read_at.is_(None))
+            .where(
+                Notification.user_id == user_id,
+                Notification.workspace_id == workspace_id,
+                Notification.read_at.is_(None),
+            )
             .values(read_at=now)
         )
         return int(result.rowcount or 0)
 
 
-async def delete_notification(user_id: int, notification_id: int) -> bool:
+async def delete_notification(user_id: int, notification_id: int, *, workspace_id: str | None = None) -> bool:
+    if not workspace_id:
+        workspace_id = (await ensure_user_default_workspace(user_id)).id
     async with get_session() as session:
         row = (
             await session.execute(
                 select(Notification).where(
                     Notification.id == notification_id,
                     Notification.user_id == user_id,
+                    Notification.workspace_id == workspace_id,
                 )
             )
         ).scalar_one_or_none()

@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from .config import get_settings
+from .workspace import get_workspace_id
 
 
 class HostNotificationsError(RuntimeError):
@@ -20,7 +21,11 @@ def _internal_base_and_headers() -> tuple[str, dict[str, str]]:
     user_id = settings.user_id
     if not base or not token or not user_id:
         raise HostNotificationsError("host internal auth not configured")
-    return base, {"X-Internal-Token": token, "X-User-Id": user_id}
+    return base, {
+        "X-Internal-Token": token,
+        "X-User-Id": user_id,
+        "X-Workspace-Id": get_workspace_id(),
+    }
 
 
 def _error_detail(resp: httpx.Response) -> str:

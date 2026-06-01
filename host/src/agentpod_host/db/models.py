@@ -81,6 +81,7 @@ class User(Base):
     audit_logs: Mapped[list[AuditLog]] = relationship(back_populates="user")
     notifications: Mapped[list["Notification"]] = relationship(back_populates="user")
     scheduled_tasks: Mapped[list["ScheduledTask"]] = relationship(back_populates="user")
+    workspaces: Mapped[list["Workspace"]] = relationship(back_populates="user")
 
     __table_args__ = (
         Index("idx_users_provision", "provision_status"),
@@ -113,6 +114,9 @@ class Notification(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
     kind: Mapped[str] = mapped_column(String(16), default="info", nullable=False)
     category: Mapped[str | None] = mapped_column(String(64))
     title: Mapped[str] = mapped_column(Text, nullable=False)
@@ -124,10 +128,11 @@ class Notification(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="notifications")
+    workspace: Mapped["Workspace"] = relationship(back_populates="notifications")
 
     __table_args__ = (
-        Index("idx_notifications_user_created", "user_id", "created_at"),
-        Index("idx_notifications_user_unread", "user_id", "read_at"),
+        Index("idx_notifications_user_ws_created", "user_id", "workspace_id", "created_at"),
+        Index("idx_notifications_user_ws_unread", "user_id", "workspace_id", "read_at"),
     )
 
 
@@ -136,6 +141,7 @@ class ScheduledTask(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
     schedule_kind: Mapped[str] = mapped_column(String(8), nullable=False)  # once | cron
@@ -157,8 +163,35 @@ class ScheduledTask(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="scheduled_tasks")
+    workspace: Mapped["Workspace"] = relationship(back_populates="scheduled_tasks")
 
     __table_args__ = (
         Index("idx_scheduled_tasks_user", "user_id", "created_at"),
+        Index("idx_scheduled_tasks_workspace", "workspace_id", "created_at"),
         Index("idx_scheduled_tasks_due", "enabled", "next_run_at"),
+    )
+
+
+class Workspace(Base):
+    __tablename__ = "workspaces"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    is_default: Mapped[bool] = mapped_column(default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    user: Mapped[User] = relationship(back_populates="workspaces")
+    notifications: Mapped[list[Notification]] = relationship(back_populates="workspace")
+    scheduled_tasks: Mapped[list[ScheduledTask]] = relationship(back_populates="workspace")
+
+    __table_args__ = (
+        Index("idx_workspaces_user_created", "user_id", "created_at"),
+        Index("idx_workspaces_user_default", "user_id", "is_default"),
     )

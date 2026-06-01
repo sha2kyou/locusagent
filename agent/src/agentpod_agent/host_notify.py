@@ -10,6 +10,7 @@ import httpx
 from .config import get_settings
 from .logging import get_logger
 from .artifacts.store import get_category_name
+from .workspace import get_workspace_id
 
 log = get_logger("host_notify")
 
@@ -55,6 +56,7 @@ async def notify_artifact_saved(art: dict[str, Any]) -> None:
     headers = {
         "X-Internal-Token": token,
         "X-User-Id": user_id,
+        "X-Workspace-Id": get_workspace_id(),
     }
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:

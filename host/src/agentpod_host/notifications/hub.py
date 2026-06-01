@@ -15,26 +15,34 @@ log = get_logger("notifications.hub")
 class NotificationHub:
     def __init__(self) -> None:
         self._lock = asyncio.Lock()
-        self._clients: dict[int, set[WebSocket]] = {}
+        self._clients: dict[tuple[int, str], set[WebSocket]] = {}
 
-    async def connect(self, user_id: int, ws: WebSocket) -> None:
+    async def connect(self, user_id: int, workspace_id: str, ws: WebSocket) -> None:
         await ws.accept()
+        key = (user_id, workspace_id)
         async with self._lock:
-            self._clients.setdefault(user_id, set()).add(ws)
-        log.info("ws_connected", user_id=user_id, clients=len(self._clients.get(user_id, ())))
+            self._clients.setdefault(key, set()).add(ws)
+        log.info(
+            "ws_connected",
+            user_id=user_id,
+            workspace_id=workspace_id,
+            clients=len(self._clients.get(key, ())),
+        )
 
-    async def disconnect(self, user_id: int, ws: WebSocket) -> None:
+    async def disconnect(self, user_id: int, workspace_id: str, ws: WebSocket) -> None:
+        key = (user_id, workspace_id)
         async with self._lock:
-            group = self._clients.get(user_id)
+            group = self._clients.get(key)
             if not group:
                 return
             group.discard(ws)
             if not group:
-                self._clients.pop(user_id, None)
+                self._clients.pop(key, None)
 
-    async def publish(self, user_id: int, event: dict[str, Any]) -> None:
+    async def publish(self, user_id: int, workspace_id: str, event: dict[str, Any]) -> None:
+        key = (user_id, workspace_id)
         async with self._lock:
-            targets = list(self._clients.get(user_id, set()))
+            targets = list(self._clients.get(key, set()))
         if not targets:
             return
         dead: list[WebSocket] = []
@@ -44,7 +52,7 @@ class NotificationHub:
             except Exception:
                 dead.append(ws)
         for ws in dead:
-            await self.disconnect(user_id, ws)
+            await self.disconnect(user_id, workspace_id, ws)
 
 
 hub = NotificationHub()

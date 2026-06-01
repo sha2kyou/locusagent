@@ -21,6 +21,7 @@ from ..orchestrator import (
     user_lock,
 )
 from ..security import decrypt_str
+from ..workspaces import ensure_user_default_workspace
 from .cron import next_cron_run_utc
 from .service import list_due_tasks
 
@@ -98,6 +99,7 @@ async def _notify_task_result(
     try:
         await create_notification(
             user_id,
+            workspace_id=str(task.workspace_id or "").strip() or None,
             kind="success" if ok else "error",
             category="定时任务",
             title=title,
@@ -128,7 +130,7 @@ async def _try_claim_task(task_id: int) -> bool:
         return bool(result.rowcount)
 
 
-async def _call_agent_run(user_id: int, *, title: str, prompt: str) -> dict:
+async def _call_agent_run(user_id: int, *, workspace_id: str, title: str, prompt: str) -> dict:
     async with get_session() as session:
         user = (await session.execute(select(User).where(User.id == user_id))).scalar_one()
         if user.internal_token_enc is None:
@@ -148,7 +150,10 @@ async def _call_agent_run(user_id: int, *, title: str, prompt: str) -> dict:
             resp = await client.post(
                 url,
                 json={"title": title, "prompt": prompt},
-                headers={"X-Internal-Token": token},
+                headers={
+                    "X-Internal-Token": token,
+                    "X-Workspace-Id": workspace_id,
+                },
             )
             if resp.status_code >= 400:
                 raise _parse_agent_error(resp)
@@ -291,7 +296,15 @@ async def execute_task(task: ScheduledTask) -> None:
             if user.deleted_at is not None:
                 raise RuntimeError("用户已删除")
 
-        result = await _call_agent_run(user_id, title=task.title, prompt=task.prompt)
+        workspace_id = str(task.workspace_id or "").strip()
+        if not workspace_id:
+            workspace_id = (await ensure_user_default_workspace(user_id)).id
+        result = await _call_agent_run(
+            user_id,
+            workspace_id=workspace_id,
+            title=task.title,
+            prompt=task.prompt,
+        )
         session_id = str(result.get("session_id") or "") or None
         final_text = str(result.get("final_text") or "")
         finished = await _finish_task(

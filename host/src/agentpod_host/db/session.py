@@ -38,7 +38,82 @@ async def init_engine() -> AsyncEngine:
             text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS category VARCHAR(64)")
         )
         await conn.execute(
+            text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS workspace_id VARCHAR(64)")
+        )
+        await conn.execute(
             text("ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(64) DEFAULT 'UTC'")
+        )
+        await conn.execute(
+            text("ALTER TABLE scheduled_tasks ADD COLUMN IF NOT EXISTS workspace_id VARCHAR(64)")
+        )
+        await conn.execute(
+            text("ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''")
+        )
+        await conn.execute(
+            text(
+                """
+                INSERT INTO workspaces (id, user_id, name, is_default)
+                SELECT
+                    'ws_' || substr(md5(random()::text || u.id::text), 1, 20),
+                    u.id,
+                    '默认工作区',
+                    true
+                FROM users u
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM workspaces w WHERE w.user_id = u.id
+                )
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                WITH default_ws AS (
+                    SELECT DISTINCT ON (user_id) user_id, id
+                    FROM workspaces
+                    WHERE is_default = true
+                    ORDER BY user_id, created_at ASC, id ASC
+                )
+                UPDATE scheduled_tasks st
+                SET workspace_id = d.id
+                FROM default_ws d
+                WHERE st.workspace_id IS NULL AND st.user_id = d.user_id
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                WITH default_ws AS (
+                    SELECT DISTINCT ON (user_id) user_id, id
+                    FROM workspaces
+                    WHERE is_default = true
+                    ORDER BY user_id, created_at ASC, id ASC
+                )
+                UPDATE notifications n
+                SET workspace_id = d.id
+                FROM default_ws d
+                WHERE n.workspace_id IS NULL AND n.user_id = d.user_id
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_workspaces_user_default_true "
+                "ON workspaces(user_id) WHERE is_default = true"
+            )
+        )
+        await conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_notifications_user_ws_created "
+                "ON notifications(user_id, workspace_id, created_at)"
+            )
+        )
+        await conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_notifications_user_ws_unread "
+                "ON notifications(user_id, workspace_id, read_at)"
+            )
         )
     return _engine
 
