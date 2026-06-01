@@ -56,6 +56,32 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, id);
 
+CREATE TABLE IF NOT EXISTS attachments (
+    id               TEXT PRIMARY KEY,
+    session_id       TEXT,
+    kind             TEXT NOT NULL,
+    name             TEXT NOT NULL,
+    mime_type        TEXT,
+    size_bytes       INTEGER NOT NULL DEFAULT 0,
+    text_content     TEXT,
+    image_data_url   TEXT,
+    processable      INTEGER NOT NULL DEFAULT 1,
+    unsupported_reason TEXT,
+    truncated        INTEGER NOT NULL DEFAULT 0,
+    created_at       TIMESTAMP NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_attachments_session ON attachments(session_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS message_attachments (
+    message_id       INTEGER NOT NULL,
+    attachment_id    TEXT NOT NULL,
+    order_index      INTEGER NOT NULL DEFAULT 0,
+    created_at       TIMESTAMP NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (message_id, attachment_id)
+);
+CREATE INDEX IF NOT EXISTS idx_message_attachments_message ON message_attachments(message_id, order_index);
+CREATE INDEX IF NOT EXISTS idx_message_attachments_attachment ON message_attachments(attachment_id);
+
 CREATE TABLE IF NOT EXISTS runs (
     id                   TEXT PRIMARY KEY,
     session_id           TEXT NOT NULL,

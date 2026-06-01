@@ -15,6 +15,7 @@ from ..audit import record_event
 from ..auth import AuthContext, require_session
 from ..db import ContainerStatus, User, get_session
 from ..logging import get_logger
+from ..orchestrator import ensure_user_container
 from ..scheduled_tasks import recalc_user_task_schedules, validate_timezone
 from ..security import decrypt_str, encrypt_str
 
@@ -191,16 +192,27 @@ async def read_tavily(ctx: AuthContext = Depends(require_session)) -> TavilyConf
 async def save_tavily(
     payload: TavilyConfigIn,
     request: Request,
+    background_tasks: BackgroundTasks,
     ctx: AuthContext = Depends(require_session),
 ) -> TavilyConfigOut:
     api_key = payload.api_key.strip()
     if api_key and len(api_key) < 8:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Tavily API Key 长度至少 8 位")
 
+    config_changed = False
+    need_reprovision = False
     async with get_session() as session:
         stmt = select(User).where(User.id == ctx.user.id)
         db_user = (await session.execute(stmt)).scalar_one()
+        old_value = decrypt_str(db_user.tavily_api_key_enc) if db_user.tavily_api_key_enc else ""
+        config_changed = old_value != api_key
         db_user.tavily_api_key_enc = encrypt_str(api_key) if api_key else None
+        status = ContainerStatus(db_user.container_status)
+        need_reprovision = (
+            config_changed
+            and db_user.llm_api_key_enc is not None
+            and status in (ContainerStatus.RUNNING, ContainerStatus.PAUSED, ContainerStatus.STOPPED)
+        )
         await record_event(
             session,
             "tavily.configured",
@@ -209,6 +221,14 @@ async def save_tavily(
             ip=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
         )
+    if need_reprovision:
+        async def _spawn() -> None:
+            try:
+                await ensure_user_container(ctx.user.id, force_recreate=True)
+            except Exception as exc:
+                log.error("tavily_reprovision_failed", user_id=ctx.user.id, error=str(exc))
+
+        background_tasks.add_task(_spawn)
     return TavilyConfigOut(configured=bool(api_key))
 
 

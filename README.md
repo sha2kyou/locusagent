@@ -66,32 +66,33 @@ openssl rand -base64 32
 
 ```bash
 docker compose up -d --build
+docker build -f "agent/Dockerfile" -t "agentpod-agent:latest" "."
 ```
 
-默认入口：`http://localhost`
+默认入口：`http://localhost:1223`
 
 ## 启动后验证
 
 ### 健康检查
 
 ```bash
-curl "http://localhost/health"
-curl "http://localhost/api/v1/health"
+curl "http://localhost:1223/health"
+curl "http://localhost:1223/api/v1/health"
 ```
 
 ### 首次使用路径
 
-1. 浏览器打开 `http://localhost`
+1. 浏览器打开 `http://localhost:1223`
 2. 用 GitHub 登录
 3. 在设置页配置 LLM（BYOK）
-4. 打开 `http://localhost/chat` 发起对话
+4. 打开 `http://localhost:1223/chat` 发起对话
 
 ### API 验证（Bearer）
 
 拿到 `agent_api_key` 后可测试：
 
 ```bash
-curl "http://localhost/api/v1/models" \
+curl "http://localhost:1223/api/v1/models" \
   -H "Authorization: Bearer <agent_api_key>"
 ```
 
@@ -148,13 +149,18 @@ npm run build
 ```
 
 ```bash
-# 全量重建（怀疑运行时环境异常时使用）
+# 重建 host+agent 镜像并拉起服务（不主动 down）
 ./rebuild.sh full
 ```
 
 ```bash
-# 全量重建后，顺带强制重建某个用户隔离容器
+# 同时顺带强制重建某个用户隔离容器
 ./rebuild.sh full <user_id>
+```
+
+```bash
+# 仅重建基础设施（postgres/tei/host）
+./rebuild.sh infra
 ```
 
 ### 3) 可选验证

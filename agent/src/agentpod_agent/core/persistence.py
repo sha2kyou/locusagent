@@ -34,6 +34,83 @@ def _new_response_id() -> str:
     return f"resp_{secrets.token_urlsafe(12)}"
 
 
+def _new_attachment_id() -> str:
+    return f"att_{secrets.token_urlsafe(12)}"
+
+
+def _to_chat_attachment_row(row: Any) -> dict[str, Any]:
+    return {
+        "id": str(row["id"]),
+        "name": str(row["name"] or "附件"),
+        "kind": str(row["kind"] or "other"),
+        "mimeType": row["mime_type"],
+        "text": row["text_content"],
+        "imageDataUrl": row["image_data_url"],
+        "processable": bool(int(row["processable"] or 0)),
+        "unsupportedReason": row["unsupported_reason"],
+        "truncated": bool(int(row["truncated"] or 0)),
+    }
+
+
+def _load_message_attachments_map(c: Any, message_ids: list[int]) -> dict[int, list[dict[str, Any]]]:
+    if not message_ids:
+        return {}
+    placeholders = ",".join("?" for _ in message_ids)
+    rows = c.execute(
+        "SELECT ma.message_id, a.id, a.name, a.kind, a.mime_type, a.text_content, a.image_data_url, "
+        "a.processable, a.unsupported_reason, a.truncated, ma.order_index "
+        "FROM message_attachments ma "
+        "JOIN attachments a ON a.id = ma.attachment_id "
+        f"WHERE ma.message_id IN ({placeholders}) "
+        "ORDER BY ma.message_id ASC, ma.order_index ASC",
+        message_ids,
+    ).fetchall()
+    out: dict[int, list[dict[str, Any]]] = {}
+    for row in rows:
+        mid = int(row["message_id"])
+        out.setdefault(mid, []).append(_to_chat_attachment_row(row))
+    return out
+
+
+def _compose_user_content_with_attachments(text: str, attachments: list[dict[str, Any]]) -> Any:
+    clean = text.strip()
+    if not attachments:
+        return clean
+
+    has_image = any(a.get("kind") == "image" and a.get("processable") for a in attachments)
+    text_attachments = [a for a in attachments if a.get("kind") == "text" and a.get("processable")]
+    unsupported = [a for a in attachments if not a.get("processable")]
+
+    if has_image:
+        parts: list[dict[str, Any]] = []
+        parts.append({"type": "text", "text": clean or "请结合附件内容回答。"})
+        for a in attachments:
+            if a.get("kind") == "image" and a.get("processable") and a.get("imageDataUrl"):
+                parts.append({"type": "image_url", "image_url": {"url": a["imageDataUrl"]}})
+        if text_attachments:
+            extras: list[str] = []
+            for i, a in enumerate(text_attachments, start=1):
+                extras.append(f"[附件 {i}] name={a.get('name')}\n{str(a.get('text') or '')}")
+            parts.append({"type": "text", "text": "以下是文本附件内容：\n\n" + "\n\n".join(extras)})
+        if unsupported:
+            names = ", ".join(str(a.get("name") or "附件") for a in unsupported)
+            parts.append({"type": "text", "text": f"另有不可解析附件：{names}。"})
+        return parts
+
+    lines: list[str] = []
+    if clean:
+        lines.append(clean)
+    if text_attachments:
+        items: list[str] = []
+        for i, a in enumerate(text_attachments, start=1):
+            items.append(f"[附件 {i}] name={a.get('name')}\n{str(a.get('text') or '')}")
+        lines.append("以下是用户上传的附件内容：\n\n" + "\n\n".join(items))
+    if unsupported:
+        names = ", ".join(str(a.get("name") or "附件") for a in unsupported)
+        lines.append(f"用户还上传了不可解析附件：{names}。")
+    return "\n\n".join(lines).strip()
+
+
 def _is_legacy_event_meta(tool_calls: Any) -> bool:
     if not isinstance(tool_calls, list) or not tool_calls:
         return False
@@ -329,6 +406,99 @@ async def append_message(
     return message_id
 
 
+async def create_attachment(
+    *,
+    session_id: str | None,
+    kind: str,
+    name: str,
+    mime_type: str | None,
+    size_bytes: int,
+    text_content: str | None,
+    image_data_url: str | None,
+    processable: bool,
+    unsupported_reason: str | None,
+    truncated: bool,
+) -> dict[str, Any]:
+    attachment_id = _new_attachment_id()
+
+    def _do() -> dict[str, Any]:
+        with conn_scope(load_vec=False) as c:
+            c.execute(
+                "INSERT INTO attachments("
+                "id, session_id, kind, name, mime_type, size_bytes, text_content, image_data_url, "
+                "processable, unsupported_reason, truncated"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    attachment_id,
+                    session_id,
+                    kind,
+                    name,
+                    mime_type,
+                    size_bytes,
+                    text_content,
+                    image_data_url,
+                    1 if processable else 0,
+                    unsupported_reason,
+                    1 if truncated else 0,
+                ),
+            )
+            row = c.execute(
+                "SELECT id, name, kind, mime_type, text_content, image_data_url, processable, "
+                "unsupported_reason, truncated FROM attachments WHERE id = ?",
+                (attachment_id,),
+            ).fetchone()
+            return _to_chat_attachment_row(row)
+
+    return await run_in_thread(_do)
+
+
+async def get_attachments_by_ids(attachment_ids: list[str]) -> list[dict[str, Any]]:
+    if not attachment_ids:
+        return []
+
+    def _do() -> list[dict[str, Any]]:
+        with conn_scope(load_vec=False) as c:
+            placeholders = ",".join("?" for _ in attachment_ids)
+            rows = c.execute(
+                "SELECT id, name, kind, mime_type, text_content, image_data_url, processable, "
+                "unsupported_reason, truncated "
+                f"FROM attachments WHERE id IN ({placeholders})",
+                attachment_ids,
+            ).fetchall()
+            by_id = {str(r["id"]): _to_chat_attachment_row(r) for r in rows}
+            out: list[dict[str, Any]] = []
+            for aid in attachment_ids:
+                item = by_id.get(aid)
+                if item:
+                    out.append(item)
+            return out
+
+    return await run_in_thread(_do)
+
+
+async def link_message_attachments(message_id: int, attachment_ids: list[str]) -> None:
+    if message_id <= 0 or not attachment_ids:
+        return
+
+    def _do() -> None:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute("SELECT session_id FROM messages WHERE id = ?", (message_id,)).fetchone()
+            session_id = str(row["session_id"]) if row and row["session_id"] else None
+            for idx, aid in enumerate(attachment_ids):
+                c.execute(
+                    "INSERT OR IGNORE INTO message_attachments(message_id, attachment_id, order_index) "
+                    "VALUES (?, ?, ?)",
+                    (message_id, aid, idx),
+                )
+                if session_id:
+                    c.execute(
+                        "UPDATE attachments SET session_id = COALESCE(session_id, ?) WHERE id = ?",
+                        (session_id, aid),
+                    )
+
+    await run_in_thread(_do)
+
+
 async def update_message(
     message_id: int,
     *,
@@ -459,6 +629,8 @@ async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
                 "ORDER BY id ASC",
                 (session_id,),
             ).fetchall()
+            mids = [int(r["id"]) for r in rows]
+            attachments_map = _load_message_attachments_map(c, mids)
 
         out: list[dict[str, Any]] = []
         for r in rows:
@@ -485,7 +657,14 @@ async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
                 continue
 
             if role == "user":
-                out.append({"role": "user", "content": content, "id": msg_id})
+                attachments = attachments_map.get(msg_id, [])
+                out.append(
+                    {
+                        "role": "user",
+                        "content": _compose_user_content_with_attachments(content, attachments),
+                        "id": msg_id,
+                    }
+                )
                 continue
 
             if role == "assistant":
@@ -633,6 +812,8 @@ async def list_messages(session_id: str) -> list[dict]:
                 "FROM messages WHERE session_id = ? ORDER BY id ASC",
                 (session_id,),
             ).fetchall()
+            mids = [int(r["id"]) for r in rows]
+            attachments_map = _load_message_attachments_map(c, mids)
             out: list[dict] = []
             for r in rows:
                 d = dict(r)
@@ -641,6 +822,7 @@ async def list_messages(session_id: str) -> list[dict]:
                         d["tool_calls"] = json.loads(d["tool_calls"])
                     except json.JSONDecodeError:
                         d["tool_calls"] = None
+                d["attachments"] = attachments_map.get(int(d["id"]), [])
                 out.append(d)
             return out
 
@@ -650,6 +832,18 @@ async def list_messages(session_id: str) -> list[dict]:
 async def delete_session(session_id: str) -> bool:
     def _do() -> bool:
         with conn_scope(load_vec=False) as c:
+            message_rows = c.execute(
+                "SELECT id FROM messages WHERE session_id = ?",
+                (session_id,),
+            ).fetchall()
+            mids = [int(r["id"]) for r in message_rows]
+            if mids:
+                placeholders = ",".join("?" for _ in mids)
+                c.execute(
+                    f"DELETE FROM message_attachments WHERE message_id IN ({placeholders})",
+                    mids,
+                )
+            c.execute("DELETE FROM attachments WHERE session_id = ?", (session_id,))
             c.execute("DELETE FROM responses WHERE session_id = ?", (session_id,))
             c.execute("DELETE FROM runs WHERE session_id = ?", (session_id,))
             c.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))

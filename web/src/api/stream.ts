@@ -4,6 +4,7 @@ import { ApiError, redirectToLogin } from "./client";
 export interface ChatRequestBody {
   messages: {
     role: string;
+    attachment_ids?: string[];
     content:
       | string
       | (

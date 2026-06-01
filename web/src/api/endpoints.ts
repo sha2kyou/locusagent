@@ -94,6 +94,29 @@ export const cancelRun = (id: string) =>
 export const deleteSession = (id: string) =>
   apiSend<{ deleted: boolean }>(`/api/workspace/sessions/${encodeURIComponent(id)}`, "DELETE");
 
+export const createAttachment = (body: {
+  session_id?: string | null;
+  name: string;
+  size_bytes: number;
+  kind: "text" | "image" | "other";
+  mime_type?: string;
+  text_content?: string;
+  image_data_url?: string;
+  processable: boolean;
+  unsupported_reason?: string;
+  truncated: boolean;
+}) => apiSend<{
+  id: string;
+  name: string;
+  kind: "text" | "image" | "other";
+  mimeType?: string;
+  text?: string;
+  imageDataUrl?: string;
+  processable: boolean;
+  unsupportedReason?: string;
+  truncated?: boolean;
+}>("/api/workspace/attachments", "POST", body);
+
 // ---- 技能 ----
 export const listSkills = () => apiGet<{ items: Skill[] }>("/api/workspace/skills");
 

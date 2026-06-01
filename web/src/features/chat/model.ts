@@ -34,6 +34,7 @@ export interface ChatAttachment {
   kind: "text" | "image" | "other";
   mimeType?: string;
   text?: string;
+  imageDataUrl?: string;
   processable: boolean;
   unsupportedReason?: string;
   truncated?: boolean;

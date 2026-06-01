@@ -14,7 +14,12 @@ from ..db import ContainerStatus, User, get_session
 from ..db.models import ScheduledTask
 from ..logging import get_logger
 from ..notifications import create_notification
-from ..orchestrator import container_name_for, ensure_container_ready, touch_last_active
+from ..orchestrator import (
+    container_name_for,
+    ensure_container_ready,
+    touch_last_active,
+    user_lock,
+)
 from ..security import decrypt_str
 from .cron import next_cron_run_utc
 from .service import list_due_tasks
@@ -26,8 +31,6 @@ TOUCH_INTERVAL_SECONDS = 60.0
 STALE_RUNNING_SECONDS = AGENT_RUN_TIMEOUT + 120.0
 STALE_ERROR_MESSAGE = "执行中断（超时或服务重启）"
 
-_user_locks: dict[int, asyncio.Lock] = {}
-_locks_guard = asyncio.Lock()
 _scan_lock = asyncio.Lock()
 _scan_tasks: set[asyncio.Task[None]] = set()
 
@@ -45,15 +48,6 @@ class _NotifyPayload:
     title: str
     notify: bool
     session_id: str | None
-
-
-async def _user_lock(user_id: int) -> asyncio.Lock:
-    async with _locks_guard:
-        lock = _user_locks.get(user_id)
-        if lock is None:
-            lock = asyncio.Lock()
-            _user_locks[user_id] = lock
-        return lock
 
 
 def _excerpt(text: str, max_len: int = 160) -> str:
@@ -332,7 +326,7 @@ async def _run_user_tasks(tasks: list[ScheduledTask]) -> None:
     if not tasks:
         return
     user_id = tasks[0].user_id
-    lock = await _user_lock(user_id)
+    lock = await user_lock(user_id)
     async with lock:
         for task in tasks:
             await execute_task(task)

@@ -23,6 +23,7 @@ from ..host_settings import build_runtime_time_context
 from ..core import (
     append_message,
     build_llm_messages,
+    get_attachments_by_ids,
     create_response,
     create_run,
     create_session,
@@ -34,6 +35,7 @@ from ..core import (
     persist_openai_message,
     run_chat_loop,
     session_lock,
+    link_message_attachments,
     truncate_after_last_user,
     update_run,
     upsert_session_meta,
@@ -102,6 +104,7 @@ _TITLE_MAX_LEN = 28
 class ChatMessage(BaseModel):
     role: str
     content: Any = None
+    attachment_ids: list[str] | None = None
     tool_calls: list[dict] | None = None
     tool_call_id: str | None = None
 
@@ -231,25 +234,66 @@ async def _resolve_response_session(req: ResponsesRequest) -> tuple[str, bool]:
     return sid, True
 
 
-def _extract_latest_user_payload(req: ChatRequest) -> tuple[Any, str, str] | None:
+def _attachment_signature(attachment_ids: list[str]) -> str:
+    joined = "\n".join(attachment_ids)
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:12]
+
+
+async def _extract_latest_user_payload(req: ChatRequest) -> tuple[Any, str, str, list[str]] | None:
     for m in reversed(req.messages):
         if m.role != "user":
             continue
+        attachment_ids = [str(x).strip() for x in (m.attachment_ids or []) if str(x).strip()]
         text = _extract_text_content(m.content)
         has_image = _has_image_content(m.content)
-        if text or has_image:
-            user_query_text = text or "[image attachment]"
-            persisted_text = user_query_text
-            if has_image:
+        if text or has_image or attachment_ids:
+            user_query_text = text
+            if attachment_ids:
+                attachments = await get_attachments_by_ids(attachment_ids)
+                if attachments:
+                    has_img_attachment = any(a.get("kind") == "image" and a.get("processable") for a in attachments)
+                    if has_img_attachment:
+                        parts: list[dict[str, Any]] = [
+                            {"type": "text", "text": text or "请结合附件内容回答。"}
+                        ]
+                        for a in attachments:
+                            if a.get("kind") == "image" and a.get("processable") and a.get("imageDataUrl"):
+                                parts.append({"type": "image_url", "image_url": {"url": a["imageDataUrl"]}})
+                        text_attachments = [a for a in attachments if a.get("kind") == "text" and a.get("processable")]
+                        if text_attachments:
+                            lines: list[str] = []
+                            for i, a in enumerate(text_attachments, start=1):
+                                lines.append(f"[附件 {i}] name={a.get('name')}\n{str(a.get('text') or '')}")
+                            parts.append({"type": "text", "text": "以下是文本附件内容：\n\n" + "\n\n".join(lines)})
+                        composed_content: Any = parts
+                    else:
+                        lines: list[str] = []
+                        if text:
+                            lines.append(text)
+                        text_attachments = [a for a in attachments if a.get("kind") == "text" and a.get("processable")]
+                        if text_attachments:
+                            items: list[str] = []
+                            for i, a in enumerate(text_attachments, start=1):
+                                items.append(f"[附件 {i}] name={a.get('name')}\n{str(a.get('text') or '')}")
+                            lines.append("以下是用户上传的附件内容：\n\n" + "\n\n".join(items))
+                        composed_content = "\n\n".join(lines).strip()
+                    if not user_query_text:
+                        user_query_text = text or "[attachment]"
+                    persisted_text = (text or "").strip()
+                    sig = _attachment_signature([a["id"] for a in attachments])
+                    persisted_text = f"{persisted_text}\n[attachment_ids:{sig}]".strip()
+                    return composed_content, persisted_text, user_query_text, [a["id"] for a in attachments]
+            if has_image and isinstance(m.content, list):
+                user_query_text = user_query_text or "[image attachment]"
                 sig = _image_signature(m.content)
                 persisted_text = (
                     f"{user_query_text}\n[image attachment:{sig}]"
                     if sig
                     else f"{user_query_text}\n[image attachment]"
                 )
-            if has_image and isinstance(m.content, list):
-                return m.content, persisted_text, user_query_text
-            return persisted_text, persisted_text, user_query_text
+                return m.content, persisted_text, user_query_text, []
+            persisted_text = text or ""
+            return persisted_text, persisted_text, text, []
     return None
 
 
@@ -274,28 +318,32 @@ def _last_user_content(messages: list[dict[str, Any]]) -> str | None:
 
 
 async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, Any]], str]:
-    latest_user = _extract_latest_user_payload(req)
+    latest_user = await _extract_latest_user_payload(req)
     if latest_user is None:
         raise ValueError("missing user message")
-    new_user_content, persisted_user_text, user_query_text = latest_user
+    new_user_content, _persisted_user_text, user_query_text, attachment_ids = latest_user
 
     if req.session_id:
         last_db_user = await get_last_user_message(sid)
-        if last_db_user == persisted_user_text:
+        if not attachment_ids and last_db_user == user_query_text:
             # 同一句重发即"重新生成 / 失败重试"：先清掉上一轮(可能中断的)助手输出再重跑
             await truncate_after_last_user(sid)
         else:
-            await append_message(sid, "user", persisted_user_text)
+            user_mid = await append_message(sid, "user", user_query_text, run_id=None)
+            if user_mid > 0 and attachment_ids:
+                await link_message_attachments(user_mid, attachment_ids)
         db_msgs = await build_llm_messages(sid)
         # 当前轮若带图片，需要用原始多模态 content 覆盖最后一条用户消息参与 LLM 推理。
         if db_msgs and db_msgs[-1].get("role") == "user":
             db_msgs[-1]["content"] = new_user_content
-        user_query = user_query_text
+        user_query = user_query_text or ""
     else:
         db_msgs = [{"role": "user", "content": new_user_content}]
-        await append_message(sid, "user", persisted_user_text)
+        user_mid = await append_message(sid, "user", user_query_text, run_id=None)
+        if user_mid > 0 and attachment_ids:
+            await link_message_attachments(user_mid, attachment_ids)
         # 标题留给运行结束后由 LLM 生成（默认 "新对话"），失败时回退首句裁剪
-        user_query = user_query_text
+        user_query = user_query_text or ""
 
     system_prompt = await _get_or_create_system_prompt(sid)
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]

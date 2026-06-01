@@ -1,5 +1,5 @@
 import type { LegacyToolMeta, Message, OpenAIToolCall, ToolKind } from "@/api/types";
-import { type ChatMessage, type ToolPart, uid } from "./model";
+import { type ChatAttachment, type ChatMessage, type ToolPart, uid } from "./model";
 
 function isOpenAIToolCall(tc: OpenAIToolCall | LegacyToolMeta | Record<string, unknown>): tc is OpenAIToolCall {
   return "function" in tc && !!(tc as OpenAIToolCall).function;
@@ -29,6 +29,33 @@ function compressionPreview(msg: Message): string {
   const body = (msg.content || "").trim();
   const header = `【自动上下文压缩】mode=${mode}, tokens: ${before} -> ${after}`;
   return body ? `${header}\n\n${body}` : `${header}\n本次未生成可展示摘要（已进行截断保留）。`;
+}
+
+function normalizeAttachments(
+  fromApi?: {
+    id: string;
+    name: string;
+    kind: "text" | "image" | "other";
+    mimeType?: string;
+    text?: string;
+    imageDataUrl?: string;
+    processable: boolean;
+    unsupportedReason?: string;
+    truncated?: boolean;
+  }[],
+): ChatAttachment[] | undefined {
+  if (!fromApi || fromApi.length === 0) return undefined;
+  return fromApi.map((a) => ({
+    id: a.id,
+    name: a.name,
+    kind: a.kind,
+    mimeType: a.mimeType,
+    text: a.text,
+    imageDataUrl: a.imageDataUrl,
+    processable: a.processable,
+    unsupportedReason: a.unsupportedReason,
+    truncated: a.truncated,
+  }));
 }
 
 function flushAssistant(result: ChatMessage[], cur: ChatMessage | null, curArchived: boolean) {
@@ -93,6 +120,7 @@ export function coalesceHistory(items: Message[]): ChatMessage[] {
         id: uid("u"),
         role: "user",
         archived: isArchived(msg),
+        attachments: normalizeAttachments((msg as { attachments?: ChatAttachment[] }).attachments),
         parts: [{ type: "text", text: msg.content || "" }],
       });
       continue;

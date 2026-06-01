@@ -131,6 +131,14 @@ async def proxy_artifacts(
     return await proxy_to_user_container(request, ctx.user, target)
 
 
+@router.api_route("/attachments", methods=PROXY_METHODS)
+async def proxy_attachments(
+    request: Request,
+    ctx: AuthContext = Depends(require_session),
+):
+    return await proxy_to_user_container(request, ctx.user, "/workspace/attachments")
+
+
 @router.post("/chat/completions")
 async def proxy_chat_for_web(
     request: Request,

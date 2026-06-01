@@ -40,6 +40,17 @@ export interface Message {
   id: number;
   role: "user" | "assistant" | "tool" | "system" | "context_summary";
   content: string;
+  attachments?: {
+    id: string;
+    name: string;
+    kind: "text" | "image" | "other";
+    mimeType?: string;
+    text?: string;
+    imageDataUrl?: string;
+    processable: boolean;
+    unsupportedReason?: string;
+    truncated?: boolean;
+  }[];
   tool_calls?: (OpenAIToolCall | LegacyToolMeta | Record<string, unknown>)[] | null;
   tool_call_id?: string | null;
   run_id?: string | null;

@@ -24,6 +24,7 @@ from ..artifacts import (
 )
 from ..core import (
     cancel_active_run,
+    create_attachment,
     delete_session,
     get_active_run,
     list_messages,
@@ -89,6 +90,19 @@ class SkillIn(BaseModel):
     description: str = ""
     body: str = ""
     triggers: list[str] = Field(default_factory=list)
+
+
+class AttachmentCreateIn(BaseModel):
+    session_id: str | None = None
+    name: str
+    size_bytes: int = 0
+    kind: Literal["text", "image", "other"]
+    mime_type: str | None = None
+    text_content: str | None = None
+    image_data_url: str | None = None
+    processable: bool = True
+    unsupported_reason: str | None = None
+    truncated: bool = False
 
 
 class SkillUpdateIn(BaseModel):
@@ -450,6 +464,23 @@ async def workspace_delete_env_var(entry_id: int) -> dict:
 async def workspace_list_sessions(limit: int = 50) -> dict:
     items = await list_sessions(limit=limit)
     return {"items": items}
+
+
+@router.post("/attachments", status_code=201)
+async def workspace_create_attachment(payload: AttachmentCreateIn) -> dict:
+    item = await create_attachment(
+        session_id=payload.session_id,
+        kind=payload.kind,
+        name=payload.name.strip() or "附件",
+        mime_type=payload.mime_type,
+        size_bytes=max(0, int(payload.size_bytes or 0)),
+        text_content=payload.text_content,
+        image_data_url=payload.image_data_url,
+        processable=bool(payload.processable),
+        unsupported_reason=payload.unsupported_reason,
+        truncated=bool(payload.truncated),
+    )
+    return item
 
 
 @router.get("/sessions/{session_id}")

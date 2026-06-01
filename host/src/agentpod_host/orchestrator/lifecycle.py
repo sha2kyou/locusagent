@@ -39,7 +39,7 @@ _user_locks: dict[int, asyncio.Lock] = {}
 _locks_guard = asyncio.Lock()
 
 
-async def _user_lock(user_id: int) -> asyncio.Lock:
+async def user_lock(user_id: int) -> asyncio.Lock:
     async with _locks_guard:
         lock = _user_locks.get(user_id)
         if lock is None:
@@ -299,7 +299,7 @@ async def ensure_user_container(user_id: int, *, force_recreate: bool = False) -
     幂等：若已 running 且未 force_recreate 直接返回；creating 期间并发请求复用同锁。
     force_recreate：销毁现有容器并按最新 LLM 配置重建（running/paused/stopped）。
     """
-    lock = await _user_lock(user_id)
+    lock = await user_lock(user_id)
     async with lock:
         user = await _load_user(user_id)
         status = ContainerStatus(user.container_status)
@@ -329,7 +329,7 @@ async def ensure_user_container(user_id: int, *, force_recreate: bool = False) -
             return ContainerStatus.RUNNING
         except Exception as exc:
             try:
-                await teardown_container(user_id, remove_volume=False)
+                await _teardown_container_unlocked(user_id, remove_volume=False)
             except Exception as cleanup_exc:
                 log.warning(
                     "provision_failed_cleanup",
@@ -346,35 +346,39 @@ async def ensure_user_container(user_id: int, *, force_recreate: bool = False) -
 
 
 async def pause_container(user_id: int) -> None:
-    name = container_name_for(user_id)
+    lock = await user_lock(user_id)
+    async with lock:
+        name = container_name_for(user_id)
 
-    def _do() -> None:
-        c = _find_container(name)
-        if c is not None and c.status == "running":
-            c.pause()
+        def _do() -> None:
+            c = _find_container(name)
+            if c is not None and c.status == "running":
+                c.pause()
 
-    await _run_blocking(_do)
-    await _set_user_status(user_id, container_status=ContainerStatus.PAUSED)
-    log.info("container_paused", user_id=user_id)
+        await _run_blocking(_do)
+        await _set_user_status(user_id, container_status=ContainerStatus.PAUSED)
+        log.info("container_paused", user_id=user_id)
 
 
 async def stop_container(user_id: int) -> None:
-    name = container_name_for(user_id)
+    lock = await user_lock(user_id)
+    async with lock:
+        name = container_name_for(user_id)
 
-    def _do() -> None:
-        c = _find_container(name)
-        if c is None:
-            return
-        if c.status == "paused":
-            c.unpause()
-        c.stop(timeout=10)
+        def _do() -> None:
+            c = _find_container(name)
+            if c is None:
+                return
+            if c.status == "paused":
+                c.unpause()
+            c.stop(timeout=10)
 
-    await _run_blocking(_do)
-    await _set_user_status(user_id, container_status=ContainerStatus.STOPPED)
-    log.info("container_stopped", user_id=user_id)
+        await _run_blocking(_do)
+        await _set_user_status(user_id, container_status=ContainerStatus.STOPPED)
+        log.info("container_stopped", user_id=user_id)
 
 
-async def teardown_container(user_id: int, *, remove_volume: bool = False) -> None:
+async def _teardown_container_unlocked(user_id: int, *, remove_volume: bool = False) -> None:
     name = container_name_for(user_id)
     network = network_name_for(user_id)
     volume = volume_name_for(user_id)
@@ -411,6 +415,12 @@ async def teardown_container(user_id: int, *, remove_volume: bool = False) -> No
         provision_status=ProvisionStatus.PENDING,
     )
     log.info("container_torn_down", user_id=user_id, removed_volume=remove_volume)
+
+
+async def teardown_container(user_id: int, *, remove_volume: bool = False) -> None:
+    lock = await user_lock(user_id)
+    async with lock:
+        await _teardown_container_unlocked(user_id, remove_volume=remove_volume)
 
 
 def _inspect_container(name: str) -> str:
@@ -537,7 +547,7 @@ async def ensure_container_ready(user_id: int) -> tuple[ContainerStatus, dict[st
     if status not in (ContainerStatus.PAUSED, ContainerStatus.STOPPED):
         return status, {"container_name": name}
 
-    lock = await _user_lock(user_id)
+    lock = await user_lock(user_id)
     async with lock:
         user = await _load_user(user_id)
         status = ContainerStatus(user.container_status)

@@ -12,6 +12,7 @@ from .lifecycle import (
     stop_container,
     teardown_container,
     touch_last_active,
+    user_lock,
 )
 from .naming import container_name_for, network_name_for, volume_name_for
 from .seed import sync_shared_skills
@@ -31,5 +32,6 @@ __all__ = [
     "sync_shared_skills",
     "teardown_container",
     "touch_last_active",
+    "user_lock",
     "volume_name_for",
 ]

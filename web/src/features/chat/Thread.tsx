@@ -7,7 +7,7 @@ import {
   useThreadRuntime,
   type TextMessagePartComponent,
 } from "@assistant-ui/react";
-import { ArrowDown, ArrowUp, Check, Copy, Paperclip, RotateCcw, Square, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Copy, Download, Paperclip, RotateCcw, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
@@ -281,6 +281,7 @@ function CopyButton({ text }: { text: string }) {
 }
 
 function UserMessage() {
+  const toast = useToast();
   const text = useMessageText();
   const archived = useMessage((m) => (m.metadata as { archived?: boolean } | undefined)?.archived);
   const rawAttachments = useMessage(
@@ -326,6 +327,24 @@ function UserMessage() {
         onClose={() => setSelectedAttachment(null)}
         title={selectedAttachment?.name}
         description={selectedAttachment ? attachmentDescription(selectedAttachment) : undefined}
+        actions={
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!canExportAttachment(selectedAttachment)}
+            onClick={() => {
+              if (!selectedAttachment) return;
+              const exported = exportAttachment(selectedAttachment);
+              if (!exported) {
+                toast("当前附件暂不支持导出", "info");
+              }
+            }}
+            title="导出"
+            aria-label="导出"
+          >
+            <Download className="size-4" />
+          </Button>
+        }
         width="xl"
       >
         {selectedAttachment ? (
@@ -359,6 +378,38 @@ function attachmentDescription(file: ChatAttachment): string {
   if (file.kind === "text") return file.truncated ? "文本附件（已截断）" : "文本附件";
   if (file.kind === "image") return "图片附件";
   return "附件";
+}
+
+function canExportAttachment(file: ChatAttachment | null): boolean {
+  if (!file) return false;
+  if (file.kind === "text") return typeof file.text === "string";
+  if (file.kind === "image") return typeof file.imageDataUrl === "string" && file.imageDataUrl.length > 0;
+  return false;
+}
+
+function exportAttachment(file: ChatAttachment): boolean {
+  if (file.kind === "text") {
+    const blob = new Blob([file.text ?? ""], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    triggerDownload(url, file.name || "attachment.txt");
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    return true;
+  }
+  if (file.kind === "image" && file.imageDataUrl) {
+    triggerDownload(file.imageDataUrl, file.name || "attachment");
+    return true;
+  }
+  return false;
+}
+
+function triggerDownload(url: string, filename: string): void {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 function AssistantMessage() {

@@ -10,6 +10,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { AssistantRuntimeProvider, useExternalStoreRuntime } from "@assistant-ui/react";
 import {
   cancelRun,
+  createAttachment as apiCreateAttachment,
   deleteSession as apiDeleteSession,
   getActiveRun,
   getSessionMessages,
@@ -33,6 +34,7 @@ import { coalesceHistory } from "./history";
 
 export interface PendingAttachment {
   id: string;
+  attachmentId: string;
   name: string;
   size: number;
   kind: "text" | "image" | "other";
@@ -81,6 +83,21 @@ type ChatRequestContent =
   | string
   | ({ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } })[];
 
+function isImageInputUnsupportedError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const msg = String((err as { message?: unknown }).message ?? "");
+  const code = String((err as { code?: unknown }).code ?? "");
+  const detail = (err as { detail?: unknown }).detail;
+  const detailText =
+    typeof detail === "string" ? detail : detail == null ? "" : JSON.stringify(detail);
+  const joined = `${msg}\n${detailText}`.toLowerCase();
+  return (
+    code === "404" &&
+    (joined.includes("support image input") ||
+      joined.includes("no endpoints found that support image input"))
+  );
+}
+
 function chatPath(sessionId: string | null): string {
   return sessionId ? `/chat/${encodeURIComponent(sessionId)}` : "/chat";
 }
@@ -119,13 +136,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   };
 
   // ---- 会话列表 ----
-  const refreshSessions = async () => {
+  const refreshSessions = async (): Promise<SessionMeta[]> => {
     try {
       const { items } = await listSessions();
       items.sort((a, b) => (b.updated_at || b.created_at).localeCompare(a.updated_at || a.created_at));
       if (mountedRef.current) setSessions(items);
+      return items;
     } catch {
       /* 容器未就绪等：忽略，由就绪提示兜底 */
+      return [];
     } finally {
       if (mountedRef.current) setLoadingSessions(false);
     }
@@ -179,8 +198,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         return;
       }
       tries += 1;
-      await refreshSessions();
-      const found = (await listSessions().catch(() => ({ items: [] as SessionMeta[] }))).items.find((s) => s.id === sid);
+      const items = await refreshSessions();
+      const found = items.find((s) => s.id === sid);
       if (tries >= 12 || (found && found.title && found.title !== DEFAULT_TITLE)) {
         clearInterval(timer);
         titlePollTimerRef.current = null;
@@ -301,6 +320,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       requestText?: string;
       requestContent?: ChatRequestContent;
       displayAttachments?: ChatAttachment[];
+      attachmentIds?: string[];
     },
   ) => {
     abortChat();
@@ -324,7 +344,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     const sid = currentIdRef.current;
     const body = {
-      messages: [{ role: "user", content: opts.requestContent ?? opts.requestText ?? text }],
+      messages: [
+        {
+          role: "user",
+          content: opts.requestContent ?? opts.requestText ?? text,
+          ...(opts.attachmentIds?.length ? { attachment_ids: opts.attachmentIds } : {}),
+        },
+      ],
       stream: true as const,
       ...(sid ? { session_id: sid } : {}),
     };
@@ -413,6 +439,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         toast("该对话仍在生成中", "info");
         if (mountedRef.current && currentIdRef.current) startActiveRunPoll(currentIdRef.current);
         return;
+      } else if (isImageInputUnsupportedError(err)) {
+        const tip = "当前模型或上游端点不支持图片输入，请切换支持视觉的模型后重试。";
+        updateLastAssistant((p) => p, tip);
+        toast(tip, "error");
+        setLastErrored(true);
       } else {
         updateLastAssistant((p) => p, err.message || "请求失败");
         setLastErrored(true);
@@ -430,17 +461,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     requestText?: string,
     requestContent?: ChatRequestContent,
     displayAttachments?: ChatAttachment[],
-  ) => runTurn(text, { appendUser: true, requestText, requestContent, displayAttachments });
+    attachmentIds?: string[],
+  ) => runTurn(text, { appendUser: true, requestText, requestContent, displayAttachments, attachmentIds });
 
   const regenerate = () => {
     if (isRunning) return;
-    const text = lastUserText(messages);
-    if (!text) return;
-    void runTurn(text, { appendUser: false });
+    const lastInput = lastUserInput(messages);
+    if (!lastInput) return;
+    void runTurn(lastInput.text, {
+      appendUser: false,
+      requestText: lastInput.text,
+      requestContent: lastInput.text,
+      attachmentIds: lastInput.attachmentIds,
+    });
   };
 
   const cancel = async () => {
     abortChat();
+    stopActiveRunPoll();
     stopRunningTools("已停止");
     setIsRunning(false);
     const sid = currentIdRef.current;
@@ -496,35 +534,71 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           const raw = await file.text();
           const normalized = raw.replace(/\r\n/g, "\n");
           const truncated = normalized.length > MAX_ATTACHMENT_CHARS;
-          next.push({
-            id: uid("f"),
+          const textContent = truncated
+            ? `${normalized.slice(0, MAX_ATTACHMENT_CHARS)}\n...（文件过长，已截断）`
+            : normalized;
+          const created = await apiCreateAttachment({
+            session_id: currentIdRef.current,
             name: file.name,
-            size: file.size,
+            size_bytes: file.size,
             kind: "text",
-            text: truncated ? `${normalized.slice(0, MAX_ATTACHMENT_CHARS)}\n...（文件过长，已截断）` : normalized,
+            mime_type: file.type || "text/plain",
+            text_content: textContent,
             processable: true,
             truncated,
           });
-        } else if (isImageFile(file)) {
-          const imageDataUrl = await fileToDataUrl(file);
           next.push({
             id: uid("f"),
-            name: file.name,
+            attachmentId: created.id,
+            name: created.name,
             size: file.size,
+            kind: "text",
+            text: created.text,
+            processable: created.processable,
+            truncated: !!created.truncated,
+          });
+        } else if (isImageFile(file)) {
+          const imageDataUrl = await fileToDataUrl(file);
+          const created = await apiCreateAttachment({
+            session_id: currentIdRef.current,
+            name: file.name,
+            size_bytes: file.size,
             kind: "image",
-            mimeType: file.type || guessMimeTypeByName(file.name) || "image/png",
-            imageDataUrl,
+            mime_type: file.type || guessMimeTypeByName(file.name) || "image/png",
+            image_data_url: imageDataUrl,
             processable: true,
             truncated: false,
           });
-        } else {
           next.push({
             id: uid("f"),
+            attachmentId: created.id,
+            name: created.name,
+            size: file.size,
+            kind: "image",
+            mimeType: created.mimeType,
+            imageDataUrl: created.imageDataUrl,
+            processable: created.processable,
+            truncated: false,
+          });
+        } else {
+          const created = await apiCreateAttachment({
+            session_id: currentIdRef.current,
             name: file.name,
+            size_bytes: file.size,
+            kind: "other",
+            mime_type: file.type || undefined,
+            processable: false,
+            unsupported_reason: "当前仅支持文本或图片附件",
+            truncated: false,
+          });
+          next.push({
+            id: uid("f"),
+            attachmentId: created.id,
+            name: created.name,
             size: file.size,
             kind: "other",
             processable: false,
-            unsupportedReason: "当前仅支持文本或图片附件",
+            unsupportedReason: created.unsupportedReason ?? "当前仅支持文本或图片附件",
             truncated: false,
           });
         }
@@ -553,11 +627,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const attachments = pendingAttachmentsRef.current;
       if (!text && attachments.length === 0) return;
       const displayText = buildDisplayText(text, attachments);
-      const requestText = buildRequestText(text, attachments);
-      const requestContent = buildRequestContent(text, attachments);
+      const requestText = text.trim();
+      const requestContent = text.trim();
       const displayAttachments = buildDisplayAttachments(attachments);
+      const attachmentIds = attachments.map((file) => file.attachmentId);
       clearPendingAttachments();
-      await send(displayText, requestText, requestContent, displayAttachments);
+      await send(displayText, requestText, requestContent, displayAttachments, attachmentIds);
     },
     onCancel: cancel,
   });
@@ -599,14 +674,19 @@ function lastAssistantIndex(msgs: ChatMessage[]): number {
   return -1;
 }
 
-function lastUserText(msgs: ChatMessage[]): string | null {
+function lastUserInput(msgs: ChatMessage[]): { text: string; attachmentIds: string[] } | null {
   for (let i = msgs.length - 1; i >= 0; i--) {
-    if (msgs[i].role === "user") {
-      const t = (
-        msgs[i].sourceText ??
-        msgs[i].parts.map((p) => (p.type === "text" ? p.text : "")).join("")
-      ).trim();
-      return t || null;
+    const msg = msgs[i];
+    if (msg.role !== "user") continue;
+    const text = (
+      msg.sourceText ??
+      msg.parts.map((p) => (p.type === "text" ? p.text : "")).join("")
+    ).trim();
+    const attachmentIds = (msg.attachments ?? [])
+      .map((a) => String(a.id || "").trim())
+      .filter((id) => id.length > 0);
+    if (text || attachmentIds.length > 0) {
+      return { text, attachmentIds };
     }
   }
   return null;
@@ -621,67 +701,16 @@ function buildDisplayText(text: string, attachments: PendingAttachment[]): strin
 function buildDisplayAttachments(attachments: PendingAttachment[]): ChatAttachment[] | undefined {
   if (attachments.length === 0) return undefined;
   return attachments.map((file) => ({
-    id: file.id,
+    id: file.attachmentId,
     name: file.name,
     kind: file.kind,
     mimeType: file.mimeType,
     text: file.kind === "text" ? file.text : undefined,
+    imageDataUrl: file.kind === "image" ? file.imageDataUrl : undefined,
     processable: file.processable,
     unsupportedReason: file.unsupportedReason,
     truncated: file.truncated,
   }));
-}
-
-function buildRequestText(text: string, attachments: PendingAttachment[]): string {
-  const clean = text.trim();
-  if (attachments.length === 0) return clean;
-  const file = attachments[0];
-  if (!file.processable) {
-    return [
-      clean,
-      `用户上传了 1 个附件：name=${file.name}, size=${formatBytes(file.size)}。`,
-      `该附件当前无法解析内容（${file.unsupportedReason ?? "未知原因"}）。`,
-      "请直接告知用户：当前无法处理该格式附件；请改为上传文本文件，或把内容粘贴到对话中。",
-      "不要猜测或编造附件内容。",
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-  }
-  if (file.kind === "image") {
-    return [
-      clean,
-      `用户上传了 1 张图片：name=${file.name}, size=${formatBytes(file.size)}。`,
-      "图片内容会随同本次请求发送，请结合图片与文字上下文回答。",
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-  }
-  const meta = [
-    `name=${file.name}`,
-    `size=${formatBytes(file.size)}`,
-    file.truncated ? "truncated=true" : "truncated=false",
-  ].join(", ");
-  return [clean, "以下是用户上传的附件内容：", `[附件 1] (${meta})\n${file.text ?? ""}`]
-    .filter(Boolean)
-    .join("\n\n");
-}
-
-function buildRequestContent(text: string, attachments: PendingAttachment[]): ChatRequestContent {
-  const clean = text.trim();
-  if (attachments.length === 0) return clean;
-  const file = attachments[0];
-  if (!file.processable) return buildRequestText(clean, attachments);
-  if (file.kind !== "image") return buildRequestText(clean, attachments);
-  if (!file.imageDataUrl) return buildRequestText(clean, attachments);
-
-  const parts: ({ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } })[] = [];
-  if (clean) {
-    parts.push({ type: "text", text: clean });
-  } else {
-    parts.push({ type: "text", text: "请基于这张图片进行分析。" });
-  }
-  parts.push({ type: "image_url", image_url: { url: file.imageDataUrl } });
-  return parts;
 }
 
 function formatBytes(size: number): string {
