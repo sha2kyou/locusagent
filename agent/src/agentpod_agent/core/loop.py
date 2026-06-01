@@ -202,7 +202,28 @@ def _all_calls_are(calls: Iterable[Any], tool_name: str) -> bool:
     return bool(seq) and all(getattr(c.function, "name", "") == tool_name for c in seq)
 
 
-async def _execute_one_tool_call(registry: ToolRegistry, tc: Any) -> dict[str, Any]:
+def _normalize_disabled_tools(disabled_tools: set[str] | None) -> set[str]:
+    return {str(n).strip().lower() for n in (disabled_tools or set()) if str(n).strip()}
+
+
+def _normalize_blocked_actions(
+    blocked_tool_actions: dict[str, set[str]] | None,
+) -> dict[str, set[str]]:
+    return {
+        str(tool).strip().lower(): {
+            str(action).strip().lower() for action in actions if str(action).strip()
+        }
+        for tool, actions in (blocked_tool_actions or {}).items()
+        if str(tool).strip()
+    }
+
+
+async def _execute_one_tool_call(
+    registry: ToolRegistry,
+    tc: Any,
+    *,
+    blocked_actions: set[str] | None = None,
+) -> dict[str, Any]:
     name = tc.function.name
     raw_args = tc.function.arguments or "{}"
     try:
@@ -213,6 +234,13 @@ async def _execute_one_tool_call(registry: ToolRegistry, tc: Any) -> dict[str, A
             "role": "tool",
             "tool_call_id": tc.id,
             "content": f"Error: invalid JSON arguments: {exc}",
+        }
+    action = str(args.get("action", "")).strip().lower()
+    if blocked_actions and action in blocked_actions:
+        return {
+            "role": "tool",
+            "tool_call_id": tc.id,
+            "content": f"Error: action '{action}' is disabled for tool '{name}' in this run",
         }
     try:
         result = await registry.call(name, args)
@@ -226,14 +254,38 @@ async def _execute_one_tool_call(registry: ToolRegistry, tc: Any) -> dict[str, A
 async def _execute_tool_calls(
     registry: ToolRegistry,
     tool_calls: Iterable[Any],
+    *,
+    blocked_tool_actions: dict[str, set[str]] | None = None,
 ) -> list[dict[str, Any]]:
     """并行执行同一轮的多个工具调用（gather 保持原顺序）。"""
     calls = list(tool_calls)
     if not calls:
         return []
+    blocked_map = blocked_tool_actions or {}
     if len(calls) == 1:
-        return [await _execute_one_tool_call(registry, calls[0])]
-    return list(await asyncio.gather(*(_execute_one_tool_call(registry, tc) for tc in calls)))
+        tool_name = str(getattr(calls[0].function, "name", "")).strip().lower()
+        return [
+            await _execute_one_tool_call(
+                registry,
+                calls[0],
+                blocked_actions=blocked_map.get(tool_name, set()),
+            )
+        ]
+    return list(
+        await asyncio.gather(
+            *(
+                _execute_one_tool_call(
+                    registry,
+                    tc,
+                    blocked_actions=blocked_map.get(
+                        str(getattr(tc.function, "name", "")).strip().lower(),
+                        set(),
+                    ),
+                )
+                for tc in calls
+            )
+        )
+    )
 
 
 async def _finalize_without_tools(
@@ -313,6 +365,8 @@ async def run_chat_loop(
     extra: dict[str, Any] | None = None,
     session_id: str | None = None,
     run_id: str | None = None,
+    disabled_tools: set[str] | None = None,
+    blocked_tool_actions: dict[str, set[str]] | None = None,
 ) -> tuple[LoopResult, list[dict[str, Any]]]:
     settings = get_settings()
     chosen_model = model or settings.llm_model
@@ -320,6 +374,15 @@ async def run_chat_loop(
     token_limit = int(_model_limit(chosen_model) * settings.context_compress_ratio)
     client = get_llm_client()
     tools_schema = registry.schemas() or None
+    disabled = _normalize_disabled_tools(disabled_tools)
+    blocked_actions = _normalize_blocked_actions(blocked_tool_actions)
+    if tools_schema and disabled:
+        filtered = [
+            t
+            for t in tools_schema
+            if str(((t.get("function") or {}).get("name") or "")).strip().lower() not in disabled
+        ]
+        tools_schema = filtered or None
     max_tool_rounds = max(1, settings.max_tool_rounds)
 
     working = list(messages)
@@ -418,7 +481,11 @@ async def run_chat_loop(
                     ),
                     working,
                 )
-            tool_results = await _execute_tool_calls(registry, stub_calls)
+            tool_results = await _execute_tool_calls(
+                registry,
+                stub_calls,
+                blocked_tool_actions=blocked_actions,
+            )
             working.extend(tool_results)
             if _all_calls_are(stub_calls, "artifact_save"):
                 artifact_save_rounds_made += 1
@@ -488,6 +555,8 @@ async def run_chat_loop_stream(
     extra: dict[str, Any] | None = None,
     session_id: str | None = None,
     run_id: str | None = None,
+    disabled_tools: set[str] | None = None,
+    blocked_tool_actions: dict[str, set[str]] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """流式 chat loop。
 
@@ -503,6 +572,15 @@ async def run_chat_loop_stream(
     token_limit = int(_model_limit(chosen_model) * settings.context_compress_ratio)
     client = get_llm_client()
     tools_schema = registry.schemas() or None
+    disabled = _normalize_disabled_tools(disabled_tools)
+    blocked_actions = _normalize_blocked_actions(blocked_tool_actions)
+    if tools_schema and disabled:
+        filtered = [
+            t
+            for t in tools_schema
+            if str(((t.get("function") or {}).get("name") or "")).strip().lower() not in disabled
+        ]
+        tools_schema = filtered or None
     max_tool_rounds = max(1, settings.max_tool_rounds)
 
     working = list(messages)
@@ -678,7 +756,11 @@ async def run_chat_loop_stream(
             yield {"type": "assistant_tools", "message": msg_dict}
             for stub in stub_calls:
                 yield {"type": "tool_call", "name": stub.function.name, "id": stub.id}
-            tool_results = await _execute_tool_calls(registry, stub_calls)
+            tool_results = await _execute_tool_calls(
+                registry,
+                stub_calls,
+                blocked_tool_actions=blocked_actions,
+            )
             for stub, r in zip(stub_calls, tool_results):
                 preview = r.get("content") or ""
                 yield {

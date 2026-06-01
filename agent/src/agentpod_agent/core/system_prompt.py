@@ -10,6 +10,19 @@ from ..tool_settings import is_skill_enabled
 from .persistence import get_session_system_prompt, set_session_system_prompt
 
 _SNAPSHOT_MEMORY_LIMIT = 30
+# 变更 build_frozen_system_prompt 模板时递增，使旧 session 缓存自动失效。
+FROZEN_SYSTEM_PROMPT_VERSION = 1
+_CACHE_PREFIX = f"agentpod:sp:v{FROZEN_SYSTEM_PROMPT_VERSION}:\n"
+
+
+def _wrap_system_prompt_cache(prompt: str) -> str:
+    return f"{_CACHE_PREFIX}{prompt}"
+
+
+def _unwrap_system_prompt_cache(cached: str) -> str | None:
+    if cached.startswith(_CACHE_PREFIX):
+        return cached[len(_CACHE_PREFIX) :]
+    return None
 
 
 async def _build_memory_snapshot() -> list[str]:
@@ -32,17 +45,17 @@ async def build_frozen_system_prompt() -> str:
     settings = get_settings()
     pieces = [
         f"You are an AI agent operating in a sandboxed container for user {settings.user_id}.",
-        "Use the provided tools (web_search/web_extract/memory/env_vars/skill_view/skill_manage/manage_workspace/session_recall/clarify/artifact_save/artifact_recall/scheduled_task_view/scheduled_task_manage) when appropriate.",
-        "When there are multiple reasonable interpretations of the request, or when a direction/preference would materially shape the output (e.g. naming, design style, scope, tech choice), prefer to first ask the user via clarify{question, options} (at most 3 options) for that direction rather than assuming or dumping every possible option. This applies even to open-ended requests like 'give me some suggestions'. Ask only ONE question per turn: call clarify at most once and never in parallel; if several things need clarifying, ask them one at a time across turns. After calling clarify, immediately end your turn and output no further text; the user's selection will arrive as the next message. Only skip clarify when any reasonable choice is equally fine or the user explicitly asks you to just proceed.",
-        "Workspace files live under /data/workspace; private skills live under /data/skills.",
-        "Do not perform any file CRUD operations: no file read/list/search/create/update/patch/delete in container or workspace.",
+        "Use the provided tools when appropriate. Available tools: web_search, web_extract, memory, env_vars, skill_view, skill_manage, manage_workspace, session_recall, clarify, artifact_save, artifact_recall, scheduled_task_view, scheduled_task_manage, get_current_user.",
+        "When a direction or preference would materially shape the output (e.g. naming, design style, scope, tech choice), ask the user via clarify{question, choices} (at most 3 options) before proceeding. Ask only ONE question per turn: call clarify at most once per turn, never in parallel; if several things need clarifying, ask them one at a time across turns. After calling clarify, end your turn immediately with no further output. Skip clarify when any reasonable choice is equally fine, or the user explicitly asks you to just proceed.",
+        "Workspace files live under /data/workspace; skill files live under /data/skills.",
+        "Do not perform direct filesystem operations. When file operations are required, use manage_workspace.",
         "The user cannot directly retrieve container/server files from the web UI.",
-        "By default, do not create or modify files in workspace.",
-        "Deliver outputs directly in chat as inline text, code blocks, and step-by-step instructions.",
+        "Deliver short or conversational outputs directly in chat as inline text or code blocks. For long-form content, structured reports, or code files, prefer artifact_save over dumping everything into chat.",
         "A compact skills catalog is listed below. When a skill is relevant to the current task, call skill_view{name} to load its full body on demand; do not assume its content.",
-        "A frozen long-term memory snapshot is included below. When the user refers to a previous conversation or an earlier conclusion not covered by the snapshot, use memory(action=recall) or session_recall to retrieve it instead of guessing. For credential/config KV management, use env_vars(action=add/list/update/delete/recall).",
-        "Before execute_code, run pre-checks only when the user request contains execution dependencies (e.g. API key, database, third-party interface, timezone/path/time requirements). In those cases, verify needed context via env_vars and get_current_user first; otherwise execute directly without extra checks.",
-        "When the user explicitly asks to produce or save a deliverable (e.g. 创建内容/生成报告/写文案/图表/代码, 保存为某个产物类别), call artifact_save{title, content, type, category} to archive it; set type to markdown/html/text by content, choose category by intent (e.g. 内容/报告/图表/代码). If a category has description text, treat that description as the primary routing hint; if description is empty, use category name only. IMPORTANT: category must be an existing category name; do NOT create new categories via tool calls. If needed, ask the user to create the category in UI first. For visualizations produced via the html-render skill, pass the full [HTML_RENDER]...[/HTML_RENDER] block as content (the tool stores its inner HTML as type=html). When the deliverable is code, use type=markdown and ALWAYS wrap the code in a fenced block (```<lang>\\n...code...\\n```) so it renders with syntax highlighting; never store raw unfenced code. Do this only on an explicit produce request, not for ordinary answers. When the user refers to a previously produced artifact (e.g. 之前的报告/那个图表/继续上次的代码), call artifact_recall{query} to locate it by title before answering.",
+        "A frozen long-term memory snapshot is included below. When the user refers to a previous conversation or earlier conclusion not in the snapshot, use memory(action=recall) or session_recall to retrieve it. For credential/config KV management, use env_vars(action=add/list/update/delete/recall).",
+        "Before executing code, verify required context (API keys, DB connections, timezone/path dependencies) only when the request has external dependencies. Use env_vars for credentials/config and get_current_user for runtime identity/timezone. Otherwise execute directly.",
+        "When the user asks for the current date or time, use Current user local time from the Runtime Time Context system message. Do not fabricate or estimate time.",
+        "When the user explicitly requests a deliverable (e.g. create, generate-and-save, export, archive, artifact), call artifact_save{title, content, type, category} to archive it. Set type to markdown/html/text by content. Category must be an existing category name; never create categories via tools. Choose the closest existing category by intent. For html-render output, pass the full [HTML_RENDER]...[/HTML_RENDER] block as content with type=html. For code, use type=markdown and always wrap in a fenced block (```<lang>\\n...code...\\n```). When the user refers to a previously saved artifact, call artifact_recall{query} first.",
     ]
     if skills:
         pieces.append("\n## Available Skills Catalog")
@@ -73,7 +86,9 @@ async def build_frozen_system_prompt() -> str:
 async def get_or_create_system_prompt(session_id: str) -> str:
     cached = await get_session_system_prompt(session_id)
     if cached:
-        return cached
+        body = _unwrap_system_prompt_cache(cached)
+        if body is not None:
+            return body
     prompt = await build_frozen_system_prompt()
-    await set_session_system_prompt(session_id, prompt)
+    await set_session_system_prompt(session_id, _wrap_system_prompt_cache(prompt))
     return prompt

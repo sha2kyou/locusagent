@@ -18,11 +18,24 @@ from ..core.persistence import (
 )
 from ..core.post_run import run_post_tasks
 from ..core.system_prompt import get_or_create_system_prompt
+from ..host_settings import build_runtime_time_context
 from ..logging import get_logger
 
 log = get_logger("scheduled_run")
 
 _TITLE_MAX = 28
+_NON_INTERACTIVE_SYSTEM_PROMPT = (
+    "## Scheduled Run Mode\n"
+    "- This run is triggered automatically by system scheduler.\n"
+    "- No user is present to answer follow-up questions.\n"
+    "- Never call clarify; make a reasonable default decision and continue.\n"
+    "- If requirements are not fully specified, proceed with the smallest sensible output.\n"
+)
+_SCHEDULED_DISABLED_TOOLS = {"clarify", "scheduled_task_manage", "skill_manage"}
+_SCHEDULED_BLOCKED_TOOL_ACTIONS = {
+    "env_vars": {"add", "update", "delete"},
+    "memory": {"add", "replace", "remove", "update", "delete"},
+}
 
 
 class ScheduledRunError(Exception):
@@ -77,6 +90,8 @@ async def run_scheduled_prompt(*, title: str, prompt: str) -> dict[str, Any]:
             system_prompt = await get_or_create_system_prompt(sid)
             db_msgs = await build_llm_messages(sid)
             messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+            messages.append({"role": "system", "content": _NON_INTERACTIVE_SYSTEM_PROMPT})
+            messages.append({"role": "system", "content": await build_runtime_time_context()})
             messages.extend(db_msgs)
             initial_len = len(messages)
 
@@ -89,6 +104,8 @@ async def run_scheduled_prompt(*, title: str, prompt: str) -> dict[str, Any]:
                 extra=None,
                 session_id=sid,
                 run_id=run_id,
+                disabled_tools=_SCHEDULED_DISABLED_TOOLS,
+                blocked_tool_actions=_SCHEDULED_BLOCKED_TOOL_ACTIONS,
             )
             last_assistant_id = await _persist_loop_messages(
                 sid, final_messages, initial_len, run_id=run_id

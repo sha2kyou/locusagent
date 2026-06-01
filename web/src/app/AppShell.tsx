@@ -86,13 +86,6 @@ export function AppShell() {
     if (me && !me.llm_configured) setSettingsOpen(true);
   }, [me]);
 
-  const toneColor =
-    readiness.tone === "ready"
-      ? "bg-success"
-      : readiness.tone === "blocked"
-        ? "bg-destructive"
-        : "bg-warning";
-
   return (
     <ShellContext.Provider value={{ openSettings: () => setSettingsOpen(true), setMobileAction }}>
       <div className="flex h-full">
@@ -158,10 +151,12 @@ export function AppShell() {
             >
               <Avatar me={me} />
               <span className={cn("min-w-0 flex-1 text-left", !expanded && "md:hidden")}>
+                <span className="block truncate text-[11px] text-muted-foreground">
+                  Agent · {readiness.label}
+                </span>
                 <span className="block truncate text-sm font-medium">{me?.username ?? "—"}</span>
-                <span className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] text-muted-foreground">
-                  <span className={cn("size-1.5 shrink-0 rounded-full", toneColor)} />
-                  <span className="truncate">Agent · {readiness.label}</span>
+                <span className="block truncate text-[11px] text-muted-foreground">
+                  {typeof me?.id === "number" ? `#${me.id}` : "#—"}
                 </span>
               </span>
             </button>

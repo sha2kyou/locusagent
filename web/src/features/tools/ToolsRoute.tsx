@@ -38,7 +38,7 @@ export function ToolsRoute() {
   return (
     <PageContainer
       title="工具"
-      subtitle="可按需启用或禁用工具"
+      subtitle="工具可用性由系统按运行场景预设"
       actions={
         data ? <Badge variant="outline">工具 {data.builtin_tools.length}</Badge> : undefined
       }

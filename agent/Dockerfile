@@ -17,8 +17,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY agent/pyproject.toml ./agent/pyproject.toml
 COPY agent/src ./agent/src
+COPY shared-skills ./shared-skills
 
-RUN pip install ./agent
+RUN pip install ./agent && \
+    cp -r ./shared-skills/. /app/skills/ && \
+    chown -R agentpod:agentpod /app/skills
 
 USER agentpod:agentpod
 

@@ -12,12 +12,13 @@ import time
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..auth import verify_internal_token
 from ..config import get_settings
+from ..host_settings import build_runtime_time_context
 from ..core import (
     append_message,
     build_llm_messages,
@@ -242,8 +243,13 @@ async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, 
 
     system_prompt = await _get_or_create_system_prompt(sid)
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+    await _insert_runtime_time_context(messages)
     messages.extend(db_msgs)
     return messages, user_query
+
+
+async def _insert_runtime_time_context(messages: list[dict[str, Any]], *, index: int = 1) -> None:
+    messages.insert(index, {"role": "system", "content": await build_runtime_time_context()})
 
 
 async def _persist_loop_messages(
@@ -265,7 +271,7 @@ async def _persist_loop_messages(
 
 
 @router.post("/chat/completions")
-async def chat_completions(req: ChatRequest, request: Request):
+async def chat_completions(req: ChatRequest):
     settings = get_settings()
     chosen_model = req.model or settings.llm_model
     sid, _ = await _ensure_session(req)
@@ -509,6 +515,7 @@ async def responses(req: ResponsesRequest):
 
         system_prompt = await _get_or_create_system_prompt(sid)
         messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+        await _insert_runtime_time_context(messages)
         if req.instructions and req.instructions.strip():
             messages.append(
                 {"role": "system", "content": "## Additional Instructions\n" + req.instructions.strip()}
