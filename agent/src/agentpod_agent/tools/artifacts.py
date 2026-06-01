@@ -103,7 +103,7 @@ async def _artifact_save(args: dict[str, Any]) -> ToolResult:
     if not content.strip():
         raise ToolError("content is required")
 
-    # html-render 输出的可视化带 [HTML_RENDER] 包裹：剥离标记取内部 HTML，按 html 类型保存
+    # content 可带 [HTML_RENDER] 包裹：剥离标记后按 html 类型保存
     m = _HTML_RENDER_RE.search(content)
     if m:
         content = m.group(1).strip()
