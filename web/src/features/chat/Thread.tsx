@@ -12,7 +12,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { useCopy } from "@/lib/useCopy";
-import { Markdown } from "./Markdown";
+import { Markdown, ThinkingBlock } from "./Markdown";
+import type { ChatPart, ChatMessage } from "./model";
 import { ToolEvent } from "./ToolEvent";
 import { useChat } from "./ChatProvider";
 import { useShell } from "@/app/AppShell";
@@ -49,7 +50,7 @@ export function Thread() {
               </p>
               {blocked ? (
                 <Button variant="primary" className="mt-5" onClick={openSettings}>
-                  去配置模型
+                  查看 Agent 状态
                 </Button>
               ) : (
                 <div className="mt-6 flex flex-wrap justify-center gap-2">
@@ -203,7 +204,7 @@ function Composer({ blocked }: { blocked: boolean }) {
           autoFocus
           onKeyDown={onKeyDown}
           onPaste={onPaste}
-          placeholder={blocked ? "请先在设置中配置模型…" : "给 Agent 发送消息…"}
+          placeholder={blocked ? "Agent 未就绪，请稍候或打开设置查看…" : "给 Agent 发送消息…"}
           className="max-h-48 flex-1 resize-none bg-transparent py-1.5 text-sm outline-none placeholder:text-muted-foreground"
         />
         <Button
@@ -423,8 +424,35 @@ function triggerDownload(url: string, filename: string): void {
   a.remove();
 }
 
+function AssistantThinkingParts({
+  chatMsg,
+  streaming,
+}: {
+  chatMsg: ChatMessage | undefined;
+  streaming: boolean;
+}) {
+  const parts = chatMsg?.parts.filter((p): p is Extract<ChatPart, { type: "thinking" }> => p.type === "thinking") ?? [];
+  if (parts.length === 0) return null;
+  return (
+    <div className="mb-2 space-y-2">
+      {parts.map((p, i) => (
+        <ThinkingBlock
+          key={i}
+          content={p.text}
+          defaultOpen={streaming}
+          label={streaming ? "思考中" : "思考过程"}
+        />
+      ))}
+    </div>
+  );
+}
+
 function AssistantMessage() {
-  const { regenerate, canRegenerate, lastErrored } = useChat();
+  const { regenerate, canRegenerate, lastErrored, messages, isRunning } = useChat();
+  const id = useMessage((m) => m.id);
+  const chatMsg = messages.find((m) => m.id === id);
+  const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+  const streaming = isRunning && lastAssistant?.id === id;
   const text = useMessageText();
   const archived = useMessage((m) => (m.metadata as { archived?: boolean } | undefined)?.archived);
   return (
@@ -433,6 +461,7 @@ function AssistantMessage() {
         <p className="text-[11px] text-muted-foreground">已压缩（不再带入上下文）</p>
       ) : null}
       <div className="min-w-0">
+        <AssistantThinkingParts chatMsg={chatMsg} streaming={streaming} />
         <MessagePrimitive.Parts
           components={{ Text: MarkdownText, tools: { Fallback: ToolEvent } }}
         />

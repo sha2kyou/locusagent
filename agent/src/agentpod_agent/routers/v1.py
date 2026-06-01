@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from ..auth import verify_internal_token
 from ..config import get_settings
 from ..host_settings import build_runtime_time_context
+from ..core.models import resolve_model
 from ..core import (
     append_message,
     build_llm_messages,
@@ -352,7 +353,7 @@ async def _persist_loop_messages(
 @router.post("/chat/completions")
 async def chat_completions(req: ChatRequest):
     settings = get_settings()
-    chosen_model = req.model or settings.llm_model
+    chosen_model = req.model or resolve_model("main")
     sid, _ = await _ensure_session(req)
 
     handle = None
@@ -441,7 +442,11 @@ async def chat_completions(req: ChatRequest):
                     "choices": [
                         {
                             "index": 0,
-                            "message": {"role": "assistant", "content": result.final_text},
+                            "message": {
+                                "role": "assistant",
+                                "content": result.final_text,
+                                "reasoning_content": result.final_reasoning,
+                            },
                             "finish_reason": "stop",
                         }
                     ],
@@ -491,7 +496,9 @@ async def chat_completions(req: ChatRequest):
                 if t == ERROR:
                     yield _chunk({}, x_event="error", x_message=ev.get("message") or "unknown")
                     break
-                if t == "delta":
+                if t == "reasoning_delta":
+                    yield _chunk({"reasoning_content": ev.get("content") or ""})
+                elif t == "delta":
                     yield _chunk({"content": ev.get("content") or ""})
                 elif t == "tool_call":
                     tool_name = str(ev.get("name") or "")
@@ -539,7 +546,7 @@ async def chat_completions(req: ChatRequest):
 @router.post("/responses")
 async def responses(req: ResponsesRequest):
     settings = get_settings()
-    chosen_model = req.model or settings.llm_model
+    chosen_model = req.model or resolve_model("main")
     if req.stream:
         return JSONResponse(
             {
@@ -712,12 +719,11 @@ async def retrieve_response(response_id: str) -> JSONResponse:
 
 @router.get("/models")
 async def list_models() -> dict:
-    settings = get_settings()
     return {
         "object": "list",
         "data": [
             {
-                "id": settings.llm_model,
+                "id": resolve_model("main"),
                 "object": "model",
                 "owned_by": "agentpod",
             }

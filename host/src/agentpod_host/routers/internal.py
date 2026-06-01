@@ -1,6 +1,6 @@
 """内部端点：手动触发容器创建（幂等）。
 
-鉴权：session（仅本人）。常规流程已在 PUT /api/settings/llm 内自动 provision。
+鉴权：session（仅本人）。首次访问工作区时代理会自动 provision。
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ from ..auth import AuthContext, require_session
 from ..db import ContainerStatus, get_session
 from ..logging import get_logger
 from ..orchestrator import ensure_user_container
+from ..orchestrator.agent_env import require_llm_configured
 
 router = APIRouter(prefix="/internal/containers", tags=["internal"])
 log = get_logger("internal")
@@ -24,11 +25,13 @@ async def ensure(
     ctx: AuthContext = Depends(require_session),
 ) -> dict:
     user = ctx.user
-    if user.llm_api_key_enc is None:
+    try:
+        require_llm_configured()
+    except RuntimeError as exc:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="请先在 /settings 配置 LLM API Key",
-        )
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
 
     current = ContainerStatus(user.container_status)
     if current == ContainerStatus.RUNNING:

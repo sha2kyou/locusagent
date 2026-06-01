@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..config import get_settings
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 _DISTILL_SYSTEM_PROMPT = (
@@ -26,11 +25,13 @@ async def _summarize(args: dict[str, Any]) -> ToolResult:
 
     # 延迟导入，避免 tools 初始化阶段与 core.loop 互相导入造成循环依赖。
     from ..core.llm import get_llm_client
+    from ..core.openai_fields import openai_completion_text
+    from ..core.models import resolve_model
 
-    settings = get_settings()
     client = get_llm_client()
+    model = resolve_model("compression")
     resp = await client.chat.completions.create(
-        model=settings.llm_model,
+        model=model,
         messages=[
             {"role": "system", "content": _DISTILL_SYSTEM_PROMPT},
             {"role": "user", "content": text[:16000]},
@@ -38,7 +39,10 @@ async def _summarize(args: dict[str, Any]) -> ToolResult:
         max_tokens=max_tokens,
         temperature=0.2,
     )
-    summary = ((resp.choices or [None])[0].message.content if resp.choices else "") or ""
+    from ..usage_report import schedule_openai_usage
+
+    schedule_openai_usage(usage=resp.usage, scenario="compression", model=model)
+    summary = openai_completion_text(resp)
     summary = summary.strip()
     if not summary:
         summary = "(empty summary)"

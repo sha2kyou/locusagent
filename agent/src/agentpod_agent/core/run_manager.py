@@ -59,27 +59,38 @@ async def _persist_event(
     if ev.get("ephemeral"):
         return
     t = ev["type"]
-    if t == "delta":
-        delta = str(ev.get("content") or "")
-        if not delta:
+    if t in ("delta", "reasoning_delta"):
+        piece = str(ev.get("content") or "")
+        if not piece:
             return
         if state.get("after_tool_round"):
             state["assistant_msg_id"] = None
             state["partial_text"] = ""
+            state["partial_reasoning"] = ""
             state["after_tool_round"] = False
-        state["partial_text"] = str(state.get("partial_text") or "") + delta
+        if t == "reasoning_delta":
+            state["partial_reasoning"] = str(state.get("partial_reasoning") or "") + piece
+        else:
+            state["partial_text"] = str(state.get("partial_text") or "") + piece
+        content = str(state.get("partial_text") or "")
+        reasoning = str(state.get("partial_reasoning") or "")
         assistant_msg_id = state.get("assistant_msg_id")
         if assistant_msg_id is None:
             mid = await append_message(
                 session_id,
                 "assistant",
-                state["partial_text"],
+                content,
+                reasoning_content=reasoning,
                 run_id=run_id,
             )
             state["assistant_msg_id"] = mid
             await update_run(run_id, assistant_message_id=mid)
         else:
-            await update_message(assistant_msg_id, content=state["partial_text"])
+            await update_message(
+                assistant_msg_id,
+                content=content,
+                reasoning_content=reasoning,
+            )
         await update_run(run_id)
         return
 
@@ -87,6 +98,7 @@ async def _persist_event(
         tool_msg = ev.get("message") or {}
         assistant_msg_id = state.get("assistant_msg_id")
         partial = str(state.get("partial_text") or "")
+        partial_reasoning = str(state.get("partial_reasoning") or "")
         already_after_tool_round = bool(state.get("after_tool_round"))
         # 同一轮里：已有(可能含流式文本的)assistant 消息时就地补 tool_calls，
         # 合并成规范的单条 assistant(content + tool_calls)，避免拆成两条
@@ -95,6 +107,7 @@ async def _persist_event(
             await update_message(
                 assistant_msg_id,
                 content=str(tool_msg.get("content") or partial),
+                reasoning_content=str(tool_msg.get("reasoning_content") or partial_reasoning),
                 tool_calls=tool_msg.get("tool_calls"),
             )
         else:
@@ -102,12 +115,14 @@ async def _persist_event(
                 session_id,
                 "assistant",
                 str(tool_msg.get("content") or ""),
+                reasoning_content=str(tool_msg.get("reasoning_content") or partial_reasoning),
                 tool_calls=tool_msg.get("tool_calls"),
                 run_id=run_id,
             )
             state["assistant_msg_id"] = mid
             await update_run(run_id, assistant_message_id=mid)
         state["partial_text"] = ""
+        state["partial_reasoning"] = ""
         state["after_tool_round"] = True
         return
 
@@ -138,6 +153,7 @@ async def _persist_event(
 
     if t == "done":
         state["final_text"] = ev.get("final_text") or ""
+        state["final_reasoning"] = ev.get("final_reasoning") or ""
         state["total_tokens"] = int(ev.get("total_tokens") or 0)
         state["tool_calls_made"] = int(ev.get("tool_calls_made") or 0)
 
@@ -145,7 +161,11 @@ async def _persist_event(
 async def _finalize_run(session_id: str, run_id: str, state: dict[str, Any], *, error: str | None) -> None:
     assistant_msg_id = state.get("assistant_msg_id")
     final_text = str(state.get("final_text") or "")
+    final_reasoning = str(state.get("final_reasoning") or "")
     partial_text = str(state.get("partial_text") or "")
+    partial_reasoning = str(state.get("partial_reasoning") or "")
+    content = final_text or partial_text
+    reasoning = final_reasoning or partial_reasoning
     total_tokens = int(state.get("total_tokens") or 0)
     try:
         if error:
@@ -156,14 +176,16 @@ async def _finalize_run(session_id: str, run_id: str, state: dict[str, Any], *, 
             assistant_msg_id = await append_message(
                 session_id,
                 "assistant",
-                final_text,
+                content,
+                reasoning_content=reasoning,
                 tokens=total_tokens,
                 run_id=run_id,
             )
         else:
             await update_message(
                 assistant_msg_id,
-                content=final_text or partial_text,
+                content=content,
+                reasoning_content=reasoning,
                 tokens=total_tokens,
             )
         await update_run(
@@ -177,7 +199,7 @@ async def _finalize_run(session_id: str, run_id: str, state: dict[str, Any], *, 
             await maybe_generate_and_update_session_title(
                 session_id,
                 user_query=auto_title_user_query,
-                assistant_text=final_text or partial_text,
+                assistant_text=content,
                 model=str(state.get("model") or "") or None,
             )
     except Exception as exc:

@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS messages (
     session_id    TEXT NOT NULL,
     role          TEXT NOT NULL,
     content       TEXT NOT NULL,
+    reasoning_content TEXT NOT NULL DEFAULT '',
     tool_calls    TEXT,
     tool_call_id  TEXT,
     run_id        TEXT,
@@ -441,6 +442,10 @@ def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_messages_context "
             "ON messages(session_id, context_state, id)"
         )
+        if msg_cols and "reasoning_content" not in msg_cols:
+            c.execute(
+                "ALTER TABLE messages ADD COLUMN reasoning_content TEXT NOT NULL DEFAULT ''"
+            )
         if msg_cols and "embedding_state" not in msg_cols:
             c.execute(
                 "ALTER TABLE messages ADD COLUMN embedding_state TEXT NOT NULL DEFAULT 'pending'"

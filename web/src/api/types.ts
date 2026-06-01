@@ -7,9 +7,6 @@ export interface Me {
   current_workspace_id?: string;
   container_status: string; // absent | creating | running | paused | stopped ...
   provision_status: string; // pending | ready | failed
-  llm_configured: boolean;
-  llm_base_url: string | null;
-  llm_model: string;
   agent_api_key_configured: boolean;
   attachment_max_bytes: number;
 }
@@ -50,6 +47,7 @@ export interface Message {
   id: number;
   role: "user" | "assistant" | "tool" | "system" | "context_summary";
   content: string;
+  reasoning_content?: string;
   attachments?: {
     id: string;
     name: string;
@@ -96,7 +94,7 @@ export interface ChatChunk {
   model?: string;
   choices?: {
     index: number;
-    delta: { role?: string; content?: string };
+    delta: { role?: string; content?: string; reasoning_content?: string };
     finish_reason: string | null;
   }[];
   session_id?: string;
@@ -182,19 +180,29 @@ export interface EnvVarEntry {
   updated_at: string;
 }
 
-export interface LLMConfig {
-  base_url: string | null;
-  model: string;
-  configured: boolean;
-  provision_action: "none" | "starting" | "applying";
-}
-
-export interface TavilyConfig {
-  configured: boolean;
-}
-
 export interface TimezoneConfig {
   timezone: string;
+}
+
+export interface UsageSummaryRow {
+  scenario: string;
+  model: string | null;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  api_calls: number;
+  event_count: number;
+}
+
+export interface UsageSummary {
+  items: UsageSummaryRow[];
+  totals: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    api_calls: number;
+    event_count: number;
+  };
 }
 
 export type ScheduleKind = "once" | "cron";

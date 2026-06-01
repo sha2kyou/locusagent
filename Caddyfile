@@ -17,6 +17,12 @@
 		}
 	}
 
+	# Agent 内部代理仅 Docker 内网可达；公网禁止（与 Host internal_network 中间件双保险）
+	@internal_agent path /internal/llm* /internal/tavily* /internal/embedding* /internal/attachments* /internal/notifications* /internal/scheduled-tasks* /internal/settings* /internal/usage*
+	handle @internal_agent {
+		respond "Forbidden" 403
+	}
+
 	@api path /api/* /health
 	handle @api {
 		reverse_proxy host:8080 {

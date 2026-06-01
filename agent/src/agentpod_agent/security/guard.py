@@ -64,12 +64,14 @@ async def review_write(content: str, *, kind: str, source: str = "model") -> Gua
         return GuardResult(allowed=False, reason=hard)
 
     from ..core.llm import get_llm_client
+    from ..core.openai_fields import openai_completion_text
 
     client = get_llm_client()
     user_content = f"类型：{kind}\n来源：{source}\n待审查内容：\n{text[:4000]}"
     try:
+        approval_model = resolve_model("approval")
         resp = await client.chat.completions.create(
-            model=settings.llm_model,
+            model=approval_model,
             messages=[
                 {"role": "system", "content": _REVIEW_SYSTEM_PROMPT},
                 {"role": "user", "content": user_content},
@@ -77,11 +79,14 @@ async def review_write(content: str, *, kind: str, source: str = "model") -> Gua
             max_tokens=160,
             temperature=0.0,
         )
+        from ..usage_report import schedule_openai_usage
+
+        schedule_openai_usage(usage=resp.usage, scenario="approval", model=approval_model)
     except Exception as exc:
         log.warning("write_guard_llm_failed", kind=kind, source=source, error=str(exc))
         return GuardResult(allowed=True, reason="guard llm unavailable, allowed")
 
-    raw = ((resp.choices or [None])[0].message.content if resp.choices else "") or ""
+    raw = openai_completion_text(resp)
     raw = raw.strip()
     if not raw:
         return GuardResult(allowed=True, reason="empty review, allowed")

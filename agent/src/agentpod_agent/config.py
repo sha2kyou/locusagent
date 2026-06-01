@@ -15,9 +15,23 @@ class Settings(BaseSettings):
     internal_token: str = Field(default="", alias="INTERNAL_TOKEN")
     user_id: str = Field(default="", alias="USER_ID")
 
-    llm_base_url: str = Field(default="https://api.openai.com/v1", alias="LLM_BASE_URL")
-    llm_api_key: str = Field(default="", alias="LLM_API_KEY")
+    llm_base_url: str = Field(
+        default="http://127.0.0.1:8080/internal/llm/v1",
+        alias="LLM_BASE_URL",
+    )
     llm_model: str = Field(default="gpt-4o", alias="LLM_MODEL")
+    auxiliary_vision_model: str = Field(default="", alias="AUXILIARY_VISION_MODEL")
+    auxiliary_web_extract_model: str = Field(default="", alias="AUXILIARY_WEB_EXTRACT_MODEL")
+    auxiliary_compression_model: str = Field(default="", alias="AUXILIARY_COMPRESSION_MODEL")
+    auxiliary_title_generation_model: str = Field(
+        default="", alias="AUXILIARY_TITLE_GENERATION_MODEL"
+    )
+    auxiliary_approval_model: str = Field(default="", alias="AUXILIARY_APPROVAL_MODEL")
+    auxiliary_curator_model: str = Field(default="", alias="AUXILIARY_CURATOR_MODEL")
+    auxiliary_skill_reflect_model: str = Field(default="", alias="AUXILIARY_SKILL_REFLECT_MODEL")
+    auxiliary_memory_autostore_model: str = Field(
+        default="", alias="AUXILIARY_MEMORY_AUTOSTORE_MODEL"
+    )
 
     embedding_base_url: str = Field(default="http://tei:80", alias="EMBEDDING_BASE_URL")
     embedding_model: str = Field(default="BAAI/bge-small-zh-v1.5", alias="EMBEDDING_MODEL")
@@ -27,12 +41,6 @@ class Settings(BaseSettings):
     data_dir: Path = Field(default=Path("/data"), alias="DATA_DIR")
     shared_skills_dir: Path = Field(default=Path("/app/skills"), alias="SHARED_SKILLS_DIR")
     attachment_storage: str = Field(default="minio", alias="ATTACHMENT_STORAGE")
-    s3_endpoint: str = Field(default="minio:9000", alias="S3_ENDPOINT")
-    s3_access_key: str = Field(default="agentpod", alias="S3_ACCESS_KEY")
-    s3_secret_key: str = Field(default="agentpodsecret", alias="S3_SECRET_KEY")
-    s3_bucket: str = Field(default="agentpod-attachments", alias="S3_BUCKET")
-    s3_region: str = Field(default="us-east-1", alias="S3_REGION")
-    s3_use_ssl: bool = Field(default=False, alias="S3_USE_SSL")
 
     max_loop_rounds: int = Field(default=20, alias="MAX_LOOP_ROUNDS")
     max_tool_rounds: int = Field(default=30, alias="MAX_TOOL_ROUNDS")

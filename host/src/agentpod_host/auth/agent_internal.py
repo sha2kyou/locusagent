@@ -14,8 +14,12 @@ from ..security import decrypt_str
 async def require_agent_internal(
     x_internal_token: str = Header(default="", alias="X-Internal-Token"),
     x_user_id: str = Header(default="", alias="X-User-Id"),
+    authorization: str = Header(default=""),
 ) -> User:
-    if not x_internal_token or not x_user_id:
+    token = x_internal_token.strip()
+    if not token and authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+    if not token or not x_user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing token")
     try:
         user_id = int(x_user_id)
@@ -27,6 +31,6 @@ async def require_agent_internal(
     if user is None or user.internal_token_enc is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
     expected = decrypt_str(user.internal_token_enc)
-    if not hmac.compare_digest(x_internal_token, expected):
+    if not hmac.compare_digest(token, expected):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
     return user

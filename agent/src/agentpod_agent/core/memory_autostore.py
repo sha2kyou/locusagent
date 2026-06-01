@@ -8,6 +8,8 @@ import re
 from ..config import get_settings
 from ..memory import add_memory, list_memories
 from .llm import get_llm_client
+from .openai_fields import openai_completion_text
+from ..usage_report import schedule_openai_usage
 
 _REMEMBER_QUERY_MIN_LEN = 4
 _REMEMBER_ANSWER_MIN_LEN = 24
@@ -51,7 +53,9 @@ async def _extract_memory_candidates(
     model: str | None,
 ) -> list[dict[str, str]]:
     settings = get_settings()
-    chosen_model = model or settings.llm_model
+    from .models import resolve_model
+
+    chosen_model = model or resolve_model("memory_autostore")
     client = get_llm_client()
     prompt = (
         "你是记忆提炼器。请从用户问题和助手回答中提炼对后续对话有长期价值的记忆。"
@@ -70,7 +74,12 @@ async def _extract_memory_candidates(
         max_tokens=220,
         temperature=0.1,
     )
-    raw = ((resp.choices or [None])[0].message.content if resp.choices else "") or ""
+    schedule_openai_usage(
+        usage=resp.usage,
+        scenario="memory_autostore",
+        model=chosen_model,
+    )
+    raw = openai_completion_text(resp)
     raw = raw.strip()
     if not raw:
         return []

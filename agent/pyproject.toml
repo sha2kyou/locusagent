@@ -17,7 +17,6 @@ dependencies = [
     "structlog>=24.4",
     "tenacity>=9.0",
     "tiktoken>=0.13.0",
-    "minio>=7.2",
 ]
 
 [build-system]

@@ -14,6 +14,8 @@ log = get_logger("tools.user_info")
 
 
 async def _get_current_user(_args: dict) -> ToolResult:
+    from ..core.models import resolve_model
+
     settings = get_settings()
     timezone = None
     try:
@@ -24,12 +26,21 @@ async def _get_current_user(_args: dict) -> ToolResult:
     payload = {
         "user_id": settings.user_id,
         "workspace_id": get_workspace_id(),
-        "llm_model": settings.llm_model,
-        "llm_base_url": settings.llm_base_url,
+        "models": {
+            "main": resolve_model("main"),
+            "vision": resolve_model("vision"),
+            "web_extract": resolve_model("web_extract"),
+            "compression": resolve_model("compression"),
+            "title_generation": resolve_model("title_generation"),
+            "approval": resolve_model("approval"),
+            "curator": resolve_model("curator"),
+            "skill_reflect": resolve_model("skill_reflect"),
+            "memory_autostore": resolve_model("memory_autostore"),
+        },
         "timezone": timezone,
         "data_dir": str(workspace_data_dir()),
         "shared_skills_dir": str(settings.shared_skills_dir),
-        "note": "P0 仅提供容器内可见的用户基础信息。",
+        "note": "模型由宿主环境变量注入；不返回 API Key 等凭据。",
     }
     return ToolResult(
         content=json.dumps(payload, ensure_ascii=False, indent=2),
@@ -53,4 +64,3 @@ register_builtin(
         handler=_get_current_user,
     )
 )
-

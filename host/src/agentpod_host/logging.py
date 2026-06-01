@@ -10,6 +10,9 @@ import structlog
 
 SENSITIVE_KEYS = {
     "llm_api_key",
+    "tavily_api_key",
+    "s3_secret_key",
+    "s3_access_key",
     "agent_api_key",
     "internal_token",
     "access_token",

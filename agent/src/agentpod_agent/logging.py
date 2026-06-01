@@ -9,7 +9,7 @@ from typing import Any
 import structlog
 
 SENSITIVE_KEYS = {
-    "llm_api_key",
+    "internal_token",
     "internal_token",
     "authorization",
     "api_key",

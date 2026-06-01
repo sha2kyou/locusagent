@@ -75,7 +75,6 @@ export function AppShell() {
   const menuRootRef = useRef<HTMLDivElement>(null);
   const navListRef = useRef<HTMLElement>(null);
   const [menuScrollable, setMenuScrollable] = useState(false);
-  const forceModelSetup = !!me && !me.llm_configured;
   const defaultWorkspaceId = workspaces.find((w) => w.is_default)?.id ?? "";
   const currentWorkspace = workspaces.find((w) => w.id === me?.current_workspace_id) ?? null;
   const currentWorkspaceLabel = currentWorkspace?.name || "默认工作区";
@@ -95,11 +94,6 @@ export function AppShell() {
       })
       .catch(() => {});
   }, []);
-
-  // 首次进入未配置模型时自动打开设置
-  useEffect(() => {
-    if (me && !me.llm_configured) setSettingsOpen(true);
-  }, [me]);
 
   useEffect(() => {
     if (!me) return;
@@ -173,12 +167,21 @@ export function AppShell() {
         >
           <div className={cn("flex h-14 items-center gap-2.5 px-4", !expanded && "md:justify-center md:px-2")}>
             <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">
-              <BrandMark />
+              {expanded ? (
+                <BrandMark />
+              ) : (
+                <>
+                  <span className="md:hidden">
+                    <BrandMark />
+                  </span>
+                  <NotificationBell className="hidden md:block" menuAlign="start" />
+                </>
+              )}
             </div>
             <span className={cn("min-w-0 flex-1 truncate text-[15px] font-semibold tracking-tight", !expanded && "md:hidden")}>
               AgentPod
             </span>
-            <NotificationBell className={cn(!expanded && "md:hidden")} menuAlign="start" />
+            <NotificationBell className={cn("hidden md:block", !expanded && "md:hidden")} menuAlign="start" />
           </div>
 
           <nav
@@ -357,7 +360,6 @@ export function AppShell() {
 
       <SettingsModal
         open={settingsOpen}
-        required={forceModelSetup}
         onClose={() => setSettingsOpen(false)}
         onLogout={() => navigate("/login")}
       />

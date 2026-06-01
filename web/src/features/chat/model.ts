@@ -16,7 +16,12 @@ export interface TextPart {
   text: string;
 }
 
-export type ChatPart = TextPart | ToolPart;
+export interface ThinkingPart {
+  type: "thinking";
+  text: string;
+}
+
+export type ChatPart = TextPart | ThinkingPart | ToolPart;
 
 export interface ChatMessage {
   id: string;
@@ -71,4 +76,13 @@ export function appendText(parts: ChatPart[], delta: string): ChatPart[] {
     return [...parts.slice(0, -1), { type: "text", text: last.text + delta }];
   }
   return [...parts, { type: "text", text: delta }];
+}
+
+/** 思考链增量：合并到末尾 thinking 块 */
+export function appendThinking(parts: ChatPart[], delta: string): ChatPart[] {
+  const last = parts[parts.length - 1];
+  if (last && last.type === "thinking") {
+    return [...parts.slice(0, -1), { type: "thinking", text: last.text + delta }];
+  }
+  return [...parts, { type: "thinking", text: delta }];
 }

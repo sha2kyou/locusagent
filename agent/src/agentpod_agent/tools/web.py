@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import ipaddress
-import os
 import re
 import socket
 from html.parser import HTMLParser
@@ -13,6 +12,7 @@ from typing import Any
 
 import httpx
 
+from ..host_internal import HostInternalError, error_detail, internal_base_and_headers
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 USER_AGENT = "Mozilla/5.0 (compatible; AgentPodAgent/0.1)"
@@ -20,7 +20,7 @@ TIMEOUT = httpx.Timeout(connect=5.0, read=15.0, write=5.0, pool=5.0)
 MAX_HTML_BYTES = 1 * 1024 * 1024
 MAX_TEXT_CHARS = 12_000
 MAX_REDIRECTS = 5
-TAVILY_SEARCH_URL = "https://api.tavily.com/search"
+TAVILY_TIMEOUT = httpx.Timeout(connect=5.0, read=15.0, write=5.0, pool=5.0)
 
 
 def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
@@ -97,23 +97,22 @@ async def _ddg_search(query: str, top_k: int) -> list[dict[str, str]]:
     return results
 
 
-async def _tavily_search(query: str, top_k: int, api_key: str) -> list[dict[str, str]]:
-    payload = {
-        "query": query,
-        "search_depth": "basic",
-        "max_results": top_k,
-        "include_answer": False,
-        "include_raw_content": False,
-    }
-    headers = {
-        "User-Agent": USER_AGENT,
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    async with httpx.AsyncClient(timeout=TIMEOUT, headers=headers) as client:
-        resp = await client.post(TAVILY_SEARCH_URL, json=payload)
-    if resp.status_code != 200:
-        raise ToolError(f"tavily http {resp.status_code}")
+async def _tavily_search_via_host(query: str, top_k: int) -> list[dict[str, str]] | None:
+    """经 Host 代理搜索；503 表示未配置 Tavily，返回 None 以降级 DuckDuckGo。"""
+    try:
+        base, headers = internal_base_and_headers()
+    except HostInternalError:
+        return None
+    async with httpx.AsyncClient(timeout=TAVILY_TIMEOUT) as client:
+        resp = await client.post(
+            f"{base}/internal/tavily/search",
+            headers=headers,
+            json={"query": query, "limit": top_k},
+        )
+    if resp.status_code == 503:
+        return None
+    if resp.status_code >= 400:
+        raise ToolError(error_detail(resp))
     data = resp.json()
     raw_results = data.get("results")
     if not isinstance(raw_results, list):
@@ -122,11 +121,13 @@ async def _tavily_search(query: str, top_k: int, api_key: str) -> list[dict[str,
     for item in raw_results:
         if not isinstance(item, dict):
             continue
-        title = str(item.get("title") or "").strip()
-        url = str(item.get("url") or "").strip()
-        snippet = str(item.get("content") or "").strip()
-        snippet = re.sub(r"\s+", " ", snippet)
-        out.append({"title": title, "url": url, "snippet": snippet})
+        out.append(
+            {
+                "title": str(item.get("title") or "").strip(),
+                "url": str(item.get("url") or "").strip(),
+                "snippet": str(item.get("snippet") or "").strip(),
+            }
+        )
         if len(out) >= top_k:
             break
     return out
@@ -138,13 +139,15 @@ async def _web_search(args: dict[str, Any]) -> ToolResult:
     top_k = max(1, min(100, top_k))
     if not query:
         raise ToolError("query is required")
-    tavily_api_key = str(os.getenv("TAVILY_API_KEY", "")).strip()
-    if tavily_api_key:
-        results = await _tavily_search(query, top_k, tavily_api_key)
+    results = await _tavily_search_via_host(query, top_k)
+    if results is not None:
         search_source = "tavily"
     else:
         results = await _ddg_search(query, top_k)
         search_source = "duckduckgo"
+        from ..usage_report import schedule_api_call
+
+        schedule_api_call(scenario="duckduckgo", model="duckduckgo-html", api_calls=1)
     if not results:
         return ToolResult(content="no results")
     lines = [f"{i+1}. {r['title']}\n   {r['url']}\n   {r['snippet']}" for i, r in enumerate(results)]
@@ -228,7 +231,7 @@ register_builtin(
     Tool(
         name="web_search",
         description=(
-            "网页搜索，返回标题/URL/摘要。配置了 TAVILY_API_KEY 时使用 Tavily；未配置时使用 DuckDuckGo。"
+            "网页搜索，返回标题/URL/摘要。Host 已配置 Tavily 时经平台代理；否则使用 DuckDuckGo。"
         ),
         parameters={
             "type": "object",

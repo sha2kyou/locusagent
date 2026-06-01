@@ -5,6 +5,8 @@ from __future__ import annotations
 from ..config import get_settings
 from ..logging import get_logger
 from .llm import get_llm_client
+from .openai_fields import openai_completion_text
+from ..usage_report import schedule_openai_usage
 from .persistence import get_session_title, upsert_session_meta
 
 log = get_logger("session_title")
@@ -44,7 +46,9 @@ async def maybe_generate_and_update_session_title(
         return current_title
 
     settings = get_settings()
-    chosen_model = model or settings.llm_model
+    from .models import resolve_model
+
+    chosen_model = model or resolve_model("title_generation")
     client = get_llm_client()
     fallback = query.splitlines()[0][:_TITLE_MAX_LEN].strip() or "新对话"
     prompt = (
@@ -69,7 +73,13 @@ async def maybe_generate_and_update_session_title(
             max_tokens=32,
             temperature=0.2,
         )
-        raw_title = ((resp.choices or [None])[0].message.content if resp.choices else "") or ""
+        schedule_openai_usage(
+            usage=resp.usage,
+            scenario="title_generation",
+            model=chosen_model,
+            session_id=session_id,
+        )
+        raw_title = openai_completion_text(resp)
         final_title = _sanitize_title(raw_title, fallback=fallback)
         await upsert_session_meta(session_id, title=final_title)
         return final_title

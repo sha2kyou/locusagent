@@ -131,6 +131,8 @@ export function coalesceHistory(items: Message[]): ChatMessage[] {
     if (isArchived(msg)) curArchived = true;
 
     if (msg.role === "assistant") {
+      const reasoning = (msg.reasoning_content || "").trim();
+      if (reasoning) cur!.parts.push({ type: "thinking", text: reasoning });
       if (msg.content) cur!.parts.push({ type: "text", text: msg.content });
       for (const tc of msg.tool_calls ?? []) {
         if (isOpenAIToolCall(tc)) {

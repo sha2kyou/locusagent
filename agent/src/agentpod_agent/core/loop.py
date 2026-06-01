@@ -21,8 +21,17 @@ from ..config import get_settings
 from ..logging import get_logger
 from ..tools import ToolError, ToolRegistry
 from .context import compress_with_report
+from .models import messages_include_images, resolve_model
 from .llm import get_llm_client
+from .openai_fields import (
+    assistant_message_dict,
+    openai_delta_content,
+    openai_delta_reasoning,
+    openai_message_reasoning,
+    openai_message_text,
+)
 from .persistence import persist_context_compression
+from ..usage_report import schedule_openai_usage
 
 log = get_logger("loop")
 
@@ -132,14 +141,13 @@ class LoopResult:
     rounds: int
     total_tokens: int
     tool_calls_made: int
+    final_reasoning: str = ""
 
 
 def _serialize_message(msg) -> dict[str, Any]:
-    out: dict[str, Any] = {"role": msg.role}
-    if msg.content is not None:
-        out["content"] = msg.content
+    tool_calls = None
     if getattr(msg, "tool_calls", None):
-        out["tool_calls"] = [
+        tool_calls = [
             {
                 "id": tc.id,
                 "type": tc.type,
@@ -147,7 +155,11 @@ def _serialize_message(msg) -> dict[str, Any]:
             }
             for tc in msg.tool_calls
         ]
-    return out
+    return assistant_message_dict(
+        content=openai_message_text(msg),
+        reasoning_content=openai_message_reasoning(msg),
+        tool_calls=tool_calls,
+    )
 
 
 def _normalize_chat_tool_calls(
@@ -294,7 +306,8 @@ async def _finalize_without_tools(
     model: str,
     working_messages: list[dict[str, Any]],
     extra: dict[str, Any] | None,
-) -> tuple[dict[str, Any], str, int]:
+    session_id: str | None = None,
+) -> tuple[dict[str, Any], str, str, int]:
     req_messages = list(working_messages)
     req_messages.append({"role": "system", "content": _TOOL_ROUND_LIMIT_NOTICE})
     kwargs: dict[str, Any] = {
@@ -304,10 +317,16 @@ async def _finalize_without_tools(
     if extra:
         kwargs.update(extra)
     completion: ChatCompletion = await client.chat.completions.create(**kwargs)
+    schedule_openai_usage(
+        usage=completion.usage,
+        scenario="chat",
+        model=model,
+        session_id=session_id,
+    )
     usage_tokens = int((completion.usage.total_tokens if completion.usage else 0) or 0)
     msg = completion.choices[0].message
     msg_dict = _serialize_message(msg)
-    return msg_dict, str(msg.content or ""), usage_tokens
+    return msg_dict, openai_message_text(msg), openai_message_reasoning(msg), usage_tokens
 
 
 def _compression_preview(
@@ -369,9 +388,17 @@ async def run_chat_loop(
     blocked_tool_actions: dict[str, set[str]] | None = None,
 ) -> tuple[LoopResult, list[dict[str, Any]]]:
     settings = get_settings()
-    chosen_model = model or settings.llm_model
+
+    def _round_model(msgs: list[dict[str, Any]]) -> str:
+        if model:
+            return model
+        if messages_include_images(msgs):
+            return resolve_model("vision")
+        return resolve_model("main")
+
+    compression_model = resolve_model("compression")
     max_rounds = settings.max_loop_rounds
-    token_limit = int(_model_limit(chosen_model) * settings.context_compress_ratio)
+    token_limit = int(_model_limit(_round_model(messages)) * settings.context_compress_ratio)
     client = get_llm_client()
     tools_schema = registry.schemas() or None
     disabled = _normalize_disabled_tools(disabled_tools)
@@ -397,7 +424,7 @@ async def run_chat_loop(
             working,
             max_tokens=token_limit,
             client=client,
-            model=chosen_model,
+            model=compression_model,
             keep_last=settings.context_keep_last,
             min_middle=settings.context_distill_min_middle,
         )
@@ -408,8 +435,9 @@ async def run_chat_loop(
             messages=len(working),
             tools=len(tools_schema or []),
         )
+        round_model = _round_model(working)
         kwargs: dict[str, Any] = {
-            "model": chosen_model,
+            "model": round_model,
             "messages": working,
         }
         if tools_schema:
@@ -422,6 +450,12 @@ async def run_chat_loop(
         usage = completion.usage
         if usage:
             total_tokens += usage.total_tokens or 0
+        schedule_openai_usage(
+            usage=usage,
+            scenario="chat",
+            model=round_model,
+            session_id=session_id,
+        )
 
         choice = completion.choices[0]
         msg = choice.message
@@ -433,8 +467,13 @@ async def run_chat_loop(
             )
             normalized_calls = _cap_clarify_calls(normalized_calls)
             assistant_msg: dict[str, Any] = {"role": "assistant", "tool_calls": normalized_calls}
-            if msg.content is not None:
-                assistant_msg["content"] = msg.content
+            text = openai_message_text(msg)
+            reasoning = openai_message_reasoning(msg)
+            if text or reasoning or getattr(msg, "content", None) is not None:
+                if text:
+                    assistant_msg["content"] = text
+                if reasoning:
+                    assistant_msg["reasoning_content"] = reasoning
             working.append(assistant_msg)
             if tool_rounds_made >= max_tool_rounds:
                 log.warning(
@@ -443,11 +482,12 @@ async def run_chat_loop(
                     tool_rounds=tool_rounds_made,
                     max_tool_rounds=max_tool_rounds,
                 )
-                final_msg, final_text, more_tokens = await _finalize_without_tools(
+                final_msg, final_text, final_reasoning, more_tokens = await _finalize_without_tools(
                     client=client,
-                    model=chosen_model,
+                    model=_round_model(working),
                     working_messages=working,
                     extra=extra,
+                    session_id=session_id,
                 )
                 total_tokens += more_tokens
                 working.append(final_msg)
@@ -457,6 +497,7 @@ async def run_chat_loop(
                         rounds=round_idx,
                         total_tokens=total_tokens,
                         tool_calls_made=tool_calls_made,
+                        final_reasoning=final_reasoning,
                     ),
                     working,
                 )
@@ -464,11 +505,12 @@ async def run_chat_loop(
             tool_calls_made += len(normalized_calls)
             stub_calls = [_ToolCallStub(raw) for raw in normalized_calls]
             if _all_calls_are(stub_calls, "artifact_save") and artifact_save_rounds_made >= 1:
-                final_msg, final_text, more_tokens = await _finalize_without_tools(
+                final_msg, final_text, final_reasoning, more_tokens = await _finalize_without_tools(
                     client=client,
-                    model=chosen_model,
+                    model=_round_model(working),
                     working_messages=working + [{"role": "system", "content": _ARTIFACT_SAVE_LOOP_NOTICE}],
                     extra=extra,
+                    session_id=session_id,
                 )
                 total_tokens += more_tokens
                 working.append(final_msg)
@@ -478,6 +520,7 @@ async def run_chat_loop(
                         rounds=round_idx,
                         total_tokens=total_tokens,
                         tool_calls_made=tool_calls_made,
+                        final_reasoning=final_reasoning,
                     ),
                     working,
                 )
@@ -493,17 +536,18 @@ async def run_chat_loop(
             if any(s.function.name == "clarify" for s in stub_calls):
                 return (
                     LoopResult(
-                        final_text=msg.content or "",
+                        final_text=openai_message_text(msg),
                         rounds=round_idx,
                         total_tokens=total_tokens,
                         tool_calls_made=tool_calls_made,
+                        final_reasoning=openai_message_reasoning(msg),
                     ),
                     working,
                 )
             continue
 
         working.append(_serialize_message(msg))
-        final_text = msg.content or ""
+        final_text = openai_message_text(msg)
         log.info("loop_finished", round=round_idx, tokens=total_tokens)
         return (
             LoopResult(
@@ -511,6 +555,7 @@ async def run_chat_loop(
                 rounds=round_idx,
                 total_tokens=total_tokens,
                 tool_calls_made=tool_calls_made,
+                final_reasoning=openai_message_reasoning(msg),
             ),
             working,
         )
@@ -522,6 +567,7 @@ async def run_chat_loop(
             rounds=max_rounds,
             total_tokens=total_tokens,
             tool_calls_made=tool_calls_made,
+            final_reasoning="",
         ),
         working,
     )
@@ -561,15 +607,24 @@ async def run_chat_loop_stream(
     """流式 chat loop。
 
     yield 事件类型：
-    - {"type": "delta", "content": str}                       LLM 增量输出
+    - {"type": "reasoning_delta", "content": str}             思考链增量
+    - {"type": "delta", "content": str}                       正文增量
     - {"type": "tool_call", "name": str, "id": str}           工具开始
     - {"type": "tool_result", "tool_call_id": str, "preview": str}
-    - {"type": "done", "final_text", "rounds", "total_tokens", "tool_calls_made"}
+    - {"type": "done", "final_text", "final_reasoning", "rounds", "total_tokens", "tool_calls_made"}
     """
     settings = get_settings()
-    chosen_model = model or settings.llm_model
+
+    def _round_model(msgs: list[dict[str, Any]]) -> str:
+        if model:
+            return model
+        if messages_include_images(msgs):
+            return resolve_model("vision")
+        return resolve_model("main")
+
+    compression_model = resolve_model("compression")
     max_rounds = settings.max_loop_rounds
-    token_limit = int(_model_limit(chosen_model) * settings.context_compress_ratio)
+    token_limit = int(_model_limit(_round_model(messages)) * settings.context_compress_ratio)
     client = get_llm_client()
     tools_schema = registry.schemas() or None
     disabled = _normalize_disabled_tools(disabled_tools)
@@ -595,7 +650,7 @@ async def run_chat_loop_stream(
             working,
             max_tokens=token_limit,
             client=client,
-            model=chosen_model,
+            model=compression_model,
             keep_last=settings.context_keep_last,
             min_middle=settings.context_distill_min_middle,
         )
@@ -634,7 +689,7 @@ async def run_chat_loop_stream(
             stream=True,
         )
         kwargs: dict[str, Any] = {
-            "model": chosen_model,
+            "model": _round_model(working),
             "messages": working,
             "stream": True,
         }
@@ -647,20 +702,28 @@ async def run_chat_loop_stream(
         stream = await client.chat.completions.create(**kwargs)
 
         accum_content = ""
+        accum_reasoning = ""
         accum_tool_calls: dict[int, dict[str, Any]] = {}
         finish_reason: str | None = None
+        round_usage: Any = None
 
         async for event in stream:
             if event.usage:
+                round_usage = event.usage
                 total_tokens += event.usage.total_tokens or 0
             if not event.choices:
                 continue
             choice = event.choices[0]
             delta = choice.delta
             if delta is not None:
-                if delta.content:
-                    accum_content += delta.content
-                    yield {"type": "delta", "content": delta.content}
+                reasoning_piece = openai_delta_reasoning(delta)
+                if reasoning_piece:
+                    accum_reasoning += reasoning_piece
+                    yield {"type": "reasoning_delta", "content": reasoning_piece}
+                content_piece = openai_delta_content(delta)
+                if content_piece:
+                    accum_content += content_piece
+                    yield {"type": "delta", "content": content_piece}
                 tcs = getattr(delta, "tool_calls", None)
                 if tcs:
                     for tc_delta in tcs:
@@ -685,6 +748,13 @@ async def run_chat_loop_stream(
             if choice.finish_reason:
                 finish_reason = choice.finish_reason
 
+        schedule_openai_usage(
+            usage=round_usage,
+            scenario="chat",
+            model=kwargs["model"],
+            session_id=session_id,
+        )
+
         normalized_tool_calls: list[dict[str, Any]] = []
         if accum_tool_calls:
             sorted_idx = sorted(accum_tool_calls)
@@ -695,11 +765,11 @@ async def run_chat_loop_stream(
                 normalized_tool_calls.append(raw)
         normalized_tool_calls = _cap_clarify_calls(normalized_tool_calls)
 
-        msg_dict: dict[str, Any] = {"role": "assistant"}
-        if accum_content:
-            msg_dict["content"] = accum_content
-        if normalized_tool_calls:
-            msg_dict["tool_calls"] = normalized_tool_calls
+        msg_dict = assistant_message_dict(
+            content=accum_content,
+            reasoning_content=accum_reasoning,
+            tool_calls=normalized_tool_calls or None,
+        )
         working.append(msg_dict)
 
         if finish_reason == "tool_calls" and normalized_tool_calls:
@@ -711,11 +781,12 @@ async def run_chat_loop_stream(
                     max_tool_rounds=max_tool_rounds,
                     stream=True,
                 )
-                final_msg, capped_text, more_tokens = await _finalize_without_tools(
+                final_msg, capped_text, capped_reasoning, more_tokens = await _finalize_without_tools(
                     client=client,
-                    model=chosen_model,
+                    model=_round_model(working),
                     working_messages=working,
                     extra=extra,
+                    session_id=session_id,
                 )
                 total_tokens += more_tokens
                 working.append(final_msg)
@@ -725,6 +796,7 @@ async def run_chat_loop_stream(
                 yield {
                     "type": "done",
                     "final_text": final_text or "[tool round limit reached]",
+                    "final_reasoning": capped_reasoning,
                     "rounds": round_idx,
                     "total_tokens": total_tokens,
                     "tool_calls_made": tool_calls_made,
@@ -734,11 +806,12 @@ async def run_chat_loop_stream(
             tool_calls_made += len(normalized_tool_calls)
             stub_calls = [_ToolCallStub(raw) for raw in normalized_tool_calls]
             if _all_calls_are(stub_calls, "artifact_save") and artifact_save_rounds_made >= 1:
-                final_msg, capped_text, more_tokens = await _finalize_without_tools(
+                final_msg, capped_text, capped_reasoning, more_tokens = await _finalize_without_tools(
                     client=client,
-                    model=chosen_model,
+                    model=_round_model(working),
                     working_messages=working + [{"role": "system", "content": _ARTIFACT_SAVE_LOOP_NOTICE}],
                     extra=extra,
+                    session_id=session_id,
                 )
                 total_tokens += more_tokens
                 working.append(final_msg)
@@ -748,6 +821,7 @@ async def run_chat_loop_stream(
                 yield {
                     "type": "done",
                     "final_text": final_text,
+                    "final_reasoning": capped_reasoning,
                     "rounds": round_idx,
                     "total_tokens": total_tokens,
                     "tool_calls_made": tool_calls_made,
@@ -778,6 +852,7 @@ async def run_chat_loop_stream(
                 yield {
                     "type": "done",
                     "final_text": accum_content,
+                    "final_reasoning": accum_reasoning,
                     "rounds": round_idx,
                     "total_tokens": total_tokens,
                     "tool_calls_made": tool_calls_made,
@@ -785,11 +860,11 @@ async def run_chat_loop_stream(
                 return
             continue
 
-        final_text = accum_content
         log.info("loop_finished", round=round_idx, tokens=total_tokens, stream=True)
         yield {
             "type": "done",
-            "final_text": final_text,
+            "final_text": accum_content,
+            "final_reasoning": accum_reasoning,
             "rounds": round_idx,
             "total_tokens": total_tokens,
             "tool_calls_made": tool_calls_made,
@@ -800,6 +875,7 @@ async def run_chat_loop_stream(
     yield {
         "type": "done",
         "final_text": final_text or "[max rounds reached]",
+        "final_reasoning": "",
         "rounds": max_rounds,
         "total_tokens": total_tokens,
         "tool_calls_made": tool_calls_made,

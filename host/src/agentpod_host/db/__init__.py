@@ -7,6 +7,7 @@ from .models import (
     Notification,
     ProvisionStatus,
     ScheduledTask,
+    UsageEvent,
     User,
     Workspace,
 )
@@ -19,6 +20,7 @@ __all__ = [
     "Notification",
     "ProvisionStatus",
     "ScheduledTask",
+    "UsageEvent",
     "User",
     "Workspace",
     "dispose_engine",

@@ -20,7 +20,9 @@ export function convertMessage(message: ChatMessage): ThreadMessageLike {
 
   const content: Part[] = [];
   for (const p of message.parts) {
-    if (p.type === "text") {
+    if (p.type === "thinking") {
+      continue;
+    } else if (p.type === "text") {
       if (p.text) content.push({ type: "text", text: p.text });
     } else {
       content.push({

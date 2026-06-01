@@ -130,7 +130,7 @@ export function SessionSidebar({
   };
 
   return (
-    <SecondarySidebar mobileOpen={mobileOpen} onClose={onClose}>
+    <SecondarySidebar mobileOpen={mobileOpen} mobileSide="right" onClose={onClose}>
       <div className="p-3">
         <div className="flex items-center gap-2">
           <Button variant="primary" className="flex-1" onClick={handleNew} disabled={batchMode}>
@@ -178,10 +178,16 @@ export function SessionSidebar({
           <div className="flex items-center justify-between rounded-lg border border-border bg-surface-2 px-2 py-1.5">
             <Button
               variant="ghost"
-              size="sm"
+              size="icon-sm"
               onClick={toggleSelectAll}
+              title={selectedIds.size === filteredSessions.length ? "取消全选" : "全选"}
+              aria-label={selectedIds.size === filteredSessions.length ? "取消全选" : "全选"}
             >
-              {selectedIds.size === filteredSessions.length ? "取消全选" : "全选"}
+              {selectedIds.size === filteredSessions.length ? (
+                <Square className="size-4" />
+              ) : (
+                <CheckSquare className="size-4" />
+              )}
             </Button>
             <Button
               variant="danger-ghost"

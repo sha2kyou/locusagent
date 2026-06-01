@@ -74,7 +74,9 @@ async def _mark_run_failed(run_id: str | None, exc: Exception) -> None:
 
 async def run_scheduled_prompt(*, title: str, prompt: str) -> dict[str, Any]:
     settings = get_settings()
-    model = settings.llm_model
+    from .models import resolve_model
+
+    model = resolve_model("main")
     session_title = (title or "").strip()[:_TITLE_MAX] or "定时任务"
     prompt = (prompt or "").strip()
     if not prompt:

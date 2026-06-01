@@ -67,8 +67,11 @@ async def maybe_distill_skill(messages: list[dict[str, Any]], *, model: str | No
         return None
 
     settings = get_settings()
-    chosen_model = model or settings.llm_model
+    from ..core.models import resolve_model
+
+    chosen_model = model or resolve_model("skill_reflect")
     from ..core.llm import get_llm_client
+    from ..core.openai_fields import openai_completion_text
 
     client = get_llm_client()
     try:
@@ -81,11 +84,14 @@ async def maybe_distill_skill(messages: list[dict[str, Any]], *, model: str | No
             max_tokens=700,
             temperature=0.2,
         )
+        from ..usage_report import schedule_openai_usage
+
+        schedule_openai_usage(usage=resp.usage, scenario="skill_reflect", model=chosen_model)
     except Exception as exc:
         log.warning("skill_reflect_llm_failed", error=str(exc))
         return None
 
-    raw = ((resp.choices or [None])[0].message.content if resp.choices else "") or ""
+    raw = openai_completion_text(resp)
     raw = raw.strip()
     if not raw:
         return None

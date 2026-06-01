@@ -24,6 +24,7 @@ import { useAuth, type AgentReadiness } from "@/app/auth";
 import { withWorkspacePrefix } from "@/app/workspace-route";
 import {
   appendText,
+  appendThinking,
   type ChatAttachment,
   type ChatMessage,
   type ChatPart,
@@ -49,6 +50,7 @@ export interface PendingAttachment {
 }
 
 interface ChatContextValue {
+  messages: ChatMessage[];
   sessions: SessionMeta[];
   loadingSessions: boolean;
   currentId: string | null;
@@ -432,10 +434,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             } else if (ev === "error") {
               updateLastAssistant((p) => p, chunk.x_message || "出错了");
             } else {
-              const delta = chunk.choices?.[0]?.delta?.content;
-              if (delta) {
+              const delta = chunk.choices?.[0]?.delta;
+              const reasoning = delta?.reasoning_content;
+              const content = delta?.content;
+              if (reasoning) {
+                updateLastAssistant((parts) => appendThinking(parts, reasoning));
+              }
+              if (content) {
                 firstToken = false;
-                updateLastAssistant((parts) => appendText(parts, delta));
+                updateLastAssistant((parts) => appendText(parts, content));
               }
             }
           },
@@ -654,6 +661,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   return (
     <ChatContext.Provider
       value={{
+        messages,
         sessions,
         loadingSessions,
         currentId,

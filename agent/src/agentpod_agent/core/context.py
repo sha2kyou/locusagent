@@ -8,6 +8,7 @@ import tiktoken
 
 from ..config import get_settings
 from ..logging import get_logger
+from ..usage_report import schedule_openai_usage
 
 log = get_logger("context")
 
@@ -123,6 +124,8 @@ _DISTILL_SYSTEM_PROMPT = (
 
 
 async def _distill_messages(messages: list[dict[str, Any]], *, client, model: str) -> str:
+    from .openai_fields import openai_completion_text
+
     convo: list[str] = []
     for m in messages:
         role = str(m.get("role") or "")
@@ -158,7 +161,8 @@ async def _distill_messages(messages: list[dict[str, Any]], *, client, model: st
         max_tokens=500,
         temperature=0.2,
     )
-    return ((resp.choices or [None])[0].message.content if resp.choices else "") or ""
+    schedule_openai_usage(usage=resp.usage, scenario="compression", model=model)
+    return openai_completion_text(resp)
 
 
 async def compress(

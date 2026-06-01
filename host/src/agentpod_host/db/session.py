@@ -31,9 +31,9 @@ async def init_engine() -> AsyncEngine:
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         # P0 无迁移框架：在启动时补齐新增列，保证老库可用。
-        await conn.execute(
-            text("ALTER TABLE users ADD COLUMN IF NOT EXISTS tavily_api_key_enc BYTEA")
-        )
+        await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS llm_base_url"))
+        await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS llm_api_key_enc"))
+        await conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS tavily_api_key_enc"))
         await conn.execute(
             text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS category VARCHAR(64)")
         )

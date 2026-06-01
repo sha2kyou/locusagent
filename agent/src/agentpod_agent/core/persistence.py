@@ -81,7 +81,7 @@ def _to_attachment_meta_row(row: Any) -> dict[str, Any]:
     }
 
 
-def _hydrate_attachment(meta: dict[str, Any]) -> dict[str, Any]:
+async def _hydrate_attachment(meta: dict[str, Any]) -> dict[str, Any]:
     out = {
         "id": meta["id"],
         "name": meta["name"],
@@ -100,7 +100,7 @@ def _hydrate_attachment(meta: dict[str, Any]) -> dict[str, Any]:
             out["unsupportedReason"] = "附件对象不存在"
         return out
     try:
-        data = load_attachment_bytes(object_key)
+        data = await load_attachment_bytes(object_key)
     except AttachmentStorageError as exc:
         log.warning("attachment_load_failed", attachment_id=out["id"], error=str(exc))
         out["processable"] = False
@@ -231,6 +231,7 @@ async def upsert_session_meta(
 
 
 STALE_RUN_SECONDS = 600
+RESTART_INTERRUPTED_ERROR = "run interrupted: service restarted"
 
 
 async def expire_stale_run_ids(
@@ -265,6 +266,47 @@ async def expire_stale_run_ids(
                 run_ids,
             )
             return run_ids
+
+    return await run_in_thread(_do)
+
+
+async def interrupt_running_runs_on_startup(
+    *,
+    error_message: str = RESTART_INTERRUPTED_ERROR,
+    session_status: str = "interrupted",
+) -> dict[str, int]:
+    """应用重启后，将残留 running run 收敛为终态，避免会话长期显示进行中。"""
+
+    def _do() -> dict[str, int]:
+        with conn_scope(load_vec=False) as c:
+            rows = c.execute(
+                "SELECT id, session_id FROM runs WHERE status='running'"
+            ).fetchall()
+            if not rows:
+                return {"runs_interrupted": 0, "sessions_marked_interrupted": 0}
+            run_ids = [str(r["id"]) for r in rows]
+            session_ids = sorted({str(r["session_id"]) for r in rows if r["session_id"]})
+            run_placeholders = ",".join("?" for _ in run_ids)
+            c.execute(
+                "UPDATE runs SET status='failed', error_message=?, updated_at=datetime('now') "
+                f"WHERE id IN ({run_placeholders})",
+                [error_message, *run_ids],
+            )
+            if session_ids:
+                session_placeholders = ",".join("?" for _ in session_ids)
+                cur = c.execute(
+                    "UPDATE sessions SET status=?, updated_at=datetime('now') "
+                    f"WHERE id IN ({session_placeholders}) "
+                    "AND status != ?",
+                    [session_status, *session_ids, session_status],
+                )
+                sessions_marked = int(cur.rowcount or 0)
+            else:
+                sessions_marked = 0
+            return {
+                "runs_interrupted": len(run_ids),
+                "sessions_marked_interrupted": sessions_marked,
+            }
 
     return await run_in_thread(_do)
 
@@ -432,6 +474,7 @@ async def append_message(
     role: str,
     content: str,
     *,
+    reasoning_content: str | None = None,
     tool_calls: Any = None,
     tool_call_id: str | None = None,
     run_id: str | None = None,
@@ -440,13 +483,15 @@ async def append_message(
     def _do() -> int:
         with conn_scope(load_vec=False) as c:
             cur = c.execute(
-                "INSERT INTO messages(session_id, role, content, tool_calls, tool_call_id, run_id, tokens) "
-                "SELECT ?, ?, ?, ?, ?, ?, ? "
+                "INSERT INTO messages(session_id, role, content, reasoning_content, tool_calls, "
+                "tool_call_id, run_id, tokens) "
+                "SELECT ?, ?, ?, ?, ?, ?, ?, ? "
                 "WHERE EXISTS(SELECT 1 FROM sessions WHERE id = ?)",
                 (
                     session_id,
                     role,
                     content,
+                    reasoning_content or "",
                     json.dumps(tool_calls) if tool_calls else None,
                     tool_call_id,
                     run_id,
@@ -503,7 +548,7 @@ async def create_attachment(
     content_sha256 = ""
     if payload is not None:
         try:
-            uploaded = save_attachment_bytes(
+            uploaded = await save_attachment_bytes(
                 attachment_id=attachment_id,
                 kind=kind,
                 name=name,
@@ -549,9 +594,9 @@ async def create_attachment(
         meta = await run_in_thread(_do)
     except Exception:
         if object_key:
-            await run_in_thread(delete_attachment_objects, [object_key])
+            await delete_attachment_objects([object_key])
         raise
-    return _hydrate_attachment(meta)
+    return await _hydrate_attachment(meta)
 
 
 async def get_attachments_by_ids(attachment_ids: list[str]) -> list[dict[str, Any]]:
@@ -576,7 +621,7 @@ async def get_attachments_by_ids(attachment_ids: list[str]) -> list[dict[str, An
             return out
 
     metas = await run_in_thread(_do)
-    return await run_in_thread(lambda: [_hydrate_attachment(m) for m in metas])
+    return [await _hydrate_attachment(m) for m in metas]
 
 
 async def link_message_attachments(message_id: int, attachment_ids: list[str]) -> None:
@@ -606,6 +651,7 @@ async def update_message(
     message_id: int,
     *,
     content: str | None = None,
+    reasoning_content: str | None = None,
     tool_calls: Any = None,
     tokens: int | None = None,
 ) -> bool:
@@ -616,6 +662,9 @@ async def update_message(
             if content is not None:
                 updates.append("content = ?")
                 params.append(content)
+            if reasoning_content is not None:
+                updates.append("reasoning_content = ?")
+                params.append(reasoning_content)
             if tool_calls is not None:
                 updates.append("tool_calls = ?")
                 params.append(json.dumps(tool_calls) if tool_calls else None)
@@ -649,6 +698,7 @@ async def persist_openai_message(
             session_id,
             "assistant",
             str(msg.get("content") or ""),
+            reasoning_content=str(msg.get("reasoning_content") or ""),
             tool_calls=msg.get("tool_calls"),
             run_id=run_id,
         )
@@ -727,7 +777,7 @@ async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
     def _do() -> tuple[list[Any], dict[int, list[dict[str, Any]]]]:
         with conn_scope(load_vec=False) as c:
             rows = c.execute(
-                "SELECT id, role, content, tool_calls, tool_call_id "
+                "SELECT id, role, content, reasoning_content, tool_calls, tool_call_id "
                 "FROM messages WHERE session_id = ? AND context_state = 'active' "
                 "ORDER BY id ASC",
                 (session_id,),
@@ -737,9 +787,9 @@ async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
             return rows, attachments_meta_map
 
     rows, attachments_meta_map = await run_in_thread(_do)
-    attachments_map = await run_in_thread(
-        lambda: {mid: [_hydrate_attachment(m) for m in metas] for mid, metas in attachments_meta_map.items()}
-    )
+    attachments_map: dict[int, list[dict[str, Any]]] = {}
+    for mid, metas in attachments_meta_map.items():
+        attachments_map[mid] = [await _hydrate_attachment(m) for m in metas]
 
     out: list[dict[str, Any]] = []
     for r in rows:
@@ -782,9 +832,16 @@ async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
                 d: dict[str, Any] = {"role": "assistant", "id": msg_id}
                 if content:
                     d["content"] = content
+                reasoning = str(r["reasoning_content"] or "").strip()
+                if reasoning:
+                    d["reasoning_content"] = reasoning
                 if _is_openai_tool_calls(tool_calls):
                     d["tool_calls"] = tool_calls
-                if d.get("content") is not None or d.get("tool_calls"):
+                if (
+                    d.get("content") is not None
+                    or d.get("reasoning_content")
+                    or d.get("tool_calls")
+                ):
                     out.append(d)
                 continue
 
@@ -914,8 +971,8 @@ async def list_messages(session_id: str) -> list[dict]:
     def _do() -> tuple[list[Any], dict[int, list[dict[str, Any]]]]:
         with conn_scope(load_vec=False) as c:
             rows = c.execute(
-                "SELECT id, role, content, tool_calls, tool_call_id, run_id, tokens, created_at, "
-                "context_state, archive_batch_id, archived_at "
+                "SELECT id, role, content, reasoning_content, tool_calls, tool_call_id, run_id, tokens, "
+                "created_at, context_state, archive_batch_id, archived_at "
                 "FROM messages WHERE session_id = ? ORDER BY id ASC",
                 (session_id,),
             ).fetchall()
@@ -924,9 +981,9 @@ async def list_messages(session_id: str) -> list[dict]:
             return rows, attachments_meta_map
 
     rows, attachments_meta_map = await run_in_thread(_do)
-    attachments_map = await run_in_thread(
-        lambda: {mid: [_hydrate_attachment(m) for m in metas] for mid, metas in attachments_meta_map.items()}
-    )
+    attachments_map: dict[int, list[dict[str, Any]]] = {}
+    for mid, metas in attachments_meta_map.items():
+        attachments_map[mid] = [await _hydrate_attachment(m) for m in metas]
     out: list[dict] = []
     for r in rows:
         d = dict(r)
@@ -968,7 +1025,7 @@ async def delete_session(session_id: str) -> bool:
 
     deleted, object_keys = await run_in_thread(_do)
     if object_keys:
-        await run_in_thread(delete_attachment_objects, object_keys)
+        await delete_attachment_objects(object_keys)
     if deleted:
         async with _locks_guard:
             _session_locks.pop(session_id, None)

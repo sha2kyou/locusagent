@@ -125,8 +125,6 @@ async def github_callback(request: Request, code: str = "", state: str = ""):
         else:
             if existing.deleted_at is not None:
                 existing.deleted_at = None
-                existing.llm_api_key_enc = None
-                existing.llm_base_url = None
                 existing.internal_token_enc = None
                 existing.container_id = None
                 existing.network_name = None

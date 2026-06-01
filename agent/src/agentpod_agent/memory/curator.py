@@ -46,8 +46,11 @@ async def maybe_curate_memories(*, model: str | None = None) -> int:
     if len(items) < 2:
         return 0
 
-    chosen_model = model or settings.llm_model
+    from ..core.models import resolve_model
+
+    chosen_model = model or resolve_model("curator")
     from ..core.llm import get_llm_client
+    from ..core.openai_fields import openai_completion_text
 
     client = get_llm_client()
     numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(items))
@@ -61,11 +64,14 @@ async def maybe_curate_memories(*, model: str | None = None) -> int:
             max_tokens=900,
             temperature=0.1,
         )
+        from ..usage_report import schedule_openai_usage
+
+        schedule_openai_usage(usage=resp.usage, scenario="curator", model=chosen_model)
     except Exception as exc:
         log.warning("memory_curate_llm_failed", error=str(exc))
         return 0
 
-    raw = ((resp.choices or [None])[0].message.content if resp.choices else "") or ""
+    raw = openai_completion_text(resp)
     raw = raw.strip()
     if not raw:
         return 0

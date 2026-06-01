@@ -2,7 +2,7 @@ FROM python:3.11-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=0 \
+    PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
@@ -17,8 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY agent/pyproject.toml ./agent/pyproject.toml
 
-# 先仅按 pyproject 安装依赖（不受 agent/src 变更影响），并缓存 pip 下载内容。
-RUN --mount=type=cache,target=/root/.cache/pip python - <<'PY' | xargs -r pip install
+# 先仅按 pyproject 安装依赖（不受 agent/src 变更影响）。
+RUN python - <<'PY' | xargs -r pip install
 import tomllib
 from pathlib import Path
 
@@ -31,7 +31,7 @@ COPY agent/src ./agent/src
 COPY shared-skills ./shared-skills
 
 # 再安装项目本身，避免每次源码变更都重下三方依赖。
-RUN --mount=type=cache,target=/root/.cache/pip pip install --no-deps ./agent && \
+RUN pip install --no-deps ./agent && \
     cp -r ./shared-skills/. /app/skills/ && \
     chown -R agentpod:agentpod /app/skills
 

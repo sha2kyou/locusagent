@@ -49,9 +49,6 @@ async def me(request: Request, ctx: AuthContext = Depends(require_session)) -> d
         "current_workspace_id": workspace.id,
         "container_status": user.container_status,
         "provision_status": user.provision_status,
-        "llm_configured": user.llm_api_key_enc is not None,
-        "llm_base_url": user.llm_base_url,
-        "llm_model": user.llm_model,
         "agent_api_key_configured": bool(user.agent_api_key_hash),
         "attachment_max_bytes": settings.attachment_max_bytes,
     }
@@ -107,8 +104,6 @@ async def delete_account(
         stmt = select(User).where(User.id == user_id)
         user = (await session.execute(stmt)).scalar_one()
         user.deleted_at = datetime.now(timezone.utc)
-        user.llm_api_key_enc = None
-        user.llm_base_url = None
         user.internal_token_enc = None
         user.container_id = None
         user.network_name = None

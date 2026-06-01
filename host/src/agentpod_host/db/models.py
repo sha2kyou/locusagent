@@ -52,10 +52,6 @@ class User(Base):
 
     agent_api_key_hash: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
 
-    llm_base_url: Mapped[str | None] = mapped_column(Text)
-    llm_api_key_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
-    llm_model: Mapped[str] = mapped_column(Text, default="gpt-4o", nullable=False)
-    tavily_api_key_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
     timezone: Mapped[str] = mapped_column(String(64), default="UTC", nullable=False)
 
     container_id: Mapped[str | None] = mapped_column(Text)
@@ -82,6 +78,7 @@ class User(Base):
     notifications: Mapped[list["Notification"]] = relationship(back_populates="user")
     scheduled_tasks: Mapped[list["ScheduledTask"]] = relationship(back_populates="user")
     workspaces: Mapped[list["Workspace"]] = relationship(back_populates="user")
+    usage_events: Mapped[list["UsageEvent"]] = relationship(back_populates="user")
 
     __table_args__ = (
         Index("idx_users_provision", "provision_status"),
@@ -169,6 +166,31 @@ class ScheduledTask(Base):
         Index("idx_scheduled_tasks_user", "user_id", "created_at"),
         Index("idx_scheduled_tasks_workspace", "workspace_id", "created_at"),
         Index("idx_scheduled_tasks_due", "enabled", "next_run_at"),
+    )
+
+
+class UsageEvent(Base):
+    __tablename__ = "usage_events"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    workspace_id: Mapped[str | None] = mapped_column(String(64))
+    session_id: Mapped[str | None] = mapped_column(String(64))
+    scenario: Mapped[str] = mapped_column(String(64), nullable=False)
+    model: Mapped[str | None] = mapped_column(String(128))
+    prompt_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    completion_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    api_calls: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    user: Mapped[User] = relationship(back_populates="usage_events")
+
+    __table_args__ = (
+        Index("idx_usage_user_created", "user_id", "created_at"),
+        Index("idx_usage_user_scenario_model", "user_id", "scenario", "model"),
     )
 
 

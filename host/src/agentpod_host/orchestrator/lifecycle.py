@@ -26,6 +26,8 @@ from ..config import get_settings
 from ..db import ContainerStatus, ProvisionStatus, User, get_session
 from ..logging import get_logger
 from ..security import decrypt_str, encrypt_str
+from ..llm_url import host_llm_proxy_base_url
+from .agent_env import build_agent_environment, require_llm_configured
 from .docker_client import get_docker_client
 from .naming import container_name_for, network_name_for, volume_name_for
 
@@ -210,40 +212,34 @@ def _host_embedding_proxy_url() -> str:
     return f"{_host_internal_base_url()}/internal/embedding"
 
 
-def _resolve_internal_network_name(client: Any, configured: str) -> str | None:
-    wanted = (configured or "").strip()
-    if wanted:
-        try:
-            client.networks.get(wanted)
-            return wanted
-        except NotFound:
-            return None
-    candidates = []
-    for net in client.networks.list():
-        name = str(net.name or "")
-        if name.endswith("agentpod-internal"):
-            candidates.append(name)
-    if not candidates:
-        return None
-    candidates.sort()
-    return candidates[0]
+def _host_llm_proxy_url(settings: Any | None = None) -> str:
+    s = settings or get_settings()
+    return host_llm_proxy_base_url(
+        host_internal_base=_host_internal_base_url(),
+        llm_base_url=s.llm_base_url,
+    )
 
 
 async def _create_container(user: User) -> str:
     settings = get_settings()
-    if user.llm_api_key_enc is None:
-        raise RuntimeError("LLM API Key 未配置，无法创建容器")
-    if user.llm_base_url is None:
-        raise RuntimeError("LLM base_url 未配置，无法创建容器")
+    require_llm_configured(settings)
 
     container_name = container_name_for(user.id)
     network = network_name_for(user.id)
     volume = volume_name_for(user.id)
 
     internal_token = secrets.token_urlsafe(32)
-    llm_api_key = decrypt_str(user.llm_api_key_enc)
-    tavily_api_key = (
-        decrypt_str(user.tavily_api_key_enc) if user.tavily_api_key_enc is not None else ""
+    agent_env = build_agent_environment(
+        user_id=user.id,
+        internal_token=internal_token,
+        llm_proxy_base_url=_host_llm_proxy_url(settings),
+        embedding_base_url=_host_embedding_proxy_url(),
+        embedding_model=settings.embedding_model,
+        host_internal_url=_host_internal_base_url(),
+        attachment_storage=settings.attachment_storage,
+        enable_terminal=settings.enable_terminal,
+        terminal_whitelist=settings.terminal_whitelist,
+        settings=settings,
     )
 
     def _do_create() -> str:
@@ -267,26 +263,7 @@ async def _create_container(user: User) -> str:
                 volume: {"bind": "/data", "mode": "rw"},
                 "agentpod_shared-skills": {"bind": "/app/skills", "mode": "ro"},
             },
-            environment={
-                "LLM_BASE_URL": user.llm_base_url,
-                "LLM_API_KEY": llm_api_key,
-                "LLM_MODEL": user.llm_model,
-                "USER_ID": str(user.id),
-                "INTERNAL_TOKEN": internal_token,
-                "EMBEDDING_BASE_URL": _host_embedding_proxy_url(),
-                "EMBEDDING_MODEL": settings.embedding_model,
-                "HOST_INTERNAL_URL": _host_internal_base_url(),
-                "ATTACHMENT_STORAGE": settings.attachment_storage,
-                "S3_ENDPOINT": settings.s3_endpoint,
-                "S3_ACCESS_KEY": settings.s3_access_key,
-                "S3_SECRET_KEY": settings.s3_secret_key,
-                "S3_BUCKET": settings.s3_bucket,
-                "S3_REGION": settings.s3_region,
-                "S3_USE_SSL": "1" if settings.s3_use_ssl else "0",
-                "ENABLE_TERMINAL": "1" if settings.enable_terminal else "0",
-                "TERMINAL_WHITELIST": settings.terminal_whitelist,
-                "TAVILY_API_KEY": tavily_api_key,
-            },
+            environment=agent_env,
             mem_limit=settings.agent_memory_limit,
             cpu_quota=settings.agent_cpu_quota,
             pids_limit=settings.agent_pids_limit,
@@ -305,14 +282,6 @@ async def _create_container(user: User) -> str:
                 client.networks.get(network).connect(host_self)
             except APIError:
                 pass
-        if settings.attachment_storage == "minio":
-            internal_network = _resolve_internal_network_name(client, settings.agent_internal_network)
-            if not internal_network:
-                raise RuntimeError("未找到 MinIO 内部网络，请检查 AGENT_INTERNAL_NETWORK")
-            try:
-                client.networks.get(internal_network).connect(container)
-            except APIError as exc:
-                raise RuntimeError(f"连接内部网络失败: {exc}") from exc
 
         return container.id
 
@@ -328,10 +297,10 @@ async def _create_container(user: User) -> str:
 
 
 async def ensure_user_container(user_id: int, *, force_recreate: bool = False) -> ContainerStatus:
-    """供 BYOK 保存后调用：absent/failed → creating → running。
+    """absent/failed → creating → running。
 
     幂等：若已 running 且未 force_recreate 直接返回；creating 期间并发请求复用同锁。
-    force_recreate：销毁现有容器并按最新 LLM 配置重建（running/paused/stopped）。
+    force_recreate：销毁现有容器并按宿主环境变量重建（running/paused/stopped）。
     """
     lock = await user_lock(user_id)
     async with lock:
@@ -525,8 +494,9 @@ async def _try_auto_reprovision(
     user_id: int,
     name: str,
 ) -> tuple[ContainerStatus, dict[str, Any]] | None:
-    user = await _load_user(user_id)
-    if user.llm_api_key_enc is None or user.llm_base_url is None:
+    try:
+        require_llm_configured()
+    except RuntimeError:
         return None
     try:
         await ensure_user_container(user_id)

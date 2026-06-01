@@ -61,6 +61,7 @@ openssl rand -base64 32
 - `ENCRYPTION_KEY`
 - `SESSION_SECRET`
 - `DB_PASSWORD`
+- `LLM_API_KEY`（及可选的 `LLM_MODEL`、辅助模型变量，见 `.env.example`）
 
 ### 3) 启动整套服务
 
@@ -84,8 +85,7 @@ curl "http://localhost:1223/api/v1/health"
 
 1. 浏览器打开 `http://localhost:1223`
 2. 用 GitHub 登录
-3. 在设置页配置 LLM（BYOK）
-4. 打开 `http://localhost:1223/chat` 发起对话
+3. 打开 `http://localhost:1223/chat` 发起对话（模型由服务端 `.env` 注入）
 
 ### API 验证（Bearer）
 
@@ -203,7 +203,7 @@ docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" | rg "apod-user|a
 
 ## P0 验收标准（DoD）
 
-- 新用户首次登录 10s 内进入工作台，保存 BYOK 后 30s 内首轮对话首包返回。
+- 新用户首次登录 10s 内进入工作台，首轮对话首包 30s 内返回（需宿主已配置 `LLM_API_KEY`）。
 - `/api/v1/chat/completions`、`/api/v1/responses` 与 `/api/v1/models` 鉴权通过；冷启动返回 `503 + Retry-After`。
 - `agent_api_key` 调用 `/api/workspace/*` 一律 403；Session 调用 `/api/v1/*` 一律 403。
 - 用户 A 容器从网络层无法访问用户 B 容器。

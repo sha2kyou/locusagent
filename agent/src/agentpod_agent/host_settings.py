@@ -9,48 +9,26 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 
-from .config import get_settings
+from .host_internal import HostInternalError, error_detail, internal_base_and_headers
 from .logging import get_logger
 
 log = get_logger("host_settings")
+
+# 兼容旧导入
+HostSettingsError = HostInternalError
 
 _TZ_CACHE_TTL_SECONDS = 60.0
 _tz_cache: tuple[str, float] | None = None
 _tz_cache_lock = asyncio.Lock()
 
 
-class HostSettingsError(RuntimeError):
-    pass
-
-
-def _internal_base_and_headers() -> tuple[str, dict[str, str]]:
-    settings = get_settings()
-    base = (settings.host_internal_url or "").rstrip("/")
-    token = settings.internal_token
-    user_id = settings.user_id
-    if not base or not token or not user_id:
-        raise HostSettingsError("host internal auth not configured")
-    return base, {"X-Internal-Token": token, "X-User-Id": user_id}
-
-
-def _error_detail(resp: httpx.Response) -> str:
-    try:
-        data = resp.json()
-    except Exception:
-        return (resp.text or "").strip() or f"http {resp.status_code}"
-    detail = data.get("detail")
-    if isinstance(detail, str) and detail.strip():
-        return detail.strip()
-    return str(data)
-
-
 async def _fetch_timezone_from_host() -> str:
-    base, headers = _internal_base_and_headers()
+    base, headers = internal_base_and_headers()
     url = f"{base}/internal/settings/timezone"
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(url, headers=headers)
     if resp.status_code >= 400:
-        raise HostSettingsError(_error_detail(resp))
+        raise HostSettingsError(error_detail(resp))
     data = resp.json()
     if not isinstance(data, dict):
         raise HostSettingsError("invalid host response")

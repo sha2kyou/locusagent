@@ -4,7 +4,6 @@ import type {
   EnvVarEntry,
   ArtifactCategory,
   ArtifactEntry,
-  LLMConfig,
   McpInput,
   McpServer,
   Me,
@@ -16,8 +15,8 @@ import type {
   Skill,
   ScheduledTask,
   ScheduleKind,
-  TavilyConfig,
   TimezoneConfig,
+  UsageSummary,
   ToolToggleOverview,
   WorkspaceItem,
 } from "./types";
@@ -48,16 +47,8 @@ export const updateWorkspace = (id: string, body: { name?: string; description?:
 export const deleteWorkspace = (id: string) =>
   apiSend<{ deleted: boolean }>(`/api/workspaces/${encodeURIComponent(id)}`, "DELETE");
 
-// ---- 设置 / LLM ----
-export const getLLMConfig = () => apiGet<LLMConfig>("/api/settings/llm");
-
-export const putLLMConfig = (body: { base_url: string; model: string; api_key?: string }) =>
-  apiSend<LLMConfig>("/api/settings/llm", "PUT", body);
-
-export const getTavilyConfig = () => apiGet<TavilyConfig>("/api/settings/tavily");
-
-export const putTavilyConfig = (body: { api_key: string }) =>
-  apiSend<TavilyConfig>("/api/settings/tavily", "PUT", body);
+// ---- 设置 ----
+export const getUsageSummary = () => apiGet<UsageSummary>("/api/settings/usage-summary");
 
 export const getTimezoneConfig = () => apiGet<TimezoneConfig>("/api/settings/timezone");
 

@@ -29,7 +29,15 @@ async def lifespan(app: FastAPI):
     log.info("agent_starting", user_id=settings.user_id, model=settings.llm_model)
     init_db()
 
-    from .core.persistence import expire_stale_runs
+    from .core.persistence import expire_stale_runs, interrupt_running_runs_on_startup
+
+    startup_interrupt_stats = await interrupt_running_runs_on_startup()
+    if startup_interrupt_stats["runs_interrupted"] > 0:
+        log.info(
+            "startup_running_runs_interrupted",
+            runs_interrupted=startup_interrupt_stats["runs_interrupted"],
+            sessions_marked_interrupted=startup_interrupt_stats["sessions_marked_interrupted"],
+        )
 
     expired = await expire_stale_runs()
     if expired:

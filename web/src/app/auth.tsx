@@ -15,14 +15,12 @@ export interface AgentReadiness {
   ready: boolean;
   label: string;
   tone: "ready" | "pending" | "blocked";
-  /** 阻塞原因：需要配置 LLM / 创建中 / 失败 等，用于提示与禁用输入 */
-  reason?: "needs_llm" | "creating" | "paused" | "stopped" | "failed" | "absent";
+  /** 阻塞原因：创建中 / 失败 等，用于提示与禁用输入 */
+  reason?: "creating" | "paused" | "stopped" | "failed" | "absent";
 }
 
 export function readinessOf(me: Me | null): AgentReadiness {
   if (!me) return { ready: false, label: "加载中", tone: "pending" };
-  if (!me.llm_configured)
-    return { ready: false, label: "未配置模型", tone: "blocked", reason: "needs_llm" };
   if (me.provision_status === "failed")
     return { ready: false, label: "部署失败", tone: "blocked", reason: "failed" };
   switch (me.container_status) {

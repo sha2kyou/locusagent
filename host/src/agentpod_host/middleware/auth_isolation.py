@@ -2,8 +2,9 @@
 
 规范约束：
 - Bearer 只能命中 /api/v1/{chat/completions, responses, models, health}；其他路径若仅带 Bearer 一律 403。
-- Session 只能命中 /api/workspace/*、/api/me*、/api/settings/*、/internal/*；
+- Session 只能命中 /api/workspace/*、/api/me*、/api/settings/*、/internal/containers/*；
   这些路径若带 Bearer（无论是否同时带 session）一律 403，避免凭据混用。
+- Agent 内部代理路径（/internal/llm 等）允许 Bearer（INTERNAL_TOKEN），不经 Session 白名单。
 - /api/v1/health 与 /health 跳过隔离，作为公共探活端点。
 - /api/oauth/* 公开（用户尚未登录），跳过隔离。
 """
@@ -16,6 +17,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from ..auth.session import SESSION_COOKIE_NAME
+from ..internal_paths import is_agent_internal_path, is_internal_session_path
 
 BEARER_ALLOWED_PATHS = {
     "/api/v1/chat/completions",
@@ -33,7 +35,6 @@ SESSION_ONLY_PREFIXES = (
     "/api/me",
     "/api/settings/",
     "/api/notifications/",
-    "/internal/",
 )
 
 PUBLIC_PATHS = {
@@ -75,12 +76,15 @@ def install_auth_isolation(app: FastAPI) -> None:
                 )
             return await call_next(request)
 
-        if any(path.startswith(p) for p in SESSION_ONLY_PREFIXES):
+        if any(path.startswith(p) for p in SESSION_ONLY_PREFIXES) or is_internal_session_path(path):
             if has_bearer:
                 return JSONResponse(
                     {"error": {"code": "bearer_on_session_path"}},
                     status_code=403,
                 )
+            return await call_next(request)
+
+        if is_agent_internal_path(path):
             return await call_next(request)
 
         return await call_next(request)

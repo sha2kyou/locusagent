@@ -172,8 +172,16 @@ function CodeBlock({ children }: { children: ReactNode }) {
   );
 }
 
-function ThinkingBlock({ content }: { content: string }) {
-  const [open, setOpen] = useState(false);
+export function ThinkingBlock({
+  content,
+  defaultOpen = false,
+  label = "思考过程",
+}: {
+  content: string;
+  defaultOpen?: boolean;
+  label?: string;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="my-2 rounded-lg border border-border bg-surface/40">
       <button
@@ -182,7 +190,7 @@ function ThinkingBlock({ content }: { content: string }) {
         className="flex w-full items-center gap-1.5 px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground"
       >
         <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
-        思考过程
+        {label}
       </button>
       {open && (
         <div className="apod-prose border-t border-border px-3 py-2 text-[13px] text-muted-foreground">
