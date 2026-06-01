@@ -70,6 +70,7 @@ async def maybe_distill_skill(messages: list[dict[str, Any]], *, model: str | No
     from ..core.models import resolve_model
 
     chosen_model = model or resolve_model("skill_reflect")
+    from ..core.completion_limits import MIN_AUXILIARY_COMPLETION_TOKENS
     from ..core.llm import get_llm_client
     from ..core.openai_fields import openai_completion_text
 
@@ -81,7 +82,7 @@ async def maybe_distill_skill(messages: list[dict[str, Any]], *, model: str | No
                 {"role": "system", "content": _REFLECT_SYSTEM_PROMPT},
                 {"role": "user", "content": f"任务轨迹：\n{trajectory}"},
             ],
-            max_tokens=700,
+            max_tokens=MIN_AUXILIARY_COMPLETION_TOKENS,
             temperature=0.2,
         )
         from ..usage_report import schedule_openai_usage

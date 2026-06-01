@@ -26,10 +26,10 @@ def openai_delta_reasoning(delta: Any) -> str:
 
 
 def openai_completion_text(resp: Any) -> str:
-    choice = (getattr(resp, "choices", None) or [None])[0]
-    if not choice:
+    choices = getattr(resp, "choices", None) or []
+    if not choices:
         return ""
-    return openai_message_text(choice.message)
+    return openai_message_text(choices[0].message)
 
 
 def assistant_message_dict(

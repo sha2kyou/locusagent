@@ -63,6 +63,7 @@ async def review_write(content: str, *, kind: str, source: str = "model") -> Gua
         log.warning("write_guard_blocked", kind=kind, source=source, reason=hard)
         return GuardResult(allowed=False, reason=hard)
 
+    from ..core.completion_limits import MIN_AUXILIARY_COMPLETION_TOKENS
     from ..core.llm import get_llm_client
     from ..core.openai_fields import openai_completion_text
 
@@ -76,7 +77,7 @@ async def review_write(content: str, *, kind: str, source: str = "model") -> Gua
                 {"role": "system", "content": _REVIEW_SYSTEM_PROMPT},
                 {"role": "user", "content": user_content},
             ],
-            max_tokens=160,
+            max_tokens=MIN_AUXILIARY_COMPLETION_TOKENS,
             temperature=0.0,
         )
         from ..usage_report import schedule_openai_usage

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..core.completion_limits import MIN_AUXILIARY_COMPLETION_TOKENS
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 _DISTILL_SYSTEM_PROMPT = (
@@ -17,11 +18,9 @@ async def _summarize(args: dict[str, Any]) -> ToolResult:
     text = str(args.get("text", "")).strip()
     if not text:
         raise ToolError("text is required")
-    max_tokens = int(args.get("max_tokens", 500) or 500)
-    if max_tokens < 64:
-        max_tokens = 64
-    if max_tokens > 1500:
-        max_tokens = 1500
+    max_tokens = int(args.get("max_tokens", MIN_AUXILIARY_COMPLETION_TOKENS) or MIN_AUXILIARY_COMPLETION_TOKENS)
+    if max_tokens < MIN_AUXILIARY_COMPLETION_TOKENS:
+        max_tokens = MIN_AUXILIARY_COMPLETION_TOKENS
 
     # 延迟导入，避免 tools 初始化阶段与 core.loop 互相导入造成循环依赖。
     from ..core.llm import get_llm_client
@@ -63,8 +62,8 @@ register_builtin(
                 "text": {"type": "string", "description": "需要蒸馏的原始文本内容。"},
                 "max_tokens": {
                     "type": "integer",
-                    "default": 500,
-                    "description": "摘要输出长度上限（64-1500）。",
+                    "default": MIN_AUXILIARY_COMPLETION_TOKENS,
+                    "description": "摘要 completion 预算下限 4096（含推理模型 thinking）。",
                 },
             },
             "required": ["text"],

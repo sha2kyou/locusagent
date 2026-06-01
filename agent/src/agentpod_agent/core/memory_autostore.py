@@ -7,6 +7,7 @@ import re
 
 from ..config import get_settings
 from ..memory import add_memory, list_memories
+from .completion_limits import MIN_AUXILIARY_COMPLETION_TOKENS
 from .llm import get_llm_client
 from .openai_fields import openai_completion_text
 from ..usage_report import schedule_openai_usage
@@ -71,7 +72,7 @@ async def _extract_memory_candidates(
             {"role": "system", "content": prompt},
             {"role": "user", "content": content},
         ],
-        max_tokens=220,
+        max_tokens=MIN_AUXILIARY_COMPLETION_TOKENS,
         temperature=0.1,
     )
     schedule_openai_usage(

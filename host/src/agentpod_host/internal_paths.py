@@ -9,6 +9,7 @@ INTERNAL_SESSION_PREFIXES: tuple[str, ...] = ("/internal/containers",)
 AGENT_INTERNAL_PREFIXES: tuple[str, ...] = (
     "/internal/llm",
     "/internal/tavily",
+    "/internal/jina",
     "/internal/embedding",
     "/internal/attachments",
     "/internal/notifications",

@@ -59,6 +59,7 @@ class Settings(BaseSettings):
         default="", alias="AUXILIARY_MEMORY_AUTOSTORE_MODEL"
     )
     tavily_api_key: str = Field(default="", alias="TAVILY_API_KEY")
+    jina_api_key: str = Field(default="", alias="JINA_API_KEY")
 
     embedding_base_url: str = Field(default="http://tei:80", alias="EMBEDDING_BASE_URL")
     embedding_model: str = Field(default="BAAI/bge-small-zh-v1.5", alias="EMBEDDING_MODEL")

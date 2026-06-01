@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from ..logging import get_logger
+from .completion_limits import MIN_AUXILIARY_COMPLETION_TOKENS
 from .llm import get_llm_client
 from .openai_fields import openai_completion_text
 from ..usage_report import schedule_openai_usage
@@ -14,7 +15,6 @@ log = get_logger("session_title")
 
 _TITLE_MIN_LEN = 4
 _TITLE_MAX_LEN = 12
-_TITLE_MAX_TOKENS = 24
 
 # 去掉首尾与句读类符号，保留中英文、数字及中间必要的连接符
 _EDGE_PUNCT_RE = re.compile(
@@ -29,7 +29,8 @@ def _is_default_title(title: str | None) -> bool:
 
 
 def _normalize_title(raw: str) -> str:
-    title = (raw or "").strip().splitlines()[0].strip()
+    lines = (raw or "").strip().splitlines()
+    title = (lines[0] if lines else "").strip()
     title = title.replace("\n", " ").replace("\r", " ")
     while True:
         stripped = _EDGE_PUNCT_RE.sub("", title)
@@ -80,7 +81,8 @@ async def maybe_generate_and_update_session_title(
                     "content": f"用户：{query[:500]}\n助手：{(assistant_text or '')[:800]}",
                 },
             ],
-            max_tokens=_TITLE_MAX_TOKENS,
+            stream=False,
+            max_tokens=MIN_AUXILIARY_COMPLETION_TOKENS,
             temperature=0.1,
         )
         schedule_openai_usage(
@@ -89,8 +91,15 @@ async def maybe_generate_and_update_session_title(
             model=chosen_model,
             session_id=session_id,
         )
-        title = _normalize_title(openai_completion_text(resp))
+        raw = openai_completion_text(resp)
+        title = _normalize_title(raw)
         if not title:
+            log.warning(
+                "session_title_empty",
+                session_id=session_id,
+                model=chosen_model,
+                raw=raw[:200],
+            )
             return None
         await upsert_session_meta(session_id, title=title)
         return title

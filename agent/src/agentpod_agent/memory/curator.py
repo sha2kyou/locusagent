@@ -49,6 +49,7 @@ async def maybe_curate_memories(*, model: str | None = None) -> int:
     from ..core.models import resolve_model
 
     chosen_model = model or resolve_model("curator")
+    from ..core.completion_limits import MIN_AUXILIARY_COMPLETION_TOKENS
     from ..core.llm import get_llm_client
     from ..core.openai_fields import openai_completion_text
 
@@ -61,7 +62,7 @@ async def maybe_curate_memories(*, model: str | None = None) -> int:
                 {"role": "system", "content": _CURATE_SYSTEM_PROMPT},
                 {"role": "user", "content": f"共 {len(items)} 条：\n{numbered}"},
             ],
-            max_tokens=900,
+            max_tokens=MIN_AUXILIARY_COMPLETION_TOKENS,
             temperature=0.1,
         )
         from ..usage_report import schedule_openai_usage

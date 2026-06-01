@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
-import ipaddress
 import re
-import socket
-from html.parser import HTMLParser
 from typing import Any
 
 import httpx
@@ -17,59 +13,8 @@ from .base import Tool, ToolError, ToolResult, register_builtin
 
 USER_AGENT = "Mozilla/5.0 (compatible; AgentPodAgent/0.1)"
 TIMEOUT = httpx.Timeout(connect=5.0, read=15.0, write=5.0, pool=5.0)
-MAX_HTML_BYTES = 1 * 1024 * 1024
-MAX_TEXT_CHARS = 12_000
-MAX_REDIRECTS = 5
+JINA_TIMEOUT = httpx.Timeout(connect=5.0, read=65.0, write=5.0, pool=5.0)
 TAVILY_TIMEOUT = httpx.Timeout(connect=5.0, read=15.0, write=5.0, pool=5.0)
-
-
-def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-    """拒绝非公网地址：私有/回环/链路本地/保留/多播/未指定（含等价 IPv6 段）。"""
-    return (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_reserved
-        or ip.is_multicast
-        or ip.is_unspecified
-    )
-
-
-async def _assert_public_host(host: str) -> None:
-    """解析主机的全部 IP，任一落入非公网段即拒绝（防 SSRF / 云元数据探测）。"""
-    loop = asyncio.get_running_loop()
-    try:
-        infos = await loop.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
-    except socket.gaierror as exc:
-        raise ToolError(f"cannot resolve host: {host}") from exc
-    addrs = {info[4][0] for info in infos}
-    if not addrs:
-        raise ToolError(f"cannot resolve host: {host}")
-    for addr in addrs:
-        try:
-            ip = ipaddress.ip_address(addr)
-        except ValueError as exc:
-            raise ToolError(f"invalid resolved address: {addr}") from exc
-        if _is_blocked_ip(ip):
-            raise ToolError(f"blocked non-public address for host {host}: {addr}")
-
-
-async def _guarded_get(client: httpx.AsyncClient, url: str) -> httpx.Response:
-    """逐跳校验后 GET：禁用自动重定向，对每一跳目标重新解析并校验，防重定向绕过。"""
-    current = httpx.URL(url)
-    for _ in range(MAX_REDIRECTS + 1):
-        if current.scheme not in ("http", "https"):
-            raise ToolError("only http(s) urls allowed")
-        host = current.host
-        if not host:
-            raise ToolError("invalid url host")
-        await _assert_public_host(host)
-        resp = await client.get(current)
-        if resp.is_redirect and "location" in resp.headers:
-            current = current.join(resp.headers["location"])
-            continue
-        return resp
-    raise ToolError("too many redirects")
 
 
 async def _ddg_search(query: str, top_k: int) -> list[dict[str, str]]:
@@ -154,36 +99,24 @@ async def _web_search(args: dict[str, Any]) -> ToolResult:
     return ToolResult(content="\n\n".join(lines), metadata={"results": results, "source": search_source})
 
 
-class _TextExtractor(HTMLParser):
-    SKIP_TAGS = {"script", "style", "noscript", "head", "meta", "link"}
-    BLOCK_TAGS = {"p", "br", "li", "tr", "div", "section", "article", "h1", "h2", "h3", "h4", "h5"}
-
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self._buf: list[str] = []
-        self._skip_depth = 0
-
-    def handle_starttag(self, tag: str, _attrs: list) -> None:
-        if tag in self.SKIP_TAGS:
-            self._skip_depth += 1
-        elif tag in self.BLOCK_TAGS:
-            self._buf.append("\n")
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag in self.SKIP_TAGS and self._skip_depth > 0:
-            self._skip_depth -= 1
-        elif tag in self.BLOCK_TAGS:
-            self._buf.append("\n")
-
-    def handle_data(self, data: str) -> None:
-        if self._skip_depth == 0:
-            self._buf.append(data)
-
-    def text(self) -> str:
-        raw = "".join(self._buf)
-        cleaned = re.sub(r"[ \t]+", " ", raw)
-        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-        return cleaned.strip()
+async def _jina_extract_via_host(urls: list[str]) -> list[dict[str, Any]]:
+    try:
+        base, headers = internal_base_and_headers()
+    except HostInternalError as exc:
+        raise ToolError("host internal auth not configured") from exc
+    async with httpx.AsyncClient(timeout=JINA_TIMEOUT) as client:
+        resp = await client.post(
+            f"{base}/internal/jina/extract",
+            headers=headers,
+            json={"urls": urls},
+        )
+    if resp.status_code >= 400:
+        raise ToolError(error_detail(resp))
+    data = resp.json()
+    raw_results = data.get("results")
+    if not isinstance(raw_results, list):
+        raise ToolError("invalid jina extract response")
+    return raw_results
 
 
 async def _web_extract(args: dict[str, Any]) -> ToolResult:
@@ -196,35 +129,8 @@ async def _web_extract(args: dict[str, Any]) -> ToolResult:
     if not urls:
         raise ToolError("urls is required")
     urls = urls[:5]
-    out: list[dict[str, Any]] = []
-    async with httpx.AsyncClient(
-        timeout=TIMEOUT, headers={"User-Agent": USER_AGENT}, follow_redirects=False
-    ) as client:
-        for url in urls:
-            if not url.startswith(("http://", "https://")):
-                out.append({"url": url, "title": "", "content": "", "error": "invalid url scheme"})
-                continue
-            try:
-                resp = await _guarded_get(client, url)
-                ctype = resp.headers.get("content-type", "")
-                if "html" not in ctype.lower():
-                    out.append({"url": url, "title": "", "content": "", "error": f"non-HTML content-type: {ctype}"})
-                    continue
-                if len(resp.content) > MAX_HTML_BYTES:
-                    out.append({"url": url, "title": "", "content": "", "error": f"page too large: {len(resp.content)} bytes"})
-                    continue
-                parser = _TextExtractor()
-                parser.feed(resp.text)
-                text = parser.text()
-                title_m = re.search(r"<title[^>]*>(.*?)</title>", resp.text, flags=re.IGNORECASE | re.DOTALL)
-                title = re.sub(r"\s+", " ", title_m.group(1)).strip() if title_m else ""
-                truncated = text[:MAX_TEXT_CHARS]
-                if len(text) > MAX_TEXT_CHARS:
-                    truncated += "\n…(truncated)"
-                out.append({"url": str(resp.url), "title": title, "content": truncated, "error": None})
-            except Exception as exc:
-                out.append({"url": url, "title": "", "content": "", "error": str(exc)})
-    return ToolResult(content=json.dumps({"results": out}, ensure_ascii=False), metadata={"results": out})
+    out = await _jina_extract_via_host(urls)
+    return ToolResult(content=json.dumps({"results": out}, ensure_ascii=False), metadata={"results": out, "source": "jina"})
 
 
 register_builtin(
@@ -249,8 +155,8 @@ register_builtin(
     Tool(
         name="web_extract",
         description=(
-            "提取网页 URL 内容，返回 results 列表（每项含 url/title/content/error）。"
-            "支持最多 5 个 URL。"
+            "经 Jina Reader 提取网页 URL 正文（Markdown），返回 results 列表"
+            "（每项含 url/title/content/error）。支持最多 5 个 URL。"
         ),
         parameters={
             "type": "object",

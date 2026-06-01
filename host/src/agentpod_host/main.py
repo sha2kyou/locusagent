@@ -20,6 +20,7 @@ from .routers import api_v1 as api_v1_router
 from .routers import embedding_proxy as embedding_proxy_router
 from .routers import attachments_proxy as attachments_proxy_router
 from .routers import llm_proxy as llm_proxy_router
+from .routers import jina_proxy as jina_proxy_router
 from .routers import tavily_proxy as tavily_proxy_router
 from .routers import internal as internal_router
 from .routers import internal_notifications as internal_notifications_router
@@ -120,6 +121,7 @@ app.include_router(internal_usage_router.router)
 app.include_router(embedding_proxy_router.router)
 app.include_router(llm_proxy_router.router)
 app.include_router(tavily_proxy_router.router)
+app.include_router(jina_proxy_router.router)
 app.include_router(attachments_proxy_router.router)
 app.include_router(api_v1_router.router)
 app.include_router(workspace_router.router)
