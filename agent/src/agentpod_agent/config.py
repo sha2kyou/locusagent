@@ -26,6 +26,13 @@ class Settings(BaseSettings):
 
     data_dir: Path = Field(default=Path("/data"), alias="DATA_DIR")
     shared_skills_dir: Path = Field(default=Path("/app/skills"), alias="SHARED_SKILLS_DIR")
+    attachment_storage: str = Field(default="minio", alias="ATTACHMENT_STORAGE")
+    s3_endpoint: str = Field(default="minio:9000", alias="S3_ENDPOINT")
+    s3_access_key: str = Field(default="agentpod", alias="S3_ACCESS_KEY")
+    s3_secret_key: str = Field(default="agentpodsecret", alias="S3_SECRET_KEY")
+    s3_bucket: str = Field(default="agentpod-attachments", alias="S3_BUCKET")
+    s3_region: str = Field(default="us-east-1", alias="S3_REGION")
+    s3_use_ssl: bool = Field(default=False, alias="S3_USE_SSL")
 
     max_loop_rounds: int = Field(default=20, alias="MAX_LOOP_ROUNDS")
     max_tool_rounds: int = Field(default=30, alias="MAX_TOOL_ROUNDS")

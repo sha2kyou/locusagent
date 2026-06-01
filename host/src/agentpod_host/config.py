@@ -35,6 +35,14 @@ class Settings(BaseSettings):
     embedding_model: str = Field(default="BAAI/bge-small-zh-v1.5", alias="EMBEDDING_MODEL")
     # 聊天附件大小上限（字节），默认 1MB。
     attachment_max_bytes: int = Field(default=1_048_576, alias="ATTACHMENT_MAX_BYTES")
+    attachment_storage: str = Field(default="minio", alias="ATTACHMENT_STORAGE")
+    s3_endpoint: str = Field(default="minio:9000", alias="S3_ENDPOINT")
+    s3_access_key: str = Field(default="agentpod", alias="S3_ACCESS_KEY")
+    s3_secret_key: str = Field(default="agentpodsecret", alias="S3_SECRET_KEY")
+    s3_bucket: str = Field(default="agentpod-attachments", alias="S3_BUCKET")
+    s3_region: str = Field(default="us-east-1", alias="S3_REGION")
+    s3_use_ssl: bool = Field(default=False, alias="S3_USE_SSL")
+    agent_internal_network: str = Field(default="agentpod-internal", alias="AGENT_INTERNAL_NETWORK")
 
     agent_memory_limit: str = Field(default="512m", alias="AGENT_MEMORY_LIMIT")
     agent_cpu_quota: int = Field(default=50000, alias="AGENT_CPU_QUOTA")

@@ -257,6 +257,13 @@ async def _create_container(user: User) -> str:
                 "EMBEDDING_BASE_URL": _host_embedding_proxy_url(),
                 "EMBEDDING_MODEL": settings.embedding_model,
                 "HOST_INTERNAL_URL": _host_internal_base_url(),
+                "ATTACHMENT_STORAGE": settings.attachment_storage,
+                "S3_ENDPOINT": settings.s3_endpoint,
+                "S3_ACCESS_KEY": settings.s3_access_key,
+                "S3_SECRET_KEY": settings.s3_secret_key,
+                "S3_BUCKET": settings.s3_bucket,
+                "S3_REGION": settings.s3_region,
+                "S3_USE_SSL": "1" if settings.s3_use_ssl else "0",
                 "ENABLE_TERMINAL": "1" if settings.enable_terminal else "0",
                 "TERMINAL_WHITELIST": settings.terminal_whitelist,
                 "TAVILY_API_KEY": tavily_api_key,
@@ -279,6 +286,10 @@ async def _create_container(user: User) -> str:
                 client.networks.get(network).connect(host_self)
             except APIError:
                 pass
+        try:
+            client.networks.get(settings.agent_internal_network).connect(container)
+        except APIError as exc:
+            raise RuntimeError(f"连接内部网络失败: {exc}") from exc
 
         return container.id
 

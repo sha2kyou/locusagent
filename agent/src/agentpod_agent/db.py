@@ -63,8 +63,9 @@ CREATE TABLE IF NOT EXISTS attachments (
     name             TEXT NOT NULL,
     mime_type        TEXT,
     size_bytes       INTEGER NOT NULL DEFAULT 0,
-    text_content     TEXT,
-    image_data_url   TEXT,
+    object_key       TEXT,
+    object_etag      TEXT,
+    sha256           TEXT,
     processable      INTEGER NOT NULL DEFAULT 1,
     unsupported_reason TEXT,
     truncated        INTEGER NOT NULL DEFAULT 0,
@@ -418,6 +419,15 @@ def init_db() -> None:
             )
         c.execute("CREATE INDEX IF NOT EXISTS idx_env_vars_name ON env_vars(name)")
         c.execute("CREATE INDEX IF NOT EXISTS idx_env_vars_embed_state ON env_vars(embedding_state)")
+        attachment_cols = {
+            str(r["name"]) for r in c.execute("PRAGMA table_info(attachments)").fetchall()
+        }
+        if attachment_cols and "object_key" not in attachment_cols:
+            c.execute("ALTER TABLE attachments ADD COLUMN object_key TEXT")
+        if attachment_cols and "object_etag" not in attachment_cols:
+            c.execute("ALTER TABLE attachments ADD COLUMN object_etag TEXT")
+        if attachment_cols and "sha256" not in attachment_cols:
+            c.execute("ALTER TABLE attachments ADD COLUMN sha256 TEXT")
         if msg_cols and "embedding" not in msg_cols:
             c.execute("ALTER TABLE messages ADD COLUMN embedding BLOB")
         if msg_cols and "context_state" not in msg_cols:

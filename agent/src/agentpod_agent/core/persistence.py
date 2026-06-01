@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
+import hashlib
 import json
 import secrets
 from typing import Any
 
 from ..db import conn_scope, run_in_thread
+from ..storage import delete_attachment_objects, load_attachment_bytes, save_attachment_bytes
 
 _session_locks: dict[str, asyncio.Lock] = {}
 _locks_guard = asyncio.Lock()
@@ -38,14 +42,44 @@ def _new_attachment_id() -> str:
     return f"att_{secrets.token_urlsafe(12)}"
 
 
+def _decode_data_url(raw: str) -> tuple[str, bytes]:
+    if not raw.startswith("data:") or "," not in raw:
+        raise ValueError("invalid data url")
+    header, b64 = raw.split(",", 1)
+    if ";base64" not in header:
+        raise ValueError("unsupported image payload")
+    mime = header[5:].split(";", 1)[0].strip() or "application/octet-stream"
+    try:
+        data = base64.b64decode(b64, validate=True)
+    except (ValueError, binascii.Error) as exc:
+        raise ValueError("invalid base64 payload") from exc
+    return mime, data
+
+
+def _encode_data_url(mime: str, data: bytes) -> str:
+    return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
+
+
 def _to_chat_attachment_row(row: Any) -> dict[str, Any]:
+    mime_type = str(row["mime_type"] or "application/octet-stream")
+    object_key = str(row["object_key"] or "")
+    data = load_attachment_bytes(object_key) if object_key else None
+    text_content: str | None = None
+    image_data_url: str | None = None
+    kind = str(row["kind"] or "other")
+    if data is not None:
+        if kind == "text":
+            text_content = data.decode("utf-8", errors="replace")
+        elif kind == "image":
+            image_data_url = _encode_data_url(mime_type, data)
+
     return {
         "id": str(row["id"]),
         "name": str(row["name"] or "附件"),
-        "kind": str(row["kind"] or "other"),
-        "mimeType": row["mime_type"],
-        "text": row["text_content"],
-        "imageDataUrl": row["image_data_url"],
+        "kind": kind,
+        "mimeType": mime_type,
+        "text": text_content,
+        "imageDataUrl": image_data_url,
         "processable": bool(int(row["processable"] or 0)),
         "unsupportedReason": row["unsupported_reason"],
         "truncated": bool(int(row["truncated"] or 0)),
@@ -57,7 +91,7 @@ def _load_message_attachments_map(c: Any, message_ids: list[int]) -> dict[int, l
         return {}
     placeholders = ",".join("?" for _ in message_ids)
     rows = c.execute(
-        "SELECT ma.message_id, a.id, a.name, a.kind, a.mime_type, a.text_content, a.image_data_url, "
+        "SELECT ma.message_id, a.id, a.name, a.kind, a.mime_type, a.object_key, a.object_etag, a.sha256, "
         "a.processable, a.unsupported_reason, a.truncated, ma.order_index "
         "FROM message_attachments ma "
         "JOIN attachments a ON a.id = ma.attachment_id "
@@ -419,30 +453,59 @@ async def create_attachment(
     truncated: bool,
 ) -> dict[str, Any]:
     attachment_id = _new_attachment_id()
+    clean_mime = str(mime_type or "").strip() or "application/octet-stream"
+    payload: bytes | None = None
+    if kind == "text":
+        payload = (text_content or "").encode("utf-8")
+        if not mime_type:
+            clean_mime = "text/plain;charset=utf-8"
+    elif kind == "image":
+        if image_data_url:
+            parsed_mime, decoded = _decode_data_url(image_data_url)
+            clean_mime = parsed_mime or clean_mime
+            payload = decoded
+    elif text_content:
+        payload = text_content.encode("utf-8")
+
+    object_key = ""
+    object_etag = ""
+    content_sha256 = ""
+    if payload is not None:
+        uploaded = save_attachment_bytes(
+            attachment_id=attachment_id,
+            kind=kind,
+            name=name,
+            mime_type=clean_mime,
+            data=payload,
+        )
+        object_key = uploaded["object_key"]
+        object_etag = uploaded["etag"]
+        content_sha256 = hashlib.sha256(payload).hexdigest()
 
     def _do() -> dict[str, Any]:
         with conn_scope(load_vec=False) as c:
             c.execute(
                 "INSERT INTO attachments("
-                "id, session_id, kind, name, mime_type, size_bytes, text_content, image_data_url, "
+                "id, session_id, kind, name, mime_type, size_bytes, object_key, object_etag, sha256, "
                 "processable, unsupported_reason, truncated"
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     attachment_id,
                     session_id,
                     kind,
                     name,
-                    mime_type,
+                    clean_mime,
                     size_bytes,
-                    text_content,
-                    image_data_url,
+                    object_key,
+                    object_etag,
+                    content_sha256,
                     1 if processable else 0,
                     unsupported_reason,
                     1 if truncated else 0,
                 ),
             )
             row = c.execute(
-                "SELECT id, name, kind, mime_type, text_content, image_data_url, processable, "
+                "SELECT id, name, kind, mime_type, object_key, object_etag, sha256, processable, "
                 "unsupported_reason, truncated FROM attachments WHERE id = ?",
                 (attachment_id,),
             ).fetchone()
@@ -459,7 +522,7 @@ async def get_attachments_by_ids(attachment_ids: list[str]) -> list[dict[str, An
         with conn_scope(load_vec=False) as c:
             placeholders = ",".join("?" for _ in attachment_ids)
             rows = c.execute(
-                "SELECT id, name, kind, mime_type, text_content, image_data_url, processable, "
+                "SELECT id, name, kind, mime_type, object_key, object_etag, sha256, processable, "
                 "unsupported_reason, truncated "
                 f"FROM attachments WHERE id IN ({placeholders})",
                 attachment_ids,
@@ -831,6 +894,10 @@ async def list_messages(session_id: str) -> list[dict]:
 async def delete_session(session_id: str) -> bool:
     def _do() -> bool:
         with conn_scope(load_vec=False) as c:
+            attachment_rows = c.execute(
+                "SELECT object_key FROM attachments WHERE session_id = ?",
+                (session_id,),
+            ).fetchall()
             message_rows = c.execute(
                 "SELECT id FROM messages WHERE session_id = ?",
                 (session_id,),
@@ -847,6 +914,9 @@ async def delete_session(session_id: str) -> bool:
             c.execute("DELETE FROM runs WHERE session_id = ?", (session_id,))
             c.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
             cur = c.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+            keys = [str(r["object_key"] or "") for r in attachment_rows]
+            if keys:
+                delete_attachment_objects(keys)
             return (cur.rowcount or 0) > 0
 
     deleted = await run_in_thread(_do)

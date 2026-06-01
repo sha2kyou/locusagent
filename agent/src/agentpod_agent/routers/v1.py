@@ -177,30 +177,6 @@ def _has_image_content(content: Any) -> bool:
     return False
 
 
-def _image_signature(content: Any) -> str | None:
-    if not isinstance(content, list):
-        return None
-    values: list[str] = []
-    for item in content:
-        if not isinstance(item, dict):
-            continue
-        item_type = str(item.get("type") or "").strip().lower()
-        if item_type not in {"image_url", "input_image"}:
-            continue
-        raw = item.get("image_url")
-        if isinstance(raw, dict):
-            url = raw.get("url")
-            if isinstance(url, str) and url:
-                values.append(url)
-                continue
-        if isinstance(raw, str) and raw:
-            values.append(raw)
-    if not values:
-        return None
-    joined = "\n".join(values)
-    return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:12]
-
-
 def _extract_new_user_message_from_response_input(raw_input: Any) -> str | None:
     if isinstance(raw_input, str):
         text = raw_input.strip()
@@ -261,22 +237,26 @@ async def _extract_latest_user_payload(req: ChatRequest) -> tuple[Any, str, str,
                                 parts.append({"type": "image_url", "image_url": {"url": a["imageDataUrl"]}})
                         text_attachments = [a for a in attachments if a.get("kind") == "text" and a.get("processable")]
                         if text_attachments:
-                            lines: list[str] = []
                             for i, a in enumerate(text_attachments, start=1):
-                                lines.append(f"[附件 {i}] name={a.get('name')}\n{str(a.get('text') or '')}")
-                            parts.append({"type": "text", "text": "以下是文本附件内容：\n\n" + "\n\n".join(lines)})
+                                parts.append(
+                                    {
+                                        "type": "text",
+                                        "text": f"[附件 {i}] name={a.get('name')}\n{str(a.get('text') or '')}",
+                                    }
+                                )
                         composed_content: Any = parts
                     else:
-                        lines: list[str] = []
-                        if text:
-                            lines.append(text)
+                        parts: list[dict[str, Any]] = [{"type": "text", "text": text or "请结合附件内容回答。"}]
                         text_attachments = [a for a in attachments if a.get("kind") == "text" and a.get("processable")]
                         if text_attachments:
-                            items: list[str] = []
                             for i, a in enumerate(text_attachments, start=1):
-                                items.append(f"[附件 {i}] name={a.get('name')}\n{str(a.get('text') or '')}")
-                            lines.append("以下是用户上传的附件内容：\n\n" + "\n\n".join(items))
-                        composed_content = "\n\n".join(lines).strip()
+                                parts.append(
+                                    {
+                                        "type": "text",
+                                        "text": f"[附件 {i}] name={a.get('name')}\n{str(a.get('text') or '')}",
+                                    }
+                                )
+                        composed_content = parts
                     if not user_query_text:
                         user_query_text = text or "[attachment]"
                     persisted_text = (text or "").strip()
@@ -285,12 +265,7 @@ async def _extract_latest_user_payload(req: ChatRequest) -> tuple[Any, str, str,
                     return composed_content, persisted_text, user_query_text, [a["id"] for a in attachments]
             if has_image and isinstance(m.content, list):
                 user_query_text = user_query_text or "[image attachment]"
-                sig = _image_signature(m.content)
-                persisted_text = (
-                    f"{user_query_text}\n[image attachment:{sig}]"
-                    if sig
-                    else f"{user_query_text}\n[image attachment]"
-                )
+                persisted_text = user_query_text
                 return m.content, persisted_text, user_query_text, []
             persisted_text = text or ""
             return persisted_text, persisted_text, text, []
