@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/field";
 import { CollapsiblePanel, CollapsibleSection, ListCard } from "@/components/ui/panel";
+import { SegmentControl } from "@/components/ui/segment-control";
+import { Empty, listItemBriefClass, Loading } from "@/components/ui/list-state";
 import { useDialogs } from "@/components/ui/dialogs";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -19,7 +21,6 @@ import {
   updateScheduledTask,
 } from "@/api/endpoints";
 import type { ScheduledTask, ScheduleKind } from "@/api/types";
-import { Empty, Loading } from "@/features/skills/SkillsRoute";
 import { cn } from "@/lib/utils";
 
 const CRON_LOCALE_ZH: CronLocale = {
@@ -310,7 +311,7 @@ export function ScheduledTasksRoute() {
   const [runAt, setRunAt] = useState("");
   const [enabled, setEnabled] = useState(true);
   const [notify, setNotify] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [userTimezone, setUserTimezone] = useState("UTC");
   const formRef = useRef<HTMLDivElement>(null);
 
@@ -379,7 +380,7 @@ export function ScheduledTasksRoute() {
       toast("请选择执行时间", "error");
       return;
     }
-    setBusy(true);
+    setSaving(true);
     try {
       const body = {
         title: title.trim(),
@@ -395,20 +396,20 @@ export function ScheduledTasksRoute() {
         toast("已更新", "success");
       } else {
         await createScheduledTask(body);
-        toast("已创建", "success");
+        toast("已添加", "success");
       }
       reset();
       await load();
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   };
 
   const remove = async (task: ScheduledTask) => {
     if (!(await confirm({ title: "删除定时任务", body: `确定删除「${task.title}」？`, danger: true, confirmText: "删除" }))) return;
-    setBusy(true);
+    setSaving(true);
     try {
       await deleteScheduledTask(task.id);
       if (editingId === task.id) reset();
@@ -417,7 +418,7 @@ export function ScheduledTasksRoute() {
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   };
 
@@ -442,12 +443,12 @@ export function ScheduledTasksRoute() {
                     <div className="flex items-start gap-2 px-4 py-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-medium">{task.title}</span>
+                          <span className="font-medium">{task.title}</span>
                           <Badge variant={st.variant}>{st.text}</Badge>
                           {task.notify ? <Badge variant="outline">通知</Badge> : null}
                         </div>
-                        <p className="mt-1 text-xs text-muted-foreground">{scheduleLabel(task, userTimezone)}</p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
+                        <p className={listItemBriefClass}>{scheduleLabel(task, userTimezone)}</p>
+                        <p className={listItemBriefClass}>
                           下次执行：{formatWhen(task.next_run_at, userTimezone)}
                           {task.last_run_at ? ` · 上次：${formatWhen(task.last_run_at, userTimezone)}` : ""}
                         </p>
@@ -466,13 +467,13 @@ export function ScheduledTasksRoute() {
                       <div className="flex shrink-0 items-center gap-1">
                         {!task.completed_at ? (
                           <>
-                            <Button variant="ghost" size="icon-sm" disabled={busy} onClick={() => startEdit(task)}>
-                              <Pencil className="size-3.5" />
+                            <Button variant="ghost" size="icon-sm" disabled={saving} onClick={() => startEdit(task)}>
+                              <Pencil />
                             </Button>
                           </>
                         ) : null}
-                        <Button variant="ghost" size="icon-sm" disabled={busy} onClick={() => void remove(task)}>
-                          <Trash2 className="size-3.5" />
+                        <Button variant="ghost" size="icon-sm" disabled={saving} onClick={() => void remove(task)}>
+                          <Trash2 />
                         </Button>
                       </div>
                     </div>
@@ -506,36 +507,15 @@ export function ScheduledTasksRoute() {
                 </div>
                 <div className="grid gap-2">
                   <Label>类型</Label>
-                  <div
-                    className={cn(
-                      "inline-flex w-fit overflow-hidden rounded-lg border border-border",
-                      editingId && "opacity-60",
-                    )}
-                  >
-                    {(
-                      [
-                        ["cron", "重复（Cron）"],
-                        ["once", "单次"],
-                      ] as const
-                    ).map(([kind, label], idx) => (
-                      <button
-                        key={kind}
-                        type="button"
-                        disabled={!!editingId}
-                        onClick={() => setScheduleKind(kind)}
-                        className={cn(
-                          "px-3 py-1.5 text-sm transition",
-                          idx > 0 && "border-l border-border",
-                          scheduleKind === kind
-                            ? "bg-brand/10 text-foreground"
-                            : "text-muted-foreground hover:bg-surface",
-                          editingId && "cursor-not-allowed",
-                        )}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
+                  <SegmentControl
+                    value={scheduleKind}
+                    onChange={setScheduleKind}
+                    options={[
+                      { value: "cron", label: "重复（Cron）", disabled: !!editingId },
+                      { value: "once", label: "单次", disabled: !!editingId },
+                    ]}
+                    className={cn(editingId && "opacity-60")}
+                  />
                   {editingId ? (
                     <p className="text-xs text-muted-foreground">类型创建后不可修改</p>
                   ) : null}
@@ -574,13 +554,13 @@ export function ScheduledTasksRoute() {
                   </label>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="primary" disabled={busy} onClick={() => void submit()}>
-                    {busy && <Loader2 className="size-4 animate-spin" />}
-                    {editingId ? "保存" : "创建"}
+                  <Button variant="primary" disabled={saving} onClick={() => void submit()}>
+                    {saving && <Loader2 className="size-4 animate-spin" />}
+                    {editingId ? "保存" : "添加"}
                   </Button>
                   {editingId ? (
-                    <Button variant="secondary" disabled={busy} onClick={reset}>
-                      取消
+                    <Button variant="ghost" disabled={saving} onClick={reset}>
+                      取消编辑
                     </Button>
                   ) : null}
                 </div>

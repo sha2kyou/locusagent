@@ -1,17 +1,19 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Download, PanelLeft, Trash2 } from "lucide-react";
+import { Download, Loader2, PanelLeft, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/field";
+import { SearchInput } from "@/components/ui/search-input";
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
 import { ListCard } from "@/components/ui/panel";
 import { Drawer } from "@/components/ui/drawer";
+import { Empty, listItemDescriptionClass, Loading } from "@/components/ui/list-state";
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
-import { Empty, Loading } from "@/features/skills/SkillsRoute";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatFull, formatRelative } from "@/lib/format-time";
 import {
   createArtifactCategory,
   deleteArtifact,
@@ -53,26 +55,6 @@ function downloadArtifactOriginal(a: ArtifactEntry): void {
   URL.revokeObjectURL(url);
 }
 
-function formatRelative(iso: string): string {
-  const t = new Date(iso.includes("Z") || iso.includes("+") ? iso : iso + "Z").getTime();
-  if (Number.isNaN(t)) return iso;
-  const diff = Date.now() - t;
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "刚刚";
-  if (m < 60) return `${m} 分钟前`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} 小时前`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d} 天前`;
-  return new Date(t).toLocaleDateString();
-}
-
-function formatFull(iso: string): string {
-  const t = new Date(iso.includes("Z") || iso.includes("+") ? iso : iso + "Z").getTime();
-  if (Number.isNaN(t)) return iso;
-  return new Date(t).toLocaleString();
-}
-
 function excerpt(content: string): string {
   const flat = content
     .replace(/<[^>]+>/g, " ")
@@ -92,16 +74,16 @@ function ArtifactRow({
   onDelete: () => void;
 }) {
   return (
-    <ListCard>
-      <div className="flex items-start gap-2">
+    <ListCard className="p-0 overflow-hidden">
+      <div className="flex items-start justify-between gap-3 px-4 py-3">
         <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
           <div className="flex items-center gap-2">
             <span className="min-w-0 flex-1 truncate font-medium">{a.title}</span>
-            <span className="shrink-0 text-xs text-muted-foreground">
+            <span className="shrink-0 text-sm text-muted-foreground">
               {formatRelative(a.created_at)}
             </span>
           </div>
-          <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{excerpt(a.content)}</p>
+          <p className={listItemDescriptionClass}>{excerpt(a.content)}</p>
         </button>
         <Button variant="ghost" size="icon-sm" onClick={onDelete} aria-label="删除">
           <Trash2 />
@@ -157,7 +139,8 @@ export function ArtifactsRoute() {
     try {
       const { items } = await listArtifactCategories();
       setCategories(items);
-    } catch {
+    } catch (e) {
+      toast((e as Error).message, "error");
       setCategories([]);
     }
   };
@@ -255,7 +238,7 @@ export function ArtifactsRoute() {
       } else {
         const created = await createArtifactCategory(name, description);
         navigate(toWorkspacePath(`/artifacts/c/${created.id}`));
-        toast("已新增类目", "success");
+        toast("已添加", "success");
       }
       await loadCategories();
       await loadArtifacts();
@@ -292,7 +275,7 @@ export function ArtifactsRoute() {
       if (categoryId === c.id) {
         navigate(toWorkspacePath("/artifacts"));
       }
-      toast("已删除类目", "success");
+      toast("已删除", "success");
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -305,6 +288,7 @@ export function ArtifactsRoute() {
       await deleteArtifact(a.id);
       setSelected(null);
       await loadArtifacts();
+      toast("已删除", "success");
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -349,13 +333,13 @@ export function ArtifactsRoute() {
 
         <div className="min-w-0 flex-1 overflow-y-auto">
           <ReadyGate>
-            <div className="mx-auto w-full max-w-4xl px-6 py-8">
-              <header className="mb-4 space-y-1">
+            <div className="mx-auto w-full max-w-4xl px-6 py-10">
+              <header className="mb-6 space-y-1">
                 <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
                 <p className="text-sm text-muted-foreground">{subtitle}</p>
               </header>
               <div className="mb-4">
-                <Input
+                <SearchInput
                   value={artifactQuery}
                   onChange={(e) => setArtifactQuery(e.target.value)}
                   placeholder="搜索产物…"
@@ -416,7 +400,7 @@ export function ArtifactsRoute() {
         footer={
           <>
             <Button variant="ghost" disabled={savingCategory} onClick={closeCategoryDialog}>
-              取消
+              {editingCategory ? "取消编辑" : "取消"}
             </Button>
             <Button
               variant="primary"
@@ -425,7 +409,8 @@ export function ArtifactsRoute() {
                 void submitCategory();
               }}
             >
-              {editingCategory ? "保存" : "新增"}
+              {savingCategory && <Loader2 className="size-4 animate-spin" />}
+              {editingCategory ? "保存" : "添加"}
             </Button>
           </>
         }

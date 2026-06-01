@@ -174,14 +174,22 @@ function CodeBlock({ children }: { children: ReactNode }) {
 
 export function ThinkingBlock({
   content,
+  isActive = false,
   defaultOpen = false,
   label = "思考过程",
 }: {
   content: string;
+  isActive?: boolean;
   defaultOpen?: boolean;
   label?: string;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(defaultOpen || isActive);
+  const displayLabel = isActive ? "思考中" : label;
+
+  useEffect(() => {
+    if (isActive) setOpen(true);
+  }, [isActive]);
+
   return (
     <div className="my-2 rounded-lg border border-border bg-surface/40">
       <button
@@ -190,7 +198,7 @@ export function ThinkingBlock({
         className="flex w-full items-center gap-1.5 px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground"
       >
         <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
-        {label}
+        {displayLabel}
       </button>
       {open && (
         <div className="apod-prose border-t border-border px-3 py-2 text-[13px] text-muted-foreground">

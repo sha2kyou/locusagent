@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ListCard } from "@/components/ui/panel";
 import type { ToolKind } from "@/api/types";
 import { useChat } from "./ChatProvider";
+import type { ToolPart } from "./model";
 
 const KIND_ICON = {
   skill: Sparkles,
@@ -114,10 +115,35 @@ export const ToolEvent: ToolCallMessagePartComponent = (props) => {
     const payload = parseClarify(props.result);
     if (payload) return <ClarifyCard payload={payload} />;
   }
-  return <GenericToolEvent {...props} />;
+  return <GenericToolBlock toolName={props.toolName} args={props.args} result={props.result} status={props.status} />;
 };
 
-const GenericToolEvent: ToolCallMessagePartComponent = ({ toolName, args, result, status }) => {
+/** 按 ChatPart 时间线直接渲染工具块（不依赖 MessagePrimitive.Parts 顺序） */
+export function ToolPartView({ part }: { part: ToolPart }) {
+  const running = part.running;
+  return (
+    <GenericToolBlock
+      toolName={part.toolName}
+      args={{ kind: part.toolKind, startedAt: part.startedAt }}
+      result={running ? undefined : (part.preview ?? "")}
+      status={{ type: running ? "running" : "complete" }}
+    />
+  );
+}
+
+type ToolBlockStatus = { type?: string } | undefined;
+
+function GenericToolBlock({
+  toolName,
+  args,
+  result,
+  status,
+}: {
+  toolName: string;
+  args: unknown;
+  result: unknown;
+  status?: ToolBlockStatus;
+}) {
   const kind = ((args as { kind?: ToolKind })?.kind ?? "tool") as ToolKind;
   const startedAt = (args as { startedAt?: number })?.startedAt ?? 0;
   const running = status?.type === "running" || status?.type === "requires-action";
@@ -181,7 +207,7 @@ const GenericToolEvent: ToolCallMessagePartComponent = ({ toolName, args, result
       ) : null}
     </ListCard>
   );
-};
+}
 
 function findScrollParent(el: HTMLElement | null): HTMLElement | null {
   let node: HTMLElement | null = el;

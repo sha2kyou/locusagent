@@ -64,11 +64,41 @@ function flushAssistant(result: ChatMessage[], cur: ChatMessage | null, curArchi
   result.push(cur);
 }
 
+export interface CoalesceHistoryOptions {
+  /** 会话仍有 active run：最后一条 assistant 的末段 thinking 保持未完成态 */
+  live?: boolean;
+}
+
+/** 供 active-run 轮询判断消息是否有变化 */
+export function historyPollKey(items: Message[]): string {
+  const tail = items.slice(-4);
+  return tail
+    .map(
+      (m) =>
+        `${m.id}:${m.role}:${(m.content || "").length}:${(m.reasoning_content || "").length}:${Array.isArray(m.tool_calls) ? m.tool_calls.length : 0}:${m.tool_call_id ?? ""}`,
+    )
+    .join("|");
+}
+
+/** active run 重连时，仅当末段 part 为 thinking 才标记为进行中 */
+function applyLiveThinkingState(messages: ChatMessage[]): ChatMessage[] {
+  if (messages.length === 0) return messages;
+  const last = messages[messages.length - 1];
+  if (last.role !== "assistant" || last.parts.length === 0) return messages;
+  const lastIdx = last.parts.length - 1;
+  const lastPart = last.parts[lastIdx];
+  if (lastPart.type !== "thinking") return messages;
+  const parts = last.parts.map((p, i) =>
+    i === lastIdx && p.type === "thinking" ? { ...p, completed: false } : p,
+  );
+  return [...messages.slice(0, -1), { ...last, parts }];
+}
+
 /**
  * 把后端历史消息（OpenAI 格式 assistant.tool_calls + role=tool 结果 + legacy 元数据）
  * 合并为前端时间线：相邻的 assistant/tool 行归入同一条 assistant 消息，按发生顺序保留 text/tool 块。
  */
-export function coalesceHistory(items: Message[]): ChatMessage[] {
+export function coalesceHistory(items: Message[], opts: CoalesceHistoryOptions = {}): ChatMessage[] {
   const result: ChatMessage[] = [];
   let cur: ChatMessage | null = null;
   let curArchived = false;
@@ -132,19 +162,20 @@ export function coalesceHistory(items: Message[]): ChatMessage[] {
 
     if (msg.role === "assistant") {
       const reasoning = (msg.reasoning_content || "").trim();
-      if (reasoning) cur!.parts.push({ type: "thinking", text: reasoning });
-      if (msg.content) cur!.parts.push({ type: "text", text: msg.content });
-      for (const tc of msg.tool_calls ?? []) {
-        if (isOpenAIToolCall(tc)) {
-          cur!.parts.push({
-            type: "tool",
-            id: tc.id,
-            toolName: tc.function.name,
-            toolKind: "tool",
-            running: true,
-            startedAt: 0,
-          });
-        }
+      const content = (msg.content || "").trim();
+      const toolCalls = (msg.tool_calls ?? []).filter(isOpenAIToolCall);
+      // 与流式顺序一致：reasoning → content → tool_calls（同轮 completion 内 content 先于 tool）
+      if (reasoning) cur!.parts.push({ type: "thinking", text: reasoning, completed: true });
+      if (content) cur!.parts.push({ type: "text", text: content });
+      for (const tc of toolCalls) {
+        cur!.parts.push({
+          type: "tool",
+          id: tc.id,
+          toolName: tc.function.name,
+          toolKind: "tool",
+          running: true,
+          startedAt: 0,
+        });
       }
     } else if (msg.role === "tool") {
       const meta = (msg.tool_calls?.[0] as LegacyToolMeta | undefined);
@@ -177,5 +208,5 @@ export function coalesceHistory(items: Message[]): ChatMessage[] {
       if (p.type === "tool" && p.running) p.running = false;
     }
   }
-  return result;
+  return opts.live ? applyLiveThinkingState(result) : result;
 }

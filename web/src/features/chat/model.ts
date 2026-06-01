@@ -19,6 +19,8 @@ export interface TextPart {
 export interface ThinkingPart {
   type: "thinking";
   text: string;
+  /** 该段思考已结束（后续出现工具/文本/新思考段） */
+  completed?: boolean;
 }
 
 export type ChatPart = TextPart | ThinkingPart | ToolPart;
@@ -69,19 +71,31 @@ export function emptyAssistant(): ChatMessage {
   return { id: uid("a"), role: "assistant", parts: [] };
 }
 
+/** 将尚未结束的 thinking 段全部标记为已完成 */
+export function completeThinkingParts(parts: ChatPart[]): ChatPart[] {
+  return parts.map((p) =>
+    p.type === "thinking" && !p.completed ? { ...p, completed: true } : p,
+  );
+}
+
 /** 把文本增量追加到末尾文本块（无则新建） */
 export function appendText(parts: ChatPart[], delta: string): ChatPart[] {
   const last = parts[parts.length - 1];
-  if (last && last.type === "text") {
-    return [...parts.slice(0, -1), { type: "text", text: last.text + delta }];
+  let base = parts;
+  if (last?.type === "thinking") {
+    base = [...parts.slice(0, -1), { ...last, completed: true }];
   }
-  return [...parts, { type: "text", text: delta }];
+  const tail = base[base.length - 1];
+  if (tail && tail.type === "text") {
+    return [...base.slice(0, -1), { type: "text", text: tail.text + delta }];
+  }
+  return [...base, { type: "text", text: delta }];
 }
 
-/** 思考链增量：合并到末尾 thinking 块 */
+/** 思考链增量：合并到末尾未完成的 thinking 块 */
 export function appendThinking(parts: ChatPart[], delta: string): ChatPart[] {
   const last = parts[parts.length - 1];
-  if (last && last.type === "thinking") {
+  if (last?.type === "thinking" && !last.completed) {
     return [...parts.slice(0, -1), { type: "thinking", text: last.text + delta }];
   }
   return [...parts, { type: "thinking", text: delta }];

@@ -9,7 +9,8 @@ import { Drawer } from "@/components/ui/drawer";
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
-import { Empty, Loading } from "@/features/skills/SkillsRoute";
+import { Empty, listItemBriefClass, Loading } from "@/components/ui/list-state";
+import { Tag } from "@/components/ui/tag";
 import { createMcp, deleteMcp, listMcp, reconnectMcp, testMcp, updateMcp } from "@/api/endpoints";
 import type { McpInput, McpServer, McpTool } from "@/api/types";
 
@@ -60,7 +61,7 @@ export function McpRoute() {
   const [command, setCommand] = useState("");
   const [url, setUrl] = useState("");
   const [envJson, setEnvJson] = useState("{}");
-  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [selectedTool, setSelectedTool] = useState<{ serverName: string; tool: McpTool } | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
   const [envError, setEnvError] = useState<string | null>(null);
@@ -124,7 +125,7 @@ export function McpRoute() {
   };
 
   const submit = async () => {
-    setBusy(true);
+    setSaving(true);
     try {
       if (editing) {
         await updateMcp(editing, buildPayload());
@@ -138,19 +139,19 @@ export function McpRoute() {
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   };
 
   const test = async () => {
-    setBusy(true);
+    setSaving(true);
     try {
       const r = await testMcp(buildPayload());
       toast(r.connected ? `连接成功，发现 ${r.tool_count} 个工具` : `连接失败：${r.runtime_error ?? "未知错误"}`, r.connected ? "success" : "error");
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   };
 
@@ -168,7 +169,9 @@ export function McpRoute() {
     if (!(await confirm({ title: "删除 MCP 服务", body: `删除「${s.name}」？`, danger: true, confirmText: "删除" }))) return;
     try {
       await deleteMcp(s.name);
+      if (editing === s.name) reset();
       await load();
+      toast("已删除", "success");
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -178,7 +181,7 @@ export function McpRoute() {
     <PageContainer
       title="MCP"
       subtitle="MCP 服务连接与工具管理"
-      actions={items && <Badge variant="outline">{items.length} 个服务</Badge>}
+      actions={items ? <Badge variant="outline">{items.length} 个服务</Badge> : undefined}
     >
       <ReadyGate>
         <div className="space-y-4">
@@ -200,7 +203,7 @@ export function McpRoute() {
                         </Badge>
                         <Badge>{s.transport}</Badge>
                       </div>
-                      <p className="mt-1 truncate text-xs text-muted-foreground">
+                      <p className={listItemBriefClass}>
                         {s.transport === "http" ? s.url : (s.command ?? []).join(" ")}
                       </p>
                     </div>
@@ -210,7 +213,7 @@ export function McpRoute() {
                       <Button variant="ghost" size="icon-sm" onClick={() => remove(s)} aria-label="删除"><Trash2 /></Button>
                     </div>
                   </div>
-                  <CollapsibleSection summary="连接详情">
+                  <CollapsibleSection summary="详情">
                     <div className="space-y-2 text-sm">
                       <p className="break-all text-foreground">
                         {s.transport === "http" ? s.url : (s.command ?? []).join(" ")}
@@ -226,14 +229,12 @@ export function McpRoute() {
                       {s.tools.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {s.tools.map((t) => (
-                            <button
+                            <Tag
                               key={t.full_name}
-                              type="button"
                               onClick={() => setSelectedTool({ serverName: s.name, tool: t })}
-                              className="rounded bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground transition hover:bg-secondary/80"
                             >
                               {t.name}
-                            </button>
+                            </Tag>
                           ))}
                         </div>
                       )}
@@ -288,11 +289,11 @@ export function McpRoute() {
                 {envError ? <p className="text-xs text-destructive">{envError}</p> : null}
               </div>
               <div className="flex gap-2">
-                <Button variant="primary" disabled={busy || !name.trim() || !!envError} onClick={submit}>
-                  {busy && <Loader2 className="size-4 animate-spin" />}
+                <Button variant="primary" disabled={saving || !name.trim() || !!envError} onClick={submit}>
+                  {saving && <Loader2 className="size-4 animate-spin" />}
                   {editing ? "保存" : "添加"}
                 </Button>
-                <Button variant="secondary" disabled={busy || !!envError} onClick={test}>测试连接</Button>
+                <Button variant="secondary" disabled={saving || !!envError} onClick={test}>测试连接</Button>
                 {editing && <Button variant="ghost" onClick={reset}>取消编辑</Button>}
               </div>
             </div>

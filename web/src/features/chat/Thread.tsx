@@ -13,8 +13,8 @@ import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { useCopy } from "@/lib/useCopy";
 import { Markdown, ThinkingBlock } from "./Markdown";
-import type { ChatPart, ChatMessage } from "./model";
-import { ToolEvent } from "./ToolEvent";
+import type { ChatMessage } from "./model";
+import { ToolPartView } from "./ToolEvent";
 import { useChat } from "./ChatProvider";
 import { useShell } from "@/app/AppShell";
 import type { ChatAttachment } from "./model";
@@ -26,8 +26,6 @@ const PROMPT_CHIPS = [
   "记住：我偏好简洁的回答",
 ];
 const EMPTY_ATTACHMENTS: ChatAttachment[] = [];
-
-const MarkdownText: TextMessagePartComponent = ({ text }) => <Markdown text={text} />;
 
 const UserText: TextMessagePartComponent = ({ text }) => (
   <span className="whitespace-pre-wrap">{text}</span>
@@ -424,26 +422,39 @@ function triggerDownload(url: string, filename: string): void {
   a.remove();
 }
 
-function AssistantThinkingParts({
+function AssistantPartList({
   chatMsg,
   streaming,
 }: {
   chatMsg: ChatMessage | undefined;
   streaming: boolean;
 }) {
-  const parts = chatMsg?.parts.filter((p): p is Extract<ChatPart, { type: "thinking" }> => p.type === "thinking") ?? [];
-  if (parts.length === 0) return null;
+  if (!chatMsg) return null;
   return (
-    <div className="mb-2 space-y-2">
-      {parts.map((p, i) => (
-        <ThinkingBlock
-          key={i}
-          content={p.text}
-          defaultOpen={streaming}
-          label={streaming ? "思考中" : "思考过程"}
-        />
-      ))}
-    </div>
+    <>
+      {chatMsg.parts.map((p, i) => {
+        const isActiveThinking =
+          streaming &&
+          p.type === "thinking" &&
+          !p.completed &&
+          i === chatMsg.parts.length - 1;
+        if (p.type === "thinking") {
+          return (
+            <ThinkingBlock
+              key={`think-${i}`}
+              content={p.text}
+              isActive={isActiveThinking}
+            />
+          );
+        }
+        if (p.type === "text") {
+          if (!p.text) return null;
+          return <Markdown key={`text-${i}`} text={p.text} />;
+        }
+        return <ToolPartView key={p.id} part={p} />;
+      })}
+      {chatMsg.error ? <Markdown text={`\n\n> ⚠ ${chatMsg.error}`} /> : null}
+    </>
   );
 }
 
@@ -461,10 +472,7 @@ function AssistantMessage() {
         <p className="text-[11px] text-muted-foreground">已压缩（不再带入上下文）</p>
       ) : null}
       <div className="min-w-0">
-        <AssistantThinkingParts chatMsg={chatMsg} streaming={streaming} />
-        <MessagePrimitive.Parts
-          components={{ Text: MarkdownText, tools: { Fallback: ToolEvent } }}
-        />
+        <AssistantPartList chatMsg={chatMsg} streaming={streaming} />
       </div>
       <MessagePrimitive.If last>
         <ThreadPrimitive.If running>

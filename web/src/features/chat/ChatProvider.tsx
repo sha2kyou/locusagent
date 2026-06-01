@@ -25,6 +25,7 @@ import { withWorkspacePrefix } from "@/app/workspace-route";
 import {
   appendText,
   appendThinking,
+  completeThinkingParts,
   type ChatAttachment,
   type ChatMessage,
   type ChatPart,
@@ -33,7 +34,7 @@ import {
   userMessage,
 } from "./model";
 import { convertMessage } from "./convert";
-import { coalesceHistory } from "./history";
+import { coalesceHistory, historyPollKey } from "./history";
 
 export interface PendingAttachment {
   id: string;
@@ -227,18 +228,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // ---- active-run 轮询恢复 ----
   const startActiveRunPoll = (sid: string) => {
     const token = ++pollTokenRef.current;
+    setIsRunning(true);
     let lastKey = "";
     const tick = async () => {
       if (token !== pollTokenRef.current) return;
       try {
         const { run } = await getActiveRun(sid);
         const { items } = await getSessionMessages(sid);
-        const key = `${items.length}:${items[items.length - 1]?.id ?? ""}:${items[items.length - 1]?.content?.length ?? 0}`;
+        const live = run?.status === "running";
+        const key = historyPollKey(items);
         if (key !== lastKey) {
           lastKey = key;
-          setMessages(coalesceHistory(items));
+          setMessages(coalesceHistory(items, { live }));
         }
-        if (run?.status === "running") {
+        if (live) {
           if (token === pollTokenRef.current) window.setTimeout(tick, 2000);
         } else {
           setIsRunning(false);
@@ -276,16 +279,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setLastErrored(false);
     void (async () => {
       try {
-        const { items } = await getSessionMessages(id);
+        const [{ items }, { run }] = await Promise.all([
+          getSessionMessages(id),
+          getActiveRun(id),
+        ]);
         if (token !== loadTokenRef.current || !mountedRef.current || currentIdRef.current !== id) {
           return;
         }
-        setMessages(coalesceHistory(items));
-        const { run } = await getActiveRun(id);
-        if (token !== loadTokenRef.current || !mountedRef.current || currentIdRef.current !== id) {
-          return;
-        }
-        if (run?.status === "running") {
+        const live = run?.status === "running";
+        setMessages(coalesceHistory(items, { live }));
+        if (live) {
           setIsRunning(true);
           startActiveRunPoll(id);
         }
@@ -372,6 +375,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
 
     let firstToken = true;
+    let handoffToPoll = false;
     try {
       await streamChatCompletion(
         body,
@@ -390,7 +394,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             const ev = chunk.x_event;
             if (ev === "tool_call") {
               updateLastAssistant((parts) => [
-                ...parts,
+                ...completeThinkingParts(parts),
                 {
                   type: "tool",
                   id: chunk.x_tool_id || chunk.x_tool_call_id || uid("t"),
@@ -458,7 +462,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         if (firstToken) updateLastAssistant((p) => appendText(p, "（已停止生成）"));
       } else if (err.code === "run_in_progress") {
         toast("该对话仍在生成中", "info");
-        if (mountedRef.current && currentIdRef.current) startActiveRunPoll(currentIdRef.current);
+        if (mountedRef.current && currentIdRef.current) {
+          handoffToPoll = true;
+          startActiveRunPoll(currentIdRef.current);
+        }
         return;
       } else if (isImageInputUnsupportedError(err)) {
         const tip = "当前模型或上游端点不支持图片输入，请切换支持视觉的模型后重试。";
@@ -472,7 +479,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } finally {
       if (abortRef.current === ac) abortRef.current = null;
       if (!mountedRef.current) return;
-      setIsRunning(false);
+      if (!handoffToPoll) {
+        updateLastAssistant((parts) => completeThinkingParts(parts));
+        setIsRunning(false);
+      }
       void refreshSessions();
     }
   };
@@ -501,6 +511,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     abortChat();
     stopActiveRunPoll();
     stopRunningTools("已停止");
+    updateLastAssistant((parts) => completeThinkingParts(parts));
     setIsRunning(false);
     const sid = currentIdRef.current;
     if (sid) await cancelRun(sid).catch(() => {});

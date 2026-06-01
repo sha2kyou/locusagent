@@ -2,27 +2,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Loader2, Pencil, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Textarea } from "@/components/ui/field";
+import { Label, Textarea } from "@/components/ui/field";
+import { SearchInput } from "@/components/ui/search-input";
 import { Badge } from "@/components/ui/badge";
 import { CollapsiblePanel, CollapsibleSection, ListCard } from "@/components/ui/panel";
+import { SegmentControl } from "@/components/ui/segment-control";
+import { Empty, listItemDescriptionClass, Loading } from "@/components/ui/list-state";
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
-import { Empty, Loading } from "@/features/skills/SkillsRoute";
 import { createMemory, deleteMemory, listMemory, updateMemory } from "@/api/endpoints";
 import type { MemoryAnchor, MemoryEntry } from "@/api/types";
-import { cn } from "@/lib/utils";
-
-const TABS: { anchor: MemoryAnchor; label: string }[] = [
-  { anchor: "identity", label: "常驻记忆" },
-  { anchor: "experience", label: "按需检索" },
-];
-
-const EMB_LABEL: Record<MemoryEntry["embedding_state"], { text: string; variant: "neutral" | "success" | "warning" }> = {
-  pending: { text: "排队中", variant: "warning" },
-  ready: { text: "已索引", variant: "success" },
-  failed: { text: "仅关键词", variant: "neutral" },
-};
+import { EMBEDDING_LABEL } from "@/lib/embedding-labels";
 
 export function MemoryRoute() {
   const toast = useToast();
@@ -124,11 +115,12 @@ export function MemoryRoute() {
   };
 
   const remove = async (m: MemoryEntry) => {
-    if (!(await confirm({ title: "删除记忆", body: "确定删除该条记忆？", danger: true, confirmText: "删除" }))) return;
+    if (!(await confirm({ title: "删除记忆", body: `删除「记忆 #${m.id}」？`, danger: true, confirmText: "删除" }))) return;
     try {
       await deleteMemory(m.id);
       if (editing?.id === m.id) resetForm();
       await load();
+      toast("已删除", "success");
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -148,23 +140,16 @@ export function MemoryRoute() {
     >
       <ReadyGate>
         <div className="space-y-4">
-          <div className="inline-flex rounded-lg border border-border bg-surface/40 p-1">
-            {TABS.map((t) => (
-              <button
-                key={t.anchor}
-                type="button"
-                onClick={() => setTab(t.anchor)}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                  tab === t.anchor ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+          <SegmentControl
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: "identity", label: "常驻记忆" },
+              { value: "experience", label: "按需检索" },
+            ]}
+          />
 
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索记忆…" />
+          <SearchInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索记忆…" />
 
           {items === null ? (
             <Loading />
@@ -173,7 +158,7 @@ export function MemoryRoute() {
           ) : (
             <div className="space-y-2">
               {filtered.map((m) => {
-                const emb = EMB_LABEL[m.embedding_state];
+                const emb = EMBEDDING_LABEL[m.embedding_state];
                 return (
                   <ListCard key={m.id} className="p-0 overflow-hidden">
                     <div className="flex items-start justify-between gap-3 px-4 py-3">
@@ -182,7 +167,7 @@ export function MemoryRoute() {
                           <span className="font-medium">记忆 #{m.id}</span>
                           <Badge variant={emb.variant}>{emb.text}</Badge>
                         </div>
-                        <p className="mt-1 line-clamp-2 max-w-[56ch] whitespace-pre-wrap text-sm text-muted-foreground">
+                        <p className={`${listItemDescriptionClass} max-w-[56ch] whitespace-pre-wrap`}>
                           {m.content}
                         </p>
                       </div>
@@ -198,7 +183,7 @@ export function MemoryRoute() {
                         </Button>
                       </div>
                     </div>
-                    <CollapsibleSection summary="说明">
+                    <CollapsibleSection summary="详情">
                       <pre className="max-h-[40vh] overflow-y-auto whitespace-pre-wrap text-sm text-foreground">
                         {m.content}
                       </pre>

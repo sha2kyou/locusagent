@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckSquare, Plus, Search, Square, Trash2, X } from "lucide-react";
+import { CheckSquare, Plus, Square, Trash2, X } from "lucide-react";
 import type { SessionMeta } from "@/api/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/field";
+import { SearchInput } from "@/components/ui/search-input";
+import { SidebarEmpty } from "@/components/ui/list-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDialogs } from "@/components/ui/dialogs";
 import { useToast } from "@/components/ui/toast";
@@ -163,15 +164,11 @@ export function SessionSidebar({
         </div>
       </div>
       <div className="px-3 pb-2">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索对话…"
-            className="pl-8"
-          />
-        </div>
+        <SearchInput
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="搜索对话…"
+        />
       </div>
       {batchMode && filteredSessions.length > 0 && (
         <div className="px-3 pb-2">
@@ -213,9 +210,7 @@ export function SessionSidebar({
             ))}
           </div>
         ) : groups.length === 0 ? (
-          <p className="px-2 py-4 text-center text-xs text-muted-foreground">
-            {query ? "无匹配对话" : "暂无对话"}
-          </p>
+          <SidebarEmpty text={query ? "无匹配对话" : "暂无对话"} />
         ) : (
           groups.map((g) => (
             <div key={g.label} className="mb-2">
@@ -271,17 +266,18 @@ export function SessionSidebar({
                     {s.title || "新对话"}
                   </span>
                   {!batchMode ? (
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="icon-sm"
                       onClick={(e) => {
                         e.stopPropagation();
                         void onDelete(s);
                       }}
-                      className="shrink-0 rounded p-1 text-muted-foreground opacity-100 transition hover:text-destructive md:opacity-0 md:group-hover:opacity-100"
                       aria-label="删除"
                     >
-                      <Trash2 className="size-3.5" />
-                    </button>
+                      <Trash2 />
+                    </Button>
                   ) : null}
                 </div>
               ))}

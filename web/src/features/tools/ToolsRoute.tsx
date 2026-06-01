@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { PageContainer } from "@/components/PageContainer";
 import { Badge } from "@/components/ui/badge";
 import { CollapsibleSection, ListCard } from "@/components/ui/panel";
+import { Empty, listItemBriefClass, Loading } from "@/components/ui/list-state";
 import { useToast } from "@/components/ui/toast";
 import { ReadyGate } from "@/components/ReadyGate";
 import { listToolToggles } from "@/api/endpoints";
 import type { ToolToggleOverview } from "@/api/types";
-import { Empty, Loading } from "@/features/skills/SkillsRoute";
 
 function getDescriptionMeta(description?: string): { brief: string; full: string } {
   if (!description?.trim()) return { brief: "暂无说明", full: "暂无说明" };
@@ -39,41 +39,35 @@ export function ToolsRoute() {
     <PageContainer
       title="工具"
       subtitle="工具可用性由系统按运行场景预设"
-      actions={
-        data ? <Badge variant="outline">工具 {data.builtin_tools.length}</Badge> : undefined
-      }
+      actions={data ? <Badge variant="outline">工具 {data.builtin_tools.length}</Badge> : undefined}
     >
       <ReadyGate>
         {data === null ? (
           <Loading />
+        ) : data.builtin_tools.length === 0 ? (
+          <Empty text="暂无条目" />
         ) : (
-          <div className="space-y-6">
-            {data.builtin_tools.length === 0 ? (
-              <Empty text="暂无条目" />
-            ) : (
-              data.builtin_tools.map((item) => {
-                const desc = getDescriptionMeta(item.description);
-                return (
-                  <ListCard key={item.name} className="p-0 overflow-hidden">
-                    <div className="flex items-start gap-3 px-4 py-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{item.name}</span>
-                        </div>
-                        <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-                          {desc.brief}
-                        </p>
+          <div className="space-y-2">
+            {data.builtin_tools.map((item) => {
+              const desc = getDescriptionMeta(item.description);
+              return (
+                <ListCard key={item.name} className="p-0 overflow-hidden">
+                  <div className="flex items-start gap-3 px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{item.name}</span>
                       </div>
+                      <p className={listItemBriefClass}>{desc.brief}</p>
                     </div>
-                    <CollapsibleSection summary="详情">
-                      <div className="space-y-2 text-sm">
-                        <p className="whitespace-pre-wrap text-foreground">{desc.full}</p>
-                      </div>
-                    </CollapsibleSection>
-                  </ListCard>
-                );
-              })
-            )}
+                  </div>
+                  <CollapsibleSection summary="详情">
+                    <div className="space-y-2 text-sm">
+                      <p className="whitespace-pre-wrap text-foreground">{desc.full}</p>
+                    </div>
+                  </CollapsibleSection>
+                </ListCard>
+              );
+            })}
           </div>
         )}
       </ReadyGate>

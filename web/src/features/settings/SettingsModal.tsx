@@ -112,7 +112,7 @@ export function SettingsModal({ open, onClose, onLogout }: Props) {
           <section className="rounded-lg border border-border bg-surface/40 p-4">
             <h3 className="mb-3 text-sm font-semibold">主题</h3>
             <div
-              className="grid grid-cols-3 gap-1 rounded-lg border border-border bg-muted p-1"
+              className="grid grid-cols-3 gap-1 rounded-lg border border-border bg-surface/40 p-1"
               role="radiogroup"
               aria-label="主题"
             >
@@ -155,8 +155,8 @@ export function SettingsModal({ open, onClose, onLogout }: Props) {
                     className={cn(
                       "rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
                       selected
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-secondary-foreground hover:bg-secondary hover:text-foreground",
+                        ? "bg-secondary text-foreground"
+                        : "text-muted-foreground hover:text-foreground",
                     )}
                   >
                     {opt.label}

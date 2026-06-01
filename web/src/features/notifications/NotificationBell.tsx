@@ -4,24 +4,12 @@ import { useNavigate } from "react-router-dom";
 import { Bell, BrushCleaning, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { formatRelative } from "@/lib/format-time";
 import { useNotifications } from "./NotificationProvider";
 import type { NotificationEntry } from "@/api/types";
 
 const PANEL_WIDTH = 352;
 const VIEWPORT_GAP = 8;
-
-function formatWhen(iso: string): string {
-  const d = new Date(iso).getTime();
-  const diff = Date.now() - d;
-  const minute = 60_000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
-  if (diff < minute) return "刚刚";
-  if (diff < hour) return `${Math.floor(diff / minute)} 分钟前`;
-  if (diff < day) return `${Math.floor(diff / hour)} 小时前`;
-  if (diff < 7 * day) return `${Math.floor(diff / day)} 天前`;
-  return new Date(iso).toLocaleString();
-}
 
 function computePanelPos(anchor: DOMRect, align: "start" | "end") {
   const width = Math.min(PANEL_WIDTH, window.innerWidth - VIEWPORT_GAP * 2);
@@ -81,7 +69,7 @@ function NotificationRow({
             <span />
           )}
           <span className="shrink-0 text-[11px] leading-5 text-muted-foreground">
-            {formatWhen(item.created_at)}
+            {formatRelative(item.created_at)}
           </span>
         </div>
         <p className="mt-1 text-sm leading-snug text-foreground">

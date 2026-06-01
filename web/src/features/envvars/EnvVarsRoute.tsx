@@ -1,22 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, Pencil, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { ReadyGate } from "@/components/ReadyGate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
 import { CollapsiblePanel, CollapsibleSection, ListCard } from "@/components/ui/panel";
+import { Empty, listItemDescriptionClass, Loading } from "@/components/ui/list-state";
 import { useDialogs } from "@/components/ui/dialogs";
 import { useToast } from "@/components/ui/toast";
 import { createEnvVar, deleteEnvVar, listEnvVars, updateEnvVar } from "@/api/endpoints";
 import type { EnvVarEntry } from "@/api/types";
-import { Empty, Loading } from "@/features/skills/SkillsRoute";
-
-const EMB_LABEL: Record<EnvVarEntry["embedding_state"], { text: string; variant: "neutral" | "success" | "warning" }> = {
-  pending: { text: "排队中", variant: "warning" },
-  ready: { text: "已索引", variant: "success" },
-  failed: { text: "仅关键词", variant: "neutral" },
-};
+import { EMBEDDING_LABEL } from "@/lib/embedding-labels";
 
 export function EnvVarsRoute() {
   const toast = useToast();
@@ -26,7 +21,7 @@ export function EnvVarsRoute() {
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
   const [description, setDescription] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [revealed, setRevealed] = useState<Record<number, boolean>>({});
   const formRef = useRef<HTMLDivElement>(null);
 
@@ -67,7 +62,7 @@ export function EnvVarsRoute() {
 
   const submit = async () => {
     if (!name.trim() || !value.trim()) return;
-    setBusy(true);
+    setSaving(true);
     try {
       if (editingId) {
         await updateEnvVar(editingId, {
@@ -85,21 +80,22 @@ export function EnvVarsRoute() {
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   };
 
   const remove = async (item: EnvVarEntry) => {
     if (!(await confirm({ title: "删除环境变量", body: `确定删除「${item.name}」？`, danger: true, confirmText: "删除" }))) return;
-    setBusy(true);
+    setSaving(true);
     try {
       await deleteEnvVar(item.id);
+      if (editingId === item.id) reset();
       await load();
-      toast("环境变量已删除", "success");
+      toast("已删除", "success");
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   };
 
@@ -118,7 +114,7 @@ export function EnvVarsRoute() {
           ) : (
             <div className="space-y-2">
               {items.map((item) => {
-                const emb = EMB_LABEL[item.embedding_state];
+                const emb = EMBEDDING_LABEL[item.embedding_state];
                 return (
                   <ListCard key={item.id} className="p-0 overflow-hidden">
                     <div className="flex items-start justify-between gap-3 px-4 py-3">
@@ -128,7 +124,7 @@ export function EnvVarsRoute() {
                           <Badge variant={emb.variant}>{emb.text}</Badge>
                         </div>
                         {item.description ? (
-                          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
+                          <p className={listItemDescriptionClass}>{item.description}</p>
                         ) : null}
                       </div>
                       <div className="flex shrink-0 gap-1">
@@ -182,7 +178,8 @@ export function EnvVarsRoute() {
                   <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="生产库密码" />
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="primary" onClick={submit} disabled={busy || !name.trim() || !value.trim()}>
+                  <Button variant="primary" onClick={submit} disabled={saving || !name.trim() || !value.trim()}>
+                    {saving && <Loader2 className="size-4 animate-spin" />}
                     {editingId ? "保存" : "添加"}
                   </Button>
                   {editingId ? <Button variant="ghost" onClick={reset}>取消编辑</Button> : null}

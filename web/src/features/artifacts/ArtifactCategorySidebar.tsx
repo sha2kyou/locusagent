@@ -1,8 +1,9 @@
-import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import type { ArtifactCategory } from "@/api/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/field";
+import { SearchInput } from "@/components/ui/search-input";
+import { SidebarEmpty } from "@/components/ui/list-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SecondarySidebar } from "@/components/SecondarySidebar";
 
@@ -45,15 +46,11 @@ export function ArtifactCategorySidebar({
         </Button>
       </div>
       <div className="px-3 pb-2">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={categoryQuery}
-            onChange={(e) => onCategoryQueryChange(e.target.value)}
-            placeholder="搜索类目…"
-            className="pl-8"
-          />
-        </div>
+        <SearchInput
+          value={categoryQuery}
+          onChange={(e) => onCategoryQueryChange(e.target.value)}
+          placeholder="搜索类目…"
+        />
       </div>
       <div className="flex-1 overflow-y-auto px-2 pb-3">
         <button
@@ -75,9 +72,7 @@ export function ArtifactCategorySidebar({
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <p className="px-2 py-4 text-center text-xs text-muted-foreground">
-            {categoryQuery ? "无匹配类目" : "暂无类目"}
-          </p>
+          <SidebarEmpty text={categoryQuery ? "无匹配类目" : "暂无类目"} />
         ) : (
           filtered.map((c) => {
             const isActive = c.id === activeCategoryId;
@@ -99,20 +94,20 @@ export function ArtifactCategorySidebar({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  className="shrink-0 text-muted-foreground opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                  className="shrink-0 text-muted-foreground"
                   aria-label="编辑类目"
                   onClick={() => onEditCategory(c)}
                 >
-                  <Pencil className="size-3.5" />
+                  <Pencil />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  className="shrink-0 text-muted-foreground opacity-100 hover:text-destructive md:opacity-0 md:group-hover:opacity-100"
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
                   aria-label="删除类目"
                   onClick={() => onDeleteCategory(c)}
                 >
-                  <Trash2 className="size-3.5" />
+                  <Trash2 />
                 </Button>
               </div>
             );
