@@ -12,11 +12,15 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { useCopy } from "@/lib/useCopy";
+import {
+  PROVISION_FAILED_HINT,
+  PROVISION_FAILED_STATUS,
+  ProvisionRetryButton,
+} from "@/components/ProvisionRetry";
 import { Markdown, ThinkingBlock } from "./Markdown";
 import type { ChatMessage } from "./model";
 import { ToolPartView } from "./ToolEvent";
 import { useChat } from "./ChatProvider";
-import { useShell } from "@/app/AppShell";
 import type { ChatAttachment } from "./model";
 import { Drawer } from "@/components/ui/drawer";
 
@@ -33,8 +37,8 @@ const UserText: TextMessagePartComponent = ({ text }) => (
 
 export function Thread() {
   const { readiness } = useChat();
-  const { openSettings } = useShell();
-  const blocked = readiness.tone === "blocked";
+  const failed = readiness.reason === "failed";
+  const booting = readiness.reason === "creating" || readiness.reason === "absent";
 
   return (
     <ThreadPrimitive.Root className="flex h-full flex-col">
@@ -46,11 +50,9 @@ export function Thread() {
               <p className="mt-2 text-sm text-muted-foreground">
                 Agent 可读写文件、调用工具、检索网页、记忆与回忆。
               </p>
-              {blocked ? (
-                <Button variant="primary" className="mt-5" onClick={openSettings}>
-                  查看 Agent 状态
-                </Button>
-              ) : (
+              {failed ? (
+                <FailedProvisionPanel className="mt-5" />
+              ) : booting ? null : (
                 <div className="mt-6 flex flex-wrap justify-center gap-2">
                   {PROMPT_CHIPS.map((p) => (
                     <ThreadPrimitive.Suggestion
@@ -87,8 +89,17 @@ export function Thread() {
       </ThreadPrimitive.Viewport>
 
       <AgentStatusBar />
-      <Composer blocked={blocked} />
+      <Composer />
     </ThreadPrimitive.Root>
+  );
+}
+
+function FailedProvisionPanel({ className }: { className?: string }) {
+  return (
+    <div className={cn("flex max-w-md flex-col items-center gap-3 text-sm text-muted-foreground", className)}>
+      <p>{PROVISION_FAILED_HINT}</p>
+      <ProvisionRetryButton size="md" />
+    </div>
   );
 }
 
@@ -97,11 +108,24 @@ function AgentStatusBar() {
   const r = readiness.reason;
   if (r !== "creating" && r !== "paused" && r !== "stopped" && r !== "failed") return null;
 
+  if (r === "failed") {
+    return (
+      <div className="px-4 pt-2">
+        <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          <div className="flex items-center gap-2">
+            <span className="size-1.5 shrink-0 rounded-full bg-current" />
+            <span>{PROVISION_FAILED_STATUS}</span>
+          </div>
+          <ProvisionRetryButton />
+        </div>
+      </div>
+    );
+  }
+
   const config = {
     creating: { text: "Agent 正在启动，请稍候…", cls: "border-warning/30 bg-warning/10 text-warning", pulse: true },
     paused: { text: "Agent 已休眠，发送消息将自动唤醒。", cls: "border-border bg-surface/60 text-muted-foreground", pulse: false },
     stopped: { text: "Agent 已停止，发送消息将重新启动。", cls: "border-border bg-surface/60 text-muted-foreground", pulse: false },
-    failed: { text: "Agent 部署失败，请前往设置重试。", cls: "border-destructive/40 bg-destructive/10 text-destructive", pulse: false },
   }[r];
 
   return (
@@ -121,17 +145,15 @@ function AgentStatusBar() {
 
 const LONG_PASTE_THRESHOLD = 8000;
 
-function Composer({ blocked }: { blocked: boolean }) {
+function Composer() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const runtime = useThreadRuntime();
   const toast = useToast();
-  const {
-    addPendingFiles,
-    isRunning,
-    pendingAttachments,
-    removePendingAttachment,
-  } = useChat();
+  const { readiness, addPendingFiles, isRunning, pendingAttachments, removePendingAttachment } =
+    useChat();
+  const failed = readiness.reason === "failed";
+  const notReady = !readiness.ready;
 
   // 全局 "/" 聚焦输入（不在其它输入/可编辑元素中时）
   useGlobalFocusShortcut(inputRef);
@@ -202,7 +224,13 @@ function Composer({ blocked }: { blocked: boolean }) {
           autoFocus
           onKeyDown={onKeyDown}
           onPaste={onPaste}
-          placeholder={blocked ? "Agent 未就绪，请稍候或打开设置查看…" : "给 Agent 发送消息…"}
+          placeholder={
+            failed
+              ? "Agent 部署失败，暂不可发送消息…"
+              : notReady
+                ? "Agent 未就绪，请稍候…"
+                : "给 Agent 发送消息…"
+          }
           className="max-h-48 flex-1 resize-none bg-transparent py-1.5 text-sm outline-none placeholder:text-muted-foreground"
         />
         <Button

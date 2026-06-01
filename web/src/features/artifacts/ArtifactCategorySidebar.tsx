@@ -14,7 +14,6 @@ export function ArtifactCategorySidebar({
   categoryQuery,
   onCategoryQueryChange,
   activeCategoryId,
-  onSelectAll,
   onSelectCategory,
   onAddCategory,
   onEditCategory,
@@ -26,7 +25,6 @@ export function ArtifactCategorySidebar({
   categoryQuery: string;
   onCategoryQueryChange: (value: string) => void;
   activeCategoryId?: string;
-  onSelectAll: () => void;
   onSelectCategory: (category: ArtifactCategory) => void;
   onAddCategory: () => void;
   onEditCategory: (category: ArtifactCategory) => void;
@@ -53,18 +51,6 @@ export function ArtifactCategorySidebar({
         />
       </div>
       <div className="flex-1 overflow-y-auto px-2 pb-3">
-        <button
-          type="button"
-          onClick={onSelectAll}
-          className={cn(
-            "mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition-colors",
-            !activeCategoryId
-              ? "bg-secondary text-foreground"
-              : "text-muted-foreground hover:bg-secondary/60",
-          )}
-        >
-          <span className="min-w-0 flex-1 truncate font-medium">全部产物</span>
-        </button>
         {categories === null ? (
           <div className="space-y-1.5 px-1 py-2">
             {Array.from({ length: 6 }).map((_, idx) => (
@@ -80,16 +66,16 @@ export function ArtifactCategorySidebar({
               <div
                 key={c.id}
                 className={cn(
-                  "group mb-1 flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm transition-colors",
+                  "group mb-1 flex items-center gap-1 rounded-lg text-sm transition-colors",
                   isActive ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary/60",
                 )}
               >
                 <button
                   type="button"
-                  className="min-w-0 flex-1 text-left"
+                  className="min-w-0 flex-1 truncate rounded-lg px-2 py-1.5 text-left font-medium"
                   onClick={() => onSelectCategory(c)}
                 >
-                  <span className="block truncate font-medium">{c.name}</span>
+                  {c.name}
                 </button>
                 <Button
                   variant="ghost"

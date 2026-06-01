@@ -251,7 +251,7 @@ export type ArtifactType = "markdown" | "html" | "text";
 
 export interface ArtifactEntry {
   id: string;
-  category_id: string | null;
+  category_id: string;
   type: ArtifactType;
   title: string;
   content: string;

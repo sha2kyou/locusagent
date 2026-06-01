@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS artifact_categories (
 
 CREATE TABLE IF NOT EXISTS artifacts (
     id              TEXT PRIMARY KEY,
-    category_id     TEXT,
+    category_id     TEXT NOT NULL,
     type            TEXT NOT NULL DEFAULT 'text',
     title           TEXT NOT NULL,
     content         TEXT NOT NULL,
@@ -397,6 +397,13 @@ def init_db() -> None:
         c.execute(
             "CREATE INDEX IF NOT EXISTS idx_artifacts_embed_state ON artifacts(embedding_state)"
         )
+        if art_cols:
+            deleted = c.execute(
+                "DELETE FROM artifacts WHERE category_id IS NULL "
+                "OR category_id NOT IN (SELECT id FROM artifact_categories)"
+            ).rowcount
+            if deleted:
+                log.info("artifacts_orphans_purged", count=deleted)
         cat_cols = {
             str(r["name"]) for r in c.execute("PRAGMA table_info(artifact_categories)").fetchall()
         }

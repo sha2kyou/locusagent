@@ -34,6 +34,9 @@ export const rotateApiKey = () =>
 export const deleteAccount = (confirm_username: string) =>
   apiSend<{ ok: boolean }>("/api/me", "DELETE", { confirm_username });
 
+export const ensureContainer = () =>
+  apiSend<{ status: string; provision_status: string }>("/internal/containers/ensure", "POST", {});
+
 // ---- 工作区 ----
 export const listWorkspaces = () =>
   apiGet<{ default_workspace_id: string; items: WorkspaceItem[] }>("/api/workspaces");
@@ -207,11 +210,9 @@ export const deleteArtifactCategory = (id: string) =>
   );
 
 // ---- 产物 ----
-export const listArtifacts = (categoryId?: string) =>
+export const listArtifacts = (categoryId: string) =>
   apiGet<{ items: ArtifactEntry[] }>(
-    categoryId
-      ? `/api/workspace/artifacts?category_id=${encodeURIComponent(categoryId)}`
-      : "/api/workspace/artifacts",
+    `/api/workspace/artifacts?category_id=${encodeURIComponent(categoryId)}`,
   );
 
 export const getArtifact = (id: string) =>

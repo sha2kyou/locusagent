@@ -109,28 +109,30 @@ async def _artifact_save(args: dict[str, Any]) -> ToolResult:
         content = m.group(1).strip()
         art_type = "html"
 
-    category_id: str | None = None
-    if category:
-        category_id = await resolve_category_id(category)
-        if category_id is None:
-            existing = await list_categories()
-            names = [str(c.get("name") or "").strip() for c in existing]
-            names = [n for n in names if n]
-            if names:
-                raise ToolError(
-                    "category_not_found: "
-                    f"'{category}' does not exist. Existing categories: {', '.join(names)}. "
-                    "Call artifact_category_create first, or reuse an existing category."
-                )
+    if not category:
+        raise ToolError(
+            "category is required. Call artifact_category_create first if no category exists."
+        )
+    category_id = await resolve_category_id(category)
+    if category_id is None:
+        existing = await list_categories()
+        names = [str(c.get("name") or "").strip() for c in existing]
+        names = [n for n in names if n]
+        if names:
             raise ToolError(
-                "category_not_found: no categories exist yet. "
-                "Call artifact_category_create first, then save artifacts into it."
+                "category_not_found: "
+                f"'{category}' does not exist. Existing categories: {', '.join(names)}. "
+                "Call artifact_category_create first, or reuse an existing category."
             )
+        raise ToolError(
+            "category_not_found: no categories exist yet. "
+            "Call artifact_category_create first, then save artifacts into it."
+        )
 
     art = await create_artifact(
         title=title, content=content, type=art_type, category_id=category_id
     )
-    suffix = f"（类目：{category}）" if category else "（未分类）"
+    suffix = f"（类目：{category}）"
     return ToolResult(
         content=f"产物已保存：{title}{suffix}",
         metadata={"artifact_id": art["id"], "category": category or None},
@@ -229,10 +231,10 @@ register_builtin(
                 },
                 "category": {
                     "type": "string",
-                    "description": "归档类目名（如“内容”“报告”）。为空则保存到未分类。",
+                    "description": "归档类目名（如“内容”“报告”）。须已存在或先 artifact_category_create。",
                 },
             },
-            "required": ["title", "content"],
+            "required": ["title", "content", "category"],
         },
         handler=_artifact_save,
     )

@@ -49,21 +49,21 @@ async def maybe_curate_memories(*, model: str | None = None) -> int:
     from ..core.models import resolve_model
 
     chosen_model = model or resolve_model("curator")
-    from ..core.completion_limits import MIN_AUXILIARY_COMPLETION_TOKENS
+    from ..core.auxiliary_completion import create_chat_completion
     from ..core.llm import get_llm_client
     from ..core.openai_fields import openai_completion_text
 
-    client = get_llm_client()
     numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(items))
     try:
-        resp = await client.chat.completions.create(
+        resp = await create_chat_completion(
+            get_llm_client(),
             model=chosen_model,
             messages=[
                 {"role": "system", "content": _CURATE_SYSTEM_PROMPT},
                 {"role": "user", "content": f"共 {len(items)} 条：\n{numbered}"},
             ],
-            max_tokens=MIN_AUXILIARY_COMPLETION_TOKENS,
             temperature=0.1,
+            retry_log_event="curator_disable_thinking_retry",
         )
         from ..usage_report import schedule_openai_usage
 

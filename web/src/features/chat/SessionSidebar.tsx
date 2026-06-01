@@ -181,9 +181,9 @@ export function SessionSidebar({
               aria-label={selectedIds.size === filteredSessions.length ? "取消全选" : "全选"}
             >
               {selectedIds.size === filteredSessions.length ? (
-                <Square className="size-4" />
-              ) : (
                 <CheckSquare className="size-4" />
+              ) : (
+                <Square className="size-4" />
               )}
             </Button>
             <Button

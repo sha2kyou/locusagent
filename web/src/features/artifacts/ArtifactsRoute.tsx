@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { SearchInput } from "@/components/ui/search-input";
 import { Modal } from "@/components/ui/modal";
-import { Badge } from "@/components/ui/badge";
 import { ListCard } from "@/components/ui/panel";
 import { Drawer } from "@/components/ui/drawer";
 import { Empty, listItemDescriptionClass, Loading } from "@/components/ui/list-state";
@@ -25,6 +24,7 @@ import {
 import type { ArtifactCategory, ArtifactEntry, ArtifactType } from "@/api/types";
 import { useShell } from "@/app/AppShell";
 import { stripWorkspacePrefix, withWorkspacePrefix } from "@/app/workspace-route";
+import { defaultArtifactsPath } from "./artifact-routes";
 import { ArtifactCategorySidebar } from "./ArtifactCategorySidebar";
 
 const LazyArtifactBody = lazy(() =>
@@ -95,6 +95,10 @@ function ArtifactRow({
 
 export function ArtifactsRoute() {
   const { categoryId } = useParams<{ categoryId?: string }>();
+  return <ArtifactsPage categoryId={categoryId} />;
+}
+
+function ArtifactsPage({ categoryId }: { categoryId?: string }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { setMobileAction } = useShell();
@@ -116,10 +120,18 @@ export function ArtifactsRoute() {
   const routeWorkspace = stripWorkspacePrefix(location.pathname);
   const toWorkspacePath = (path: string) => withWorkspacePrefix(path, routeWorkspace.workspaceId);
 
+  const showCategoryView = Boolean(categoryId);
+
   const currentCategory = useMemo(
-    () => categories?.find((c) => c.id === categoryId) ?? null,
-    [categories, categoryId],
+    () =>
+      showCategoryView ? (categories?.find((c) => c.id === categoryId) ?? null) : null,
+    [categories, categoryId, showCategoryView],
   );
+
+  const navigateAfterCategoriesChange = (cats: ArtifactCategory[]) => {
+    const path = defaultArtifactsPath(cats, routeWorkspace.workspaceId);
+    navigate(path ?? withWorkspacePrefix("/artifacts", routeWorkspace.workspaceId), { replace: true });
+  };
 
   useEffect(() => {
     setMobileAction(
@@ -137,19 +149,21 @@ export function ArtifactsRoute() {
 
   const loadCategories = async () => {
     try {
-      const { items } = await listArtifactCategories();
-      setCategories(items);
+      const { items: cats } = await listArtifactCategories();
+      setCategories(cats);
+      return cats;
     } catch (e) {
       toast((e as Error).message, "error");
       setCategories([]);
+      return [];
     }
   };
 
   const loadArtifacts = async () => {
     setItems(null);
     try {
-      const { items } = await listArtifacts(categoryId);
-      setItems(items);
+      const { items: scoped } = await listArtifacts(categoryId);
+      setItems(scoped);
     } catch (e) {
       toast((e as Error).message, "error");
       setItems([]);
@@ -162,14 +176,24 @@ export function ArtifactsRoute() {
   }, []);
 
   useEffect(() => {
+    if (!categoryId) {
+      setItems([]);
+      return;
+    }
     void loadArtifacts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoryId]);
 
   useEffect(() => {
-    if (!categoryId || categories === null) return;
+    if (categories === null) return;
+    if (!categoryId && categories.length > 0) {
+      const path = defaultArtifactsPath(categories, routeWorkspace.workspaceId);
+      if (path) navigate(path, { replace: true });
+      return;
+    }
+    if (!categoryId) return;
     if (categories.some((c) => c.id === categoryId)) return;
-    navigate(toWorkspacePath("/artifacts"), { replace: true });
+    navigateAfterCategoriesChange(categories);
   }, [categories, categoryId, navigate, routeWorkspace.workspaceId]);
 
   useEffect(() => {
@@ -183,34 +207,15 @@ export function ArtifactsRoute() {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [exportMenuOpen]);
 
-  const catName = (id: string | null) =>
-    id ? ((categories ?? []).find((c) => c.id === id)?.name ?? "未分类") : "未分类";
-
   const filtered = useMemo(() => {
     const q = artifactQuery.trim().toLowerCase();
-    return (items ?? []).filter(
+    const list = (items ?? []).filter(
       (a) => !q || a.title.toLowerCase().includes(q) || a.content.toLowerCase().includes(q),
     );
+    return list.sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
   }, [items, artifactQuery]);
-
-  const groups = useMemo(() => {
-    if (currentCategory) return [];
-    const categoryList = categories ?? [];
-    if (categoryList.length === 0) return [];
-    const byId = new Map<string | null, ArtifactEntry[]>();
-    for (const a of filtered) {
-      const key = a.category_id ?? null;
-      (byId.get(key) ?? byId.set(key, []).get(key)!).push(a);
-    }
-    const ordered: { id: string | null; name: string; items: ArtifactEntry[] }[] = [];
-    for (const c of categoryList) {
-      const list = byId.get(c.id);
-      if (list?.length) ordered.push({ id: c.id, name: c.name, items: list });
-    }
-    const uncat = byId.get(null);
-    if (uncat?.length) ordered.push({ id: null, name: "未分类", items: uncat });
-    return ordered;
-  }, [filtered, categories, currentCategory]);
 
   const closeCategoryDialog = () => {
     setCategoryDialogOpen(false);
@@ -241,7 +246,7 @@ export function ArtifactsRoute() {
         toast("已添加", "success");
       }
       await loadCategories();
-      await loadArtifacts();
+      if (categoryId) await loadArtifacts();
       closeCategoryDialog();
     } catch (e) {
       toast((e as Error).message, "error");
@@ -261,7 +266,7 @@ export function ArtifactsRoute() {
     if (
       !(await confirm({
         title: "删除类目",
-        body: `删除「${c.name}」？该类目下的产物会移至未分类。`,
+        body: `删除「${c.name}」？该类目下的产物将一并删除。`,
         danger: true,
         confirmText: "删除",
       }))
@@ -270,10 +275,10 @@ export function ArtifactsRoute() {
     }
     try {
       await deleteArtifactCategory(c.id);
-      await loadCategories();
+      const cats = await loadCategories();
       await loadArtifacts();
       if (categoryId === c.id) {
-        navigate(toWorkspacePath("/artifacts"));
+        navigateAfterCategoriesChange(cats);
       }
       toast("已删除", "success");
     } catch (e) {
@@ -294,10 +299,10 @@ export function ArtifactsRoute() {
     }
   };
 
-  const title = currentCategory ? currentCategory.name : "全部产物";
-  const subtitle = currentCategory
-    ? (currentCategory.description?.trim() || "该类目下的产物")
-    : "AI 产出的成果，可按类目归档";
+  const title = showCategoryView ? (currentCategory?.name ?? "产物") : "产物";
+  const subtitle = showCategoryView
+    ? currentCategory?.description?.trim() || "该类目下的产物，按保存时间从新到旧显示"
+    : "创建类目后，可在此查看归档产物";
   const exportOriginalLabel = selected
     ? selected.type === "html"
       ? "HTML"
@@ -305,6 +310,9 @@ export function ArtifactsRoute() {
         ? "Markdown"
         : "Text"
     : "原始类型";
+
+  const catName = (id: string | null) =>
+    id ? ((categories ?? []).find((c) => c.id === id)?.name ?? "") : "";
 
   return (
     <>
@@ -315,11 +323,7 @@ export function ArtifactsRoute() {
           categories={categories}
           categoryQuery={categoryQuery}
           onCategoryQueryChange={setCategoryQuery}
-          activeCategoryId={categoryId}
-          onSelectAll={() => {
-            navigate(toWorkspacePath("/artifacts"));
-            setSidebarOpen(false);
-          }}
+          activeCategoryId={showCategoryView ? categoryId : undefined}
           onSelectCategory={(c) => {
             navigate(toWorkspacePath(`/artifacts/c/${c.id}`));
             setSidebarOpen(false);
@@ -333,61 +337,56 @@ export function ArtifactsRoute() {
 
         <div className="min-w-0 flex-1 overflow-y-auto">
           <ReadyGate>
-            <div className="mx-auto w-full max-w-4xl px-6 py-10">
-              <header className="mb-6 space-y-1">
-                <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-                <p className="text-sm text-muted-foreground">{subtitle}</p>
-              </header>
-              <div className="mb-4">
-                <SearchInput
-                  value={artifactQuery}
-                  onChange={(e) => setArtifactQuery(e.target.value)}
-                  placeholder="搜索产物…"
-                />
+            {categories === null ? (
+              <Loading />
+            ) : !showCategoryView ? (
+              <div className="mx-auto w-full max-w-4xl px-6 py-10">
+                <header className="mb-6 space-y-1">
+                  <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+                  <p className="text-sm text-muted-foreground">{subtitle}</p>
+                </header>
+                <Empty text="暂无类目。点击左侧「新建类目」创建第一个类目。" />
               </div>
+            ) : currentCategory === null ? (
+              <Loading />
+            ) : (
+              <div className="mx-auto w-full max-w-4xl px-6 py-10">
+                <header className="mb-6 space-y-1">
+                  <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+                  <p className="text-sm text-muted-foreground">{subtitle}</p>
+                </header>
+                <div className="mb-4">
+                  <SearchInput
+                    value={artifactQuery}
+                    onChange={(e) => setArtifactQuery(e.target.value)}
+                    placeholder="搜索产物…"
+                  />
+                </div>
 
-              {items === null ? (
-                <Loading />
-              ) : filtered.length === 0 ? (
-                <Empty
-                  text={
-                    artifactQuery
-                      ? "无匹配产物"
-                      : "暂无产物，在对话中让 AI 产出成果（如「创建一条内容」）即可归档到这里"
-                  }
-                />
-              ) : currentCategory ? (
-                <div className="space-y-2">
-                  {filtered.map((a) => (
-                    <ArtifactRow
-                      key={a.id}
-                      a={a}
-                      onOpen={() => setSelected(a)}
-                      onDelete={() => removeArtifact(a)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {groups.map((g) => (
-                    <section key={g.id ?? "_uncat"} className="space-y-2">
-                      <div className="flex items-center gap-2 px-0.5">
-                        <h3 className="text-sm font-semibold text-foreground">{g.name}</h3>
-                        <Badge variant="outline">{g.items.length}</Badge>
-                      </div>
-                      {g.items.map((a) => (
-                        <ArtifactRow
-                          key={a.id}
-                          a={a}
-                          onOpen={() => setSelected(a)}
-                          onDelete={() => removeArtifact(a)}
-                        />
-                      ))}
-                    </section>
-                  ))}
-                </div>
-              )}
-            </div>
+                {items === null ? (
+                  <Loading />
+                ) : filtered.length === 0 ? (
+                  <Empty
+                    text={
+                      artifactQuery
+                        ? "无匹配产物"
+                        : "暂无产物。在对话中请 AI 保存、导出或归档内容后，会出现在这里"
+                    }
+                  />
+                ) : (
+                  <div className="space-y-2">
+                    {filtered.map((a) => (
+                      <ArtifactRow
+                        key={a.id}
+                        a={a}
+                        onOpen={() => setSelected(a)}
+                        onDelete={() => removeArtifact(a)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </ReadyGate>
         </div>
       </div>

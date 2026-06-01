@@ -74,11 +74,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void reload();
   }, [reload]);
 
-  // 容器 creating / (absent + provision pending) 时轮询，直到 running
+  // 部署进行中轮询，直到 running（含重试后的 creating / pending）
   useEffect(() => {
     const needsPoll =
       me?.container_status === "creating" ||
-      (me?.container_status === "absent" && me?.provision_status === "pending");
+      (me?.provision_status === "pending" && me?.container_status !== "running");
     if (!needsPoll) {
       if (pollRef.current) {
         clearInterval(pollRef.current);

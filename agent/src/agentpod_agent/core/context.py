@@ -9,7 +9,7 @@ import tiktoken
 from ..config import get_settings
 from ..logging import get_logger
 from ..usage_report import schedule_openai_usage
-from .completion_limits import MIN_AUXILIARY_COMPLETION_TOKENS
+from .auxiliary_completion import create_chat_completion
 
 log = get_logger("context")
 
@@ -153,14 +153,15 @@ async def _distill_messages(messages: list[dict[str, Any]], *, client, model: st
     text = "\n".join(convo)[:8000]
     if not text.strip():
         return ""
-    resp = await client.chat.completions.create(
+    resp = await create_chat_completion(
+        client,
         model=model,
         messages=[
             {"role": "system", "content": _DISTILL_SYSTEM_PROMPT},
             {"role": "user", "content": text},
         ],
-        max_tokens=MIN_AUXILIARY_COMPLETION_TOKENS,
         temperature=0.2,
+        retry_log_event="compression_disable_thinking_retry",
     )
     schedule_openai_usage(usage=resp.usage, scenario="compression", model=model)
     return openai_completion_text(resp)

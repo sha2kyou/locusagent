@@ -38,7 +38,6 @@ export function UsageSummaryCard({ active }: { active?: boolean }) {
     };
   }, [active]);
 
-  const totals = data?.totals;
   const items = data?.items ?? [];
   const aggregated: AggregatedRow[] = (() => {
     const m = new Map<string, AggregatedRow>();
@@ -82,20 +81,6 @@ export function UsageSummaryCard({ active }: { active?: boolean }) {
 
       {!loading && error && (
         <p className="text-sm text-destructive">{error}</p>
-      )}
-
-      {!loading && !error && totals && (
-        <div className="mb-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
-          <span>
-            总 Token：<strong className="text-foreground">{formatTokenCount(totals.total_tokens)}</strong>
-          </span>
-          <span>
-            第三方调用：<strong className="text-foreground">{totals.api_calls}</strong> 次
-          </span>
-          <span>
-            记录条数：<strong className="text-foreground">{totals.event_count}</strong>
-          </span>
-        </div>
       )}
 
       {!loading && !error && aggregated.length === 0 && (

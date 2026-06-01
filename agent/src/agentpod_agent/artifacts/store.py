@@ -133,15 +133,11 @@ async def update_category(
 
 
 async def delete_category(category_id: str) -> bool:
-    """删除类目；该类目下产物降级为未分类（category_id 置 NULL）。"""
+    """删除类目及其下全部产物。"""
 
     def _do() -> bool:
         with conn_scope(load_vec=False) as c:
-            c.execute(
-                "UPDATE artifacts SET category_id = NULL, updated_at = datetime('now') "
-                "WHERE category_id = ?",
-                (category_id,),
-            )
+            c.execute("DELETE FROM artifacts WHERE category_id = ?", (category_id,))
             cur = c.execute(
                 "DELETE FROM artifact_categories WHERE id = ?",
                 (category_id,),
@@ -159,20 +155,26 @@ def _normalize_type(value: str | None) -> str:
     return t if t in _ALLOWED_TYPES else "markdown"
 
 
-async def list_artifacts(category_id: str | None = None) -> list[dict[str, Any]]:
+async def category_exists(category_id: str) -> bool:
+    def _do() -> bool:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT 1 FROM artifact_categories WHERE id = ?",
+                (category_id,),
+            ).fetchone()
+            return row is not None
+
+    return await run_in_thread(_do)
+
+
+async def list_artifacts(category_id: str) -> list[dict[str, Any]]:
     def _do() -> list[dict[str, Any]]:
         with conn_scope(load_vec=False) as c:
-            if category_id:
-                rows = c.execute(
-                    "SELECT id, category_id, type, title, content, created_at, updated_at "
-                    "FROM artifacts WHERE category_id = ? ORDER BY created_at DESC",
-                    (category_id,),
-                ).fetchall()
-            else:
-                rows = c.execute(
-                    "SELECT id, category_id, type, title, content, created_at, updated_at "
-                    "FROM artifacts ORDER BY created_at DESC"
-                ).fetchall()
+            rows = c.execute(
+                "SELECT id, category_id, type, title, content, created_at, updated_at "
+                "FROM artifacts WHERE category_id = ? ORDER BY created_at DESC",
+                (category_id,),
+            ).fetchall()
             return [dict(r) for r in rows]
 
     return await run_in_thread(_do)
@@ -196,8 +198,14 @@ async def create_artifact(
     title: str,
     content: str,
     type: str = "markdown",
-    category_id: str | None = None,
+    category_id: str,
 ) -> dict[str, Any]:
+    cid = str(category_id or "").strip()
+    if not cid:
+        raise ValueError("category_id is required")
+    if not await category_exists(cid):
+        raise ValueError("category not found")
+
     aid = _new_artifact_id()
     art_type = _normalize_type(type)
 
@@ -206,7 +214,7 @@ async def create_artifact(
             c.execute(
                 "INSERT INTO artifacts(id, category_id, type, title, content, embedding, embedding_state) "
                 "VALUES (?, ?, ?, ?, ?, NULL, 'pending')",
-                (aid, category_id, art_type, title, content),
+                (aid, cid, art_type, title, content),
             )
             row = c.execute(
                 "SELECT id, category_id, type, title, content, created_at, updated_at "
@@ -236,8 +244,15 @@ async def update_artifact(
     title: str | None = None,
     content: str | None = None,
     category_id: str | None = None,
-    clear_category: bool = False,
 ) -> bool:
+    cid: str | None = None
+    if category_id is not None:
+        cid = str(category_id).strip()
+        if not cid:
+            raise ValueError("category_id is required")
+        if not await category_exists(cid):
+            raise ValueError("category not found")
+
     def _do() -> bool:
         with conn_scope(load_vec=False) as c:
             updates = ["updated_at = datetime('now')"]
@@ -251,11 +266,9 @@ async def update_artifact(
             if title is not None or content is not None:
                 updates.append("embedding = NULL")
                 updates.append("embedding_state = 'pending'")
-            if clear_category:
-                updates.append("category_id = NULL")
-            elif category_id is not None:
+            if cid is not None:
                 updates.append("category_id = ?")
-                params.append(category_id)
+                params.append(cid)
             if len(updates) == 1:
                 return False
             params.append(artifact_id)
@@ -407,11 +420,8 @@ async def resolve_category_id(name: str) -> str | None:
     return await run_in_thread(_do)
 
 
-async def get_category_name(category_id: str | None) -> str | None:
+async def get_category_name(category_id: str) -> str | None:
     """按类目 id 查名称；不存在返回 None。"""
-
-    if not category_id:
-        return None
 
     def _do() -> str | None:
         with conn_scope(load_vec=False) as c:

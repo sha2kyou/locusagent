@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/app/auth";
+import { PROVISION_FAILED_HINT, ProvisionRetryButton } from "@/components/ProvisionRetry";
 
 /** 工作区数据页的就绪门：容器未就绪时显示提示而非空列表 */
 export function ReadyGate({ children }: { children: ReactNode }) {
@@ -16,7 +17,8 @@ export function ReadyGate({ children }: { children: ReactNode }) {
   if (readiness.reason === "failed") {
     return (
       <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-surface/40 py-14 text-center">
-        <p className="text-sm text-muted-foreground">Agent 部署失败，请联系管理员检查服务端配置。</p>
+        <p className="text-sm text-muted-foreground">{PROVISION_FAILED_HINT}</p>
+        <ProvisionRetryButton size="md" />
       </div>
     );
   }

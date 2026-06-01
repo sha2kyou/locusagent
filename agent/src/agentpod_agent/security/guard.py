@@ -63,22 +63,23 @@ async def review_write(content: str, *, kind: str, source: str = "model") -> Gua
         log.warning("write_guard_blocked", kind=kind, source=source, reason=hard)
         return GuardResult(allowed=False, reason=hard)
 
-    from ..core.completion_limits import MIN_AUXILIARY_COMPLETION_TOKENS
+    from ..core.auxiliary_completion import create_chat_completion
     from ..core.llm import get_llm_client
+    from ..core.models import resolve_model
     from ..core.openai_fields import openai_completion_text
 
-    client = get_llm_client()
     user_content = f"类型：{kind}\n来源：{source}\n待审查内容：\n{text[:4000]}"
     try:
         approval_model = resolve_model("approval")
-        resp = await client.chat.completions.create(
+        resp = await create_chat_completion(
+            get_llm_client(),
             model=approval_model,
             messages=[
                 {"role": "system", "content": _REVIEW_SYSTEM_PROMPT},
                 {"role": "user", "content": user_content},
             ],
-            max_tokens=MIN_AUXILIARY_COMPLETION_TOKENS,
             temperature=0.0,
+            retry_log_event="approval_disable_thinking_retry",
         )
         from ..usage_report import schedule_openai_usage
 

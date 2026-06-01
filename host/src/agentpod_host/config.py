@@ -88,8 +88,8 @@ class Settings(BaseSettings):
     # 仅在宿主 docker 卷所在 FS 支持 project quota（XFS pquota / ext4 project）时可用。
     agent_disk_limit: str = Field(default="", alias="AGENT_DISK_LIMIT")
 
-    idle_pause_seconds: int = Field(default=86400, alias="IDLE_PAUSE_SECONDS")
-    pause_to_stop_seconds: int = Field(default=604800, alias="PAUSE_TO_STOP_SECONDS")
+    idle_pause_seconds: int = Field(default=1800, alias="IDLE_PAUSE_SECONDS")
+    pause_to_stop_seconds: int = Field(default=10800, alias="PAUSE_TO_STOP_SECONDS")
     scheduled_task_retry_max_attempts: int = Field(default=3, alias="SCHEDULED_TASK_RETRY_MAX_ATTEMPTS")
     scheduled_task_retry_initial_delay_seconds: float = Field(
         default=2.0, alias="SCHEDULED_TASK_RETRY_INITIAL_DELAY_SECONDS"

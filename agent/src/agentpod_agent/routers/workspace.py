@@ -529,7 +529,7 @@ class ArtifactIn(BaseModel):
     title: str
     content: str
     type: Literal["markdown", "html", "text"] = "markdown"
-    category_id: str | None = None
+    category_id: str
 
 
 class ArtifactUpdateIn(BaseModel):
@@ -574,8 +574,11 @@ async def workspace_delete_category(category_id: str) -> dict:
 
 
 @router.get("/artifacts")
-async def workspace_list_artifacts(category_id: str | None = None) -> dict:
-    return {"items": await list_artifacts(category_id)}
+async def workspace_list_artifacts(category_id: str) -> dict:
+    cid = category_id.strip()
+    if not cid:
+        raise WsError("category_required", "category_id is required", status_code=400)
+    return {"items": await list_artifacts(cid)}
 
 
 @router.get("/artifacts/{artifact_id}")
@@ -591,24 +594,42 @@ async def workspace_create_artifact(payload: ArtifactIn) -> dict:
     title = payload.title.strip()
     if not title:
         raise WsError("artifact_empty", "title is empty", status_code=400)
-    return await create_artifact(
-        title=title,
-        content=payload.content,
-        type=payload.type,
-        category_id=payload.category_id,
-    )
+    cid = payload.category_id.strip()
+    if not cid:
+        raise WsError("category_required", "category_id is required", status_code=400)
+    try:
+        return await create_artifact(
+            title=title,
+            content=payload.content,
+            type=payload.type,
+            category_id=cid,
+        )
+    except ValueError as exc:
+        if str(exc) == "category not found":
+            raise WsError("category_not_found", str(exc), status_code=404) from exc
+        raise WsError("category_required", str(exc), status_code=400) from exc
 
 
 @router.put("/artifacts/{artifact_id}")
 async def workspace_update_artifact(artifact_id: str, payload: ArtifactUpdateIn) -> dict:
     if payload.title is None and payload.content is None and payload.category_id is None:
         raise WsError("artifact_update_empty", "nothing to update", status_code=400)
-    ok = await update_artifact(
-        artifact_id,
-        title=payload.title.strip() if payload.title is not None else None,
-        content=payload.content,
-        category_id=payload.category_id,
-    )
+    cid: str | None = None
+    if payload.category_id is not None:
+        cid = payload.category_id.strip()
+        if not cid:
+            raise WsError("category_required", "category_id is required", status_code=400)
+    try:
+        ok = await update_artifact(
+            artifact_id,
+            title=payload.title.strip() if payload.title is not None else None,
+            content=payload.content,
+            category_id=cid,
+        )
+    except ValueError as exc:
+        if str(exc) == "category not found":
+            raise WsError("category_not_found", str(exc), status_code=404) from exc
+        raise WsError("category_required", str(exc), status_code=400) from exc
     if not ok:
         raise WsError("artifact_not_found", "artifact not found", status_code=404)
     return {"updated": True}

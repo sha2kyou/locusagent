@@ -24,10 +24,8 @@ def _excerpt(content: str, max_len: int = 120) -> str:
     return flat[: max_len - 1].rstrip() + "…"
 
 
-def _artifact_link(category_id: str | None) -> str:
-    if category_id:
-        return f"/artifacts/c/{category_id}"
-    return "/artifacts"
+def _artifact_link(category_id: str) -> str:
+    return f"/artifacts/c/{category_id}"
 
 
 async def notify_artifact_saved(art: dict[str, Any]) -> None:
@@ -42,16 +40,18 @@ async def notify_artifact_saved(art: dict[str, Any]) -> None:
     if not title:
         return
 
-    category_id = art.get("category_id")
-    category_name = await get_category_name(str(category_id) if category_id else None)
-    label = category_name or "未分类"
+    category_id = str(art.get("category_id") or "").strip()
+    if not category_id:
+        return
+    category_name = await get_category_name(category_id)
+    label = category_name or "产物"
     body = _excerpt(str(art.get("content") or ""))
     payload = {
         "kind": "success",
         "category": f"保存产物（{label}）",
         "title": title,
         "body": body,
-        "link": _artifact_link(str(category_id) if category_id else None),
+        "link": _artifact_link(category_id),
     }
     headers = {
         "X-Internal-Token": token,

@@ -27,9 +27,11 @@ async def _summarize(args: dict[str, Any]) -> ToolResult:
     from ..core.openai_fields import openai_completion_text
     from ..core.models import resolve_model
 
-    client = get_llm_client()
+    from ..core.auxiliary_completion import create_chat_completion
+
     model = resolve_model("compression")
-    resp = await client.chat.completions.create(
+    resp = await create_chat_completion(
+        get_llm_client(),
         model=model,
         messages=[
             {"role": "system", "content": _DISTILL_SYSTEM_PROMPT},
@@ -37,6 +39,7 @@ async def _summarize(args: dict[str, Any]) -> ToolResult:
         ],
         max_tokens=max_tokens,
         temperature=0.2,
+        retry_log_event="summarize_disable_thinking_retry",
     )
     from ..usage_report import schedule_openai_usage
 

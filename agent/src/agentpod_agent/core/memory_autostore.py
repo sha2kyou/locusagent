@@ -7,7 +7,7 @@ import re
 
 from ..config import get_settings
 from ..memory import add_memory, list_memories
-from .completion_limits import MIN_AUXILIARY_COMPLETION_TOKENS
+from .auxiliary_completion import create_chat_completion
 from .llm import get_llm_client
 from .openai_fields import openai_completion_text
 from ..usage_report import schedule_openai_usage
@@ -66,14 +66,15 @@ async def _extract_memory_candidates(
         "如果没有可保存记忆，返回 {\"memories\":[]}。"
     )
     content = f"用户问题：{query[:500]}\n助手回答：{answer[:1000]}"
-    resp = await client.chat.completions.create(
+    resp = await create_chat_completion(
+        client,
         model=chosen_model,
         messages=[
             {"role": "system", "content": prompt},
             {"role": "user", "content": content},
         ],
-        max_tokens=MIN_AUXILIARY_COMPLETION_TOKENS,
         temperature=0.1,
+        retry_log_event="memory_autostore_disable_thinking_retry",
     )
     schedule_openai_usage(
         usage=resp.usage,
