@@ -9,6 +9,7 @@ from typing import Any
 from ..logging import get_logger
 from ..tools import ToolRegistry
 from .loop import run_chat_loop_stream
+from .stream_health import StreamHealthError
 from .persistence import (
     append_message,
     expire_stale_run_ids,
@@ -271,6 +272,15 @@ async def _worker(
         stream_error = CANCELLED_MARK
         log.info("run_worker_cancelled", run_id=handle.run_id, session_id=handle.session_id)
         await handle.queue.put({"type": ERROR, "message": "已停止生成"})
+    except StreamHealthError as exc:
+        stream_error = str(exc)
+        log.warning(
+            "run_stream_health_abort",
+            run_id=handle.run_id,
+            code=exc.code,
+            error=stream_error,
+        )
+        await handle.queue.put({"type": ERROR, "message": stream_error, "code": exc.code})
     except Exception as exc:
         stream_error = str(exc)
         log.error("run_worker_failed", run_id=handle.run_id, error=stream_error)

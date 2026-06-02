@@ -54,6 +54,24 @@ class Settings(BaseSettings):
     # MCP 工具调用超时（秒）：避免上游插件异常时调用长期挂起
     mcp_call_timeout_seconds: float = Field(default=45.0, alias="MCP_CALL_TIMEOUT_SECONDS")
 
+    # 工具循环护栏（单轮对话内重复失败 / 只读无进展检测）
+    tool_guardrail_warnings_enabled: bool = Field(default=True, alias="TOOL_GUARDRAIL_WARNINGS_ENABLED")
+    tool_guardrail_hard_stop_enabled: bool = Field(default=True, alias="TOOL_GUARDRAIL_HARD_STOP_ENABLED")
+    tool_guardrail_exact_failure_warn_after: int = Field(default=2, alias="TOOL_GUARDRAIL_EXACT_FAILURE_WARN_AFTER")
+    tool_guardrail_exact_failure_block_after: int = Field(default=5, alias="TOOL_GUARDRAIL_EXACT_FAILURE_BLOCK_AFTER")
+    tool_guardrail_same_tool_failure_warn_after: int = Field(
+        default=3, alias="TOOL_GUARDRAIL_SAME_TOOL_FAILURE_WARN_AFTER"
+    )
+    tool_guardrail_same_tool_failure_halt_after: int = Field(
+        default=8, alias="TOOL_GUARDRAIL_SAME_TOOL_FAILURE_HALT_AFTER"
+    )
+    tool_guardrail_no_progress_warn_after: int = Field(default=2, alias="TOOL_GUARDRAIL_NO_PROGRESS_WARN_AFTER")
+    tool_guardrail_no_progress_block_after: int = Field(default=5, alias="TOOL_GUARDRAIL_NO_PROGRESS_BLOCK_AFTER")
+
+    # 流式 LLM：单 chunk 空闲超时（秒）与整段上限（0 表示不限制整段）
+    stream_chunk_timeout_s: float = Field(default=90.0, alias="STREAM_CHUNK_TIMEOUT_S")
+    stream_max_duration_s: float = Field(default=600.0, alias="STREAM_MAX_DURATION_S")
+
 
 @lru_cache
 def get_settings() -> Settings:

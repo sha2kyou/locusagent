@@ -23,6 +23,14 @@ from ..tools import ToolError, ToolRegistry
 from .context import compress_with_report
 from .models import messages_include_images, resolve_model
 from .llm import get_llm_client
+from .stream_health import StreamHealthError, iter_with_stream_health
+from .tool_guardrails import (
+    ToolCallGuardrailController,
+    append_guardrail_guidance,
+    guardrail_block_content,
+    guardrail_config_from_settings,
+    classify_tool_failure,
+)
 from .openai_fields import (
     assistant_message_dict,
     openai_delta_content,
@@ -122,6 +130,10 @@ _TOOL_ROUND_LIMIT_NOTICE = (
 _ARTIFACT_SAVE_LOOP_NOTICE = (
     "你刚完成过一次 artifact_save。请停止继续调用 artifact_save，"
     "直接给用户简短确认结果。"
+)
+_TOOL_GUARDRAIL_HALT_NOTICE = (
+    "工具循环护栏已触发：同一工具路径重复失败或无进展。请停止继续调用工具，"
+    "基于当前已知信息给出最终答复，并说明阻塞原因。"
 )
 
 
@@ -230,37 +242,87 @@ def _normalize_blocked_actions(
     }
 
 
+def _guardrail_skip_result(
+    guardrail: ToolCallGuardrailController,
+    tc: Any,
+) -> dict[str, Any] | None:
+    stop = guardrail.turn_stop_decision
+    if stop is None:
+        return None
+    return {
+        "role": "tool",
+        "tool_call_id": tc.id,
+        "content": guardrail_block_content(stop),
+    }
+
+
 async def _execute_one_tool_call(
     registry: ToolRegistry,
     tc: Any,
     *,
     blocked_actions: set[str] | None = None,
+    guardrail: ToolCallGuardrailController | None = None,
 ) -> dict[str, Any]:
     name = tc.function.name
+    if guardrail is not None:
+        skipped = _guardrail_skip_result(guardrail, tc)
+        if skipped is not None:
+            return skipped
     raw_args = tc.function.arguments or "{}"
     try:
         args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
     except json.JSONDecodeError as exc:
         log.warning("tool_args_parse_failed", tool=name, error=str(exc))
+        content = f"Error: invalid JSON arguments: {exc}"
+        if guardrail is not None:
+            post = guardrail.after_call(name, {}, content, failed=True)
+            content = append_guardrail_guidance(content, post)
         return {
             "role": "tool",
             "tool_call_id": tc.id,
-            "content": f"Error: invalid JSON arguments: {exc}",
+            "content": content,
         }
+    if guardrail is not None:
+        pre = guardrail.before_call(name, args)
+        if not pre.allows_execution:
+            log.warning(
+                "tool_guardrail_block",
+                tool=name,
+                code=pre.code,
+                count=pre.count,
+            )
+            return {
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": guardrail_block_content(pre),
+            }
     action = str(args.get("action", "")).strip().lower()
     if blocked_actions and action in blocked_actions:
+        content = f"Error: action '{action}' is disabled for tool '{name}' in this run"
+        if guardrail is not None:
+            post = guardrail.after_call(name, args, content, failed=True)
+            content = append_guardrail_guidance(content, post)
         return {
             "role": "tool",
             "tool_call_id": tc.id,
-            "content": f"Error: action '{action}' is disabled for tool '{name}' in this run",
+            "content": content,
         }
     try:
         result = await registry.call(name, args)
         log.info("tool_executed", tool=name)
-        return {"role": "tool", "tool_call_id": tc.id, "content": result.to_message()}
+        content = result.to_message()
     except ToolError as exc:
         log.warning("tool_failed", tool=name, error=str(exc))
-        return {"role": "tool", "tool_call_id": tc.id, "content": f"Error: {exc}"}
+        content = f"Error: {exc}"
+    if guardrail is not None:
+        post = guardrail.after_call(
+            name,
+            args,
+            content,
+            failed=classify_tool_failure(name, content),
+        )
+        content = append_guardrail_guidance(content, post)
+    return {"role": "tool", "tool_call_id": tc.id, "content": content}
 
 
 async def _execute_tool_calls(
@@ -268,6 +330,7 @@ async def _execute_tool_calls(
     tool_calls: Iterable[Any],
     *,
     blocked_tool_actions: dict[str, set[str]] | None = None,
+    guardrail: ToolCallGuardrailController | None = None,
 ) -> list[dict[str, Any]]:
     """并行执行同一轮的多个工具调用（gather 保持原顺序）。"""
     calls = list(tool_calls)
@@ -281,6 +344,7 @@ async def _execute_tool_calls(
                 registry,
                 calls[0],
                 blocked_actions=blocked_map.get(tool_name, set()),
+                guardrail=guardrail,
             )
         ]
     return list(
@@ -293,6 +357,7 @@ async def _execute_tool_calls(
                         str(getattr(tc.function, "name", "")).strip().lower(),
                         set(),
                     ),
+                    guardrail=guardrail,
                 )
                 for tc in calls
             )
@@ -420,6 +485,7 @@ async def run_chat_loop(
     tool_rounds_made = 0
     artifact_save_rounds_made = 0
     final_text = ""
+    guardrail = ToolCallGuardrailController(guardrail_config_from_settings(settings))
 
     for round_idx in range(1, max_rounds + 1):
         working, compression_report = await compress_with_report(
@@ -530,8 +596,32 @@ async def run_chat_loop(
                 registry,
                 stub_calls,
                 blocked_tool_actions=blocked_actions,
+                guardrail=guardrail,
             )
             working.extend(tool_results)
+            stop = guardrail.turn_stop_decision
+            if stop is not None and stop.should_stop_turn:
+                halt = stop
+                log.warning("tool_guardrail_halt", code=halt.code, tool=halt.tool_name, count=halt.count)
+                final_msg, final_text, final_reasoning, more_tokens = await _finalize_without_tools(
+                    client=client,
+                    model=_round_model(working),
+                    working_messages=working + [{"role": "system", "content": _TOOL_GUARDRAIL_HALT_NOTICE}],
+                    extra=extra,
+                    session_id=session_id,
+                )
+                total_tokens += more_tokens
+                working.append(final_msg)
+                return (
+                    LoopResult(
+                        final_text=final_text or halt.message,
+                        rounds=round_idx,
+                        total_tokens=total_tokens,
+                        tool_calls_made=tool_calls_made,
+                        final_reasoning=final_reasoning,
+                    ),
+                    working,
+                )
             if _all_calls_are(stub_calls, "artifact_save"):
                 artifact_save_rounds_made += 1
             # clarify 是终结性工具：执行后立即返回，不再续跑下一轮
@@ -648,6 +738,10 @@ async def run_chat_loop_stream(
     tool_rounds_made = 0
     artifact_save_rounds_made = 0
     final_text = ""
+    guardrail = ToolCallGuardrailController(guardrail_config_from_settings(settings))
+    stream_max_duration = (
+        settings.stream_max_duration_s if settings.stream_max_duration_s > 0 else None
+    )
 
     for round_idx in range(1, max_rounds + 1):
         working, compression_report = await compress_with_report(
@@ -711,46 +805,55 @@ async def run_chat_loop_stream(
         finish_reason: str | None = None
         round_usage: Any = None
 
-        async for event in stream:
-            if event.usage:
-                round_usage = event.usage
-                total_tokens += event.usage.total_tokens or 0
-            if not event.choices:
-                continue
-            choice = event.choices[0]
-            delta = choice.delta
-            if delta is not None:
-                reasoning_piece = openai_delta_reasoning(delta)
-                if reasoning_piece:
-                    accum_reasoning += reasoning_piece
-                    yield {"type": "reasoning_delta", "content": reasoning_piece}
-                content_piece = openai_delta_content(delta)
-                if content_piece:
-                    accum_content += content_piece
-                    yield {"type": "delta", "content": content_piece}
-                tcs = getattr(delta, "tool_calls", None)
-                if tcs:
-                    for tc_delta in tcs:
-                        idx = tc_delta.index
-                        bucket = accum_tool_calls.setdefault(
-                            idx,
-                            {
-                                "id": "",
-                                "type": "function",
-                                "function": {"name": "", "arguments": ""},
-                            },
-                        )
-                        if tc_delta.id:
-                            bucket["id"] = tc_delta.id
-                        if tc_delta.type:
-                            bucket["type"] = tc_delta.type
-                        if tc_delta.function:
-                            if tc_delta.function.name:
-                                bucket["function"]["name"] = tc_delta.function.name
-                            if tc_delta.function.arguments:
-                                bucket["function"]["arguments"] += tc_delta.function.arguments
-            if choice.finish_reason:
-                finish_reason = choice.finish_reason
+        try:
+            monitored = iter_with_stream_health(
+                stream,
+                chunk_timeout_s=settings.stream_chunk_timeout_s,
+                max_total_s=stream_max_duration,
+            )
+            async for event in monitored:
+                if event.usage:
+                    round_usage = event.usage
+                    total_tokens += event.usage.total_tokens or 0
+                if not event.choices:
+                    continue
+                choice = event.choices[0]
+                delta = choice.delta
+                if delta is not None:
+                    reasoning_piece = openai_delta_reasoning(delta)
+                    if reasoning_piece:
+                        accum_reasoning += reasoning_piece
+                        yield {"type": "reasoning_delta", "content": reasoning_piece}
+                    content_piece = openai_delta_content(delta)
+                    if content_piece:
+                        accum_content += content_piece
+                        yield {"type": "delta", "content": content_piece}
+                    tcs = getattr(delta, "tool_calls", None)
+                    if tcs:
+                        for tc_delta in tcs:
+                            idx = tc_delta.index
+                            bucket = accum_tool_calls.setdefault(
+                                idx,
+                                {
+                                    "id": "",
+                                    "type": "function",
+                                    "function": {"name": "", "arguments": ""},
+                                },
+                            )
+                            if tc_delta.id:
+                                bucket["id"] = tc_delta.id
+                            if tc_delta.type:
+                                bucket["type"] = tc_delta.type
+                            if tc_delta.function:
+                                if tc_delta.function.name:
+                                    bucket["function"]["name"] = tc_delta.function.name
+                                if tc_delta.function.arguments:
+                                    bucket["function"]["arguments"] += tc_delta.function.arguments
+                if choice.finish_reason:
+                    finish_reason = choice.finish_reason
+        except StreamHealthError as exc:
+            log.warning("stream_health_abort", code=exc.code, error=str(exc), round=round_idx)
+            raise
 
         schedule_openai_usage(
             usage=round_usage,
@@ -838,6 +941,7 @@ async def run_chat_loop_stream(
                 registry,
                 stub_calls,
                 blocked_tool_actions=blocked_actions,
+                guardrail=guardrail,
             )
             for stub, r in zip(stub_calls, tool_results):
                 preview = r.get("content") or ""
@@ -849,6 +953,37 @@ async def run_chat_loop_stream(
                     "content": r.get("content") or "",
                 }
             working.extend(tool_results)
+            stop = guardrail.turn_stop_decision
+            if stop is not None and stop.should_stop_turn:
+                halt = stop
+                log.warning(
+                    "tool_guardrail_halt",
+                    code=halt.code,
+                    tool=halt.tool_name,
+                    count=halt.count,
+                    stream=True,
+                )
+                final_msg, capped_text, capped_reasoning, more_tokens = await _finalize_without_tools(
+                    client=client,
+                    model=_round_model(working),
+                    working_messages=working + [{"role": "system", "content": _TOOL_GUARDRAIL_HALT_NOTICE}],
+                    extra=extra,
+                    session_id=session_id,
+                )
+                total_tokens += more_tokens
+                working.append(final_msg)
+                if capped_text:
+                    yield {"type": "delta", "content": capped_text}
+                final_text = capped_text or halt.message
+                yield {
+                    "type": "done",
+                    "final_text": final_text,
+                    "final_reasoning": capped_reasoning,
+                    "rounds": round_idx,
+                    "total_tokens": total_tokens,
+                    "tool_calls_made": tool_calls_made,
+                }
+                return
             if _all_calls_are(stub_calls, "artifact_save"):
                 artifact_save_rounds_made += 1
             # clarify 是终结性工具：抛出选项卡片后立即收尾，不再续跑下一轮，等待用户选择
