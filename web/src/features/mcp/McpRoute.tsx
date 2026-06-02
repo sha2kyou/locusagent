@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Pencil, PlugZap, RefreshCw, Trash2 } from "lucide-react";
+import { Link2, Loader2, Network, Pencil, RefreshCw, Trash2, Unlink2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/field";
@@ -260,8 +260,8 @@ export function McpRoute() {
                 <ListCard key={s.name} className="p-0 overflow-hidden">
                   <div className="flex items-start justify-between gap-3 px-4 py-3">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{s.name}</span>
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <span className="min-w-0 font-medium">{s.name}</span>
                         <Badge variant={s.connected ? "success" : "danger"}>
                           <Dot className={s.connected ? "bg-success" : "bg-destructive"} />
                           {s.connected ? "在线" : "离线"}
@@ -279,10 +279,24 @@ export function McpRoute() {
                     </div>
                     <div className="flex shrink-0 gap-1">
                       {s.oauth_required && !s.oauth_connected ? (
-                        <Button variant="outline" size="sm" onClick={() => startOAuth(s)}>连接</Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => startOAuth(s)}
+                          aria-label="OAuth 连接"
+                        >
+                          <Link2 />
+                        </Button>
                       ) : null}
                       {s.oauth_required && s.oauth_connected ? (
-                        <Button variant="ghost" size="sm" onClick={() => disconnectOAuth(s)}>断开</Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => disconnectOAuth(s)}
+                          aria-label="断开 OAuth"
+                        >
+                          <Unlink2 />
+                        </Button>
                       ) : null}
                       <Button
                         variant="ghost"
@@ -291,7 +305,7 @@ export function McpRoute() {
                         onClick={() => testServer(s)}
                         aria-label="测试连接"
                       >
-                        {testing === s.name ? <Loader2 className="size-4 animate-spin" /> : <PlugZap />}
+                        {testing === s.name ? <Loader2 className="size-4 animate-spin" /> : <Network />}
                       </Button>
                       <Button variant="ghost" size="icon-sm" onClick={() => reconnect(s)} aria-label="重连"><RefreshCw /></Button>
                       <Button variant="ghost" size="icon-sm" onClick={() => startEdit(s)} aria-label="编辑"><Pencil /></Button>
