@@ -54,7 +54,7 @@ cmd="${1:-}"
 case "$cmd" in
   host)
     export DOCKER_BUILDKIT=1
-    docker compose build --progress=plain "host"
+    docker compose --progress=plain build "host"
     docker compose up -d --no-deps "host"
     ;;
   agent)

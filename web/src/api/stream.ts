@@ -1,5 +1,9 @@
 import type { ChatChunk } from "./types";
 import { ApiError, getWorkspaceId, redirectToLogin } from "./client";
+import {
+  STREAM_MAX_RETRIES,
+  userMessageFromContainerError,
+} from "@/lib/agent-status-copy";
 
 export interface ChatRequestBody {
   messages: {
@@ -23,7 +27,7 @@ export interface StreamHandlers {
   onRetry?: (attempt: number, retryAfterSec: number) => void;
 }
 
-const MAX_RETRIES = 5;
+const MAX_RETRIES = STREAM_MAX_RETRIES;
 
 async function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
   if (!signal) {
@@ -90,9 +94,11 @@ export async function streamChatCompletion(
     if (!res.ok || !res.body) {
       const data = await res.json().catch(() => null);
       const err = (data as { error?: { code?: string; message?: string; detail?: unknown } })?.error;
-      throw new ApiError(err?.message || `请求失败 (${res.status})`, {
+      const code = err?.code;
+      const friendly = userMessageFromContainerError(code, res.status);
+      throw new ApiError(friendly || err?.message || `请求失败 (${res.status})`, {
         status: res.status,
-        code: err?.code,
+        code,
         detail: err?.detail,
         data,
       });

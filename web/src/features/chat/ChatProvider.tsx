@@ -18,7 +18,9 @@ import {
   listSessions,
 } from "@/api/endpoints";
 import type { SessionMeta } from "@/api/types";
+import { ApiError } from "@/api/client";
 import { streamChatCompletion } from "@/api/stream";
+import { formatStreamRetryToast, userMessageFromContainerError } from "@/lib/agent-status-copy";
 import { useToast } from "@/components/ui/toast";
 import { useAuth, type AgentReadiness } from "@/app/auth";
 import { withWorkspacePrefix } from "@/app/workspace-route";
@@ -356,7 +358,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       attachmentIds?: string[];
     },
   ) => {
-    if (readiness.reason === "paused" || readiness.reason === "stopped") {
+    const wakingOnSend =
+      readiness.reason === "paused" || readiness.reason === "stopped";
+    if (wakingOnSend) {
       void reload();
     }
     abortChat();
@@ -468,13 +472,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             }
           },
           onRetry: (attempt, sec) => {
-            toast(`Agent 启动中，${sec}s 后重试（${attempt}）`, "info");
+            toast(formatStreamRetryToast(attempt, sec, wakingOnSend), "info");
           },
         },
         { signal: ac.signal },
       );
     } catch (e) {
-      const err = e as { code?: string; message?: string };
+      const err = e as { code?: string; message?: string; status?: number };
       if (ac.signal.aborted) {
         if (firstToken) updateLastAssistant((p) => appendText(p, "（已停止生成）"));
       } else if (err.code === "run_in_progress") {
@@ -490,7 +494,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         toast(tip, "error");
         setLastErrored(true);
       } else {
-        updateLastAssistant((p) => p, err.message || "请求失败");
+        const status = e instanceof ApiError ? e.status : err.status;
+        const code = e instanceof ApiError ? e.code : err.code;
+        const friendly = userMessageFromContainerError(code, status);
+        const message =
+          friendly || (e instanceof Error ? e.message : undefined) || "请求失败";
+        updateLastAssistant((p) => p, message);
         setLastErrored(true);
       }
     } finally {

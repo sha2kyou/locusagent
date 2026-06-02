@@ -53,9 +53,16 @@ CREATE TABLE IF NOT EXISTS messages (
     tool_call_id  TEXT,
     run_id        TEXT,
     tokens        INTEGER,
+    embedding     BLOB,
+    context_state TEXT NOT NULL DEFAULT 'active',
+    archive_batch_id TEXT,
+    archived_at   TIMESTAMP,
+    embedding_state TEXT NOT NULL DEFAULT 'pending',
     created_at    TIMESTAMP NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, id);
+CREATE INDEX IF NOT EXISTS idx_messages_context ON messages(session_id, context_state, id);
+CREATE INDEX IF NOT EXISTS idx_messages_embed_state ON messages(embedding_state);
 
 CREATE TABLE IF NOT EXISTS attachments (
     id               TEXT PRIMARY KEY,
@@ -371,102 +378,19 @@ def init_db() -> None:
                 c.execute(stmt)
         # 兼容历史坏触发器：先清掉，避免迁移期间 UPDATE 触发 SQL logic error。
         _drop_fts_triggers(c)
-        # 兼容老库：若 memory.anchor 不存在则补充（SQLite 无 IF NOT EXISTS 列语法）
-        cols = c.execute("PRAGMA table_info(memory)").fetchall()
-        col_names = {str(r["name"]) for r in cols}
-        if "anchor" not in col_names:
-            c.execute("ALTER TABLE memory ADD COLUMN anchor TEXT NOT NULL DEFAULT 'experience'")
         c.execute("CREATE INDEX IF NOT EXISTS idx_memory_anchor ON memory(anchor)")
-        msg_cols = {str(r["name"]) for r in c.execute("PRAGMA table_info(messages)").fetchall()}
-        if "tool_call_id" not in msg_cols:
-            c.execute("ALTER TABLE messages ADD COLUMN tool_call_id TEXT")
-        if "run_id" not in msg_cols:
-            c.execute("ALTER TABLE messages ADD COLUMN run_id TEXT")
-        sess_cols = {str(r["name"]) for r in c.execute("PRAGMA table_info(sessions)").fetchall()}
-        if "system_prompt" not in sess_cols:
-            c.execute("ALTER TABLE sessions ADD COLUMN system_prompt TEXT")
-        art_cols = {str(r["name"]) for r in c.execute("PRAGMA table_info(artifacts)").fetchall()}
-        if art_cols and "type" not in art_cols:
-            c.execute("ALTER TABLE artifacts ADD COLUMN type TEXT NOT NULL DEFAULT 'text'")
-        if art_cols and "embedding" not in art_cols:
-            c.execute("ALTER TABLE artifacts ADD COLUMN embedding BLOB")
-        if art_cols and "embedding_state" not in art_cols:
-            c.execute(
-                "ALTER TABLE artifacts ADD COLUMN embedding_state TEXT NOT NULL DEFAULT 'pending'"
-            )
-        c.execute(
-            "CREATE INDEX IF NOT EXISTS idx_artifacts_embed_state ON artifacts(embedding_state)"
-        )
-        if art_cols:
+        if _table_exists(c, "artifacts"):
             deleted = c.execute(
                 "DELETE FROM artifacts WHERE category_id IS NULL "
                 "OR category_id NOT IN (SELECT id FROM artifact_categories)"
             ).rowcount
             if deleted:
                 log.info("artifacts_orphans_purged", count=deleted)
-        cat_cols = {
-            str(r["name"]) for r in c.execute("PRAGMA table_info(artifact_categories)").fetchall()
-        }
-        if cat_cols and "description" not in cat_cols:
-            c.execute(
-                "ALTER TABLE artifact_categories ADD COLUMN description TEXT NOT NULL DEFAULT ''"
-            )
-        env_cols = {str(r["name"]) for r in c.execute("PRAGMA table_info(env_vars)").fetchall()}
-        if env_cols and "description" not in env_cols:
-            c.execute("ALTER TABLE env_vars ADD COLUMN description TEXT NOT NULL DEFAULT ''")
-        if env_cols and "embedding" not in env_cols:
-            c.execute("ALTER TABLE env_vars ADD COLUMN embedding BLOB")
-        if env_cols and "embedding_state" not in env_cols:
-            c.execute(
-                "ALTER TABLE env_vars ADD COLUMN embedding_state TEXT NOT NULL DEFAULT 'pending'"
-            )
-        if env_cols and "updated_at" not in env_cols:
-            c.execute(
-                "ALTER TABLE env_vars ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT (datetime('now'))"
-            )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_env_vars_name ON env_vars(name)")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_env_vars_embed_state ON env_vars(embedding_state)")
-        attachment_cols = {
-            str(r["name"]) for r in c.execute("PRAGMA table_info(attachments)").fetchall()
-        }
-        if attachment_cols and "object_key" not in attachment_cols:
-            c.execute("ALTER TABLE attachments ADD COLUMN object_key TEXT")
-        if attachment_cols and "object_etag" not in attachment_cols:
-            c.execute("ALTER TABLE attachments ADD COLUMN object_etag TEXT")
-        if attachment_cols and "sha256" not in attachment_cols:
-            c.execute("ALTER TABLE attachments ADD COLUMN sha256 TEXT")
-        if msg_cols and "embedding" not in msg_cols:
-            c.execute("ALTER TABLE messages ADD COLUMN embedding BLOB")
-        if msg_cols and "context_state" not in msg_cols:
-            c.execute(
-                "ALTER TABLE messages ADD COLUMN context_state TEXT NOT NULL DEFAULT 'active'"
-            )
-        if msg_cols and "archive_batch_id" not in msg_cols:
-            c.execute("ALTER TABLE messages ADD COLUMN archive_batch_id TEXT")
-        if msg_cols and "archived_at" not in msg_cols:
-            c.execute("ALTER TABLE messages ADD COLUMN archived_at TIMESTAMP")
         c.execute(
-            "CREATE INDEX IF NOT EXISTS idx_messages_context "
-            "ON messages(session_id, context_state, id)"
+            "UPDATE messages SET embedding_state='skipped' "
+            "WHERE embedding_state IN ('pending', 'failed') "
+            "AND role NOT IN ('user', 'assistant')"
         )
-        if msg_cols and "reasoning_content" not in msg_cols:
-            c.execute(
-                "ALTER TABLE messages ADD COLUMN reasoning_content TEXT NOT NULL DEFAULT ''"
-            )
-        if msg_cols and "embedding_state" not in msg_cols:
-            c.execute(
-                "ALTER TABLE messages ADD COLUMN embedding_state TEXT NOT NULL DEFAULT 'pending'"
-            )
-            c.execute(
-                "UPDATE messages SET embedding_state='skipped' "
-                "WHERE role NOT IN ('user', 'assistant')"
-            )
-        else:
-            c.execute(
-                "UPDATE messages SET embedding_state='skipped' "
-                "WHERE embedding_state IN ('pending', 'failed') "
-                "AND role NOT IN ('user', 'assistant')"
-            )
         c.execute(
             "UPDATE messages SET embedding_state='pending' WHERE embedding_state='failed'"
         )
@@ -475,9 +399,6 @@ def init_db() -> None:
         )
         c.execute(
             "UPDATE artifacts SET embedding_state='pending' WHERE embedding_state='failed'"
-        )
-        c.execute(
-            "CREATE INDEX IF NOT EXISTS idx_messages_embed_state ON messages(embedding_state)"
         )
         _init_messages_fts(c)
         _init_memory_fts(c)

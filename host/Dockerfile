@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # ---- frontend (Vite → host/.../web/spa) ----
 FROM node:22-alpine AS web
 

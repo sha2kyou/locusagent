@@ -13,7 +13,6 @@ import secrets
 from ..config import get_settings
 
 API_KEY_PREFIX = "apod_"
-LEGACY_API_KEY_PREFIX = "gwzz_"
 
 
 def generate_agent_api_key() -> str:

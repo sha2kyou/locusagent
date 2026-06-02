@@ -1,7 +1,11 @@
 import type { ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/app/auth";
-import { PROVISION_FAILED_HINT, ProvisionRetryButton } from "@/components/ProvisionRetry";
+import { ProvisionRetryButton } from "@/components/ProvisionRetry";
+import {
+  AGENT_STARTING_READY_GATE,
+  PROVISION_FAILED_HINT,
+} from "@/lib/agent-status-copy";
 
 /** 工作区数据页的就绪门：容器未就绪时显示提示而非空列表 */
 export function ReadyGate({ children }: { children: ReactNode }) {
@@ -27,7 +31,7 @@ export function ReadyGate({ children }: { children: ReactNode }) {
     return (
       <div className="flex flex-col items-center gap-2 py-14 text-center text-sm text-muted-foreground">
         <Loader2 className="size-5 animate-spin" />
-        Agent 启动中，请稍候…
+        {AGENT_STARTING_READY_GATE}
       </div>
     );
   }

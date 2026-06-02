@@ -2,7 +2,7 @@
 
 技能正文与记忆都会被注入冻结 system prompt，是 prompt-injection / 数据外泄的天然通道。
 本模块以 LLM 语义审查为主，仅对极少数"无歧义"的明文密钥做廉价子串预检。
-失败安全：LLM 审查异常时放行并记录日志（安全门是纵深防御，非唯一防线）。
+LLM 审查异常或解析失败时拒绝写入（fail-closed）。
 """
 
 from __future__ import annotations
@@ -86,19 +86,19 @@ async def review_write(content: str, *, kind: str, source: str = "model") -> Gua
         schedule_openai_usage(usage=resp.usage, scenario="approval", model=approval_model)
     except Exception as exc:
         log.warning("write_guard_llm_failed", kind=kind, source=source, error=str(exc))
-        return GuardResult(allowed=True, reason="guard llm unavailable, allowed")
+        return GuardResult(allowed=False, reason="guard llm unavailable, blocked")
 
     raw = openai_completion_text(resp)
     raw = raw.strip()
     if not raw:
-        return GuardResult(allowed=True, reason="empty review, allowed")
+        return GuardResult(allowed=False, reason="empty review, blocked")
     try:
         parsed = json.loads(raw)
-        allow = bool(parsed.get("allow", True))
+        allow = bool(parsed.get("allow", False))
         reason = str(parsed.get("reason") or "")
     except json.JSONDecodeError:
         log.warning("write_guard_parse_failed", kind=kind, raw=raw[:200])
-        return GuardResult(allowed=True, reason="review parse failed, allowed")
+        return GuardResult(allowed=False, reason="review parse failed, blocked")
 
     if not allow:
         log.warning("write_guard_blocked", kind=kind, source=source, reason=reason)

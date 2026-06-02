@@ -35,6 +35,7 @@ SESSION_ONLY_PREFIXES = (
     "/api/me",
     "/api/settings/",
     "/api/notifications/",
+    "/api/scheduled-tasks",
 )
 
 PUBLIC_PATHS = {

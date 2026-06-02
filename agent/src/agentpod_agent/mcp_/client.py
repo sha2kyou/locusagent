@@ -51,6 +51,7 @@ class MCPManager:
         self._registered_tool_names: dict[str, list[str]] = {}
         self._tool_catalog: dict[str, list[dict[str, Any]]] = {}
         self._reconnect_locks: dict[str, asyncio.Lock] = {}
+        self._tools_lock = asyncio.Lock()
         self._last_errors: dict[str, str] = {}
 
     async def start(self) -> None:
@@ -104,58 +105,59 @@ class MCPManager:
             raise
 
     async def _register_tools(self, server_name: str, session: ClientSession) -> None:
-        listed = await session.list_tools()
-        names: list[str] = []
-        catalog: list[dict[str, Any]] = []
-        category = mcp_tool_category(server_name, self._workspace_id)
-        for tool_def in listed.tools:
-            full_name = mcp_tool_full_name(server_name, tool_def.name, self._workspace_id)
-            description = tool_def.description or f"MCP tool {tool_def.name}@{server_name}"
-            schema = tool_def.inputSchema or {"type": "object", "properties": {}}
-            schema_summary = _schema_summary(schema)
+        async with self._tools_lock:
+            listed = await session.list_tools()
+            names: list[str] = []
+            catalog: list[dict[str, Any]] = []
+            category = mcp_tool_category(server_name, self._workspace_id)
+            for tool_def in listed.tools:
+                full_name = mcp_tool_full_name(server_name, tool_def.name, self._workspace_id)
+                description = tool_def.description or f"MCP tool {tool_def.name}@{server_name}"
+                schema = tool_def.inputSchema or {"type": "object", "properties": {}}
+                schema_summary = _schema_summary(schema)
 
-            async def _handler(
-                args: dict[str, Any],
-                _server=server_name,
-                _name=tool_def.name,
-                _mgr=self,
-            ) -> ToolResult:
-                try:
-                    result = await _mgr._call_tool_with_retry(_server, _name, args)
-                except Exception as exc:
-                    raise ToolError(f"mcp call failed: {exc}") from exc
-                if getattr(result, "isError", False):
-                    raise ToolError(_extract_text(result))
-                return ToolResult(content=_extract_text(result))
+                async def _handler(
+                    args: dict[str, Any],
+                    _server=server_name,
+                    _name=tool_def.name,
+                    _mgr=self,
+                ) -> ToolResult:
+                    try:
+                        result = await _mgr._call_tool_with_retry(_server, _name, args)
+                    except Exception as exc:
+                        raise ToolError(f"mcp call failed: {exc}") from exc
+                    if getattr(result, "isError", False):
+                        raise ToolError(_extract_text(result))
+                    return ToolResult(content=_extract_text(result))
 
-            tool_registry.register(
-                Tool(
-                    name=full_name,
-                    description=description,
-                    parameters=schema,
-                    handler=_handler,
-                    enabled=is_mcp_server_enabled(server_name),
-                    category=category,
+                tool_registry.register(
+                    Tool(
+                        name=full_name,
+                        description=description,
+                        parameters=schema,
+                        handler=_handler,
+                        enabled=is_mcp_server_enabled(server_name),
+                        category=category,
+                    )
                 )
+                names.append(full_name)
+                catalog.append(
+                    {
+                        "name": tool_def.name,
+                        "full_name": full_name,
+                        "description": description,
+                        "input_schema": schema,
+                        "schema_summary": schema_summary,
+                    }
+                )
+            self._registered_tool_names[server_name] = names
+            self._tool_catalog[server_name] = catalog
+            log.info(
+                "mcp_tools_registered",
+                server=server_name,
+                workspace_id=self._workspace_id,
+                count=len(listed.tools),
             )
-            names.append(full_name)
-            catalog.append(
-                {
-                    "name": tool_def.name,
-                    "full_name": full_name,
-                    "description": description,
-                    "input_schema": schema,
-                    "schema_summary": schema_summary,
-                }
-            )
-        self._registered_tool_names[server_name] = names
-        self._tool_catalog[server_name] = catalog
-        log.info(
-            "mcp_tools_registered",
-            server=server_name,
-            workspace_id=self._workspace_id,
-            count=len(listed.tools),
-        )
 
     async def publish_tools_to_registry(self) -> None:
         """工作区切回时，把已连接 session 的工具重新挂到全局 registry。"""
@@ -319,10 +321,12 @@ class MCPManager:
             await stack.aclose()
 
     async def remove_server(self, server_name: str) -> bool:
-        tool_names = self._registered_tool_names.pop(server_name, [])
-        for name in tool_names:
-            tool_registry.unregister(name)
-        self._tool_catalog.pop(server_name, None)
+        tool_names: list[str] = []
+        async with self._tools_lock:
+            tool_names = self._registered_tool_names.pop(server_name, [])
+            for name in tool_names:
+                tool_registry.unregister(name)
+            self._tool_catalog.pop(server_name, None)
         self._sessions.pop(server_name, None)
         stack = self._stacks.pop(server_name, None)
         if stack is not None:

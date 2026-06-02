@@ -13,11 +13,17 @@ import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { useImeEnterGuard } from "@/lib/ime-enter";
 import { useCopy } from "@/lib/useCopy";
+import { ProvisionRetryButton } from "@/components/ProvisionRetry";
 import {
+  AGENT_COMPOSER_FAILED,
+  AGENT_COMPOSER_NOT_READY,
+  AGENT_COMPOSER_PLACEHOLDER,
+  AGENT_PAUSED,
+  AGENT_STARTING,
+  AGENT_STOPPED,
   PROVISION_FAILED_HINT,
   PROVISION_FAILED_STATUS,
-  ProvisionRetryButton,
-} from "@/components/ProvisionRetry";
+} from "@/lib/agent-status-copy";
 import { Markdown, ThinkingBlock } from "./Markdown";
 import type { ChatMessage } from "./model";
 import { ToolPartView } from "./ToolEvent";
@@ -124,9 +130,9 @@ function AgentStatusBar() {
   }
 
   const config = {
-    creating: { text: "Agent 正在启动，请稍候…", cls: "border-warning/30 bg-warning/10 text-warning", pulse: true },
-    paused: { text: "Agent 已休眠，发送消息将自动唤醒。", cls: "border-border bg-surface/60 text-muted-foreground", pulse: false },
-    stopped: { text: "Agent 已停止，发送消息将重新启动。", cls: "border-border bg-surface/60 text-muted-foreground", pulse: false },
+    creating: { text: AGENT_STARTING, cls: "border-warning/30 bg-warning/10 text-warning", pulse: true },
+    paused: { text: AGENT_PAUSED, cls: "border-border bg-surface/60 text-muted-foreground", pulse: false },
+    stopped: { text: AGENT_STOPPED, cls: "border-border bg-surface/60 text-muted-foreground", pulse: false },
   }[r];
 
   return (
@@ -235,10 +241,10 @@ function Composer() {
           onPaste={onPaste}
           placeholder={
             failed
-              ? "Agent 部署失败，暂不可发送消息…"
+              ? AGENT_COMPOSER_FAILED
               : notReady
-                ? "Agent 未就绪，请稍候…"
-                : "给 Agent 发送消息…"
+                ? AGENT_COMPOSER_NOT_READY
+                : AGENT_COMPOSER_PLACEHOLDER
           }
           className="max-h-48 flex-1 resize-none bg-transparent py-1.5 text-sm outline-none placeholder:text-muted-foreground"
         />

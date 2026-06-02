@@ -5,9 +5,10 @@ import { useAuth } from "@/app/auth";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 
-export const PROVISION_FAILED_STATUS = "Agent 部署失败，请联系管理员检查服务端配置。";
-
-export const PROVISION_FAILED_HINT = `${PROVISION_FAILED_STATUS}修复后可重试。`;
+export {
+  PROVISION_FAILED_HINT,
+  PROVISION_FAILED_STATUS,
+} from "@/lib/agent-status-copy";
 
 export function useProvisionRetry() {
   const { reload } = useAuth();

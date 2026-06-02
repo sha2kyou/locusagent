@@ -2,26 +2,67 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+
 from ..artifacts import list_categories
 from ..config import get_settings
 from ..memory import list_memories
 from ..skills import list_skills
-from ..tool_settings import is_skill_enabled
+from ..logging import get_logger
+from ..tool_settings import is_skill_enabled, load_tool_settings
+from ..tools import registry as tool_registry
+from ..workspace import get_workspace_id
 from .persistence import get_session_system_prompt, set_session_system_prompt
+
+log = get_logger("system_prompt")
 
 _SNAPSHOT_MEMORY_LIMIT = 30
 # 变更 build_frozen_system_prompt 模板时递增，使旧 session 缓存自动失效。
-FROZEN_SYSTEM_PROMPT_VERSION = 2
-_CACHE_PREFIX = f"agentpod:sp:v{FROZEN_SYSTEM_PROMPT_VERSION}:\n"
+FROZEN_SYSTEM_PROMPT_VERSION = 3
+_CACHE_PREFIX = f"agentpod:sp:v{FROZEN_SYSTEM_PROMPT_VERSION}:"
 
 
-def _wrap_system_prompt_cache(prompt: str) -> str:
-    return f"{_CACHE_PREFIX}{prompt}"
+def _format_available_tools() -> str:
+    tools = tool_registry.list(workspace_id=get_workspace_id())
+    return ", ".join(sorted(t.name for t in tools))
 
 
-def _unwrap_system_prompt_cache(cached: str) -> str | None:
-    if cached.startswith(_CACHE_PREFIX):
-        return cached[len(_CACHE_PREFIX) :]
+async def _compute_snapshot_fingerprint() -> str:
+    tool_settings = load_tool_settings()
+    enabled_tools = sorted(t.name for t in tool_registry.list(workspace_id=get_workspace_id()))
+    skills = sorted(
+        f"{s.name}:{(s.description or '').strip()}"
+        for s in list_skills()
+        if is_skill_enabled(s.name)
+    )
+    category_rows = await list_categories()
+    categories = sorted(
+        f"{str(c.get('name') or '').strip()}:{str(c.get('description') or '').strip()}"
+        for c in category_rows
+        if str(c.get("name") or "").strip()
+    )
+    memories = await list_memories(limit=_SNAPSHOT_MEMORY_LIMIT)
+    memory_lines = sorted(str(m.get("content") or "").strip() for m in memories if m.get("content"))
+    payload = {
+        "tools": enabled_tools,
+        "tool_settings": tool_settings.to_dict(),
+        "skills": skills,
+        "categories": categories,
+        "memory": memory_lines,
+    }
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+    return digest[:16]
+
+
+def _wrap_system_prompt_cache(prompt: str, fingerprint: str) -> str:
+    return f"{_CACHE_PREFIX}{fingerprint}:\n{prompt}"
+
+
+def _unwrap_system_prompt_cache(cached: str, fingerprint: str) -> str | None:
+    expected_prefix = f"{_CACHE_PREFIX}{fingerprint}:"
+    if cached.startswith(expected_prefix):
+        return cached[len(expected_prefix) + 1 :]
     return None
 
 
@@ -43,12 +84,14 @@ async def _build_memory_snapshot() -> list[str]:
 async def build_frozen_system_prompt() -> str:
     skills = [s for s in list_skills() if is_skill_enabled(s.name)]
     settings = get_settings()
+    tool_names = _format_available_tools()
     pieces = [
         f"You are an AI agent operating in a sandboxed container for user {settings.user_id}.",
-        "Use the provided tools when appropriate. Available tools: web_search, web_extract, memory, env_vars, skill_view, skill_manage, manage_workspace, session_recall, clarify, artifact_category_create, artifact_save, artifact_recall, scheduled_task_view, scheduled_task_manage, get_current_user.",
+        f"Use the provided tools when appropriate. Available tools: {tool_names}.",
         "When a direction or preference would materially shape the output (e.g. naming, design style, scope, tech choice), ask the user via clarify{question, choices} (at most 3 options) before proceeding. Ask only ONE question per turn: call clarify at most once per turn, never in parallel; if several things need clarifying, ask them one at a time across turns. After calling clarify, end your turn immediately with no further output. Skip clarify when any reasonable choice is equally fine, or the user explicitly asks you to just proceed.",
-        "Workspace files live under /data/workspace; skill files live under /data/skills.",
-        "Do not perform direct filesystem operations. When file operations are required, use manage_workspace.",
+        "Workspace files live under workspace/ relative to the container data directory; skill files live under /data/skills.",
+        "For file operations within the workspace, use read_file, search_files, write_file, and patch.",
+        "Use manage_workspace for MCP server configuration and workspace summary.",
         "The user cannot directly retrieve container/server files from the web UI.",
         "Deliver outputs directly in chat as inline text or code blocks unless the user explicitly asks to save, export, or archive.",
         "A compact skills catalog is listed below. When a skill is relevant to the current task, call skill_view{name} to load its full body on demand; do not assume its content.",
@@ -86,11 +129,12 @@ async def build_frozen_system_prompt() -> str:
 
 
 async def get_or_create_system_prompt(session_id: str) -> str:
+    fingerprint = await _compute_snapshot_fingerprint()
     cached = await get_session_system_prompt(session_id)
     if cached:
-        body = _unwrap_system_prompt_cache(cached)
+        body = _unwrap_system_prompt_cache(cached, fingerprint)
         if body is not None:
             return body
     prompt = await build_frozen_system_prompt()
-    await set_session_system_prompt(session_id, _wrap_system_prompt_cache(prompt))
+    await set_session_system_prompt(session_id, _wrap_system_prompt_cache(prompt, fingerprint))
     return prompt

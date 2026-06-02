@@ -30,6 +30,9 @@ async def ensure_workspace_runtime(workspace_id: str) -> None:
         if not same_workspace:
             ensure_workspace_storage_initialized(workspace_id)
             init_db()
+            removed = tool_registry.unregister_mcp_tools_outside_workspace(workspace_id)
+            if removed:
+                log.info("mcp_tools_purged_for_workspace_switch", removed=removed, workspace_id=workspace_id)
         from .mcp_.client import ensure_mcp_started, sync_mcp_tools_for_workspace
 
         await ensure_mcp_started(workspace_id)

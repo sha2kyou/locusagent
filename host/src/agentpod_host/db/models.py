@@ -1,6 +1,6 @@
 """ORM 模型：users + audit_logs。
 
-P0 通过 SQLAlchemy `metadata.create_all` 启动建表；后续切 alembic。
+Schema 变更通过 host/alembic 迁移管理。
 """
 
 from __future__ import annotations
