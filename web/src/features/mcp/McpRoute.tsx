@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { Loader2, Pencil, PlugZap, RefreshCw, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/field";
@@ -37,6 +37,12 @@ function parseEnvJson(raw: string): Record<string, string> {
   return out;
 }
 
+function envToJsonText(env?: Record<string, string>): string {
+  const keys = Object.keys(env ?? {});
+  if (keys.length === 0) return "";
+  return JSON.stringify(env, null, 2);
+}
+
 function normalizeText(value: unknown, fallback: string): string {
   if (typeof value === "string") {
     const trimmed = value.trim();
@@ -62,8 +68,9 @@ export function McpRoute() {
   const [auth, setAuth] = useState<"none" | "oauth">("oauth");
   const [command, setCommand] = useState("");
   const [url, setUrl] = useState("");
-  const [envJson, setEnvJson] = useState("{}");
+  const [envJson, setEnvJson] = useState("");
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState<string | null>(null);
   const [selectedTool, setSelectedTool] = useState<{ serverName: string; tool: McpTool } | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
   const [envError, setEnvError] = useState<string | null>(null);
@@ -111,9 +118,12 @@ export function McpRoute() {
 
   const buildPayload = (): McpInput => {
     const env = parseEnvJson(envJson);
-    return transport === "stdio"
-      ? { name, transport, command: command.trim().split(/\s+/).filter(Boolean), args: [], env }
-      : { name, transport, url: url.trim(), env, auth };
+    const base: McpInput =
+      transport === "stdio"
+        ? { name, transport, command: command.trim().split(/\s+/).filter(Boolean), args: [] }
+        : { name, transport, url: url.trim(), auth };
+    if (Object.keys(env).length > 0) base.env = env;
+    return base;
   };
 
   const reset = () => {
@@ -123,7 +133,7 @@ export function McpRoute() {
     setAuth("oauth");
     setCommand("");
     setUrl("");
-    setEnvJson("{}");
+    setEnvJson("");
     setEnvError(null);
   };
 
@@ -134,7 +144,7 @@ export function McpRoute() {
     setAuth(s.auth ?? (s.transport === "http" ? "oauth" : "none"));
     setCommand((s.command ?? []).join(" "));
     setUrl(s.url ?? "");
-    setEnvJson(JSON.stringify(s.env ?? {}, null, 2));
+    setEnvJson(envToJsonText(s.env));
     requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
@@ -165,15 +175,23 @@ export function McpRoute() {
     }
   };
 
-  const test = async () => {
-    setSaving(true);
+  const testServer = async (s: McpServer) => {
+    setTesting(s.name);
     try {
-      const r = await testMcp(buildPayload());
-      toast(r.connected ? `连接成功，发现 ${r.tool_count} 个工具` : `连接失败：${r.runtime_error ?? "未知错误"}`, r.connected ? "success" : "error");
+      const payload: McpInput =
+        s.transport === "stdio"
+          ? { name: s.name, transport: s.transport, command: s.command ?? [], args: s.args ?? [] }
+          : { name: s.name, transport: s.transport, url: s.url ?? "", auth: s.auth ?? "oauth" };
+      if (s.env && Object.keys(s.env).length > 0) payload.env = s.env;
+      const r = await testMcp(payload);
+      toast(
+        r.connected ? `连接成功，发现 ${r.tool_count} 个工具` : `连接失败：${r.runtime_error ?? "未知错误"}`,
+        r.connected ? "success" : "error",
+      );
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
-      setSaving(false);
+      setTesting(null);
     }
   };
 
@@ -266,6 +284,15 @@ export function McpRoute() {
                       {s.oauth_required && s.oauth_connected ? (
                         <Button variant="ghost" size="sm" onClick={() => disconnectOAuth(s)}>断开</Button>
                       ) : null}
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        disabled={testing === s.name}
+                        onClick={() => testServer(s)}
+                        aria-label="测试连接"
+                      >
+                        {testing === s.name ? <Loader2 className="size-4 animate-spin" /> : <PlugZap />}
+                      </Button>
                       <Button variant="ghost" size="icon-sm" onClick={() => reconnect(s)} aria-label="重连"><RefreshCw /></Button>
                       <Button variant="ghost" size="icon-sm" onClick={() => startEdit(s)} aria-label="编辑"><Pencil /></Button>
                       <Button variant="ghost" size="icon-sm" onClick={() => remove(s)} aria-label="删除"><Trash2 /></Button>
@@ -359,13 +386,10 @@ export function McpRoute() {
                 />
                 {envError ? <p className="text-xs text-destructive">{envError}</p> : null}
               </div>
-              <div className="flex gap-2">
-                <Button variant="primary" disabled={saving || !name.trim() || !!envError} onClick={submit}>
-                  {saving && <Loader2 className="size-4 animate-spin" />}
-                  {editing ? "保存" : "添加"}
-                </Button>
-                <Button variant="secondary" disabled={saving || !!envError} onClick={test}>测试连接</Button>
-              </div>
+              <Button variant="primary" disabled={saving || !name.trim() || !!envError} onClick={submit}>
+                {saving && <Loader2 className="size-4 animate-spin" />}
+                {editing ? "保存" : "添加"}
+              </Button>
             </div>
           </CollapsiblePanel>
           </div>

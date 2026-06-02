@@ -21,8 +21,19 @@ function resolveDark(pref: ThemePreference): boolean {
   return getSystemDark();
 }
 
+const FAVICON_LIGHT = "/favicon.svg";
+const FAVICON_DARK = "/favicon-dark.svg";
+
+export function applyFavicon(dark: boolean) {
+  const link = document.getElementById("apod-favicon") as HTMLLinkElement | null;
+  if (!link) return;
+  link.href = dark ? FAVICON_DARK : FAVICON_LIGHT;
+}
+
 export function applyTheme(pref: ThemePreference) {
-  document.documentElement.classList.toggle("dark", resolveDark(pref));
+  const dark = resolveDark(pref);
+  document.documentElement.classList.toggle("dark", dark);
+  applyFavicon(dark);
 }
 
 function loadPreference(): ThemePreference {
