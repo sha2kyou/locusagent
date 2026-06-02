@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMessage, type ToolCallMessagePartComponent } from "@assistant-ui/react";
 import { Blocks, Brain, ChevronDown, HelpCircle, Loader2, Send, Sparkles, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useImeEnterGuard } from "@/lib/ime-enter";
 import { Button } from "@/components/ui/button";
 import { ListCard } from "@/components/ui/panel";
 import type { ToolKind } from "@/api/types";
@@ -56,6 +57,7 @@ function clarifyMessage(question: string, answer: string): string {
 function ClarifyCard({ payload }: { payload: ClarifyPayload }) {
   const { send, isRunning } = useChat();
   const { isLast } = useMessage();
+  const { onCompositionStart, onCompositionEnd, shouldBlockEnter } = useImeEnterGuard();
   const [picked, setPicked] = useState(false);
   const [other, setOther] = useState("");
   // 已选过、正在生成、或该卡片已非最后一条消息（含刷新后的历史）→ 不可再选
@@ -97,6 +99,11 @@ function ClarifyCard({ payload }: { payload: ClarifyPayload }) {
           <input
             value={other}
             onChange={(e) => setOther(e.target.value)}
+            onCompositionStart={onCompositionStart}
+            onCompositionEnd={onCompositionEnd}
+            onKeyDown={(e) => {
+              if (shouldBlockEnter(e)) e.preventDefault();
+            }}
             placeholder={payload.choices.length === 0 ? "请输入你的回答…" : "其他（自由输入）…"}
             disabled={disabled}
             className="h-8 min-w-0 flex-1 rounded-md border border-border bg-surface px-2.5 text-[13px] text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-45"

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useRef, useState, type ReactNod
 import { Modal } from "./modal";
 import { Button } from "./button";
 import { Input } from "./field";
+import { useImeEnterGuard } from "@/lib/ime-enter";
 
 interface ConfirmOptions {
   title?: string;
@@ -37,6 +38,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
   const [promptState, setPromptState] = useState<PromptOptions | null>(null);
   const [promptValue, setPromptValue] = useState("");
   const resolver = useRef<((v: unknown) => void) | null>(null);
+  const { onCompositionStart, onCompositionEnd, shouldBlockEnter } = useImeEnterGuard();
 
   const confirm = useCallback((opts: ConfirmOptions) => {
     setConfirmState(opts);
@@ -113,7 +115,13 @@ export function DialogProvider({ children }: { children: ReactNode }) {
           value={promptValue}
           placeholder={promptState?.placeholder}
           onChange={(e) => setPromptValue(e.target.value)}
+          onCompositionStart={onCompositionStart}
+          onCompositionEnd={onCompositionEnd}
           onKeyDown={(e) => {
+            if (shouldBlockEnter(e)) {
+              e.preventDefault();
+              return;
+            }
             if (e.key === "Enter") settlePrompt(promptValue);
           }}
         />

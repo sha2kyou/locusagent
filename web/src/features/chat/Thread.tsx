@@ -11,6 +11,7 @@ import { ArrowDown, ArrowUp, Check, Copy, Download, Paperclip, RotateCcw, Square
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import { useImeEnterGuard } from "@/lib/ime-enter";
 import { useCopy } from "@/lib/useCopy";
 import {
   PROVISION_FAILED_HINT,
@@ -148,6 +149,7 @@ const LONG_PASTE_THRESHOLD = 8000;
 function Composer() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { onCompositionStart, onCompositionEnd, shouldBlockEnter } = useImeEnterGuard();
   const runtime = useThreadRuntime();
   const toast = useToast();
   const { readiness, addPendingFiles, isRunning, pendingAttachments, removePendingAttachment } =
@@ -166,6 +168,11 @@ function Composer() {
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (shouldBlockEnter(e)) {
+      e.preventDefault();
+      return;
+    }
+
     if (e.key === "Escape") {
       // 生成中按 Esc 取消；否则失焦
       const running = runtime.getState().isRunning;
@@ -222,6 +229,8 @@ function Composer() {
           ref={inputRef}
           rows={1}
           autoFocus
+          onCompositionStart={onCompositionStart}
+          onCompositionEnd={onCompositionEnd}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           placeholder={
