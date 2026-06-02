@@ -68,23 +68,30 @@ def load_mcp_config(workspace_id: str | None = None) -> list[MCPServerConfig]:
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     servers = raw.get("servers") or []
     out: list[MCPServerConfig] = []
+    stale_empty_env = False
     for item in servers:
         if not isinstance(item, dict):
             continue
         try:
+            env_raw = item.get("env")
+            if isinstance(env_raw, dict) and not env_raw:
+                stale_empty_env = True
+            env = dict(env_raw) if isinstance(env_raw, dict) and env_raw else {}
             out.append(
                 MCPServerConfig(
                     name=str(item["name"]),
                     transport=item.get("transport", "stdio"),
                     command=list(item.get("command", []) or []),
                     args=list(item.get("args", []) or []),
-                    env=dict(item.get("env", {}) or {}),
+                    env=env,
                     url=item.get("url"),
                     auth=_normalize_auth(item.get("transport", "stdio"), item.get("auth")),
                 )
             )
         except KeyError:
             continue
+    if stale_empty_env and out:
+        _save_all(out, workspace_id=workspace_id)
     return out
 
 
