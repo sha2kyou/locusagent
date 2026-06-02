@@ -348,7 +348,7 @@ export function McpRoute() {
             summary={editing ? `编辑服务：${editing}` : "添加 MCP 服务"}
             defaultOpen={!!editing}
             onOpenChange={(open) => {
-              if (!open && editing) reset();
+              if (!open) reset();
             }}
           >
             <div className="grid gap-3">
@@ -401,10 +401,12 @@ export function McpRoute() {
                 />
                 {envError ? <p className="text-xs text-destructive">{envError}</p> : null}
               </div>
-              <Button variant="primary" disabled={saving || !name.trim() || !!envError} onClick={submit}>
-                {saving && <Loader2 className="size-4 animate-spin" />}
-                {editing ? "保存" : "添加"}
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="primary" disabled={saving || !name.trim() || !!envError} onClick={submit}>
+                  {saving && <Loader2 className="size-4 animate-spin" />}
+                  {editing ? "保存" : "添加"}
+                </Button>
+              </div>
             </div>
           </CollapsiblePanel>
           </div>

@@ -161,7 +161,7 @@ export function SkillsRoute() {
               summary={editing ? `编辑技能：${editing.name}` : "添加技能"}
               defaultOpen={!!editing}
               onOpenChange={(open) => {
-                if (!open && editing) resetForm();
+                if (!open) resetForm();
               }}
             >
               <div className="grid gap-3">

@@ -200,7 +200,7 @@ export function MemoryRoute() {
               summary={editing ? `编辑记忆 #${editing.id}` : "添加记忆"}
               defaultOpen={!!editing}
               onOpenChange={(open) => {
-                if (!open && editing) resetForm();
+                if (!open) resetForm();
               }}
             >
               <div className="grid gap-3">

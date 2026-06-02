@@ -166,7 +166,7 @@ export function EnvVarsRoute() {
               summary={editingId ? "编辑环境变量" : "添加环境变量"}
               defaultOpen={!!editingId}
               onOpenChange={(open) => {
-                if (!open && editingId) reset();
+                if (!open) reset();
               }}
             >
               <div className="grid gap-3">

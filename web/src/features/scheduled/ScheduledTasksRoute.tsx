@@ -492,7 +492,7 @@ export function ScheduledTasksRoute() {
               summary={<span>{editingId ? "编辑任务" : "新建任务"}</span>}
               defaultOpen={!!editingId || items?.length === 0}
               onOpenChange={(open) => {
-                if (!open && editingId) reset();
+                if (!open) reset();
               }}
             >
               <div className="grid gap-3">
