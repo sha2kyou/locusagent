@@ -293,7 +293,9 @@ class MCPManager:
     async def add_server(self, cfg: MCPServerConfig) -> dict[str, Any]:
         try:
             await self._connect(cfg)
-        except OAuthRequiredError as exc:
+        except (OAuthRequiredError, asyncio.CancelledError) as exc:
+            if isinstance(exc, asyncio.CancelledError):
+                raise
             log.warning(
                 "mcp_oauth_required",
                 server=cfg.name,

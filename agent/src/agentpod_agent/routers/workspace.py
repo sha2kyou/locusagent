@@ -5,9 +5,10 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from ..auth import verify_internal_token
@@ -82,9 +83,11 @@ from ..workspace import get_workspace_id
 from ..workspace_runtime import (
     disconnect_mcp_server_runtime,
     ensure_mcp_runtime,
+    ensure_workspace_context,
     invalidate_mcp_runtime,
     mark_mcp_runtime_ready,
     refresh_mcp_server,
+    schedule_mcp_runtime_warm,
 )
 
 router = APIRouter(
@@ -299,11 +302,18 @@ async def _oauth_connected_map() -> set[str]:
 
 
 @router.get("/mcp")
-async def workspace_list_mcp() -> dict:
-    await ensure_mcp_runtime(get_workspace_id())
-    servers = await run_in_thread(list_mcp_servers)
+async def workspace_list_mcp(sync: bool = Query(False, description="为 true 时同步连接全部 MCP（较慢）")) -> dict:
+    wid = get_workspace_id()
+    await ensure_workspace_context(wid)
+    if sync:
+        await ensure_mcp_runtime(wid)
+    else:
+        schedule_mcp_runtime_warm(wid)
+    servers, oauth_connected = await asyncio.gather(
+        run_in_thread(list_mcp_servers),
+        _oauth_connected_map(),
+    )
     runtime = list_mcp_runtime()
-    oauth_connected = await _oauth_connected_map()
     return {
         "items": [
             _mcp_item_with_runtime(

@@ -68,9 +68,9 @@ export function McpRoute() {
   const formRef = useRef<HTMLDivElement>(null);
   const [envError, setEnvError] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = async (opts?: { sync?: boolean }) => {
     try {
-      const { items } = await listMcp();
+      const { items } = await listMcp(opts);
       setItems(items);
     } catch (e) {
       toast((e as Error).message, "error");
@@ -84,7 +84,8 @@ export function McpRoute() {
     const server = params.get("server");
     if (oauth === "success") {
       toast(server ? `「${server}」OAuth 授权成功` : "OAuth 授权成功", "success");
-      if (server) void reconnectMcp(server).then(() => load()).catch((e) => toast((e as Error).message, "error"));
+      // Host 回调已通知 Agent 重连，此处仅刷新列表
+      void load();
       params.delete("oauth");
       params.delete("server");
       const next = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
@@ -180,7 +181,7 @@ export function McpRoute() {
     try {
       await reconnectMcp(s.name);
       toast("已重连", "success");
-      await load();
+      await load({ sync: true });
     } catch (e) {
       toast((e as Error).message, "error");
     }

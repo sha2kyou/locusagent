@@ -15,6 +15,7 @@ log = get_logger("workspace_runtime")
 _runtime_lock = asyncio.Lock()
 _active_workspace_id: str | None = None
 _mcp_ready_workspace: str | None = None
+_mcp_warm_inflight: set[str] = set()
 
 
 def _apply_builtin_tool_settings() -> None:
@@ -78,9 +79,16 @@ async def refresh_mcp_server(workspace_id: str, server_name: str) -> dict[str, A
     invalidate_mcp_runtime(wid)
     await ensure_workspace_context(wid)
     await ensure_mcp_started(wid)
-    runtime = await reconnect_mcp_server(server_name)
-    await sync_mcp_tools_for_workspace(wid)
-    mark_mcp_runtime_ready(wid)
+    try:
+        runtime = await reconnect_mcp_server(server_name)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.warning("mcp_refresh_failed", server=server_name, workspace_id=wid, error=str(exc))
+        runtime = {"name": server_name, "connected": False, "tools": [], "error": str(exc)}
+    if runtime.get("connected"):
+        await sync_mcp_tools_for_workspace(wid)
+        mark_mcp_runtime_ready(wid)
     return runtime
 
 
@@ -107,7 +115,21 @@ def mark_workspace_runtime_bootstrapped() -> None:
 
 
 async def warm_mcp_runtime_background(workspace_id: str) -> None:
+    wid = normalize_workspace_id(workspace_id)
+    if _mcp_ready_workspace == wid or wid in _mcp_warm_inflight:
+        return
+    _mcp_warm_inflight.add(wid)
     try:
-        await ensure_mcp_runtime(workspace_id)
+        await ensure_mcp_runtime(wid)
     except Exception as exc:
-        log.warning("mcp_warm_failed", workspace_id=workspace_id, error=str(exc))
+        log.warning("mcp_warm_failed", workspace_id=wid, error=str(exc))
+    finally:
+        _mcp_warm_inflight.discard(wid)
+
+
+def schedule_mcp_runtime_warm(workspace_id: str) -> None:
+    """后台预热 MCP，不阻塞列表等只读接口。"""
+    wid = normalize_workspace_id(workspace_id)
+    if _mcp_ready_workspace == wid or wid in _mcp_warm_inflight:
+        return
+    asyncio.create_task(warm_mcp_runtime_background(wid), name=f"mcp-warm-{wid}")

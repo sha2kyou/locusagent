@@ -9,6 +9,7 @@ from ..auth.agent_internal import require_agent_internal
 from ..config import get_settings
 from ..db import User, get_session
 from ..mcp_oauth import store
+from ..mcp_oauth.service import McpOAuthError, refresh_oauth_tokens as do_refresh_oauth_tokens
 from ..workspaces import requested_workspace_id, resolve_workspace
 
 router = APIRouter(prefix="/internal/mcp-oauth", tags=["internal-mcp-oauth"])
@@ -62,6 +63,26 @@ async def mcp_oauth_get_credentials(
         "client_info": store.client_info_to_dict(client_info) if client_info else None,
         "redirect_uri": settings.mcp_oauth_redirect_uri,
     }
+
+
+@router.post("/credentials/{server_name}/refresh")
+async def mcp_oauth_refresh_tokens(
+    server_name: str,
+    request: Request,
+    user: User = Depends(require_agent_internal),
+) -> dict:
+    workspace_id = await _workspace_for_request(request, user.id)
+    try:
+        tokens = await do_refresh_oauth_tokens(
+            user_id=user.id,
+            workspace_id=workspace_id,
+            server_name=server_name,
+        )
+    except McpOAuthError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return {"refreshed": True, "tokens": store.tokens_to_dict(tokens)}
 
 
 @router.put("/credentials/{server_name}/tokens")

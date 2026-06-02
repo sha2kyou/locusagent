@@ -311,3 +311,61 @@ async def exchange_authorization_code(
         tokens=tokens,
     )
     return tokens
+
+
+async def refresh_oauth_tokens(
+    *,
+    user_id: int,
+    workspace_id: str,
+    server_name: str,
+) -> OAuthToken:
+    row = await store.get_credential(user_id=user_id, workspace_id=workspace_id, server_name=server_name)
+    if row is None:
+        raise McpOAuthError("credential not found")
+    server_url = (row.server_url or "").strip()
+    if not server_url:
+        raise McpOAuthError("server url missing")
+
+    tokens = await store.load_tokens(user_id=user_id, workspace_id=workspace_id, server_name=server_name)
+    client_info = await store.load_client_info(user_id=user_id, workspace_id=workspace_id, server_name=server_name)
+    if tokens is None or not tokens.refresh_token:
+        raise McpOAuthError("no refresh token")
+    if client_info is None or not client_info.client_id:
+        raise McpOAuthError("no client info")
+
+    www_auth_url, www_scope = await _probe_www_auth(server_url)
+    prm, auth_server_url = await _discover_prm(server_url, www_auth_url)
+    oauth_metadata = await _discover_oauth_metadata(auth_server_url, server_url)
+
+    if oauth_metadata and oauth_metadata.token_endpoint:
+        token_url = str(oauth_metadata.token_endpoint)
+    else:
+        token_url = urljoin(_auth_base_url(server_url), "/token")
+
+    prm_resource = str(prm.resource) if getattr(prm, "resource", None) else None
+    refresh_data: dict[str, str] = {
+        "grant_type": "refresh_token",
+        "refresh_token": tokens.refresh_token,
+        "client_id": client_info.client_id,
+        "resource": _resource_param(server_url, prm_resource),
+    }
+    scope = get_client_metadata_scopes(www_scope, prm, oauth_metadata)
+    if scope:
+        refresh_data["scope"] = scope
+
+    headers = {"Content-Type": "application/x-www-form-urlencoded", MCP_PROTOCOL_VERSION: LATEST_PROTOCOL_VERSION}
+    async with httpx.AsyncClient(timeout=httpx.Timeout(20.0)) as client:
+        resp = await client.post(token_url, data=refresh_data, headers=headers)
+    if resp.status_code != 200:
+        body = resp.text.strip()
+        raise OAuthTokenError(f"Token refresh failed ({resp.status_code}): {body}")
+    new_tokens = await handle_token_response_scopes(resp)
+    ok = await store.update_tokens(
+        user_id=user_id,
+        workspace_id=workspace_id,
+        server_name=server_name,
+        tokens=new_tokens,
+    )
+    if not ok:
+        raise McpOAuthError("credential not found")
+    return new_tokens

@@ -47,3 +47,8 @@ async def fetch_credentials(server_name: str, *, workspace_id: str) -> dict[str,
 async def update_tokens(server_name: str, *, workspace_id: str, tokens: dict) -> None:
     path = f"/internal/mcp-oauth/credentials/{server_name}/tokens"
     await _request("PUT", path, workspace_id=workspace_id, json_body={"tokens": tokens})
+
+
+async def refresh_oauth_tokens(server_name: str, *, workspace_id: str) -> dict:
+    path = f"/internal/mcp-oauth/credentials/{server_name}/refresh"
+    return await _request("POST", path, workspace_id=workspace_id)

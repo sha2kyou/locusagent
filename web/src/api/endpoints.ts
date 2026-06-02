@@ -138,7 +138,8 @@ export const deleteSkill = (name: string) =>
   apiSend<{ deleted: boolean }>(`/api/workspace/skills/${encodeURIComponent(name)}`, "DELETE");
 
 // ---- MCP ----
-export const listMcp = () => apiGet<{ items: McpServer[] }>("/api/workspace/mcp");
+export const listMcp = (opts?: { sync?: boolean }) =>
+  apiGet<{ items: McpServer[] }>(`/api/workspace/mcp${opts?.sync ? "?sync=1" : ""}`);
 
 export const createMcp = (body: McpInput) => apiSend<McpServer>("/api/workspace/mcp", "POST", body);
 
