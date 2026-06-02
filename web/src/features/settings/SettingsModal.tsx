@@ -173,7 +173,7 @@ export function SettingsModal({ open, onClose, onLogout }: Props) {
             </p>
             <div className="grid gap-3">
               <div className="grid gap-1.5">
-                <Label>IANA 时区</Label>
+                <Label>时区</Label>
                 <Input
                   list="timezone-options"
                   value={timezone}

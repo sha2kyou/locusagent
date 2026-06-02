@@ -13,7 +13,7 @@ import {
   KeyRound,
   Settings,
   Sparkles,
-  Wrench,
+  // Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -46,7 +46,7 @@ const NAV_PRIMARY: NavEntry[] = [{ to: "/chat", label: "对话", icon: MessagesS
 const NAV_CAPABILITIES: NavEntry[] = [
   { to: "/skills", label: "技能", icon: Sparkles },
   { to: "/mcp", label: "MCP", icon: Plug },
-  { to: "/tools", label: "工具", icon: Wrench },
+  // { to: "/tools", label: "工具", icon: Wrench },
 ];
 // 上下文与密钥
 const NAV_CONTEXT: NavEntry[] = [
