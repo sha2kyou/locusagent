@@ -79,6 +79,7 @@ class User(Base):
     scheduled_tasks: Mapped[list["ScheduledTask"]] = relationship(back_populates="user")
     workspaces: Mapped[list["Workspace"]] = relationship(back_populates="user")
     usage_events: Mapped[list["UsageEvent"]] = relationship(back_populates="user")
+    mcp_oauth_credentials: Mapped[list["McpOauthCredential"]] = relationship(back_populates="user")
 
     __table_args__ = (
         Index("idx_users_provision", "provision_status"),
@@ -212,8 +213,35 @@ class Workspace(Base):
     user: Mapped[User] = relationship(back_populates="workspaces")
     notifications: Mapped[list[Notification]] = relationship(back_populates="workspace")
     scheduled_tasks: Mapped[list[ScheduledTask]] = relationship(back_populates="workspace")
+    mcp_oauth_credentials: Mapped[list["McpOauthCredential"]] = relationship(back_populates="workspace")
 
     __table_args__ = (
         Index("idx_workspaces_user_created", "user_id", "created_at"),
         Index("idx_workspaces_user_default", "user_id", "is_default"),
+    )
+
+
+class McpOauthCredential(Base):
+    __tablename__ = "mcp_oauth_credentials"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
+    server_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    server_url: Mapped[str] = mapped_column(Text, nullable=False)
+    tokens_enc: Mapped[bytes | None] = mapped_column(LargeBinary)
+    client_info_enc: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    user: Mapped[User] = relationship(back_populates="mcp_oauth_credentials")
+    workspace: Mapped[Workspace] = relationship(back_populates="mcp_oauth_credentials")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "workspace_id", "server_name", name="uq_mcp_oauth_cred"),
+        Index("idx_mcp_oauth_cred_user_ws", "user_id", "workspace_id"),
     )

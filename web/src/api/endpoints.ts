@@ -154,6 +154,9 @@ export const reconnectMcp = (name: string) =>
 export const deleteMcp = (name: string) =>
   apiSend<{ deleted: boolean }>(`/api/workspace/mcp/${encodeURIComponent(name)}`, "DELETE");
 
+export const disconnectMcpOAuth = (name: string) =>
+  apiSend<{ deleted: boolean }>(`/api/oauth/mcp/${encodeURIComponent(name)}`, "DELETE");
+
 // ---- 工具开关 ----
 export const listToolToggles = () => apiGet<ToolToggleOverview>("/api/workspace/tools");
 

@@ -118,15 +118,25 @@ function ClarifyCard({ payload }: { payload: ClarifyPayload }) {
 }
 
 export const ToolEvent: ToolCallMessagePartComponent = (props) => {
-  if (props.toolName === "clarify") {
+  if (isClarifyTool(props.toolName)) {
     const payload = parseClarify(props.result);
     if (payload) return <ClarifyCard payload={payload} />;
   }
   return <GenericToolBlock toolName={props.toolName} args={props.args} result={props.result} status={props.status} />;
 };
 
+function isClarifyTool(toolName: string): boolean {
+  return toolName === "clarify" || toolName.endsWith("/clarify");
+}
+
 /** 按 ChatPart 时间线直接渲染工具块（不依赖 MessagePrimitive.Parts 顺序） */
 export function ToolPartView({ part }: { part: ToolPart }) {
+  if (isClarifyTool(part.toolName)) {
+    if (!part.running) {
+      const payload = parseClarify(part.preview);
+      if (payload) return <ClarifyCard payload={payload} />;
+    }
+  }
   const running = part.running;
   return (
     <GenericToolBlock

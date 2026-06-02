@@ -17,6 +17,10 @@ class Settings(BaseSettings):
         default="http://localhost/api/oauth/github/callback",
         alias="OAUTH_REDIRECT_URI",
     )
+    mcp_oauth_redirect_uri: str = Field(
+        default="http://localhost/api/oauth/mcp/callback",
+        alias="MCP_OAUTH_REDIRECT_URI",
+    )
 
     encryption_key: str = Field(default="", alias="ENCRYPTION_KEY")
     session_secret: str = Field(default="", alias="SESSION_SECRET")

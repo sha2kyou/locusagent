@@ -109,7 +109,12 @@ async def proxy_to_user_container(
 
     body = await request.body()
 
-    client = httpx.AsyncClient(timeout=httpx.Timeout(connect=5.0, read=None, write=30.0, pool=5.0))
+    accept = request.headers.get("accept", "")
+    is_sse_request = accept.startswith("text/event-stream")
+    read_timeout = None if is_sse_request else 120.0
+    client = httpx.AsyncClient(
+        timeout=httpx.Timeout(connect=5.0, read=read_timeout, write=30.0, pool=5.0),
+    )
     try:
         req = client.build_request(
             method,

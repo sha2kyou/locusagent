@@ -30,6 +30,8 @@ from .routers import internal_usage as internal_usage_router
 from .routers import me as me_router
 from .routers import notifications as notifications_router
 from .routers import oauth as oauth_router
+from .routers import oauth_mcp as oauth_mcp_router
+from .routers import internal_mcp_oauth as internal_mcp_oauth_router
 from .routers import scheduled_tasks as scheduled_tasks_router
 from .routers import settings as settings_router
 from .routers import workspace as workspace_router
@@ -109,6 +111,7 @@ install_auth_isolation(app)
 install_internal_network_guard(app)
 
 app.include_router(oauth_router.router)
+app.include_router(oauth_mcp_router.router)
 app.include_router(me_router.router)
 app.include_router(notifications_router.router)
 app.include_router(settings_router.router)
@@ -118,6 +121,7 @@ app.include_router(internal_notifications_router.router)
 app.include_router(internal_scheduled_tasks_router.router)
 app.include_router(internal_settings_router.router)
 app.include_router(internal_usage_router.router)
+app.include_router(internal_mcp_oauth_router.router)
 app.include_router(embedding_proxy_router.router)
 app.include_router(llm_proxy_router.router)
 app.include_router(tavily_proxy_router.router)
@@ -127,9 +131,10 @@ app.include_router(api_v1_router.router)
 app.include_router(workspace_router.router)
 app.include_router(workspaces_router.router)
 
-install_pages(app)
-
 
 @app.get("/health")
 async def root_health() -> JSONResponse:
     return JSONResponse({"status": "ok"})
+
+
+install_pages(app)

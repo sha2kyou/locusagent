@@ -69,21 +69,32 @@ async def _list_mcp() -> ToolResult:
 
 
 async def _add_mcp(args: dict[str, Any]) -> ToolResult:
+    transport = str(args.get("transport", "stdio")).strip()
+    auth_raw = args.get("auth")
+    auth = str(auth_raw).strip() if auth_raw is not None else ("oauth" if transport == "http" else "none")
     cfg = MCPServerConfig(
         name=str(args.get("name", "")).strip(),
-        transport=str(args.get("transport", "stdio")).strip(),
+        transport=transport,
         command=list(args.get("command", []) or []),
         args=list(args.get("args", []) or []),
         env=dict(args.get("env", {}) or {}),
         url=args.get("url"),
+        auth=auth if auth in ("none", "oauth") else "oauth",
     )
     try:
         await run_in_thread(add_mcp_server, cfg)
     except (ValueError, FileExistsError) as exc:
         raise ToolError(str(exc)) from exc
-    from ..mcp_.client import connect_mcp_server
+    from ..mcp_.client import connect_mcp_server, ensure_mcp_started, sync_mcp_tools_for_workspace
+    from ..workspace import get_workspace_id
+    from ..workspace_runtime import invalidate_mcp_runtime, mark_mcp_runtime_ready
 
+    wid = get_workspace_id()
+    invalidate_mcp_runtime(wid)
+    await ensure_mcp_started(wid)
     runtime = await connect_mcp_server(cfg)
+    await sync_mcp_tools_for_workspace(wid)
+    mark_mcp_runtime_ready(wid)
     if runtime.get("connected"):
         return ToolResult(
             content=f"mcp server '{cfg.name}' added and connected, tools={len(runtime.get('tools', []))}",
@@ -102,9 +113,10 @@ async def _remove_mcp(args: dict[str, Any]) -> ToolResult:
     ok = await run_in_thread(remove_mcp_server, name)
     if not ok:
         raise ToolError(f"mcp server not found: {name}")
-    from ..mcp_.client import disconnect_mcp_server
+    from ..workspace import get_workspace_id
+    from ..workspace_runtime import disconnect_mcp_server_runtime
 
-    await disconnect_mcp_server(name)
+    await disconnect_mcp_server_runtime(get_workspace_id(), name)
     return ToolResult(content=f"mcp server '{name}' removed")
 
 

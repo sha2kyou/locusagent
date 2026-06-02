@@ -7,6 +7,9 @@
 **/.mypy_cache
 **/.ruff_cache
 web/node_modules
+web/public/node_modules
+web/public/package.json
+web/public/package-lock.json
 host/src/agentpod_host/web/spa
 .env
 .env.*

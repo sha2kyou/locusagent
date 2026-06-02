@@ -97,6 +97,41 @@ def verify_oauth_state(state: str) -> bool:
     return isinstance(payload, dict) and isinstance(payload.get("n"), str)
 
 
+MCP_OAUTH_STATE_MAX_AGE = 600  # 10 分钟
+MCP_OAUTH_STATE_SALT = "apod.oauth.mcp.state.v1"
+
+
+@lru_cache
+def _mcp_oauth_state_serializer() -> URLSafeTimedSerializer:
+    settings = get_settings()
+    if not settings.session_secret:
+        raise RuntimeError("SESSION_SECRET 未配置")
+    return URLSafeTimedSerializer(settings.session_secret, salt=MCP_OAUTH_STATE_SALT)
+
+
+def issue_mcp_oauth_state(*, user_id: int, workspace_id: str, server_name: str) -> str:
+    return _mcp_oauth_state_serializer().dumps(
+        {"uid": user_id, "wid": workspace_id, "srv": server_name, "n": secrets.token_urlsafe(16)}
+    )
+
+
+def verify_mcp_oauth_state(state: str) -> dict | None:
+    if not state:
+        return None
+    try:
+        payload = _mcp_oauth_state_serializer().loads(state, max_age=MCP_OAUTH_STATE_MAX_AGE)
+    except (BadSignature, SignatureExpired):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    uid = payload.get("uid")
+    wid = payload.get("wid")
+    srv = payload.get("srv")
+    if not isinstance(uid, int) or not isinstance(wid, str) or not isinstance(srv, str):
+        return None
+    return {"user_id": uid, "workspace_id": wid, "server_name": srv}
+
+
 FLASH_COOKIE_NAME = "apod_apikey_flash"
 FLASH_MAX_AGE = 120  # 2 分钟内必须读取
 FLASH_SALT = "apod.apikey-flash.v1"

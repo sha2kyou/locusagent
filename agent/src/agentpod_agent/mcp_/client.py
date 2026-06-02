@@ -25,6 +25,7 @@ from ..workspace import (
     workspace_data_dir,
 )
 from .config import MCPServerConfig, get_mcp_server, list_mcp_servers
+from .oauth import OAuthRequiredError, connect_http_oauth_session, probe_http_oauth
 
 log = get_logger("mcp")
 
@@ -54,14 +55,33 @@ class MCPManager:
         self._tools_lock = asyncio.Lock()
         self._last_errors: dict[str, str] = {}
 
+    async def _connect_timed(self, cfg: MCPServerConfig) -> None:
+        timeout = max(1.0, float(get_settings().mcp_connect_timeout_seconds))
+        try:
+            await asyncio.wait_for(self._connect(cfg), timeout=timeout)
+        except TimeoutError:
+            msg = f"connect timeout after {timeout}s"
+            self._last_errors[cfg.name] = msg
+            log.error(
+                "mcp_connect_timeout",
+                server=cfg.name,
+                workspace_id=self._workspace_id,
+                timeout_seconds=timeout,
+            )
+
     async def start(self) -> None:
         if self._started:
             return
         self._started = True
-        for cfg in list_mcp_servers(self._workspace_id):
+        cfgs = list_mcp_servers(self._workspace_id)
+        if not cfgs:
+            return
+
+        async def _one(cfg: MCPServerConfig) -> None:
             try:
-                await self._connect(cfg)
+                await self._connect_timed(cfg)
             except Exception as exc:
+                self._last_errors[cfg.name] = str(exc)
                 log.error(
                     "mcp_connect_failed",
                     server=cfg.name,
@@ -69,26 +89,46 @@ class MCPManager:
                     error=str(exc),
                 )
 
+        await asyncio.gather(*[_one(cfg) for cfg in cfgs], return_exceptions=True)
+
     async def _connect(self, cfg: MCPServerConfig) -> None:
         if cfg.name in self._sessions:
             return
         stack = AsyncExitStack()
-        if cfg.transport == "stdio":
-            params = StdioServerParameters(
-                command=cfg.command[0] if cfg.command else "",
-                args=cfg.command[1:] + cfg.args if len(cfg.command) > 1 else cfg.args,
-                env=_stdio_env(cfg, self._workspace_id),
-            )
-            read, write = await stack.enter_async_context(stdio_client(params))
-        elif cfg.transport == "http":
-            if not cfg.url:
-                raise ValueError("http transport requires url")
-            transport = await stack.enter_async_context(streamablehttp_client(cfg.url))
-            read, write, _ = transport
-        else:
-            raise ValueError(f"unknown transport: {cfg.transport}")
-
         try:
+            if cfg.transport == "stdio":
+                params = StdioServerParameters(
+                    command=cfg.command[0] if cfg.command else "",
+                    args=cfg.command[1:] + cfg.args if len(cfg.command) > 1 else cfg.args,
+                    env=_stdio_env(cfg, self._workspace_id),
+                )
+                read, write = await stack.enter_async_context(stdio_client(params))
+            elif cfg.transport == "http":
+                if not cfg.url:
+                    raise ValueError("http transport requires url")
+                if cfg.auth == "oauth":
+                    session = await connect_http_oauth_session(
+                        stack,
+                        server_name=cfg.name,
+                        server_url=cfg.url,
+                        workspace_id=self._workspace_id,
+                    )
+                    self._sessions[cfg.name] = session
+                    self._stacks[cfg.name] = stack
+                    await self._register_tools(cfg.name, session)
+                    log.info(
+                        "mcp_connected",
+                        server=cfg.name,
+                        workspace_id=self._workspace_id,
+                        transport=cfg.transport,
+                        auth="oauth",
+                    )
+                    return
+                transport = await stack.enter_async_context(streamablehttp_client(cfg.url))
+                read, write, _ = transport
+            else:
+                raise ValueError(f"unknown transport: {cfg.transport}")
+
             session = await stack.enter_async_context(ClientSession(read, write))
             await session.initialize()
             self._sessions[cfg.name] = session
@@ -253,6 +293,19 @@ class MCPManager:
     async def add_server(self, cfg: MCPServerConfig) -> dict[str, Any]:
         try:
             await self._connect(cfg)
+        except OAuthRequiredError as exc:
+            log.warning(
+                "mcp_oauth_required",
+                server=cfg.name,
+                workspace_id=self._workspace_id,
+            )
+            self._last_errors[cfg.name] = str(exc)
+            return {
+                "name": cfg.name,
+                "connected": False,
+                "tools": [],
+                "error": str(exc),
+            }
         except Exception as exc:
             log.error(
                 "mcp_runtime_add_failed",
@@ -297,8 +350,42 @@ class MCPManager:
             elif cfg.transport == "http":
                 if not cfg.url:
                     raise ValueError("http transport requires url")
-                transport = await stack.enter_async_context(streamablehttp_client(cfg.url))
-                read, write, _ = transport
+                if cfg.auth == "oauth":
+                    result = await probe_http_oauth(
+                        server_name=cfg.name,
+                        server_url=cfg.url,
+                        workspace_id=self._workspace_id,
+                    )
+                    if not result.get("connected"):
+                        err = result.get("error") or "connection failed"
+                        return {"name": cfg.name, "connected": False, "tools": [], "error": err}
+                    oauth_stack = AsyncExitStack()
+                    try:
+                        session = await connect_http_oauth_session(
+                            oauth_stack,
+                            server_name=cfg.name,
+                            server_url=cfg.url,
+                            workspace_id=self._workspace_id,
+                        )
+                        listed = await session.list_tools()
+                        tools = [
+                            {
+                                "name": t.name,
+                                "full_name": mcp_tool_full_name(cfg.name, t.name, self._workspace_id),
+                                "description": t.description or f"MCP tool {t.name}@{cfg.name}",
+                                "input_schema": t.inputSchema or {"type": "object", "properties": {}},
+                                "schema_summary": _schema_summary(
+                                    t.inputSchema or {"type": "object", "properties": {}}
+                                ),
+                            }
+                            for t in listed.tools
+                        ]
+                        return {"name": cfg.name, "connected": True, "tools": tools, "error": None}
+                    finally:
+                        await oauth_stack.aclose()
+                else:
+                    transport = await stack.enter_async_context(streamablehttp_client(cfg.url))
+                    read, write, _ = transport
             else:
                 raise ValueError(f"unknown transport: {cfg.transport}")
             session = await stack.enter_async_context(ClientSession(read, write))

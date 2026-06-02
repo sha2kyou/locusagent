@@ -44,6 +44,8 @@ from ..core.run_manager import ERROR, FINISHED, reconcile_session_active_handles
 from ..core.session_title import schedule_session_title_generation
 from ..core.system_prompt import get_or_create_system_prompt as _get_or_create_system_prompt
 from ..logging import get_logger
+from ..workspace import get_workspace_id
+from ..workspace_runtime import ensure_mcp_runtime
 from .v1_sessions import router as sessions_router
 
 router = APIRouter(prefix="/v1", tags=["v1"], dependencies=[Depends(verify_internal_token)])
@@ -342,6 +344,7 @@ async def _persist_loop_messages(
 
 @router.post("/chat/completions")
 async def chat_completions(req: ChatRequest):
+    await ensure_mcp_runtime(get_workspace_id())
     try:
         public_model, internal_model = await _resolve_v1_model(req.model)
     except ValueError as exc:
@@ -516,6 +519,7 @@ async def chat_completions(req: ChatRequest):
 
 @router.post("/responses")
 async def responses(req: ResponsesRequest):
+    await ensure_mcp_runtime(get_workspace_id())
     try:
         public_model, internal_model = await _resolve_v1_model(req.model)
     except ValueError as exc:

@@ -1,4 +1,15 @@
-"""MCP server 配置：YAML 持久化在各工作区 agent.sqlite 同目录。"""
+"""MCP server 配置：YAML 持久化在各工作区 agent.sqlite 同目录。
+
+mcp.yaml 示例（HTTP + OAuth，如 Notion）::
+
+    servers:
+      - name: notion
+        transport: http
+        url: https://mcp.notion.com/mcp
+        auth: oauth   # 未写 auth 的 http 默认为直连 none
+
+在 MCP 页完成 Host OAuth 后 Agent 会经 internal 重连该服。
+"""
 
 from __future__ import annotations
 
@@ -11,6 +22,7 @@ import yaml
 from ..workspace import get_workspace_id, normalize_workspace_id, workspace_data_dir
 
 Transport = Literal["stdio", "http"]
+AuthMode = Literal["none", "oauth"]
 
 
 @dataclass(slots=True)
@@ -21,9 +33,12 @@ class MCPServerConfig:
     args: list[str] = field(default_factory=list)
     env: dict[str, str] = field(default_factory=dict)
     url: str | None = None
+    auth: AuthMode = "none"
 
     def to_dict(self) -> dict:
         d = asdict(self)
+        if not d.get("env"):
+            d.pop("env", None)
         return d
 
 
@@ -35,6 +50,15 @@ def _resolve_workspace_id(workspace_id: str | None) -> str:
 
 def _config_path(workspace_id: str | None = None) -> Path:
     return workspace_data_dir(_resolve_workspace_id(workspace_id)) / "mcp.yaml"
+
+
+def _normalize_auth(transport: str, auth: str | None) -> AuthMode:
+    if transport != "http":
+        return "none"
+    if auth in ("none", "oauth"):
+        return auth
+    # 未写 auth 时保持直连；需 OAuth 时在 mcp.yaml 显式写 auth: oauth
+    return "none"
 
 
 def load_mcp_config(workspace_id: str | None = None) -> list[MCPServerConfig]:
@@ -56,6 +80,7 @@ def load_mcp_config(workspace_id: str | None = None) -> list[MCPServerConfig]:
                     args=list(item.get("args", []) or []),
                     env=dict(item.get("env", {}) or {}),
                     url=item.get("url"),
+                    auth=_normalize_auth(item.get("transport", "stdio"), item.get("auth")),
                 )
             )
         except KeyError:
@@ -90,6 +115,8 @@ def _validate(cfg: MCPServerConfig) -> None:
         raise ValueError("stdio transport requires command")
     if cfg.transport == "http" and not cfg.url:
         raise ValueError("http transport requires url")
+    if cfg.transport == "stdio" and cfg.auth != "none":
+        raise ValueError("stdio transport does not support oauth auth")
 
 
 def add_mcp_server(cfg: MCPServerConfig, workspace_id: str | None = None) -> MCPServerConfig:

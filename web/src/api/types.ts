@@ -132,11 +132,14 @@ export interface McpServer {
   args?: string[];
   env?: Record<string, string>;
   url?: string;
+  auth?: "none" | "oauth";
   connected: boolean;
   tools: McpTool[];
   tool_count: number;
   runtime_error?: string;
   enabled?: boolean;
+  oauth_required?: boolean;
+  oauth_connected?: boolean | null;
 }
 
 export interface McpInput {
@@ -146,6 +149,7 @@ export interface McpInput {
   args?: string[];
   env?: Record<string, string>;
   url?: string;
+  auth?: "none" | "oauth";
 }
 
 export interface ToolToggleItem {

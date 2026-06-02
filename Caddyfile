@@ -30,6 +30,10 @@
 			transport http {
 				read_buffer 0
 				write_buffer 0
+				# Docker 内嵌 DNS；dial_timeout 避免 host 重建后连旧 IP 长时间挂起
+				resolvers 127.0.0.11:53
+				dial_timeout 5s
+				response_header_timeout 120s
 			}
 		}
 	}
@@ -37,6 +41,10 @@
 	handle {
 		reverse_proxy host:8080 {
 			flush_interval -1
+			transport http {
+				resolvers 127.0.0.11:53
+				dial_timeout 5s
+			}
 		}
 	}
 }

@@ -53,6 +53,8 @@ class Settings(BaseSettings):
 
     # MCP 工具调用超时（秒）：避免上游插件异常时调用长期挂起
     mcp_call_timeout_seconds: float = Field(default=45.0, alias="MCP_CALL_TIMEOUT_SECONDS")
+    # MCP 单服连接超时（秒）：start() 并行连接时每服上限，避免一服拖死整批
+    mcp_connect_timeout_seconds: float = Field(default=30.0, alias="MCP_CONNECT_TIMEOUT_SECONDS")
 
     # 工具循环护栏（单轮对话内重复失败 / 只读无进展检测）
     tool_guardrail_warnings_enabled: bool = Field(default=True, alias="TOOL_GUARDRAIL_WARNINGS_ENABLED")

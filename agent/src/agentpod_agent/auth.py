@@ -11,7 +11,7 @@ from fastapi import Header, HTTPException, status
 
 from .config import get_settings
 from .workspace import set_workspace_id
-from .workspace_runtime import ensure_workspace_runtime
+from .workspace_runtime import ensure_workspace_context
 
 
 async def verify_internal_token(
@@ -25,4 +25,4 @@ async def verify_internal_token(
     if not hmac.compare_digest(x_internal_token, expected):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
     workspace_id = set_workspace_id(x_workspace_id)
-    await ensure_workspace_runtime(workspace_id)
+    await ensure_workspace_context(workspace_id)

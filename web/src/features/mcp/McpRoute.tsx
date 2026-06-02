@@ -11,7 +11,8 @@ import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
 import { Empty, listItemBriefClass, Loading } from "@/components/ui/list-state";
 import { Tag } from "@/components/ui/tag";
-import { createMcp, deleteMcp, listMcp, reconnectMcp, testMcp, updateMcp } from "@/api/endpoints";
+import { getWorkspaceId } from "@/api/client";
+import { createMcp, deleteMcp, disconnectMcpOAuth, listMcp, reconnectMcp, testMcp, updateMcp } from "@/api/endpoints";
 import type { McpInput, McpServer, McpTool } from "@/api/types";
 
 function parseEnvJson(raw: string): Record<string, string> {
@@ -58,6 +59,7 @@ export function McpRoute() {
 
   const [name, setName] = useState("");
   const [transport, setTransport] = useState<"stdio" | "http">("stdio");
+  const [auth, setAuth] = useState<"none" | "oauth">("oauth");
   const [command, setCommand] = useState("");
   const [url, setUrl] = useState("");
   const [envJson, setEnvJson] = useState("{}");
@@ -77,6 +79,23 @@ export function McpRoute() {
   };
   useEffect(() => {
     void load();
+    const params = new URLSearchParams(window.location.search);
+    const oauth = params.get("oauth");
+    const server = params.get("server");
+    if (oauth === "success") {
+      toast(server ? `「${server}」OAuth 授权成功` : "OAuth 授权成功", "success");
+      if (server) void reconnectMcp(server).then(() => load()).catch((e) => toast((e as Error).message, "error"));
+      params.delete("oauth");
+      params.delete("server");
+      const next = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
+      window.history.replaceState(null, "", next);
+    } else if (oauth === "error") {
+      toast("OAuth 授权失败", "error");
+      params.delete("oauth");
+      params.delete("server");
+      const next = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
+      window.history.replaceState(null, "", next);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -93,13 +112,14 @@ export function McpRoute() {
     const env = parseEnvJson(envJson);
     return transport === "stdio"
       ? { name, transport, command: command.trim().split(/\s+/).filter(Boolean), args: [], env }
-      : { name, transport, url: url.trim(), env };
+      : { name, transport, url: url.trim(), env, auth };
   };
 
   const reset = () => {
     setEditing(null);
     setName("");
     setTransport("stdio");
+    setAuth("oauth");
     setCommand("");
     setUrl("");
     setEnvJson("{}");
@@ -110,6 +130,7 @@ export function McpRoute() {
     setEditing(s.name);
     setName(s.name);
     setTransport(s.transport);
+    setAuth(s.auth ?? (s.transport === "http" ? "oauth" : "none"));
     setCommand((s.command ?? []).join(" "));
     setUrl(s.url ?? "");
     setEnvJson(JSON.stringify(s.env ?? {}, null, 2));
@@ -165,6 +186,31 @@ export function McpRoute() {
     }
   };
 
+  const startOAuth = (s: McpServer) => {
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) {
+      toast("请先选择工作区", "error");
+      return;
+    }
+    const params = new URLSearchParams({ server: s.name, workspace_id: workspaceId });
+    window.location.href = `/api/oauth/mcp/start?${params.toString()}`;
+  };
+
+  const disconnectOAuth = async (s: McpServer) => {
+    try {
+      await disconnectMcpOAuth(s.name);
+      try {
+        await reconnectMcp(s.name);
+      } catch {
+        // 预期：无 token 时重连失败
+      }
+      toast("已断开 OAuth", "success");
+      await load();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  };
+
   const remove = async (s: McpServer) => {
     if (!(await confirm({ title: "删除 MCP 服务", body: `删除「${s.name}」？`, danger: true, confirmText: "删除" }))) return;
     try {
@@ -202,12 +248,23 @@ export function McpRoute() {
                           {s.connected ? "在线" : "离线"}
                         </Badge>
                         <Badge>{s.transport}</Badge>
+                        {s.oauth_required ? (
+                          <Badge variant={s.oauth_connected ? "success" : "outline"}>
+                            OAuth {s.oauth_connected ? "已授权" : "未授权"}
+                          </Badge>
+                        ) : null}
                       </div>
                       <p className={listItemBriefClass}>
                         {s.transport === "http" ? s.url : (s.command ?? []).join(" ")}
                       </p>
                     </div>
                     <div className="flex shrink-0 gap-1">
+                      {s.oauth_required && !s.oauth_connected ? (
+                        <Button variant="outline" size="sm" onClick={() => startOAuth(s)}>连接</Button>
+                      ) : null}
+                      {s.oauth_required && s.oauth_connected ? (
+                        <Button variant="ghost" size="sm" onClick={() => disconnectOAuth(s)}>断开</Button>
+                      ) : null}
                       <Button variant="ghost" size="icon-sm" onClick={() => reconnect(s)} aria-label="重连"><RefreshCw /></Button>
                       <Button variant="ghost" size="icon-sm" onClick={() => startEdit(s)} aria-label="编辑"><Pencil /></Button>
                       <Button variant="ghost" size="icon-sm" onClick={() => remove(s)} aria-label="删除"><Trash2 /></Button>
@@ -222,9 +279,7 @@ export function McpRoute() {
                         <pre className="max-h-32 overflow-y-auto whitespace-pre-wrap rounded-md bg-surface-2 p-2 font-mono text-xs text-foreground">
                           {JSON.stringify(s.env, null, 2)}
                         </pre>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">无环境变量</p>
-                      )}
+                      ) : null}
                       {s.runtime_error && <p className="text-xs text-destructive">{s.runtime_error}</p>}
                       {s.tools.length > 0 && (
                         <div className="flex flex-wrap gap-1">
@@ -273,10 +328,19 @@ export function McpRoute() {
                   <Input value={command} onChange={(e) => setCommand(e.target.value)} placeholder="npx @scope/mcp-server" />
                 </div>
               ) : (
-                <div className="grid gap-1.5">
-                  <Label>URL</Label>
-                  <Input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com/mcp" />
-                </div>
+                <>
+                  <div className="grid gap-1.5">
+                    <Label>URL</Label>
+                    <Input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://mcp.notion.com/mcp" />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label>认证</Label>
+                    <Select value={auth} onChange={(e) => setAuth(e.target.value as "none" | "oauth")}>
+                      <option value="oauth">OAuth（远程 MCP 推荐）</option>
+                      <option value="none">无（匿名 HTTP）</option>
+                    </Select>
+                  </div>
+                </>
               )}
               <div className="grid gap-1.5">
                 <div className="flex items-center justify-between gap-2">

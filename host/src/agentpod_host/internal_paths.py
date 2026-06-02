@@ -16,6 +16,7 @@ AGENT_INTERNAL_PREFIXES: tuple[str, ...] = (
     "/internal/scheduled-tasks",
     "/internal/settings",
     "/internal/usage",
+    "/internal/mcp-oauth",
 )
 
 

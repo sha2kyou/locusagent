@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -16,7 +17,7 @@ from .routers import internal as internal_router
 from .routers import v1 as v1_router
 from .routers import workspace as workspace_router
 from .workspace import ensure_workspace_storage_initialized, iter_workspace_ids, set_workspace_id
-from .workspace_runtime import mark_workspace_runtime_bootstrapped
+from .workspace_runtime import mark_workspace_runtime_bootstrapped, warm_mcp_runtime_background
 
 
 @asynccontextmanager
@@ -56,6 +57,8 @@ async def lifespan(app: FastAPI):
 
     await start_embedding_worker()
     mark_workspace_runtime_bootstrapped()
+    for wid in iter_workspace_ids():
+        asyncio.create_task(warm_mcp_runtime_background(wid), name=f"mcp-warm-{wid}")
 
     try:
         yield

@@ -75,20 +75,41 @@ function parseApiError(status: number, data: unknown): ApiError {
 export interface RequestOptions extends RequestInit {
   /** 401 时不自动跳转（用于探测登录态） */
   noAuthRedirect?: boolean;
+  /** 请求超时（毫秒），默认 30s */
+  timeoutMs?: number;
+}
+
+const DEFAULT_API_TIMEOUT_MS = 30_000;
+
+function apiFetchSignal(opts: RequestOptions): AbortSignal | undefined {
+  const { signal, timeoutMs = DEFAULT_API_TIMEOUT_MS } = opts;
+  if (timeoutMs <= 0) return signal ?? undefined;
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  if (!signal) return timeoutSignal;
+  return AbortSignal.any([signal, timeoutSignal]);
 }
 
 export async function api<T = unknown>(url: string, opts: RequestOptions = {}): Promise<T> {
-  const { noAuthRedirect, headers, ...rest } = opts;
+  const { noAuthRedirect, headers, timeoutMs: _t, signal: _s, ...rest } = opts;
   const workspaceId = getWorkspaceId();
-  const res = await fetch(url, {
-    credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json",
-      ...(workspaceId ? { "X-Workspace-Id": workspaceId } : {}),
-      ...headers,
-    },
-    ...rest,
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        ...(workspaceId ? { "X-Workspace-Id": workspaceId } : {}),
+        ...headers,
+      },
+      signal: apiFetchSignal(opts),
+      ...rest,
+    });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "TimeoutError") {
+      throw new ApiError("请求超时，请稍后重试", { status: 408, code: "timeout" });
+    }
+    throw e;
+  }
 
   if (res.status === 401 && !noAuthRedirect) {
     redirectToLogin();

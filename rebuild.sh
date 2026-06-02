@@ -56,6 +56,8 @@ case "$cmd" in
     export DOCKER_BUILDKIT=1
     docker compose --progress=plain build "host"
     docker compose up -d --no-deps "host"
+    # host 容器 IP 会变；Caddy 可能仍连旧地址导致 502，需一并刷新上游
+    docker compose restart caddy
     ;;
   agent)
     user_id="${2:-}"

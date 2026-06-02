@@ -36,8 +36,11 @@ log = get_logger("orchestrator")
 HEALTH_TIMEOUT_COLD_START = 30.0
 HEALTH_TIMEOUT_RESUME = 30.0
 HEALTH_TIMEOUT_RUNNING = 5.0
+# 运行中容器健康探测缓存，避免每次 workspace 代理都阻塞最多 5s
+HEALTH_CACHE_SEC = 15.0
 
 _user_locks: dict[int, asyncio.Lock] = {}
+_health_ok_until: dict[int, float] = {}
 _locks_guard = asyncio.Lock()
 
 
@@ -537,8 +540,14 @@ async def ensure_container_ready(user_id: int) -> tuple[ContainerStatus, dict[st
             status = ContainerStatus.ABSENT
         elif docker_status == "running":
             await _run_blocking(lambda: _connect_self_to_network(network))
+            now = asyncio.get_running_loop().time()
+            if _health_ok_until.get(user_id, 0.0) > now:
+                return ContainerStatus.RUNNING, {"container_name": name}
             ok = await _wait_health(name, timeout=HEALTH_TIMEOUT_RUNNING)
-            if not ok:
+            if ok:
+                _health_ok_until[user_id] = now + HEALTH_CACHE_SEC
+            else:
+                _health_ok_until.pop(user_id, None)
                 log.warning("container_health_degraded", user_id=user_id, container=name)
             return ContainerStatus.RUNNING, {"container_name": name}
         if docker_status == "paused":

@@ -1,5 +1,12 @@
 import { lazy, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+
+// 已移除 PWA：注销旧 Service Worker，避免继续拦截 /api 请求
+if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+  void navigator.serviceWorker.getRegistrations().then((regs) => {
+    for (const reg of regs) void reg.unregister();
+  });
+}
 import { createBrowserRouter, Navigate, RouterProvider, useLocation } from "react-router-dom";
 import { stripWorkspacePrefix, withWorkspacePrefix } from "@/app/workspace-route";
 import "./index.css";

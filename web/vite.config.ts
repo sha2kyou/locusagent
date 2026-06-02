@@ -2,45 +2,12 @@ import { defineConfig } from 'vite'
 import { fileURLToPath, URL } from 'node:url'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { VitePWA } from 'vite-plugin-pwa'
 
 const API_TARGET = process.env.API_TARGET ?? 'http://127.0.0.1:8080'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      // 图标勿进 precache，否则 Safari 添加到程序坞后会长期命中旧 PNG
-      includeAssets: ['favicon.svg'],
-      manifest: {
-        name: 'AgentPod',
-        short_name: 'AgentPod',
-        description: '个人 AI Agent 工作区',
-        lang: 'zh-CN',
-        start_url: '/',
-        scope: '/',
-        display: 'standalone',
-        theme_color: '#ffffff',
-        background_color: '#ffffff',
-        icons: [
-          { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-        ],
-      },
-      workbox: {
-        skipWaiting: true,
-        clientsClaim: true,
-        navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api(?:\/|$)/, /^\/health(?:\/|$)?/],
-        globPatterns: ['**/*.{js,css,html,ico,svg,woff2,webmanifest}'],
-        globIgnores: ['**/apple-touch-icon.png', '**/pwa-192.png', '**/pwa-512.png'],
-      },
-    }),
-  ],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
