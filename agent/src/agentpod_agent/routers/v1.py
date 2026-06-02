@@ -18,7 +18,6 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..auth import verify_internal_token
-from ..config import get_settings
 from ..host_settings import build_runtime_time_context
 from ..core.models import resolve_model
 from ..core import (
@@ -51,6 +50,23 @@ router = APIRouter(prefix="/v1", tags=["v1"], dependencies=[Depends(verify_inter
 router.include_router(sessions_router)
 log = get_logger("v1")
 _background_tasks: set[asyncio.Task] = set()
+
+PUBLIC_API_MODEL_ID = "agentpod-v1"
+
+
+async def _resolve_v1_model(requested: str | None) -> tuple[str, str]:
+    """对外模型 id 与内部 LLM 模型名分离。"""
+    if requested not in (None, "", PUBLIC_API_MODEL_ID):
+        raise ValueError(f"unsupported model; use {PUBLIC_API_MODEL_ID!r} or omit")
+    return PUBLIC_API_MODEL_ID, await resolve_model("main")
+
+
+def _llm_extra(extra: dict[str, Any] | None) -> dict[str, Any] | None:
+    """透传上游参数时禁止客户端覆盖内部 model。"""
+    if not extra:
+        return None
+    sanitized = {k: v for k, v in extra.items() if k != "model"}
+    return sanitized or None
 
 
 async def shutdown_v1_background_tasks(*, timeout_seconds: float = 3.0) -> None:
@@ -324,8 +340,13 @@ async def _persist_loop_messages(
 
 @router.post("/chat/completions")
 async def chat_completions(req: ChatRequest):
-    settings = get_settings()
-    chosen_model = req.model or await resolve_model("main")
+    try:
+        public_model, internal_model = await _resolve_v1_model(req.model)
+    except ValueError as exc:
+        return JSONResponse(
+            {"error": {"code": "bad_request", "message": str(exc)}},
+            status_code=400,
+        )
     sid, _ = await _ensure_session(req)
 
     handle = None
@@ -365,8 +386,8 @@ async def chat_completions(req: ChatRequest):
                 result, final_messages = await run_chat_loop(
                     messages,
                     registry=registry,
-                    model=chosen_model,
-                    extra=req.extra,
+                    model=internal_model,
+                    extra=_llm_extra(req.extra),
                     session_id=sid,
                     run_id=run_id,
                 )
@@ -388,7 +409,7 @@ async def chat_completions(req: ChatRequest):
                 _schedule_post_run(
                     sid,
                     tool_calls_made=result.tool_calls_made,
-                    model=chosen_model,
+                    model=internal_model,
                     messages=final_messages,
                 )
 
@@ -396,7 +417,7 @@ async def chat_completions(req: ChatRequest):
                     "id": chat_id,
                     "object": "chat.completion",
                     "created": created,
-                    "model": chosen_model,
+                    "model": public_model,
                     "session_id": sid,
                     "run_id": run_id,
                     "choices": [
@@ -424,8 +445,8 @@ async def chat_completions(req: ChatRequest):
                     session_id=sid,
                     messages=messages,
                     registry=registry,
-                    model=chosen_model,
-                    extra=req.extra,
+                    model=internal_model,
+                    extra=_llm_extra(req.extra),
                     auto_title_user_query=user_query,
                 )
             except Exception as exc:
@@ -437,7 +458,7 @@ async def chat_completions(req: ChatRequest):
             "id": chat_id,
             "object": "chat.completion.chunk",
             "created": created,
-            "model": chosen_model,
+            "model": public_model,
             "choices": [{"index": 0, "delta": delta, "finish_reason": None}],
         }
         body.update(extra_fields)
@@ -484,7 +505,7 @@ async def chat_completions(req: ChatRequest):
             "id": chat_id,
             "object": "chat.completion.chunk",
             "created": created,
-            "model": chosen_model,
+            "model": public_model,
             "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
             "run_id": run_id,
         }
@@ -500,8 +521,13 @@ async def chat_completions(req: ChatRequest):
 
 @router.post("/responses")
 async def responses(req: ResponsesRequest):
-    settings = get_settings()
-    chosen_model = req.model or await resolve_model("main")
+    try:
+        public_model, internal_model = await _resolve_v1_model(req.model)
+    except ValueError as exc:
+        return JSONResponse(
+            {"error": {"code": "bad_request", "message": str(exc)}},
+            status_code=400,
+        )
     if req.stream:
         return JSONResponse(
             {
@@ -570,8 +596,8 @@ async def responses(req: ResponsesRequest):
             result, final_messages = await run_chat_loop(
                 messages,
                 registry=registry,
-                model=chosen_model,
-                extra=req.extra,
+                model=internal_model,
+                extra=_llm_extra(req.extra),
                 session_id=sid,
                 run_id=run_id,
             )
@@ -593,7 +619,7 @@ async def responses(req: ResponsesRequest):
             _schedule_post_run(
                 sid,
                 tool_calls_made=result.tool_calls_made,
-                model=chosen_model,
+                model=internal_model,
                 messages=final_messages,
             )
             response_id = await create_response(
@@ -601,7 +627,7 @@ async def responses(req: ResponsesRequest):
                 run_id=run_id,
                 previous_response_id=req.previous_response_id,
                 assistant_message_id=last_assistant_id,
-                model=chosen_model,
+                model=public_model,
                 input_text=user_query,
                 output_text=result.final_text,
                 status="completed",
@@ -610,7 +636,7 @@ async def responses(req: ResponsesRequest):
                 {
                     "id": response_id,
                     "object": "response",
-                    "model": chosen_model,
+                    "model": public_model,
                     "status": "completed",
                     "previous_response_id": req.previous_response_id,
                     "output": [
@@ -646,7 +672,7 @@ async def retrieve_response(response_id: str) -> JSONResponse:
         {
             "id": item["id"],
             "object": "response",
-            "model": item.get("model"),
+            "model": PUBLIC_API_MODEL_ID,
             "status": item.get("status") or "completed",
             "previous_response_id": item.get("previous_response_id"),
             "output": [
@@ -672,7 +698,7 @@ async def list_models() -> dict:
         "object": "list",
         "data": [
             {
-                "id": await resolve_model("main"),
+                "id": PUBLIC_API_MODEL_ID,
                 "object": "model",
                 "owned_by": "agentpod",
             }
