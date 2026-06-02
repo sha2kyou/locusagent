@@ -51,9 +51,20 @@ def install_pages(app: FastAPI) -> None:
     async def favicon():
         return HTMLResponse("", status_code=204)
 
+    def _spa_static_file(relative_path: str) -> FileResponse | None:
+        """manifest / sw / 图标等 SPA 根目录静态文件（构建产物）。"""
+        candidate = (SPA_DIR / relative_path).resolve()
+        if not candidate.is_file() or SPA_DIR.resolve() not in candidate.parents:
+            return None
+        return FileResponse(candidate, headers={"Cache-Control": "no-cache"})
+
     # 通用 history 回退：非后端前缀的 GET 一律返回 index.html，交由前端 Router 处理
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa_fallback(full_path: str) -> FileResponse:
         if full_path.startswith(API_PREFIXES):
             raise HTTPException(status_code=404)
+        if full_path:
+            static = _spa_static_file(full_path)
+            if static is not None:
+                return static
         return spa_index()

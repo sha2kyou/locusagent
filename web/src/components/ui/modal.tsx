@@ -34,25 +34,35 @@ export function Modal({
   closeDisabled = false,
 }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  const closeDisabledRef = useRef(closeDisabled);
+  onCloseRef.current = onClose;
+  closeDisabledRef.current = closeDisabled;
 
+  const focusables = () =>
+    Array.from(
+      dialogRef.current?.querySelectorAll<HTMLElement>(
+        'a[href],button:not([disabled]),textarea,input,select,[tabindex]:not([tabindex="-1"])',
+      ) ?? [],
+    ).filter((el) => el.offsetParent !== null);
+
+  // 仅在打开时聚焦一次；勿依赖 onClose，否则父组件重渲染会反复抢焦点
   useEffect(() => {
     if (!open) return;
     const prevFocus = document.activeElement as HTMLElement | null;
-
-    const focusables = () =>
-      Array.from(
-        dialogRef.current?.querySelectorAll<HTMLElement>(
-          'a[href],button:not([disabled]),textarea,input,select,[tabindex]:not([tabindex="-1"])',
-        ) ?? [],
-      ).filter((el) => el.offsetParent !== null);
-
-    // 打开后聚焦首个可聚焦元素（退化为对话框本身）
     const first = focusables()[0];
     (first ?? dialogRef.current)?.focus();
+    return () => {
+      prevFocus?.focus?.();
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (!closeDisabled) onClose();
+        if (!closeDisabledRef.current) onCloseRef.current();
         return;
       }
       if (e.key !== "Tab") return;
@@ -78,9 +88,8 @@ export function Modal({
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
-      prevFocus?.focus?.();
     };
-  }, [open, onClose, closeDisabled]);
+  }, [open]);
 
   if (!open) return null;
 
