@@ -105,6 +105,11 @@ function MarkdownBlock({ text }: { text: string }) {
       rehypePlugins={[rehypeKatex, rehypeHighlight]}
       components={{
         pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
+        table: ({ children, ...props }) => (
+          <div className="apod-table-scroll">
+            <table {...props}>{children}</table>
+          </div>
+        ),
         a: ({ children, href }) => (
           <a href={href} target="_blank" rel="noreferrer" className="text-brand underline underline-offset-2">
             {children}

@@ -341,25 +341,34 @@
   .dark .apod-prose .katex {
     color: var(--color-foreground);
   }
-  /* 表格：圆角描边卡片风格，与对话中的卡片一致（浅色表头 + 行分隔线，无竖线） */
-  .apod-prose table {
-    display: block;
-    width: max-content;
-    max-width: 100%;
+  /* 表格：列 max-width 内换行；整表过宽时横向滚动 */
+  .apod-prose .apod-table-scroll {
     margin: 0.9em 0;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
+  }
+  .apod-prose .apod-table-scroll > table {
+    width: max-content;
+    min-width: 100%;
+    margin: 0;
     border-collapse: separate;
     border-spacing: 0;
-    overflow-x: auto;
-    font-size: 0.92em;
+    font-size: 0.875em;
+    line-height: 1.45;
   }
   .apod-prose th,
   .apod-prose td {
-    padding: 0.5em 0.9em;
+    padding: 0.55em 1em;
     text-align: left;
     vertical-align: top;
     border-bottom: 1px solid var(--color-border);
+    max-width: 20rem;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
   .apod-prose thead th {
     background-color: var(--color-surface);
