@@ -137,7 +137,7 @@ register_builtin(
     Tool(
         name="web_search",
         description=(
-            "网页搜索，返回标题/URL/摘要。Host 已配置 Tavily 时经平台代理；否则使用 DuckDuckGo。"
+            "网页搜索，返回标题/URL/摘要。优先经平台内部代理；不可用时降级 DuckDuckGo。"
         ),
         parameters={
             "type": "object",

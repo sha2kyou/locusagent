@@ -1,10 +1,12 @@
+# syntax=docker/dockerfile:1
 # ---- frontend (Vite → host/.../web/spa) ----
 FROM node:22-alpine AS web
 
 WORKDIR /build/web
 
 COPY web/package.json web/package-lock.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --prefer-offline --no-audit --no-fund
 
 COPY web/ ./
 RUN npm run build

@@ -56,7 +56,7 @@ async def _extract_memory_candidates(
     settings = get_settings()
     from .models import resolve_model
 
-    chosen_model = model or resolve_model("memory_autostore")
+    chosen_model = model or await resolve_model("memory_autostore")
     client = get_llm_client()
     prompt = (
         "你是记忆提炼器。请从用户问题和助手回答中提炼对后续对话有长期价值的记忆。"

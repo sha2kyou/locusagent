@@ -2,14 +2,15 @@
 export const USAGE_SCENARIO_LABELS: Record<string, string> = {
   chat: "对话",
   compression: "上下文压缩",
-  title_generation: "会话标题",
+  title_generation: "标题生成",
   memory_autostore: "记忆提炼",
   curator: "记忆策展",
   skill_reflect: "技能反思",
   approval: "写入审查",
-  tavily: "Tavily 搜索",
+  tavily: "网络搜索",
+  duckduckgo: "网络搜索",
+  jina: "网页阅读",
   embedding: "向量嵌入",
-  duckduckgo: "DuckDuckGo 搜索",
   scheduled_run: "定时任务",
 };
 

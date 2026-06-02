@@ -69,13 +69,3 @@ def _role_to_field(role: ModelRole) -> str:
             return field
     raise KeyError(role)
 
-
-def auxiliary_env_for_agent(settings: Settings | None = None) -> dict[str, str]:
-    """注入 Agent 容器的模型名（非密钥）。"""
-    s = settings or get_settings()
-    env: dict[str, str] = {"LLM_MODEL": s.llm_model}
-    for env_key, field in _AUXILIARY_FIELDS:
-        value = (getattr(s, field) or "").strip()
-        if value:
-            env[env_key] = value
-    return env

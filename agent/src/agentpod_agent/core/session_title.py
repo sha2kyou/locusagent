@@ -67,7 +67,7 @@ async def maybe_generate_and_update_session_title(
 
     from .models import resolve_model
 
-    chosen_model = resolve_model("title_generation")
+    chosen_model = await resolve_model("title_generation")
     messages = [
         {"role": "system", "content": _TITLE_SYSTEM_PROMPT},
         {

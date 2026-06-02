@@ -29,7 +29,7 @@ async def _summarize(args: dict[str, Any]) -> ToolResult:
 
     from ..core.auxiliary_completion import create_chat_completion
 
-    model = resolve_model("compression")
+    model = await resolve_model("compression")
     resp = await create_chat_completion(
         get_llm_client(),
         model=model,

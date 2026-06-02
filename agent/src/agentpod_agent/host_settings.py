@@ -21,6 +21,10 @@ _TZ_CACHE_TTL_SECONDS = 60.0
 _tz_cache: tuple[str, float] | None = None
 _tz_cache_lock = asyncio.Lock()
 
+_MODEL_CACHE_TTL_SECONDS = 60.0
+_model_cache: dict[str, tuple[str, float]] = {}
+_model_cache_lock = asyncio.Lock()
+
 
 async def _fetch_timezone_from_host() -> str:
     base, headers = internal_base_and_headers()
@@ -61,6 +65,48 @@ async def get_timezone(*, force_refresh: bool = False) -> str:
             raise
         _tz_cache = (tz, time.monotonic() + _TZ_CACHE_TTL_SECONDS)
         return tz
+
+
+async def _fetch_model_from_host(role: str) -> str:
+    base, headers = internal_base_and_headers()
+    url = f"{base}/internal/settings/model"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(url, headers=headers, params={"role": role})
+    if resp.status_code >= 400:
+        raise HostSettingsError(error_detail(resp))
+    data = resp.json()
+    if not isinstance(data, dict):
+        raise HostSettingsError("invalid host response")
+    model = str(data.get("model") or "").strip()
+    if not model:
+        raise HostSettingsError("missing model in host response")
+    return model
+
+
+async def get_resolved_model(role: str, *, force_refresh: bool = False) -> str:
+    """从 Host 解析模型角色；60s 进程内缓存。"""
+    global _model_cache
+    now = time.monotonic()
+    if not force_refresh and role in _model_cache:
+        model, expires = _model_cache[role]
+        if now < expires:
+            return model
+
+    async with _model_cache_lock:
+        if not force_refresh and role in _model_cache:
+            model, expires = _model_cache[role]
+            if time.monotonic() < expires:
+                return model
+        try:
+            model = await _fetch_model_from_host(role)
+        except HostSettingsError as exc:
+            stale = _model_cache.get(role)
+            if stale is not None:
+                log.debug("model_fetch_failed_use_stale", role=role, error=str(exc))
+                return stale[0]
+            raise
+        _model_cache[role] = (model, time.monotonic() + _MODEL_CACHE_TTL_SECONDS)
+        return model
 
 
 async def build_runtime_time_context() -> str:

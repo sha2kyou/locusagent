@@ -134,6 +134,18 @@ async def mark_failed(memory_id: int) -> None:
     await run_in_thread(_do)
 
 
+async def memory_embedding_state(memory_id: int) -> str | None:
+    def _do() -> str | None:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT embedding_state FROM memory WHERE id=?",
+                (memory_id,),
+            ).fetchone()
+            return str(row["embedding_state"]) if row else None
+
+    return await run_in_thread(_do)
+
+
 async def get_content(memory_id: int) -> str | None:
     def _do() -> str | None:
         with conn_scope(load_vec=False) as c:

@@ -70,7 +70,7 @@ async def review_write(content: str, *, kind: str, source: str = "model") -> Gua
 
     user_content = f"类型：{kind}\n来源：{source}\n待审查内容：\n{text[:4000]}"
     try:
-        approval_model = resolve_model("approval")
+        approval_model = await resolve_model("approval")
         resp = await create_chat_completion(
             get_llm_client(),
             model=approval_model,

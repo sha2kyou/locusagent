@@ -38,7 +38,7 @@ def _estimate_text_tokens(text: str) -> int:
 
 def estimate_tokens(messages: list[dict[str, Any]]) -> int:
     try:
-        return _estimate_tokens_by_tiktoken(messages, model=get_settings().llm_model)
+        return _estimate_tokens_by_tiktoken(messages, model=None)
     except Exception as exc:
         log.warning("token_estimate_fallback", error=str(exc))
     total = 0

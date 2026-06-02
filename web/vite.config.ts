@@ -13,7 +13,8 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      // 图标勿进 precache，否则 Safari 添加到程序坞后会长期命中旧 PNG
+      includeAssets: ['favicon.svg'],
       manifest: {
         name: 'AgentPod',
         short_name: 'AgentPod',
@@ -22,8 +23,8 @@ export default defineConfig({
         start_url: '/',
         scope: '/',
         display: 'standalone',
-        theme_color: '#863bff',
-        background_color: '#f8fafc',
+        theme_color: '#ffffff',
+        background_color: '#ffffff',
         icons: [
           { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },
@@ -31,9 +32,12 @@ export default defineConfig({
         ],
       },
       workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/api(?:\/|$)/, /^\/health(?:\/|$)?/],
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,ico,svg,woff2,webmanifest}'],
+        globIgnores: ['**/apple-touch-icon.png', '**/pwa-192.png', '**/pwa-512.png'],
       },
     }),
   ],

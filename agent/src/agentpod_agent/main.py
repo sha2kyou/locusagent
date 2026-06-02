@@ -9,14 +9,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from .config import get_settings
-from .db import init_db
 from .errors import WsError, ws_error_handler, ws_validation_handler
 from .logging import configure_logging, get_logger
 from .memory import start_embedding_worker, stop_embedding_worker
 from .routers import internal as internal_router
 from .routers import v1 as v1_router
 from .routers import workspace as workspace_router
-from .tool_settings import load_tool_settings
+from .workspace import ensure_workspace_storage_initialized, iter_workspace_ids, set_workspace_id
 from .workspace_runtime import mark_workspace_runtime_bootstrapped
 
 
@@ -26,52 +25,49 @@ async def lifespan(app: FastAPI):
     log = get_logger("agent")
     settings = get_settings()
     app.state.settings = settings
-    log.info("agent_starting", user_id=settings.user_id, model=settings.llm_model)
-    init_db()
+    log.info("agent_starting", user_id=settings.user_id, workspaces=len(iter_workspace_ids()))
 
+    from .db import init_db
     from .core.persistence import expire_stale_runs, interrupt_running_runs_on_startup
 
-    startup_interrupt_stats = await interrupt_running_runs_on_startup()
-    if startup_interrupt_stats["runs_interrupted"] > 0:
-        log.info(
-            "startup_running_runs_interrupted",
-            runs_interrupted=startup_interrupt_stats["runs_interrupted"],
-            sessions_marked_interrupted=startup_interrupt_stats["sessions_marked_interrupted"],
-        )
+    interrupt_stats = {"runs_interrupted": 0, "sessions_marked_interrupted": 0}
+    for wid in iter_workspace_ids():
+        set_workspace_id(wid)
+        ensure_workspace_storage_initialized(wid)
+        init_db()
+        stats = await interrupt_running_runs_on_startup()
+        interrupt_stats["runs_interrupted"] += stats["runs_interrupted"]
+        interrupt_stats["sessions_marked_interrupted"] += stats["sessions_marked_interrupted"]
 
-    expired = await expire_stale_runs()
-    if expired:
-        log.info("stale_runs_expired", count=expired)
+    if interrupt_stats["runs_interrupted"] > 0:
+        log.info("startup_running_runs_interrupted", **interrupt_stats)
 
-    from .skills import list_skills
+    expired_total = 0
+    for wid in iter_workspace_ids():
+        set_workspace_id(wid)
+        expired_total += await expire_stale_runs()
+    if expired_total:
+        log.info("stale_runs_expired", count=expired_total)
+
     from .tools import registry as tool_registry
 
-    skills = list_skills()
-    tool_settings = load_tool_settings()
-    for name, enabled in tool_settings.builtin_tools.items():
-        tool_registry.set_enabled(name, enabled)
     app.state.tool_registry = tool_registry
-    log.info("agent_ready", skills=len(skills), tools=len(tool_registry.list()))
+    log.info("agent_ready", tools=len(tool_registry.list()))
 
     await start_embedding_worker()
-    from .mcp_.client import start_mcp, stop_mcp
-
-    try:
-        await start_mcp()
-        mark_workspace_runtime_bootstrapped()
-    except Exception as exc:
-        log.error("mcp_start_failed", error=str(exc))
+    mark_workspace_runtime_bootstrapped()
 
     try:
         yield
     finally:
         from .core.run_manager import shutdown_run_manager
+        from .mcp_.client import stop_all_mcp
         from .routers.v1 import shutdown_v1_background_tasks
 
         await shutdown_v1_background_tasks()
         await shutdown_run_manager()
         try:
-            await stop_mcp()
+            await stop_all_mcp()
         except Exception as exc:
             log.warning("mcp_stop_error", error=str(exc))
         await stop_embedding_worker()

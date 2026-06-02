@@ -1,21 +1,12 @@
-"""MCP 客户端：启动时建立 session，发现 tools 注册到 ToolRegistry。
-
-支持：
-- stdio：fork 子进程（继承容器约束 user/cap/seccomp）
-- streamable HTTP：URL 必须在出网白名单内（由网络层强制，本模块不再二次校验）
-
-约束：
-- 单个 server 失败不影响其他流程（捕获异常仅记日志）。
-- 名字冲突：MCP 工具以 `mcp__{server}__{tool}` 命名，避免与内置工具碰撞。
-"""
+"""MCP 客户端：按工作区隔离 manager，工具注册带 workspace 前缀 category。"""
 
 from __future__ import annotations
 
 import asyncio
 import time
-from uuid import uuid4
 from contextlib import AsyncExitStack
 from typing import Any
+from uuid import uuid4
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -26,15 +17,22 @@ from ..logging import get_logger
 from ..tool_settings import is_mcp_server_enabled
 from ..tools import Tool, ToolError, ToolResult
 from ..tools import registry as tool_registry
-from ..workspace import workspace_data_dir
+from ..workspace import (
+    get_workspace_id,
+    mcp_tool_category,
+    mcp_tool_full_name,
+    normalize_workspace_id,
+    workspace_data_dir,
+)
 from .config import MCPServerConfig, get_mcp_server, list_mcp_servers
 
 log = get_logger("mcp")
 
+_managers_lock = asyncio.Lock()
 
-def _stdio_env(cfg: MCPServerConfig) -> dict[str, str]:
-    """只读根文件系统 + /tmp noexec：npx 缓存必须落在可执行的 /data volume。"""
-    data_dir = workspace_data_dir()
+
+def _stdio_env(cfg: MCPServerConfig, workspace_id: str) -> dict[str, str]:
+    data_dir = workspace_data_dir(workspace_id)
     base = {
         "HOME": str(data_dir),
         "NPM_CONFIG_CACHE": str(data_dir / ".npm-cache"),
@@ -45,7 +43,8 @@ def _stdio_env(cfg: MCPServerConfig) -> dict[str, str]:
 
 
 class MCPManager:
-    def __init__(self) -> None:
+    def __init__(self, workspace_id: str) -> None:
+        self._workspace_id = normalize_workspace_id(workspace_id)
         self._started = False
         self._stacks: dict[str, AsyncExitStack] = {}
         self._sessions: dict[str, ClientSession] = {}
@@ -58,12 +57,16 @@ class MCPManager:
         if self._started:
             return
         self._started = True
-        servers = list_mcp_servers()
-        for cfg in servers:
+        for cfg in list_mcp_servers(self._workspace_id):
             try:
                 await self._connect(cfg)
             except Exception as exc:
-                log.error("mcp_connect_failed", server=cfg.name, error=str(exc))
+                log.error(
+                    "mcp_connect_failed",
+                    server=cfg.name,
+                    workspace_id=self._workspace_id,
+                    error=str(exc),
+                )
 
     async def _connect(self, cfg: MCPServerConfig) -> None:
         if cfg.name in self._sessions:
@@ -73,7 +76,7 @@ class MCPManager:
             params = StdioServerParameters(
                 command=cfg.command[0] if cfg.command else "",
                 args=cfg.command[1:] + cfg.args if len(cfg.command) > 1 else cfg.args,
-                env=_stdio_env(cfg),
+                env=_stdio_env(cfg, self._workspace_id),
             )
             read, write = await stack.enter_async_context(stdio_client(params))
         elif cfg.transport == "http":
@@ -90,7 +93,12 @@ class MCPManager:
             self._sessions[cfg.name] = session
             self._stacks[cfg.name] = stack
             await self._register_tools(cfg.name, session)
-            log.info("mcp_connected", server=cfg.name, transport=cfg.transport)
+            log.info(
+                "mcp_connected",
+                server=cfg.name,
+                workspace_id=self._workspace_id,
+                transport=cfg.transport,
+            )
         except Exception:
             await stack.aclose()
             raise
@@ -99,15 +107,21 @@ class MCPManager:
         listed = await session.list_tools()
         names: list[str] = []
         catalog: list[dict[str, Any]] = []
+        category = mcp_tool_category(server_name, self._workspace_id)
         for tool_def in listed.tools:
-            full_name = f"mcp__{server_name}__{tool_def.name}"
+            full_name = mcp_tool_full_name(server_name, tool_def.name, self._workspace_id)
             description = tool_def.description or f"MCP tool {tool_def.name}@{server_name}"
             schema = tool_def.inputSchema or {"type": "object", "properties": {}}
             schema_summary = _schema_summary(schema)
 
-            async def _handler(args: dict[str, Any], _server=server_name, _name=tool_def.name) -> ToolResult:
+            async def _handler(
+                args: dict[str, Any],
+                _server=server_name,
+                _name=tool_def.name,
+                _mgr=self,
+            ) -> ToolResult:
                 try:
-                    result = await self._call_tool_with_retry(_server, _name, args)
+                    result = await _mgr._call_tool_with_retry(_server, _name, args)
                 except Exception as exc:
                     raise ToolError(f"mcp call failed: {exc}") from exc
                 if getattr(result, "isError", False):
@@ -121,7 +135,7 @@ class MCPManager:
                     parameters=schema,
                     handler=_handler,
                     enabled=is_mcp_server_enabled(server_name),
-                    category=f"mcp:{server_name}",
+                    category=category,
                 )
             )
             names.append(full_name)
@@ -136,7 +150,17 @@ class MCPManager:
             )
         self._registered_tool_names[server_name] = names
         self._tool_catalog[server_name] = catalog
-        log.info("mcp_tools_registered", server=server_name, count=len(listed.tools))
+        log.info(
+            "mcp_tools_registered",
+            server=server_name,
+            workspace_id=self._workspace_id,
+            count=len(listed.tools),
+        )
+
+    async def publish_tools_to_registry(self) -> None:
+        """工作区切回时，把已连接 session 的工具重新挂到全局 registry。"""
+        for server_name, session in self._sessions.items():
+            await self._register_tools(server_name, session)
 
     async def _call_tool_with_retry(
         self,
@@ -155,6 +179,7 @@ class MCPManager:
                 server=server_name,
                 tool=tool_name,
                 phase=phase,
+                workspace_id=self._workspace_id,
                 timeout_seconds=timeout_seconds,
             )
             try:
@@ -167,6 +192,7 @@ class MCPManager:
                     server=server_name,
                     tool=tool_name,
                     phase=phase,
+                    workspace_id=self._workspace_id,
                     elapsed_seconds=elapsed,
                     timeout_seconds=timeout_seconds,
                 )
@@ -179,6 +205,7 @@ class MCPManager:
                     server=server_name,
                     tool=tool_name,
                     phase=phase,
+                    workspace_id=self._workspace_id,
                     elapsed_seconds=elapsed,
                     error=str(exc),
                 )
@@ -190,6 +217,7 @@ class MCPManager:
                 server=server_name,
                 tool=tool_name,
                 phase=phase,
+                workspace_id=self._workspace_id,
                 elapsed_seconds=elapsed,
             )
             return result
@@ -205,6 +233,7 @@ class MCPManager:
                 request_id=request_id,
                 server=server_name,
                 tool=tool_name,
+                workspace_id=self._workspace_id,
                 error=str(first_exc),
             )
             await self.reconnect_server(server_name)
@@ -223,7 +252,12 @@ class MCPManager:
         try:
             await self._connect(cfg)
         except Exception as exc:
-            log.error("mcp_runtime_add_failed", server=cfg.name, error=str(exc))
+            log.error(
+                "mcp_runtime_add_failed",
+                server=cfg.name,
+                workspace_id=self._workspace_id,
+                error=str(exc),
+            )
             self._last_errors[cfg.name] = str(exc)
             return {
                 "name": cfg.name,
@@ -240,7 +274,7 @@ class MCPManager:
         }
 
     async def reconnect_server(self, server_name: str) -> dict[str, Any]:
-        cfg = get_mcp_server(server_name)
+        cfg = get_mcp_server(server_name, self._workspace_id)
         if cfg is None:
             return {"name": server_name, "connected": False, "tools": [], "error": "server not found"}
         lock = self._reconnect_locks.setdefault(server_name, asyncio.Lock())
@@ -255,7 +289,7 @@ class MCPManager:
                 params = StdioServerParameters(
                     command=cfg.command[0] if cfg.command else "",
                     args=cfg.command[1:] + cfg.args if len(cfg.command) > 1 else cfg.args,
-                    env=_stdio_env(cfg),
+                    env=_stdio_env(cfg, self._workspace_id),
                 )
                 read, write = await stack.enter_async_context(stdio_client(params))
             elif cfg.transport == "http":
@@ -271,7 +305,7 @@ class MCPManager:
             tools = [
                 {
                     "name": t.name,
-                    "full_name": f"mcp__{cfg.name}__{t.name}",
+                    "full_name": mcp_tool_full_name(cfg.name, t.name, self._workspace_id),
                     "description": t.description or f"MCP tool {t.name}@{cfg.name}",
                     "input_schema": t.inputSchema or {"type": "object", "properties": {}},
                     "schema_summary": _schema_summary(t.inputSchema or {"type": "object", "properties": {}}),
@@ -295,7 +329,12 @@ class MCPManager:
             try:
                 await stack.aclose()
             except Exception as exc:
-                log.warning("mcp_server_close_error", server=server_name, error=str(exc))
+                log.warning(
+                    "mcp_server_close_error",
+                    server=server_name,
+                    workspace_id=self._workspace_id,
+                    error=str(exc),
+                )
         return bool(tool_names or stack is not None)
 
     def runtime_servers(self) -> dict[str, dict[str, Any]]:
@@ -310,7 +349,9 @@ class MCPManager:
         return out
 
     async def stop(self) -> None:
-        for server_name in list(self._sessions.keys() | self._stacks.keys() | self._registered_tool_names.keys()):
+        for server_name in list(
+            self._sessions.keys() | self._stacks.keys() | self._registered_tool_names.keys()
+        ):
             await self.remove_server(server_name)
         self._registered_tool_names.clear()
         self._tool_catalog.clear()
@@ -319,6 +360,9 @@ class MCPManager:
         self._reconnect_locks.clear()
         self._last_errors.clear()
         self._started = False
+
+
+_managers: dict[str, MCPManager] = {}
 
 
 def _extract_text(result: Any) -> str:
@@ -348,39 +392,87 @@ def _schema_summary(schema: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
-_manager = MCPManager()
+async def _get_or_create_manager(workspace_id: str) -> MCPManager:
+    wid = normalize_workspace_id(workspace_id)
+    async with _managers_lock:
+        mgr = _managers.get(wid)
+        if mgr is None:
+            mgr = MCPManager(wid)
+            _managers[wid] = mgr
+        return mgr
+
+
+async def ensure_mcp_started(workspace_id: str) -> MCPManager:
+    mgr = await _get_or_create_manager(workspace_id)
+    if not mgr._started:
+        await mgr.start()
+    return mgr
+
+
+async def sync_mcp_tools_for_workspace(workspace_id: str) -> None:
+    """注册当前工作区 MCP 工具（全局唯一命名）；LLM schema 由 registry 按 ContextVar 过滤。"""
+    wid = normalize_workspace_id(workspace_id)
+    mgr = await ensure_mcp_started(wid)
+    await mgr.publish_tools_to_registry()
 
 
 async def start_mcp() -> None:
-    await _manager.start()
+    await ensure_mcp_started(get_workspace_id())
 
 
 async def stop_mcp() -> None:
-    await _manager.stop()
+    await stop_all_mcp()
+
+
+async def stop_all_mcp() -> None:
+    async with _managers_lock:
+        managers = list(_managers.values())
+        _managers.clear()
+    for mgr in managers:
+        await mgr.stop()
 
 
 async def connect_mcp_server(cfg: MCPServerConfig) -> dict[str, Any]:
-    return await _manager.add_server(cfg)
+    mgr = await ensure_mcp_started(get_workspace_id())
+    return await mgr.add_server(cfg)
 
 
 async def disconnect_mcp_server(server_name: str) -> bool:
-    return await _manager.remove_server(server_name)
+    mgr = await _get_or_create_manager(get_workspace_id())
+    return await mgr.remove_server(server_name)
 
 
 def list_mcp_runtime() -> dict[str, dict[str, Any]]:
-    return _manager.runtime_servers()
+    wid = get_workspace_id()
+    mgr = _managers.get(wid)
+    if mgr is None:
+        return {}
+    return mgr.runtime_servers()
 
 
 async def reconnect_mcp_server(server_name: str) -> dict[str, Any]:
-    return await _manager.reconnect_server(server_name)
+    mgr = await ensure_mcp_started(get_workspace_id())
+    return await mgr.reconnect_server(server_name)
 
 
 async def probe_mcp_server(cfg: MCPServerConfig) -> dict[str, Any]:
-    return await _manager.probe_server(cfg)
+    mgr = await _get_or_create_manager(get_workspace_id())
+    return await mgr.probe_server(cfg)
+
+
+async def reconnect_all_mcp_servers_for_workspace(workspace_id: str) -> dict[str, Any]:
+    mgr = await ensure_mcp_started(workspace_id)
+    results: dict[str, Any] = {}
+    for cfg in list_mcp_servers(workspace_id):
+        results[cfg.name] = await mgr.reconnect_server(cfg.name)
+    return results
 
 
 async def reconnect_all_mcp_servers() -> dict[str, Any]:
-    results: dict[str, Any] = {}
-    for cfg in list_mcp_servers():
-        results[cfg.name] = await _manager.reconnect_server(cfg.name)
-    return results
+    from ..workspace import iter_workspace_ids, set_workspace_id
+
+    all_results: dict[str, Any] = {}
+    for wid in iter_workspace_ids():
+        set_workspace_id(wid)
+        all_results[wid] = await reconnect_all_mcp_servers_for_workspace(wid)
+    return all_results

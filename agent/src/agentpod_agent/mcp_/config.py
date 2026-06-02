@@ -1,4 +1,4 @@
-"""MCP server 配置：YAML 持久化在 /data/mcp.yaml。"""
+"""MCP server 配置：YAML 持久化在各工作区 agent.sqlite 同目录。"""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Literal
 
 import yaml
 
-from ..workspace import workspace_data_dir
+from ..workspace import get_workspace_id, normalize_workspace_id, workspace_data_dir
 
 Transport = Literal["stdio", "http"]
 
@@ -27,12 +27,18 @@ class MCPServerConfig:
         return d
 
 
-def _config_path() -> Path:
-    return workspace_data_dir() / "mcp.yaml"
+def _resolve_workspace_id(workspace_id: str | None) -> str:
+    if workspace_id is not None:
+        return normalize_workspace_id(workspace_id)
+    return get_workspace_id()
 
 
-def load_mcp_config() -> list[MCPServerConfig]:
-    path = _config_path()
+def _config_path(workspace_id: str | None = None) -> Path:
+    return workspace_data_dir(_resolve_workspace_id(workspace_id)) / "mcp.yaml"
+
+
+def load_mcp_config(workspace_id: str | None = None) -> list[MCPServerConfig]:
+    path = _config_path(workspace_id)
     if not path.is_file():
         return []
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -57,19 +63,19 @@ def load_mcp_config() -> list[MCPServerConfig]:
     return out
 
 
-def _save_all(items: list[MCPServerConfig]) -> None:
-    path = _config_path()
+def _save_all(items: list[MCPServerConfig], *, workspace_id: str | None = None) -> None:
+    path = _config_path(workspace_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"servers": [it.to_dict() for it in items]}
     path.write_text(yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
 
-def list_mcp_servers() -> list[MCPServerConfig]:
-    return load_mcp_config()
+def list_mcp_servers(workspace_id: str | None = None) -> list[MCPServerConfig]:
+    return load_mcp_config(workspace_id)
 
 
-def get_mcp_server(name: str) -> MCPServerConfig | None:
-    for item in load_mcp_config():
+def get_mcp_server(name: str, workspace_id: str | None = None) -> MCPServerConfig | None:
+    for item in load_mcp_config(workspace_id):
         if item.name == name:
             return item
     return None
@@ -86,33 +92,37 @@ def _validate(cfg: MCPServerConfig) -> None:
         raise ValueError("http transport requires url")
 
 
-def add_mcp_server(cfg: MCPServerConfig) -> MCPServerConfig:
+def add_mcp_server(cfg: MCPServerConfig, workspace_id: str | None = None) -> MCPServerConfig:
     _validate(cfg)
-    items = load_mcp_config()
+    items = load_mcp_config(workspace_id)
     if any(it.name == cfg.name for it in items):
         raise FileExistsError(f"mcp server already exists: {cfg.name}")
     items.append(cfg)
-    _save_all(items)
+    _save_all(items, workspace_id=workspace_id)
     return cfg
 
 
-def update_mcp_server(name: str, cfg: MCPServerConfig) -> MCPServerConfig:
+def update_mcp_server(
+    name: str,
+    cfg: MCPServerConfig,
+    workspace_id: str | None = None,
+) -> MCPServerConfig:
     _validate(cfg)
-    items = load_mcp_config()
+    items = load_mcp_config(workspace_id)
     idx = next((i for i, it in enumerate(items) if it.name == name), -1)
     if idx < 0:
         raise FileNotFoundError(f"mcp server not found: {name}")
     if cfg.name != name and any(it.name == cfg.name for it in items):
         raise FileExistsError(f"mcp server already exists: {cfg.name}")
     items[idx] = cfg
-    _save_all(items)
+    _save_all(items, workspace_id=workspace_id)
     return cfg
 
 
-def remove_mcp_server(name: str) -> bool:
-    items = load_mcp_config()
+def remove_mcp_server(name: str, workspace_id: str | None = None) -> bool:
+    items = load_mcp_config(workspace_id)
     new_items = [it for it in items if it.name != name]
     if len(new_items) == len(items):
         return False
-    _save_all(new_items)
+    _save_all(new_items, workspace_id=workspace_id)
     return True

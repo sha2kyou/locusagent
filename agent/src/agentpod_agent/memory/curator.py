@@ -48,7 +48,7 @@ async def maybe_curate_memories(*, model: str | None = None) -> int:
 
     from ..core.models import resolve_model
 
-    chosen_model = model or resolve_model("curator")
+    chosen_model = model or await resolve_model("curator")
     from ..core.auxiliary_completion import create_chat_completion
     from ..core.llm import get_llm_client
     from ..core.openai_fields import openai_completion_text

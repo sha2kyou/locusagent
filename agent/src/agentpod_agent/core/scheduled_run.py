@@ -76,7 +76,7 @@ async def run_scheduled_prompt(*, title: str, prompt: str) -> dict[str, Any]:
     settings = get_settings()
     from .models import resolve_model
 
-    model = resolve_model("main")
+    model = await resolve_model("main")
     session_title = (title or "").strip()[:_TITLE_MAX] or "定时任务"
     prompt = (prompt or "").strip()
     if not prompt:

@@ -8,7 +8,7 @@ usage() {
   cat <<'EOF'
 Usage:
   ./rebuild.sh host
-      Rebuild host image (含前端 SPA) and restart host only.
+      Rebuild host image (含前端 SPA，Docker 内构建) and restart host only.
 
   ./rebuild.sh agent <user_id>
       Rebuild agent image and recreate one user isolated container.
@@ -53,7 +53,8 @@ PY"
 cmd="${1:-}"
 case "$cmd" in
   host)
-    docker compose build "host"
+    export DOCKER_BUILDKIT=1
+    docker compose build --progress=plain "host"
     docker compose up -d --no-deps "host"
     ;;
   agent)

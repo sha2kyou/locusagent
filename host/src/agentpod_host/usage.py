@@ -8,6 +8,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .db import UsageEvent, get_session
 
+SCENARIO_LABELS: dict[str, str] = {
+    "chat": "对话",
+    "compression": "上下文压缩",
+    "title_generation": "标题生成",
+    "memory_autostore": "记忆提炼",
+    "curator": "记忆策展",
+    "skill_reflect": "技能反思",
+    "approval": "写入审查",
+    "tavily": "网络搜索",
+    "duckduckgo": "网络搜索",
+    "jina": "网页阅读",
+    "embedding": "向量嵌入",
+    "scheduled_run": "定时任务",
+}
+
+
+def scenario_label(scenario: str) -> str:
+    return SCENARIO_LABELS.get(scenario, scenario)
+
 
 class UsageEventIn(BaseModel):
     scenario: str = Field(..., min_length=1, max_length=64)
@@ -21,6 +40,7 @@ class UsageEventIn(BaseModel):
 
 class UsageSummaryRow(BaseModel):
     scenario: str
+    label: str
     model: str | None
     prompt_tokens: int
     completion_tokens: int
@@ -97,7 +117,6 @@ async def usage_summary_for_user(user_id: int) -> UsageSummaryOut:
         stmt = (
             select(
                 UsageEvent.scenario,
-                UsageEvent.model,
                 func.coalesce(func.sum(UsageEvent.prompt_tokens), 0),
                 func.coalesce(func.sum(UsageEvent.completion_tokens), 0),
                 func.coalesce(func.sum(UsageEvent.total_tokens), 0),
@@ -105,7 +124,7 @@ async def usage_summary_for_user(user_id: int) -> UsageSummaryOut:
                 func.count(UsageEvent.id),
             )
             .where(UsageEvent.user_id == user_id)
-            .group_by(UsageEvent.scenario, UsageEvent.model)
+            .group_by(UsageEvent.scenario)
             .order_by(func.sum(UsageEvent.total_tokens).desc(), UsageEvent.scenario)
         )
         rows = (await session.execute(stmt)).all()
@@ -118,12 +137,14 @@ async def usage_summary_for_user(user_id: int) -> UsageSummaryOut:
         "api_calls": 0,
         "event_count": 0,
     }
-    for scenario, model, p, c, t, api, cnt in rows:
+    for scenario, p, c, t, api, cnt in rows:
         p_i, c_i, t_i, api_i, cnt_i = int(p), int(c), int(t), int(api), int(cnt)
+        scenario_s = str(scenario)
         items.append(
             UsageSummaryRow(
-                scenario=str(scenario),
-                model=str(model) if model else None,
+                scenario=scenario_s,
+                label=scenario_label(scenario_s),
+                model=None,
                 prompt_tokens=p_i,
                 completion_tokens=c_i,
                 total_tokens=t_i,

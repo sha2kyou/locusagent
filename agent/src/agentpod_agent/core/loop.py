@@ -388,15 +388,17 @@ async def run_chat_loop(
     blocked_tool_actions: dict[str, set[str]] | None = None,
 ) -> tuple[LoopResult, list[dict[str, Any]]]:
     settings = get_settings()
+    main_model = await resolve_model("main")
+    vision_model = await resolve_model("vision")
+    compression_model = await resolve_model("compression")
 
     def _round_model(msgs: list[dict[str, Any]]) -> str:
         if model:
             return model
         if messages_include_images(msgs):
-            return resolve_model("vision")
-        return resolve_model("main")
+            return vision_model
+        return main_model
 
-    compression_model = resolve_model("compression")
     max_rounds = settings.max_loop_rounds
     token_limit = int(_model_limit(_round_model(messages)) * settings.context_compress_ratio)
     client = get_llm_client()
@@ -614,15 +616,17 @@ async def run_chat_loop_stream(
     - {"type": "done", "final_text", "final_reasoning", "rounds", "total_tokens", "tool_calls_made"}
     """
     settings = get_settings()
+    main_model = await resolve_model("main")
+    vision_model = await resolve_model("vision")
+    compression_model = await resolve_model("compression")
 
     def _round_model(msgs: list[dict[str, Any]]) -> str:
         if model:
             return model
         if messages_include_images(msgs):
-            return resolve_model("vision")
-        return resolve_model("main")
+            return vision_model
+        return main_model
 
-    compression_model = resolve_model("compression")
     max_rounds = settings.max_loop_rounds
     token_limit = int(_model_limit(_round_model(messages)) * settings.context_compress_ratio)
     client = get_llm_client()

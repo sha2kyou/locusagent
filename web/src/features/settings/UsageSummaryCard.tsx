@@ -42,11 +42,9 @@ export function UsageSummaryCard({ active }: { active?: boolean }) {
   const aggregated: AggregatedRow[] = (() => {
     const m = new Map<string, AggregatedRow>();
     for (const row of items) {
-      const hasModel = !!(row.model && row.model.trim());
-      const key = hasModel ? `model:${row.model}` : `service:${row.scenario}`;
-      const label = hasModel ? String(row.model) : usageScenarioLabel(row.scenario);
+      const label = row.label?.trim() || usageScenarioLabel(row.scenario);
       const cur =
-        m.get(key) ??
+        m.get(label) ??
         {
           label,
           prompt_tokens: 0,
@@ -60,7 +58,7 @@ export function UsageSummaryCard({ active }: { active?: boolean }) {
       cur.total_tokens += row.total_tokens;
       cur.api_calls += row.api_calls;
       cur.event_count += row.event_count;
-      m.set(key, cur);
+      m.set(label, cur);
     }
     return Array.from(m.values()).sort((a, b) => b.total_tokens - a.total_tokens || b.api_calls - a.api_calls);
   })();
@@ -69,7 +67,7 @@ export function UsageSummaryCard({ active }: { active?: boolean }) {
     <section className="rounded-lg border border-border bg-surface/40 p-4">
       <h3 className="mb-1 text-sm font-semibold">用量统计</h3>
       <p className="mb-3 text-xs text-muted-foreground">
-        按模型/服务汇总：对话 Token、Tavily / 嵌入等第三方调用次数。
+        按使用场景汇总：对话 Token、搜索 / 嵌入等第三方调用次数。
       </p>
 
       {loading && (
@@ -92,7 +90,7 @@ export function UsageSummaryCard({ active }: { active?: boolean }) {
           <table className="w-full min-w-[28rem] text-left text-sm">
             <thead className="border-b border-border bg-muted/50 text-xs text-muted-foreground">
               <tr>
-                <th className="px-3 py-2 font-medium">模型/服务</th>
+                <th className="px-3 py-2 font-medium">场景</th>
                 <th className="px-3 py-2 font-medium text-right">Token</th>
                 <th className="px-3 py-2 font-medium text-right">API 次数</th>
               </tr>
@@ -100,7 +98,7 @@ export function UsageSummaryCard({ active }: { active?: boolean }) {
             <tbody>
               {aggregated.map((row) => (
                 <tr key={row.label} className="border-b border-border/60 last:border-0">
-                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{row.label}</td>
+                  <td className="px-3 py-2 text-sm">{row.label}</td>
                   <td className="px-3 py-2 text-right tabular-nums">
                     {row.total_tokens > 0 ? formatTokenCount(row.total_tokens) : "—"}
                   </td>

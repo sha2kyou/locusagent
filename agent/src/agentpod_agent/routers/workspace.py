@@ -249,7 +249,9 @@ def _mcp_response(cfg: MCPServerConfig, runtime: dict[str, object]) -> dict:
 
 
 def _set_mcp_tools_enabled(server_name: str, enabled: bool) -> None:
-    target = f"mcp:{server_name}"
+    from ..workspace import get_workspace_id, mcp_tool_category
+
+    target = mcp_tool_category(server_name, get_workspace_id())
     for tool in tool_registry.all():
         if tool.category == target:
             tool.enabled = enabled

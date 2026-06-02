@@ -442,9 +442,18 @@ async def _notify_agent_resumed(user_id: int) -> None:
     token = decrypt_str(user.internal_token_enc)
     container_name = container_name_for(user_id)
     url = f"http://{container_name}:8000/internal/resume"
+    from ..workspaces import ensure_user_default_workspace
+
+    default_ws = (await ensure_user_default_workspace(user_id)).id
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(url, headers={"X-Internal-Token": token})
+            resp = await client.post(
+                url,
+                headers={
+                    "X-Internal-Token": token,
+                    "X-Workspace-Id": default_ws,
+                },
+            )
             if resp.status_code >= 400:
                 log.warning(
                     "agent_resume_notify_failed",

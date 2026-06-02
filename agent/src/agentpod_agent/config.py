@@ -19,19 +19,6 @@ class Settings(BaseSettings):
         default="http://127.0.0.1:8080/internal/llm/v1",
         alias="LLM_BASE_URL",
     )
-    llm_model: str = Field(default="gpt-4o", alias="LLM_MODEL")
-    auxiliary_vision_model: str = Field(default="", alias="AUXILIARY_VISION_MODEL")
-    auxiliary_web_extract_model: str = Field(default="", alias="AUXILIARY_WEB_EXTRACT_MODEL")
-    auxiliary_compression_model: str = Field(default="", alias="AUXILIARY_COMPRESSION_MODEL")
-    auxiliary_title_generation_model: str = Field(
-        default="", alias="AUXILIARY_TITLE_GENERATION_MODEL"
-    )
-    auxiliary_approval_model: str = Field(default="", alias="AUXILIARY_APPROVAL_MODEL")
-    auxiliary_curator_model: str = Field(default="", alias="AUXILIARY_CURATOR_MODEL")
-    auxiliary_skill_reflect_model: str = Field(default="", alias="AUXILIARY_SKILL_REFLECT_MODEL")
-    auxiliary_memory_autostore_model: str = Field(
-        default="", alias="AUXILIARY_MEMORY_AUTOSTORE_MODEL"
-    )
 
     embedding_base_url: str = Field(default="http://tei:80", alias="EMBEDDING_BASE_URL")
     embedding_model: str = Field(default="BAAI/bge-small-zh-v1.5", alias="EMBEDDING_MODEL")

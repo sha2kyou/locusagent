@@ -26,20 +26,20 @@ async def ensure_workspace_runtime(workspace_id: str) -> None:
     global _active_workspace_id
     workspace_id = set_workspace_id(workspace_id)
     async with _runtime_lock:
-        if _active_workspace_id == workspace_id:
-            return
-        ensure_workspace_storage_initialized(workspace_id)
-        init_db()
-        from .mcp_.client import start_mcp, stop_mcp
+        same_workspace = _active_workspace_id == workspace_id
+        if not same_workspace:
+            ensure_workspace_storage_initialized(workspace_id)
+            init_db()
+        from .mcp_.client import ensure_mcp_started, sync_mcp_tools_for_workspace
 
-        await stop_mcp()
+        await ensure_mcp_started(workspace_id)
         _apply_builtin_tool_settings()
-        await start_mcp()
+        await sync_mcp_tools_for_workspace(workspace_id)
+        if not same_workspace:
+            log.info("workspace_runtime_switched", workspace_id=workspace_id)
         _active_workspace_id = workspace_id
-        log.info("workspace_runtime_switched", workspace_id=workspace_id)
 
 
 def mark_workspace_runtime_bootstrapped() -> None:
     global _active_workspace_id
     _active_workspace_id = get_workspace_id()
-

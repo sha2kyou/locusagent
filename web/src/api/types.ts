@@ -186,6 +186,7 @@ export interface TimezoneConfig {
 
 export interface UsageSummaryRow {
   scenario: string;
+  label: string;
   model: string | null;
   prompt_tokens: number;
   completion_tokens: number;

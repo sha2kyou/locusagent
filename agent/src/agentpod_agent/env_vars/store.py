@@ -30,6 +30,69 @@ def _recall_text(name: str, description: str) -> str:
     return n
 
 
+async def fetch_pending_env_var_ids(limit: int = 50) -> list[int]:
+    def _do() -> list[int]:
+        with conn_scope(load_vec=False) as c:
+            rows = c.execute(
+                "SELECT id FROM env_vars WHERE embedding_state='pending' ORDER BY id ASC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            return [int(r[0]) for r in rows]
+
+    return await run_in_thread(_do)
+
+
+async def env_var_embedding_state(env_id: int) -> str | None:
+    def _do() -> str | None:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT embedding_state FROM env_vars WHERE id=?",
+                (env_id,),
+            ).fetchone()
+            return str(row["embedding_state"]) if row else None
+
+    return await run_in_thread(_do)
+
+
+async def get_env_var_embed_text(env_id: int) -> str | None:
+    def _do() -> dict[str, Any] | None:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT id, name, description FROM env_vars WHERE id=?",
+                (env_id,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    row = await run_in_thread(_do)
+    if row is None:
+        return None
+    return _recall_text(str(row["name"]), str(row.get("description") or ""))
+
+
+async def mark_env_var_embedding_failed(env_id: int) -> None:
+    def _do() -> None:
+        with conn_scope(load_vec=False) as c:
+            c.execute(
+                "UPDATE env_vars SET embedding=NULL, embedding_state='failed', "
+                "updated_at=datetime('now') WHERE id=?",
+                (env_id,),
+            )
+
+    await run_in_thread(_do)
+
+
+async def write_env_var_embedding(env_id: int, blob: bytes) -> None:
+    def _do() -> None:
+        with conn_scope(load_vec=False) as c:
+            c.execute(
+                "UPDATE env_vars SET embedding=?, embedding_state='ready', "
+                "updated_at=datetime('now') WHERE id=?",
+                (blob, env_id),
+            )
+
+    await run_in_thread(_do)
+
+
 async def list_env_vars(limit: int = 200) -> list[dict[str, Any]]:
     def _do() -> list[dict[str, Any]]:
         with conn_scope(load_vec=False) as c:
@@ -62,7 +125,9 @@ async def add_env_var(name: str, value: str, description: str = "") -> int:
             return int(cur.lastrowid or 0)
 
     env_id = await run_in_thread(_do)
-    await _refresh_embedding(env_id)
+    from ..memory.queue import enqueue_env_var_embedding
+
+    await enqueue_env_var_embedding(env_id)
     return env_id
 
 
@@ -96,18 +161,23 @@ async def update_env_var(
             if has_description:
                 set_parts.append("description=?")
                 params.append(str(description or ""))
-            set_parts.extend(["embedding=NULL", "embedding_state='pending'", "updated_at=datetime('now')"])
+            reindex = has_name or has_description
+            if reindex:
+                set_parts.extend(["embedding=NULL", "embedding_state='pending'"])
+            set_parts.append("updated_at=datetime('now')")
             params.append(env_id)
             sql = f"UPDATE env_vars SET {', '.join(set_parts)} WHERE id=?"
             try:
                 cur = c.execute(sql, params)
             except IntegrityError as exc:
                 raise FileExistsError("env var already exists") from exc
-            return cur.rowcount > 0
+            return cur.rowcount > 0, reindex
 
-    ok = await run_in_thread(_do)
-    if ok:
-        await _refresh_embedding(env_id)
+    ok, reindex = await run_in_thread(_do)
+    if ok and reindex:
+        from ..memory.queue import enqueue_env_var_embedding
+
+        await enqueue_env_var_embedding(env_id, bump=True)
     return ok
 
 
@@ -202,39 +272,3 @@ async def recall_env_vars(query: str, top_k: int = 5) -> list[dict[str, Any]]:
     return hits
 
 
-async def _refresh_embedding(env_id: int) -> None:
-    def _load() -> dict[str, Any] | None:
-        with conn_scope(load_vec=False) as c:
-            row = c.execute(
-                "SELECT id, name, description FROM env_vars WHERE id=?",
-                (env_id,),
-            ).fetchone()
-            return dict(row) if row else None
-
-    row = await run_in_thread(_load)
-    if not row:
-        return
-    text = _recall_text(str(row["name"]), str(row.get("description") or ""))
-    try:
-        emb = await embed_text(text)
-    except EmbeddingUnavailable:
-        return
-    except Exception:
-        def _mark_failed() -> None:
-            with conn_scope(load_vec=False) as c:
-                c.execute(
-                    "UPDATE env_vars SET embedding=NULL, embedding_state='failed', updated_at=datetime('now') WHERE id=?",
-                    (env_id,),
-                )
-
-        await run_in_thread(_mark_failed)
-        return
-
-    def _write() -> None:
-        with conn_scope(load_vec=False) as c:
-            c.execute(
-                "UPDATE env_vars SET embedding=?, embedding_state='ready', updated_at=datetime('now') WHERE id=?",
-                (emb, env_id),
-            )
-
-    await run_in_thread(_write)

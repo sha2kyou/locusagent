@@ -341,7 +341,7 @@ async def _persist_loop_messages(
 @router.post("/chat/completions")
 async def chat_completions(req: ChatRequest):
     settings = get_settings()
-    chosen_model = req.model or resolve_model("main")
+    chosen_model = req.model or await resolve_model("main")
     sid, _ = await _ensure_session(req)
 
     handle = None
@@ -533,7 +533,7 @@ async def chat_completions(req: ChatRequest):
 @router.post("/responses")
 async def responses(req: ResponsesRequest):
     settings = get_settings()
-    chosen_model = req.model or resolve_model("main")
+    chosen_model = req.model or await resolve_model("main")
     if req.stream:
         return JSONResponse(
             {
@@ -715,7 +715,7 @@ async def list_models() -> dict:
         "object": "list",
         "data": [
             {
-                "id": resolve_model("main"),
+                "id": await resolve_model("main"),
                 "object": "model",
                 "owned_by": "agentpod",
             }

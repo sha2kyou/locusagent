@@ -1,9 +1,12 @@
-"""Agent 容器环境变量：仅内部令牌与非密钥配置；平台凭据留在 Host。"""
+"""Agent 容器环境变量：仅内部令牌与非密钥配置。
+
+平台凭据与上游配置（LLM API Key、Tavily/Jina、模型角色映射等）留在 Host，
+由 /internal/* 代理；不得写入 user pod 环境变量。
+"""
 
 from __future__ import annotations
 
 from ..config import Settings, get_settings
-from ..llm_models import auxiliary_env_for_agent
 
 
 def require_llm_configured(settings: Settings | None = None) -> None:
@@ -46,5 +49,4 @@ def build_agent_environment(
         "SANDBOX_MAX_FILE_MB": str(s.sandbox_max_file_mb),
         "SANDBOX_KILL_GRACE_SECONDS": str(s.sandbox_kill_grace_seconds),
     }
-    env.update(auxiliary_env_for_agent(s))
     return env

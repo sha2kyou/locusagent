@@ -5,9 +5,17 @@ from __future__ import annotations
 from typing import Any
 
 from ..logging import get_logger
+from ..workspace import mcp_tool_category_prefix
 from .base import Tool, ToolError, ToolResult, builtin_tools
 
 log = get_logger("tools")
+
+
+def _tool_visible_in_workspace(tool: Tool, workspace_id: str | None = None) -> bool:
+    if not tool.category.startswith("mcp:"):
+        return True
+    prefix = mcp_tool_category_prefix(workspace_id)
+    return tool.category.startswith(prefix)
 
 
 class ToolRegistry:
@@ -27,8 +35,12 @@ class ToolRegistry:
     def get(self, name: str) -> Tool | None:
         return self._tools.get(name)
 
-    def list(self) -> list[Tool]:
-        return [t for t in self._tools.values() if t.enabled]
+    def list(self, *, workspace_id: str | None = None) -> list[Tool]:
+        return [
+            t
+            for t in self._tools.values()
+            if t.enabled and _tool_visible_in_workspace(t, workspace_id)
+        ]
 
     def all(self) -> list[Tool]:
         return list(self._tools.values())
@@ -40,8 +52,8 @@ class ToolRegistry:
         tool.enabled = enabled
         return True
 
-    def schemas(self) -> list[dict[str, Any]]:
-        return [t.to_openai_schema() for t in self.list()]
+    def schemas(self, *, workspace_id: str | None = None) -> list[dict[str, Any]]:
+        return [t.to_openai_schema() for t in self.list(workspace_id=workspace_id)]
 
     async def call(self, name: str, args: dict[str, Any]) -> ToolResult:
         tool = self._tools.get(name)

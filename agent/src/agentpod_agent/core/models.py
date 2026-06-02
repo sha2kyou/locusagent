@@ -1,10 +1,10 @@
-"""模型角色解析（对齐 Hermes auxiliary，空值回退主模型）。"""
+"""模型角色解析：名称仅由 Host 配置，Agent 经 internal API 查询。"""
 
 from __future__ import annotations
 
 from typing import Any, Literal
 
-from ..config import get_settings
+from ..host_settings import get_resolved_model
 
 ModelRole = Literal[
     "main",
@@ -28,30 +28,15 @@ HERMES_ROLES_NOT_IMPLEMENTED = (
 )
 
 
-def resolve_model(role: ModelRole) -> str:
-    settings = get_settings()
-    main = settings.llm_model
-    overrides = {
-        "main": main,
-        "vision": settings.auxiliary_vision_model,
-        "web_extract": settings.auxiliary_web_extract_model,
-        "compression": settings.auxiliary_compression_model,
-        "title_generation": settings.auxiliary_title_generation_model,
-        "approval": settings.auxiliary_approval_model,
-        "curator": settings.auxiliary_curator_model,
-        "skill_reflect": settings.auxiliary_skill_reflect_model,
-        "memory_autostore": settings.auxiliary_memory_autostore_model,
-    }
-    chosen = (overrides.get(role) or "").strip()
-    return chosen or main
+async def resolve_model(role: ModelRole) -> str:
+    return await get_resolved_model(role)
 
 
 def messages_include_images(messages: list[dict[str, Any]]) -> bool:
-    for m in messages:
-        content = m.get("content")
-        if not isinstance(content, list):
-            continue
-        for part in content:
-            if isinstance(part, dict) and part.get("type") == "image_url":
-                return True
+    for msg in messages:
+        content = msg.get("content")
+        if isinstance(content, list):
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "image_url":
+                    return True
     return False
