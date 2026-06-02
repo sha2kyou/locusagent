@@ -74,10 +74,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void reload();
   }, [reload]);
 
-  // 部署进行中轮询，直到 running（含重试后的 creating / pending）
+  // 部署/恢复进行中轮询，直到 running（含休眠唤醒、停止后重启）
   useEffect(() => {
     const needsPoll =
       me?.container_status === "creating" ||
+      me?.container_status === "paused" ||
+      me?.container_status === "stopped" ||
       (me?.provision_status === "pending" && me?.container_status !== "running");
     if (!needsPoll) {
       if (pollRef.current) {

@@ -111,7 +111,7 @@ function chatPath(sessionId: string | null, workspaceId?: string | null): string
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const toast = useToast();
-  const { readiness, me } = useAuth();
+  const { readiness, me, reload } = useAuth();
   const navigate = useNavigate();
   const params = useParams();
   const urlSessionId = params.sessionId ?? null;
@@ -146,6 +146,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     pendingAttachmentsRef.current = pendingAttachments;
   }, [pendingAttachments]);
+
+  // 发送消息触发容器唤醒时，加快刷新就绪状态以便状态栏自动消失
+  useEffect(() => {
+    if (!isRunning) return;
+    const waking =
+      readiness.reason === "paused" ||
+      readiness.reason === "stopped" ||
+      readiness.reason === "creating";
+    if (!waking) return;
+
+    void reload();
+    const id = window.setInterval(() => void reload(), 1500);
+    return () => clearInterval(id);
+  }, [isRunning, readiness.reason, reload]);
 
   const setCurrent = (id: string | null) => {
     currentIdRef.current = id;
@@ -342,6 +356,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       attachmentIds?: string[];
     },
   ) => {
+    if (readiness.reason === "paused" || readiness.reason === "stopped") {
+      void reload();
+    }
     abortChat();
     setLastErrored(false);
     setMessages((prev) => {
