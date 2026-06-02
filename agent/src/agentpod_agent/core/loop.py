@@ -226,6 +226,18 @@ def _all_calls_are(calls: Iterable[Any], tool_name: str) -> bool:
     return bool(seq) and all(getattr(c.function, "name", "") == tool_name for c in seq)
 
 
+def _clarify_succeeded(stub_calls: Iterable[Any], tool_results: list[dict[str, Any]]) -> bool:
+    from ..tools.clarify import is_clarify_result
+
+    by_id = {r.get("tool_call_id"): r.get("content") or "" for r in tool_results}
+    for stub in stub_calls:
+        if getattr(stub.function, "name", "") != "clarify":
+            continue
+        if is_clarify_result(by_id.get(stub.id, "")):
+            return True
+    return False
+
+
 def _normalize_disabled_tools(disabled_tools: set[str] | None) -> set[str]:
     return {str(n).strip().lower() for n in (disabled_tools or set()) if str(n).strip()}
 
@@ -624,8 +636,8 @@ async def run_chat_loop(
                 )
             if _all_calls_are(stub_calls, "artifact_save"):
                 artifact_save_rounds_made += 1
-            # clarify 是终结性工具：执行后立即返回，不再续跑下一轮
-            if any(s.function.name == "clarify" for s in stub_calls):
+            # clarify 成功时才终结本轮，失败则把 tool 错误回给模型并重试
+            if _clarify_succeeded(stub_calls, tool_results):
                 return (
                     LoopResult(
                         final_text=openai_message_text(msg),
@@ -986,8 +998,8 @@ async def run_chat_loop_stream(
                 return
             if _all_calls_are(stub_calls, "artifact_save"):
                 artifact_save_rounds_made += 1
-            # clarify 是终结性工具：抛出选项卡片后立即收尾，不再续跑下一轮，等待用户选择
-            if any(s.function.name == "clarify" for s in stub_calls):
+            # clarify 成功时才终结本轮，失败则把 tool 错误回给模型并重试
+            if _clarify_succeeded(stub_calls, tool_results):
                 yield {
                     "type": "done",
                     "final_text": accum_content,

@@ -252,7 +252,7 @@ export interface ArtifactCategory {
   created_at: string;
 }
 
-export type ArtifactType = "markdown" | "html" | "text";
+export type ArtifactType = "markdown" | "latex" | "html" | "text";
 
 export interface ArtifactEntry {
   id: string;

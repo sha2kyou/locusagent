@@ -14,6 +14,7 @@ import { ReadyGate } from "@/components/ReadyGate";
 import { createMemory, deleteMemory, listMemory, updateMemory } from "@/api/endpoints";
 import type { MemoryAnchor, MemoryEntry } from "@/api/types";
 import { EMBEDDING_LABEL } from "@/lib/embedding-labels";
+import { toastAction } from "@/lib/toast-copy";
 
 export function MemoryRoute() {
   const toast = useToast();
@@ -90,10 +91,10 @@ export function MemoryRoute() {
     try {
       if (editing) {
         await updateMemory(editing.id, { content: text });
-        toast("已更新", "success");
+        toast(toastAction("已更新", text, "记忆"), "success");
       } else {
         await createMemory({ content: text, anchor: tab });
-        toast("已添加", "success");
+        toast(toastAction("已添加", text, "记忆"), "success");
       }
       resetForm();
       await load();
@@ -120,7 +121,7 @@ export function MemoryRoute() {
       await deleteMemory(m.id);
       if (editing?.id === m.id) resetForm();
       await load();
-      toast("已删除", "success");
+      toast(toastAction("已删除", m.content, "记忆"), "success");
     } catch (e) {
       toast((e as Error).message, "error");
     }

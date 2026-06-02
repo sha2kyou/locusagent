@@ -14,6 +14,7 @@ import {
 import type { NotificationEntry } from "@/api/types";
 import { useAuth } from "@/app/auth";
 import { useToast } from "@/components/ui/toast";
+import { toastMessageForNotification } from "./notification-copy";
 import { notificationWsUrl, parseNotificationWsEvent } from "./socket";
 
 interface NotificationContextValue {
@@ -52,7 +53,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const notifyNew = useCallback(
     (count: number, item?: NotificationEntry) => {
       if (item) {
-        toast(item.title, toastTypeFromKind(item.kind), { sticky: true });
+        toast(toastMessageForNotification(item), toastTypeFromKind(item.kind), { sticky: true });
       } else if (knownUnreadRef.current !== null && count > knownUnreadRef.current) {
         const delta = count - knownUnreadRef.current;
         toast(delta === 1 ? "你有 1 条新消息" : `你有 ${delta} 条新消息`, "info", { sticky: true });
@@ -68,7 +69,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     if (prev !== null && count > prev) {
       const delta = count - prev;
       if (delta === 1 && unreadItems[0]) {
-        toast(unreadItems[0].title, toastTypeFromKind(unreadItems[0].kind), { sticky: true });
+        toast(
+          toastMessageForNotification(unreadItems[0]),
+          toastTypeFromKind(unreadItems[0].kind),
+          { sticky: true },
+        );
       } else {
         toast(delta === 1 ? "你有 1 条新消息" : `你有 ${delta} 条新消息`, "info", { sticky: true });
       }

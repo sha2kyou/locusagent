@@ -24,7 +24,7 @@ import {
   PROVISION_FAILED_HINT,
   PROVISION_FAILED_STATUS,
 } from "@/lib/agent-status-copy";
-import { Markdown, ThinkingBlock } from "./Markdown";
+import { Markdown, ProseMarkdown, ThinkingBlock } from "./Markdown";
 import type { ChatMessage } from "./model";
 import { ToolPartView } from "./ToolEvent";
 import { useChat } from "./ChatProvider";
@@ -39,7 +39,7 @@ const PROMPT_CHIPS = [
 const EMPTY_ATTACHMENTS: ChatAttachment[] = [];
 
 const UserText: TextMessagePartComponent = ({ text }) => (
-  <span className="whitespace-pre-wrap">{text}</span>
+  <ProseMarkdown text={text} className="[&_p]:my-0" />
 );
 
 export function Thread() {

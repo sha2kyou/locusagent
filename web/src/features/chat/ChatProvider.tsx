@@ -21,6 +21,7 @@ import type { SessionMeta } from "@/api/types";
 import { ApiError } from "@/api/client";
 import { streamChatCompletion } from "@/api/stream";
 import { formatStreamRetryToast, userMessageFromContainerError } from "@/lib/agent-status-copy";
+import { toastAction } from "@/lib/toast-copy";
 import { useToast } from "@/components/ui/toast";
 import { useAuth, type AgentReadiness } from "@/app/auth";
 import { withWorkspacePrefix } from "@/app/workspace-route";
@@ -72,7 +73,7 @@ interface ChatContextValue {
   regenerate: () => void;
   newSession: () => void;
   selectSession: (id: string) => void;
-  deleteSession: (id: string) => Promise<void>;
+  deleteSession: (id: string, options?: { silent?: boolean }) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -552,13 +553,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     navigate(chatPath(id, urlWorkspaceId));
   };
 
-  const deleteSession = async (id: string) => {
+  // toast 放在 Provider：删除当前对话会触发路由 remount，Sidebar 层调用不可靠
+  const deleteSession = async (id: string, options?: { silent?: boolean }) => {
+    const raw = sessions.find((s) => s.id === id)?.title ?? "";
+    const title = raw.trim() || DEFAULT_TITLE;
     const wasCurrent = currentIdRef.current === id || urlSessionId === id;
     if (wasCurrent) {
       abortChat();
       stopActiveRunPoll();
     }
     await apiDeleteSession(id);
+    if (!options?.silent) {
+      toast(toastAction("已删除", title, "对话"), "success");
+    }
     if (!mountedRef.current) return;
     await refreshSessions();
     if (wasCurrent && mountedRef.current) navigate(chatPath(null, urlWorkspaceId));

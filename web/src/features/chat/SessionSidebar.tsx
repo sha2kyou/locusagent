@@ -25,6 +25,10 @@ function groupLabel(iso: string): string {
 
 const ORDER = ["今天", "昨天", "过去 7 天", "过去 30 天", "更早"];
 
+function sessionLabel(title: string): string {
+  return title.trim() || "新对话";
+}
+
 export function SessionSidebar({
   mobileOpen = false,
   onClose,
@@ -62,9 +66,10 @@ export function SessionSidebar({
   );
 
   const onDelete = async (s: SessionMeta) => {
+    const label = sessionLabel(s.title);
     const ok = await confirm({
       title: "删除对话",
-      body: `确定删除「${s.title}」？此操作不可恢复。`,
+      body: `确定删除「${label}」？此操作不可恢复。`,
       danger: true,
       confirmText: "删除",
     });
@@ -90,8 +95,18 @@ export function SessionSidebar({
     if (!ok) return;
     try {
       const ids = filteredSessions.map((s) => s.id);
-      const res = await Promise.allSettled(ids.map((id) => deleteSession(id)));
-      const failed = res.filter((r) => r.status === "rejected").length;
+      const ordered =
+        currentId && ids.includes(currentId)
+          ? [...ids.filter((id) => id !== currentId), currentId]
+          : ids;
+      let failed = 0;
+      for (const id of ordered) {
+        try {
+          await deleteSession(id, { silent: true });
+        } catch {
+          failed++;
+        }
+      }
       if (failed > 0) {
         toast(`已删除 ${ids.length - failed} 个，失败 ${failed} 个`, "error");
       } else {
@@ -163,7 +178,7 @@ export function SessionSidebar({
                   }}
                 >
                   <span className="min-w-0 flex-1 truncate text-left" title={s.title}>
-                    {s.title || "新对话"}
+                    {sessionLabel(s.title)}
                   </span>
                   <Button
                     type="button"

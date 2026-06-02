@@ -20,6 +20,7 @@ import { setWorkspaceId } from "@/api/client";
 import type { WorkspaceItem } from "@/api/types";
 import { useAuth } from "@/app/auth";
 import { withWorkspacePrefix } from "@/app/workspace-route";
+import { toastAction } from "@/lib/toast-copy";
 
 export function WorkspacesRoute() {
   const toast = useToast();
@@ -90,10 +91,10 @@ export function WorkspacesRoute() {
     try {
       if (editing) {
         await updateWorkspace(editing.id, { name: nextName, description: description.trim() });
-        toast("已更新", "success");
+        toast(toastAction("已更新", nextName, "工作区"), "success");
       } else {
         await createWorkspace({ name: nextName, description: description.trim() });
-        toast("已添加", "success");
+        toast(toastAction("已添加", nextName, "工作区"), "success");
       }
       resetForm();
       await load();
@@ -120,7 +121,7 @@ export function WorkspacesRoute() {
         window.location.href = "/chat";
         return;
       }
-      toast("已删除", "success");
+      toast(toastAction("已删除", workspace.name, "工作区"), "success");
     } catch (e) {
       toast((e as Error).message, "error");
     }

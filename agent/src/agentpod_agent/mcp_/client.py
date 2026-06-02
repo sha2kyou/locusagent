@@ -55,11 +55,27 @@ class MCPManager:
         self._tools_lock = asyncio.Lock()
         self._last_errors: dict[str, str] = {}
 
+    async def _discard_connect_state(self, server_name: str, stack: AsyncExitStack) -> None:
+        self._sessions.pop(server_name, None)
+        self._stacks.pop(server_name, None)
+        self._registered_tool_names.pop(server_name, None)
+        self._tool_catalog.pop(server_name, None)
+        try:
+            await stack.aclose()
+        except Exception as exc:
+            log.warning(
+                "mcp_connect_discard_close_error",
+                server=server_name,
+                workspace_id=self._workspace_id,
+                error=str(exc),
+            )
+
     async def _connect_timed(self, cfg: MCPServerConfig) -> None:
         timeout = max(1.0, float(get_settings().mcp_connect_timeout_seconds))
         try:
             await asyncio.wait_for(self._connect(cfg), timeout=timeout)
         except TimeoutError:
+            await self.remove_server(cfg.name)
             msg = f"connect timeout after {timeout}s"
             self._last_errors[cfg.name] = msg
             log.error(
@@ -140,8 +156,8 @@ class MCPManager:
                 workspace_id=self._workspace_id,
                 transport=cfg.transport,
             )
-        except Exception:
-            await stack.aclose()
+        except BaseException:
+            await self._discard_connect_state(cfg.name, stack)
             raise
 
     async def _register_tools(self, server_name: str, session: ClientSession) -> None:
@@ -200,9 +216,32 @@ class MCPManager:
             )
 
     async def publish_tools_to_registry(self) -> None:
-        """工作区切回时，把已连接 session 的工具重新挂到全局 registry。"""
-        for server_name, session in self._sessions.items():
-            await self._register_tools(server_name, session)
+        """把当前已连接 MCP session 的工具挂到全局 registry（含启动预热与对话前同步）。"""
+        for server_name in list(self._sessions.keys()):
+            session = self._sessions.get(server_name)
+            if session is None:
+                continue
+            try:
+                await self._register_tools(server_name, session)
+            except Exception as exc:
+                log.warning(
+                    "mcp_register_tools_failed",
+                    server=server_name,
+                    workspace_id=self._workspace_id,
+                    error=str(exc) or repr(exc),
+                )
+                cfg = get_mcp_server(server_name, self._workspace_id)
+                if cfg is None:
+                    await self.remove_server(server_name)
+                    continue
+                runtime = await self.reconnect_server(server_name)
+                if not runtime.get("connected"):
+                    log.warning(
+                        "mcp_reconnect_after_register_failed",
+                        server=server_name,
+                        workspace_id=self._workspace_id,
+                        error=runtime.get("error"),
+                    )
 
     async def _call_tool_with_retry(
         self,

@@ -13,6 +13,7 @@ import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
 import { createSkill, deleteSkill, listSkills, updateSkill } from "@/api/endpoints";
 import type { Skill } from "@/api/types";
+import { toastAction } from "@/lib/toast-copy";
 
 export function SkillsRoute() {
   const toast = useToast();
@@ -79,10 +80,10 @@ export function SkillsRoute() {
     try {
       if (editing) {
         await updateSkill(editing.name, { description: desc, body, triggers: triggerList });
-        toast("已更新", "success");
+        toast(toastAction("已更新", editing.name, "技能"), "success");
       } else {
         await createSkill({ name, description: desc, body, triggers: triggerList });
-        toast("已添加", "success");
+        toast(toastAction("已添加", name, "技能"), "success");
       }
       resetForm();
       await load();
@@ -99,7 +100,7 @@ export function SkillsRoute() {
       await deleteSkill(s.name);
       if (editing?.name === s.name) resetForm();
       await load();
-      toast("已删除", "success");
+      toast(toastAction("已删除", s.name, "技能"), "success");
     } catch (e) {
       toast((e as Error).message, "error");
     }

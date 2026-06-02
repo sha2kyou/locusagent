@@ -13,7 +13,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'favicon-dark.svg', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.svg', 'favicon-dark.svg', 'logo.svg', 'apple-touch-icon.png', 'pwa-192.png', 'pwa-512.png'],
       manifest: {
         name: 'AgentPod',
         short_name: 'AgentPod',
@@ -33,7 +33,7 @@ export default defineConfig({
       workbox: {
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/api(?:\/|$)/, /^\/health(?:\/|$)?/],
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,ico,jpg,png,svg,woff2,webmanifest}'],
         globIgnores: ['**/node_modules/**'],
       },
     }),
@@ -57,6 +57,7 @@ export default defineConfig({
               normalized.includes('react-markdown') ||
               normalized.includes('/remark-') ||
               normalized.includes('/rehype-') ||
+              normalized.includes('/katex/') ||
               normalized.includes('micromark') ||
               normalized.includes('/unified/')
             ) {
@@ -78,11 +79,11 @@ export default defineConfig({
             return 'app-shared'
           }
         },
-        entryFileNames: 'assets/[name].js',
-        chunkFileNames: 'assets/[name].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: ({ name }) => {
-          if (name?.endsWith('.css')) return 'assets/[name].css'
-          return 'assets/[name][extname]'
+          if (name?.endsWith('.css')) return 'assets/[name]-[hash].css'
+          return 'assets/[name]-[hash][extname]'
         },
       },
     },

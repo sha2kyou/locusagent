@@ -24,11 +24,7 @@ SPA_BLOCKED_PREFIXES = ("node_modules/", "package.json", "package-lock.json")
 
 
 class ImmutableStaticFiles(StaticFiles):
-    """静态资源统一短缓存。
-
-    当前前端使用稳定文件名（如 index.js/index.css），不能使用 immutable 长缓存，
-    否则新版本部署后浏览器会长期命中旧资源。
-    """
+    """静态资源短缓存；构建产物文件名含 content hash，index.html 引用随版本更新。"""
 
     async def get_response(self, path: str, scope: Scope):
         response = await super().get_response(path, scope)

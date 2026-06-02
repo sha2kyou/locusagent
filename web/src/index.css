@@ -333,6 +333,14 @@
     background-color: var(--color-surface-2);
     border: 1px solid var(--color-border);
   }
+  .apod-prose .katex-display {
+    margin: 0.8em 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .dark .apod-prose .katex {
+    color: var(--color-foreground);
+  }
   /* 表格：圆角描边卡片风格，与对话中的卡片一致（浅色表头 + 行分隔线，无竖线） */
   .apod-prose table {
     display: block;

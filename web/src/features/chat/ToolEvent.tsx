@@ -31,14 +31,11 @@ function parseClarify(result: unknown): ClarifyPayload | null {
   const raw = typeof result === "string" ? result : "";
   if (!raw) return null;
   try {
-    const data = JSON.parse(raw) as Partial<ClarifyPayload> & { options?: unknown };
+    const data = JSON.parse(raw) as Partial<ClarifyPayload>;
     if (!data || typeof data.question !== "string") return null;
-    const rawChoices = Array.isArray(data.choices)
-      ? data.choices
-      : Array.isArray(data.options)
-        ? data.options
-        : [];
+    const rawChoices = Array.isArray(data.choices) ? data.choices : [];
     const choices = rawChoices.map((o) => String(o).trim()).filter(Boolean).slice(0, 4);
+    if (choices.length < 2) return null;
     return {
       question: data.question,
       choices,
@@ -87,7 +84,7 @@ function ClarifyCard({ payload }: { payload: ClarifyPayload }) {
           </Button>
         ))}
       </div>
-      {(payload.allow_other || payload.choices.length === 0) && (
+      {payload.allow_other && (
         <form
           className="mt-2 flex items-center gap-2"
           onSubmit={(e) => {
@@ -104,7 +101,7 @@ function ClarifyCard({ payload }: { payload: ClarifyPayload }) {
             onKeyDown={(e) => {
               if (shouldBlockEnter(e)) e.preventDefault();
             }}
-            placeholder={payload.choices.length === 0 ? "请输入你的回答…" : "其他（自由输入）…"}
+            placeholder="其他（自由输入）…"
             disabled={disabled}
             className="h-8 min-w-0 flex-1 rounded-md border border-border bg-surface px-2.5 text-[13px] text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-45"
           />
@@ -117,6 +114,10 @@ function ClarifyCard({ payload }: { payload: ClarifyPayload }) {
   );
 }
 
+function isClarifyTool(toolName: string): boolean {
+  return toolName === "clarify" || toolName.endsWith("/clarify");
+}
+
 export const ToolEvent: ToolCallMessagePartComponent = (props) => {
   if (isClarifyTool(props.toolName)) {
     const payload = parseClarify(props.result);
@@ -124,10 +125,6 @@ export const ToolEvent: ToolCallMessagePartComponent = (props) => {
   }
   return <GenericToolBlock toolName={props.toolName} args={props.args} result={props.result} status={props.status} />;
 };
-
-function isClarifyTool(toolName: string): boolean {
-  return toolName === "clarify" || toolName.endsWith("/clarify");
-}
 
 /** 按 ChatPart 时间线直接渲染工具块（不依赖 MessagePrimitive.Parts 顺序） */
 export function ToolPartView({ part }: { part: ToolPart }) {

@@ -12,6 +12,7 @@ import { useToast } from "@/components/ui/toast";
 import { createEnvVar, deleteEnvVar, listEnvVars, updateEnvVar } from "@/api/endpoints";
 import type { EnvVarEntry } from "@/api/types";
 import { EMBEDDING_LABEL } from "@/lib/embedding-labels";
+import { toastAction } from "@/lib/toast-copy";
 
 export function EnvVarsRoute() {
   const toast = useToast();
@@ -70,10 +71,10 @@ export function EnvVarsRoute() {
           value: value.trim(),
           description: description.trim(),
         });
-        toast("已更新", "success");
+        toast(toastAction("已更新", name.trim(), "环境变量"), "success");
       } else {
         await createEnvVar({ name: name.trim(), value: value.trim(), description: description.trim() });
-        toast("已添加", "success");
+        toast(toastAction("已添加", name.trim(), "环境变量"), "success");
       }
       reset();
       await load();
@@ -91,7 +92,7 @@ export function EnvVarsRoute() {
       await deleteEnvVar(item.id);
       if (editingId === item.id) reset();
       await load();
-      toast("已删除", "success");
+      toast(toastAction("已删除", item.name, "环境变量"), "success");
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {

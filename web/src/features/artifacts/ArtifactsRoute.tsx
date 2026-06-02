@@ -13,6 +13,7 @@ import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatFull, formatRelative } from "@/lib/format-time";
+import { toastAction } from "@/lib/toast-copy";
 import {
   createArtifactCategory,
   deleteArtifact,
@@ -33,6 +34,7 @@ const LazyArtifactBody = lazy(() =>
 
 const EXPORT_FORMAT: Record<ArtifactType, { ext: string; mime: string }> = {
   markdown: { ext: "md", mime: "text/markdown" },
+  latex: { ext: "md", mime: "text/markdown" },
   html: { ext: "html", mime: "text/html" },
   text: { ext: "txt", mime: "text/plain" },
 };
@@ -270,11 +272,11 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
     try {
       if (editingCategory) {
         await updateArtifactCategory(editingCategory.id, { name, description });
-        toast("已更新类目", "success");
+        toast(toastAction("已更新", name, "类目"), "success");
       } else {
         const created = await createArtifactCategory(name, description);
         navigate(toWorkspacePath(`/artifacts/c/${created.id}`));
-        toast("已添加", "success");
+        toast(toastAction("已添加", name, "类目"), "success");
       }
       await loadCategories();
       if (categoryId) await loadArtifacts();
@@ -311,7 +313,7 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
       if (categoryId === c.id) {
         navigateAfterCategoriesChange(cats);
       }
-      toast("已删除", "success");
+      toast(toastAction("已删除", c.name, "类目"), "success");
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -331,7 +333,7 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
       await deleteArtifact(a.id);
       setSelected(null);
       await loadArtifacts();
-      toast("已删除", "success");
+      toast(toastAction("已删除", a.title, "产物"), "success");
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -344,9 +346,11 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
   const exportOriginalLabel = selected
     ? selected.type === "html"
       ? "HTML"
-      : selected.type === "markdown"
-        ? "Markdown"
-        : "Text"
+      : selected.type === "latex"
+        ? "LaTeX"
+        : selected.type === "markdown"
+          ? "Markdown"
+          : "Text"
     : "原始类型";
 
   const catName = (id: string | null) =>

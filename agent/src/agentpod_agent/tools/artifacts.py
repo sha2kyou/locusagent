@@ -8,6 +8,7 @@ import unicodedata
 from difflib import SequenceMatcher
 from typing import Any
 
+from ..latex_normalize import normalize_latex_input
 from ..artifacts import (
     create_artifact,
     create_category,
@@ -18,6 +19,7 @@ from ..artifacts import (
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 _HTML_RENDER_RE = re.compile(r"\[HTML_RENDER\]([\s\S]*?)\[/HTML_RENDER\]", re.IGNORECASE)
+_LATEX_RE = re.compile(r"\$\$[\s\S]+?\$\$|\$[^$\n]+\$")
 _CATEGORY_SIMILARITY_THRESHOLD = 0.82
 
 
@@ -108,6 +110,21 @@ async def _artifact_save(args: dict[str, Any]) -> ToolResult:
     if m:
         content = m.group(1).strip()
         art_type = "html"
+
+    content = normalize_latex_input(content)
+
+    if art_type == "text" and _LATEX_RE.search(content):
+        raise ToolError(
+            "type=text does not render LaTeX. Use type=latex for content with $...$ or $$...$$ formulas."
+        )
+    if art_type == "markdown" and _LATEX_RE.search(content):
+        raise ToolError(
+            "type=markdown must not contain $...$ or $$...$$. Use type=latex for math content."
+        )
+    if art_type == "latex" and not _LATEX_RE.search(content):
+        raise ToolError(
+            "type=latex requires LaTeX delimiters: inline $...$ or block $$...$$."
+        )
 
     if not category:
         raise ToolError(
@@ -226,8 +243,14 @@ register_builtin(
                 "content": {"type": "string", "description": "产物正文内容（将被持久化保存）。"},
                 "type": {
                     "type": "string",
-                    "enum": ["markdown", "html", "text"],
-                    "description": "渲染类型：markdown/html/text。省略时默认 markdown。",
+                    "enum": ["markdown", "latex", "html", "text"],
+                    "description": (
+                        "渲染类型：markdown=Markdown（标题/列表/代码块，不含公式）；"
+                        "latex=LaTeX 公式（行内 $...$，块级 $$...$$）；"
+                        "html=HTML 页面；text=纯文本。"
+                        "含数学公式时必须设为 latex，不要用 markdown 或 text。"
+                        "JSON 参数里反斜杠须双重转义（\\\\begin）。"
+                    ),
                 },
                 "category": {
                     "type": "string",

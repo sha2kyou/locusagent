@@ -7,8 +7,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { CheckCircle2, Info, Trash2, XCircle } from "lucide-react";
+import { CheckCircle2, Info, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const AUTO_DISMISS_MS = 3400;
+const STICKY_DISMISS_MS = 7800;
 
 type ToastType = "info" | "success" | "error";
 type ToastOptions = { sticky?: boolean };
@@ -59,11 +62,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     const id = Date.now() + Math.random();
     const sticky = !!options?.sticky;
     setToasts((prev) => [...prev, { id, message, type, sticky }]);
-    if (sticky) return;
     const timerId = window.setTimeout(() => {
       timeoutIdsRef.current.delete(id);
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3400);
+    }, sticky ? STICKY_DISMISS_MS : AUTO_DISMISS_MS);
     timeoutIdsRef.current.set(id, timerId);
   }, []);
 
@@ -75,23 +77,24 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             className={cn(
-              "pointer-events-auto flex items-center gap-2.5 rounded-lg border border-border-strong bg-card px-3.5 py-2.5 text-sm text-card-foreground shadow-xl backdrop-blur-0",
+              "pointer-events-auto flex items-center gap-2.5 rounded-lg border border-border-strong bg-card py-2.5 text-sm text-card-foreground shadow-xl backdrop-blur-0",
               "apod-enter-up",
+              t.sticky ? "pl-3.5 pr-2" : "px-3.5",
             )}
           >
+            {icons[t.type]}
+            <span className="flex-1">{t.message}</span>
             {t.sticky ? (
               <button
                 type="button"
-                className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-foreground"
                 onClick={() => removeToast(t.id)}
-                aria-label="删除通知"
-                title="删除"
+                aria-label="关闭"
+                title="关闭"
               >
-                <Trash2 className="size-3.5" />
+                <X className="size-3.5" />
               </button>
             ) : null}
-            {icons[t.type]}
-            <span className="flex-1">{t.message}</span>
           </div>
         ))}
       </div>

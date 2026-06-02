@@ -14,6 +14,7 @@ import { Tag } from "@/components/ui/tag";
 import { getWorkspaceId } from "@/api/client";
 import { createMcp, deleteMcp, disconnectMcpOAuth, listMcp, reconnectMcp, testMcp, updateMcp } from "@/api/endpoints";
 import type { McpInput, McpServer, McpTool } from "@/api/types";
+import { toastAction } from "@/lib/toast-copy";
 
 function parseEnvJson(raw: string): Record<string, string> {
   const source = raw.trim() || "{}";
@@ -161,10 +162,10 @@ export function McpRoute() {
     try {
       if (editing) {
         await updateMcp(editing, buildPayload());
-        toast("已更新", "success");
+        toast(toastAction("已更新", editing, "MCP 服务"), "success");
       } else {
         await createMcp(buildPayload());
-        toast("已添加", "success");
+        toast(toastAction("已添加", name.trim(), "MCP 服务"), "success");
       }
       reset();
       await load();
@@ -198,7 +199,7 @@ export function McpRoute() {
   const reconnect = async (s: McpServer) => {
     try {
       await reconnectMcp(s.name);
-      toast("已重连", "success");
+      toast(toastAction("已重连", s.name, "MCP 服务"), "success");
       await load({ sync: true });
     } catch (e) {
       toast((e as Error).message, "error");
@@ -223,7 +224,7 @@ export function McpRoute() {
       } catch {
         // 预期：无 token 时重连失败
       }
-      toast("已断开 OAuth", "success");
+      toast(toastAction("已断开 OAuth", s.name, "MCP 服务"), "success");
       await load();
     } catch (e) {
       toast((e as Error).message, "error");
@@ -236,7 +237,7 @@ export function McpRoute() {
       await deleteMcp(s.name);
       if (editing === s.name) reset();
       await load();
-      toast("已删除", "success");
+      toast(toastAction("已删除", s.name, "MCP 服务"), "success");
     } catch (e) {
       toast((e as Error).message, "error");
     }

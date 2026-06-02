@@ -89,7 +89,7 @@ export function SettingsModal({ open, onClose, onLogout }: Props) {
     try {
       const next = await putTimezoneConfig({ timezone: timezone.trim() || "UTC" });
       setTimezone(next.timezone);
-      toast("时区已保存", "success");
+      toast(`时区已保存：${next.timezone}`, "success");
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {

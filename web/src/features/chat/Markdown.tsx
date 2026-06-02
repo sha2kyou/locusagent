@@ -1,7 +1,10 @@
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import rehypeHighlight from "rehype-highlight";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import {
   Check,
   ChevronRight,
@@ -13,6 +16,7 @@ import {
   WrapText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { normalizeLatexInput } from "@/lib/latex-normalize";
 
 interface Segment {
   kind: "md" | "thinking" | "html" | "html-pending";
@@ -94,10 +98,11 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
 });
 
 function MarkdownBlock({ text }: { text: string }) {
+  const normalized = useMemo(() => normalizeLatexInput(text), [text]);
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeHighlight]}
+      remarkPlugins={[remarkMath, remarkGfm]}
+      rehypePlugins={[rehypeKatex, rehypeHighlight]}
       components={{
         pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
         a: ({ children, href }) => (
@@ -107,8 +112,17 @@ function MarkdownBlock({ text }: { text: string }) {
         ),
       }}
     >
-      {text}
+      {normalized}
     </ReactMarkdown>
+  );
+}
+
+/** 无 thinking/HTML 分段，用于用户气泡等纯 Markdown+公式场景 */
+export function ProseMarkdown({ text, className }: { text: string; className?: string }) {
+  return (
+    <div className={cn("apod-prose max-w-none", className)}>
+      <MarkdownBlock text={text} />
+    </div>
   );
 }
 

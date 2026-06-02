@@ -22,6 +22,7 @@ import {
 } from "@/api/endpoints";
 import type { ScheduledTask, ScheduleKind } from "@/api/types";
 import { cn } from "@/lib/utils";
+import { toastAction } from "@/lib/toast-copy";
 
 const CRON_LOCALE_ZH: CronLocale = {
   everyText: "每",
@@ -393,10 +394,10 @@ export function ScheduledTasksRoute() {
       };
       if (editingId) {
         await updateScheduledTask(editingId, body);
-        toast("已更新", "success");
+        toast(toastAction("已更新", title.trim(), "定时任务"), "success");
       } else {
         await createScheduledTask(body);
-        toast("已添加", "success");
+        toast(toastAction("已添加", title.trim(), "定时任务"), "success");
       }
       reset();
       await load();
@@ -414,7 +415,7 @@ export function ScheduledTasksRoute() {
       await deleteScheduledTask(task.id);
       if (editingId === task.id) reset();
       await load();
-      toast("已删除", "success");
+      toast(toastAction("已删除", task.title, "定时任务"), "success");
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {

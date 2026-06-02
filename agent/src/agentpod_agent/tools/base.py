@@ -35,16 +35,20 @@ class Tool:
     handler: Handler
     enabled: bool = True
     category: str = "builtin"
+    strict_schema: bool = False
 
     def to_openai_schema(self) -> dict[str, Any]:
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": self.description,
-                "parameters": self.parameters,
-            },
+        params = dict(self.parameters)
+        if self.strict_schema:
+            params.setdefault("additionalProperties", False)
+        fn: dict[str, Any] = {
+            "name": self.name,
+            "description": self.description,
+            "parameters": params,
         }
+        if self.strict_schema:
+            fn["strict"] = True
+        return {"type": "function", "function": fn}
 
 
 _BUILTINS: list[Tool] = []
