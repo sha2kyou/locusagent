@@ -255,6 +255,7 @@ async def _process_job(job: _EmbedJob) -> None:
 
             text = await get_artifact_embed_text(artifact_id)
             if not text:
+                await mark_artifact_embedding_failed(artifact_id)
                 return
             try:
                 blob = await embed_text(text)
@@ -369,7 +370,18 @@ async def _worker_loop() -> None:
             job = await asyncio.wait_for(_queue.get(), timeout=1.0)
         except TimeoutError:
             continue
-        await _process_job(job)
+        try:
+            await _process_job(job)
+        except Exception as exc:
+            _queued.discard(job)
+            log.error(
+                "embedding_job_crashed",
+                kind=job.kind,
+                id=job.entity_id,
+                workspace_id=job.workspace_id,
+                error=str(exc),
+                exc_info=True,
+            )
 
 
 async def start_embedding_worker() -> None:

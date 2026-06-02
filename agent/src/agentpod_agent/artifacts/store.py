@@ -51,7 +51,7 @@ async def get_artifact_embed_text(artifact_id: str) -> str | None:
             ).fetchone()
             if not row:
                 return None
-            text = _artifact_embed_text(str(row["title"]), str(row.get("content") or ""))
+            text = _artifact_embed_text(str(row["title"]), str(row["content"] or ""))
             return text or None
 
     return await run_in_thread(_do)

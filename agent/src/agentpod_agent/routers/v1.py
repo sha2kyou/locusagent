@@ -41,12 +41,10 @@ from ..core import (
     update_run,
     upsert_session_meta,
 )
-from ..core.memory_autostore import maybe_remember
 from ..core.post_run import run_post_tasks
 from ..core.run_manager import ERROR, FINISHED, reconcile_session_active_handles, start_stream_run
 from ..core.system_prompt import get_or_create_system_prompt as _get_or_create_system_prompt
 from ..logging import get_logger
-from ..memory import enqueue_embedding
 from .v1_sessions import router as sessions_router
 
 router = APIRouter(prefix="/v1", tags=["v1"], dependencies=[Depends(verify_internal_token)])
@@ -65,20 +63,6 @@ async def shutdown_v1_background_tasks(*, timeout_seconds: float = 3.0) -> None:
         except TimeoutError:
             pass
     _background_tasks.clear()
-
-
-def _schedule_remember(user_query: str, final_text: str, *, model: str | None) -> None:
-    async def _run() -> None:
-        try:
-            mids = await maybe_remember(user_query, final_text, model=model)
-            for mid in mids:
-                await enqueue_embedding(mid)
-        except Exception as exc:
-            log.warning("memory_autostore_failed", error=str(exc))
-
-    task = asyncio.create_task(_run(), name="memory-autostore")
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
 
 
 def _schedule_post_run(
@@ -401,17 +385,6 @@ async def chat_completions(req: ChatRequest):
                         user_query=user_query,
                         assistant_text=result.final_text,
                     )
-                if user_query and result.final_text:
-                    try:
-                        mids = await maybe_remember(
-                            user_query,
-                            result.final_text,
-                            model=chosen_model,
-                        )
-                        for mid in mids:
-                            await enqueue_embedding(mid)
-                    except Exception as exc:
-                        log.warning("memory_autostore_failed", error=str(exc))
                 _schedule_post_run(
                     sid,
                     tool_calls_made=result.tool_calls_made,
@@ -473,12 +446,10 @@ async def chat_completions(req: ChatRequest):
     async def _stream():
         yield _chunk({"role": "assistant"}, session_id=sid, run_id=run_id)
         try:
-            stream_final_text = ""
             while True:
                 ev = await handle.queue.get()
                 t = ev.get("type")
                 if t == FINISHED:
-                    stream_final_text = str(ev.get("final_text") or "")
                     break
                 if t == ERROR:
                     yield _chunk({}, x_event="error", x_message=ev.get("message") or "unknown")
@@ -508,9 +479,6 @@ async def chat_completions(req: ChatRequest):
         except asyncio.CancelledError:
             log.info("sse_disconnected", run_id=run_id, session_id=sid)
             raise
-
-        if user_query and stream_final_text:
-            _schedule_remember(user_query, stream_final_text, model=chosen_model)
 
         done = {
             "id": chat_id,
@@ -622,17 +590,6 @@ async def responses(req: ResponsesRequest):
                     user_query=user_query,
                     assistant_text=result.final_text,
                 )
-            if user_query and result.final_text:
-                try:
-                    mids = await maybe_remember(
-                        user_query,
-                        result.final_text,
-                        model=chosen_model,
-                    )
-                    for mid in mids:
-                        await enqueue_embedding(mid)
-                except Exception as exc:
-                    log.warning("memory_autostore_failed", error=str(exc))
             _schedule_post_run(
                 sid,
                 tool_calls_made=result.tool_calls_made,

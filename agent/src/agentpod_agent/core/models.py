@@ -15,7 +15,6 @@ ModelRole = Literal[
     "approval",
     "curator",
     "skill_reflect",
-    "memory_autostore",
 ]
 
 # Hermes 有、AgentPod 当前无 LLM 调用

@@ -119,9 +119,18 @@ register_builtin(
     Tool(
         name="memory",
         description=(
-            "管理长期记忆。推荐动作：add / replace / remove / read，"
-            "并通过 target 区分 user（用户画像）与 memory（经验笔记）。"
-            "兼容旧动作：update / delete / list / recall。"
+            "将可跨会话复用的信息写入长期记忆；记忆会注入后续对话，请保持简短、只记仍长期有用的内容。\n\n"
+            "何时应主动保存（不必等用户开口）：\n"
+            "- 用户纠正你，或说「记住」「别再这样」\n"
+            "- 用户分享偏好、习惯或个人背景（称呼、角色、时区、编码风格等）\n"
+            "- 你发现环境事实（系统、已装工具、项目结构）\n"
+            "- 你发现仅适用于该用户工作流的约定、API 怪癖或稳定配置\n\n"
+            "优先级：用户偏好与纠正 > 环境事实 > 流程性知识。\n\n"
+            "不要保存：单次问答摘要（如「用户问了某算法」）、任务进度、会话结果、"
+            "已完成工作日志、临时 TODO；这些用 session_recall 从历史对话检索。\n"
+            "可复用的做法应沉淀为 skill，不要塞进 memory。\n\n"
+            "target：user=用户画像，memory=你的经验笔记。"
+            "动作：add / replace / remove / read；兼容 update / delete / list / recall。"
         ),
         parameters={
             "type": "object",

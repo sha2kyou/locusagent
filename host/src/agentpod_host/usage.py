@@ -12,7 +12,6 @@ SCENARIO_LABELS: dict[str, str] = {
     "chat": "对话",
     "compression": "上下文压缩",
     "title_generation": "标题生成",
-    "memory_autostore": "记忆提炼",
     "curator": "记忆策展",
     "skill_reflect": "技能反思",
     "approval": "写入审查",

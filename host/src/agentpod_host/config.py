@@ -55,9 +55,6 @@ class Settings(BaseSettings):
     auxiliary_approval_model: str = Field(default="", alias="AUXILIARY_APPROVAL_MODEL")
     auxiliary_curator_model: str = Field(default="", alias="AUXILIARY_CURATOR_MODEL")
     auxiliary_skill_reflect_model: str = Field(default="", alias="AUXILIARY_SKILL_REFLECT_MODEL")
-    auxiliary_memory_autostore_model: str = Field(
-        default="", alias="AUXILIARY_MEMORY_AUTOSTORE_MODEL"
-    )
     tavily_api_key: str = Field(default="", alias="TAVILY_API_KEY")
     jina_api_key: str = Field(default="", alias="JINA_API_KEY")
 

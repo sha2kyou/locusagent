@@ -15,7 +15,6 @@ ModelRole = Literal[
     "approval",
     "curator",
     "skill_reflect",
-    "memory_autostore",
 ]
 
 ROLE_ENV_KEYS: dict[ModelRole, str] = {
@@ -27,7 +26,6 @@ ROLE_ENV_KEYS: dict[ModelRole, str] = {
     "approval": "AUXILIARY_APPROVAL_MODEL",
     "curator": "AUXILIARY_CURATOR_MODEL",
     "skill_reflect": "AUXILIARY_SKILL_REFLECT_MODEL",
-    "memory_autostore": "AUXILIARY_MEMORY_AUTOSTORE_MODEL",
 }
 
 # Hermes 有、AgentPod 当前无对应 LLM 调用
@@ -47,7 +45,6 @@ _AUXILIARY_FIELDS: list[tuple[str, str]] = [
     ("AUXILIARY_APPROVAL_MODEL", "auxiliary_approval_model"),
     ("AUXILIARY_CURATOR_MODEL", "auxiliary_curator_model"),
     ("AUXILIARY_SKILL_REFLECT_MODEL", "auxiliary_skill_reflect_model"),
-    ("AUXILIARY_MEMORY_AUTOSTORE_MODEL", "auxiliary_memory_autostore_model"),
 ]
 
 
