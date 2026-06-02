@@ -19,7 +19,6 @@ from .persistence import (
     upsert_session_meta,
 )
 from .post_run import run_post_tasks
-from .session_title import maybe_generate_and_update_session_title
 
 log = get_logger("run_manager")
 
@@ -195,13 +194,6 @@ async def _finalize_run(session_id: str, run_id: str, state: dict[str, Any], *, 
             assistant_message_id=assistant_msg_id,
         )
         await upsert_session_meta(session_id, tokens_delta=total_tokens)
-        auto_title_user_query = str(state.get("auto_title_user_query") or "").strip()
-        if auto_title_user_query:
-            await maybe_generate_and_update_session_title(
-                session_id,
-                user_query=auto_title_user_query,
-                assistant_text=content,
-            )
     except Exception as exc:
         log.warning("run_finalize_failed", run_id=run_id, error=str(exc))
         await update_run(run_id, status="failed", error_message=str(exc))
@@ -214,7 +206,6 @@ async def _worker(
     registry: ToolRegistry,
     model: str,
     extra: dict[str, Any] | None,
-    auto_title_user_query: str | None,
 ) -> None:
     call_name_by_id: dict[str, str] = {}
     state: dict[str, Any] = {
@@ -223,7 +214,6 @@ async def _worker(
         "after_tool_round": False,
         "final_text": "",
         "total_tokens": 0,
-        "auto_title_user_query": auto_title_user_query or "",
         "model": model,
     }
     stream_error: str | None = None
@@ -320,7 +310,6 @@ def start_stream_run(
     registry: ToolRegistry,
     model: str,
     extra: dict[str, Any] | None,
-    auto_title_user_query: str | None = None,
 ) -> StreamRunHandle:
     queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=512)
     handle = StreamRunHandle(run_id=run_id, session_id=session_id, queue=queue)
@@ -331,7 +320,6 @@ def start_stream_run(
             registry=registry,
             model=model,
             extra=extra,
-            auto_title_user_query=auto_title_user_query,
         ),
         name=f"chat-run-{run_id}",
     )

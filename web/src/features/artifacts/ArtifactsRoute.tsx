@@ -218,6 +218,36 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
     );
   }, [items, artifactQuery]);
 
+  const deleteAllVisible = async () => {
+    if (filtered.length === 0) return;
+    const q = artifactQuery.trim();
+    const ok = await confirm({
+      title: "删除全部产物",
+      body: q
+        ? `确定删除当前搜索结果中的 ${filtered.length} 个产物？此操作不可恢复。`
+        : `确定删除该类目下的全部 ${filtered.length} 个产物？此操作不可恢复。`,
+      danger: true,
+      confirmText: "删除",
+    });
+    if (!ok) return;
+    try {
+      const ids = filtered.map((a) => a.id);
+      const res = await Promise.allSettled(ids.map((id) => deleteArtifact(id)));
+      const failed = res.filter((r) => r.status === "rejected").length;
+      if (selected && ids.includes(selected.id)) {
+        setSelected(null);
+      }
+      await loadArtifacts();
+      if (failed > 0) {
+        toast(`已删除 ${ids.length - failed} 个，失败 ${failed} 个`, "error");
+      } else {
+        toast(`已删除 ${ids.length} 个产物`, "success");
+      }
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  };
+
   const closeCategoryDialog = () => {
     setCategoryDialogOpen(false);
     setEditingCategory(null);
@@ -288,7 +318,14 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
   };
 
   const removeArtifact = async (a: ArtifactEntry) => {
-    if (!(await confirm({ title: "删除产物", body: `删除「${a.title}」？`, danger: true, confirmText: "删除" })))
+    if (
+      !(await confirm({
+        title: "删除产物",
+        body: `确定删除「${a.title}」？此操作不可恢复。`,
+        danger: true,
+        confirmText: "删除",
+      }))
+    )
       return;
     try {
       await deleteArtifact(a.id);
@@ -356,12 +393,25 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
                   <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
                   <p className="text-sm text-muted-foreground">{subtitle}</p>
                 </header>
-                <div className="mb-4">
+                <div className="mb-4 flex items-center gap-2">
                   <SearchInput
                     value={artifactQuery}
                     onChange={(e) => setArtifactQuery(e.target.value)}
                     placeholder="搜索产物…"
+                    className="flex-1"
                   />
+                  <Button
+                    variant="secondary"
+                    size="icon-sm"
+                    disabled={filtered.length === 0}
+                    onClick={() => {
+                      void deleteAllVisible();
+                    }}
+                    title="删除全部"
+                    aria-label="删除全部"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
                 </div>
 
                 {items === null ? (
@@ -381,7 +431,9 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
                         key={a.id}
                         a={a}
                         onOpen={() => setSelected(a)}
-                        onDelete={() => removeArtifact(a)}
+                        onDelete={() => {
+                          void removeArtifact(a);
+                        }}
                       />
                     ))}
                   </div>

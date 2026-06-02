@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 
 from ..logging import get_logger
@@ -13,6 +14,8 @@ from .persistence import get_session_title, upsert_session_meta
 
 log = get_logger("session_title")
 
+_title_tasks: set[asyncio.Task] = set()
+
 _TITLE_MIN_LEN = 4
 _TITLE_MAX_LEN = 12
 
@@ -22,12 +25,13 @@ _EDGE_PUNCT_RE = re.compile(
 )
 
 _TITLE_SYSTEM_PROMPT = (
-    "根据用户与助手的对话，生成一个会话标题。\n"
+    "根据用户消息（以及可选的助手回复），生成一个会话标题。\n"
     "必须遵守：\n"
     "1. 只输出标题，不要任何解释、前缀、后缀或标点\n"
     "2. 中文为主，必要时可含英文/数字\n"
     "3. 长度 4~12 个字\n"
-    "4. 用名词短语概括任务主题，不要复述用户原句"
+    "4. 用名词短语概括任务主题，不要复述用户原句\n"
+    "5. 若仅有用户消息，按用户意图概括主题"
 )
 
 
@@ -50,6 +54,34 @@ def _normalize_title(raw: str) -> str:
     if len(title) < _TITLE_MIN_LEN:
         return ""
     return title
+
+
+def schedule_session_title_generation(session_id: str, *, user_query: str) -> None:
+    query = (user_query or "").strip()
+    if not query:
+        return
+    task = asyncio.create_task(
+        maybe_generate_and_update_session_title(
+            session_id,
+            user_query=query,
+            assistant_text="",
+        ),
+        name=f"session-title-{session_id}",
+    )
+    _title_tasks.add(task)
+    task.add_done_callback(_title_tasks.discard)
+
+
+async def shutdown_session_title_tasks(*, timeout_seconds: float = 3.0) -> None:
+    pending = [task for task in list(_title_tasks) if not task.done()]
+    for task in pending:
+        task.cancel()
+    if pending:
+        try:
+            await asyncio.wait_for(asyncio.gather(*pending, return_exceptions=True), timeout=timeout_seconds)
+        except TimeoutError:
+            pass
+    _title_tasks.clear()
 
 
 async def maybe_generate_and_update_session_title(

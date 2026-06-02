@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
+import { AlertTriangle } from "lucide-react";
 import { Modal } from "./modal";
 import { Button } from "./button";
 import { Input } from "./field";
@@ -74,7 +75,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
         open={!!confirmState}
         onClose={() => settleConfirm(false)}
         title={confirmState?.title ?? "确认"}
-        description={confirmState?.body}
+        description={confirmState?.danger ? undefined : confirmState?.body}
         showClose={false}
         size="sm"
         footer={
@@ -90,7 +91,14 @@ export function DialogProvider({ children }: { children: ReactNode }) {
             </Button>
           </>
         }
-      />
+      >
+        {confirmState?.danger && confirmState.body ? (
+          <div className="flex gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm">
+            <AlertTriangle className="mt-0.5 size-5 shrink-0 text-destructive" aria-hidden />
+            <p className="text-foreground leading-relaxed">{confirmState.body}</p>
+          </div>
+        ) : null}
+      </Modal>
 
       <Modal
         open={!!promptState}

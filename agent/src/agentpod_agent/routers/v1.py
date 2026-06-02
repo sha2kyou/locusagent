@@ -31,7 +31,6 @@ from ..core import (
     get_last_user_message,
     get_response,
     get_response_session_id,
-    maybe_generate_and_update_session_title,
     persist_openai_message,
     run_chat_loop,
     session_lock,
@@ -42,6 +41,7 @@ from ..core import (
 )
 from ..core.post_run import run_post_tasks
 from ..core.run_manager import ERROR, FINISHED, reconcile_session_active_handles, start_stream_run
+from ..core.session_title import schedule_session_title_generation
 from ..core.system_prompt import get_or_create_system_prompt as _get_or_create_system_prompt
 from ..logging import get_logger
 from .v1_sessions import router as sessions_router
@@ -306,8 +306,10 @@ async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, 
         user_mid = await append_message(sid, "user", user_query_text, run_id=None)
         if user_mid > 0 and attachment_ids:
             await link_message_attachments(user_mid, attachment_ids)
-        # 标题留给运行结束后由 LLM 生成；失败则保持「新对话」
         user_query = user_query_text or ""
+
+    if user_query:
+        schedule_session_title_generation(sid, user_query=user_query)
 
     system_prompt = await _get_or_create_system_prompt(sid)
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
@@ -400,12 +402,6 @@ async def chat_completions(req: ChatRequest):
                     assistant_message_id=last_assistant_id,
                 )
                 await upsert_session_meta(sid, tokens_delta=result.total_tokens)
-                if user_query:
-                    await maybe_generate_and_update_session_title(
-                        sid,
-                        user_query=user_query,
-                        assistant_text=result.final_text,
-                    )
                 _schedule_post_run(
                     sid,
                     tool_calls_made=result.tool_calls_made,
@@ -447,7 +443,6 @@ async def chat_completions(req: ChatRequest):
                     registry=registry,
                     model=internal_model,
                     extra=_llm_extra(req.extra),
-                    auto_title_user_query=user_query,
                 )
             except Exception as exc:
                 await update_run(run_id, status="failed", error_message=str(exc))
@@ -578,6 +573,7 @@ async def responses(req: ResponsesRequest):
                 await append_message(sid, "user", new_user)
                 db_msgs.append({"role": "user", "content": new_user})
         user_query = new_user
+        schedule_session_title_generation(sid, user_query=user_query)
 
         system_prompt = await _get_or_create_system_prompt(sid)
         messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
@@ -610,12 +606,6 @@ async def responses(req: ResponsesRequest):
                 assistant_message_id=last_assistant_id,
             )
             await upsert_session_meta(sid, tokens_delta=result.total_tokens)
-            if user_query:
-                await maybe_generate_and_update_session_title(
-                    sid,
-                    user_query=user_query,
-                    assistant_text=result.final_text,
-                )
             _schedule_post_run(
                 sid,
                 tool_calls_made=result.tool_calls_made,

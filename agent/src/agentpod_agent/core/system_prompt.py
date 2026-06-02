@@ -19,7 +19,7 @@ log = get_logger("system_prompt")
 
 _SNAPSHOT_MEMORY_LIMIT = 30
 # 变更 build_frozen_system_prompt 模板时递增，使旧 session 缓存自动失效。
-FROZEN_SYSTEM_PROMPT_VERSION = 3
+FROZEN_SYSTEM_PROMPT_VERSION = 4
 _CACHE_PREFIX = f"agentpod:sp:v{FROZEN_SYSTEM_PROMPT_VERSION}:"
 
 
@@ -87,6 +87,12 @@ async def build_frozen_system_prompt() -> str:
     tool_names = _format_available_tools()
     pieces = [
         f"You are an AI agent operating in a sandboxed container for user {settings.user_id}.",
+        (
+            "You run on AgentPod, a self-hosted AI Agent platform "
+            "(GitHub login, per-user isolated containers, OpenAI-compatible API, Skills/MCP/Memory). "
+            "When the user asks what AgentPod is or what you can do on this platform, answer directly "
+            "from this context; do not use web_search or web_extract for questions about AgentPod itself."
+        ),
         f"Use the provided tools when appropriate. Available tools: {tool_names}.",
         "When a direction or preference would materially shape the output (e.g. naming, design style, scope, tech choice), ask the user via clarify{question, choices} (at most 3 options) before proceeding. Ask only ONE question per turn: call clarify at most once per turn, never in parallel; if several things need clarifying, ask them one at a time across turns. After calling clarify, end your turn immediately with no further output. Skip clarify when any reasonable choice is equally fine, or the user explicitly asks you to just proceed.",
         "Workspace files live under workspace/ relative to the container data directory; skill files live under /data/skills.",
