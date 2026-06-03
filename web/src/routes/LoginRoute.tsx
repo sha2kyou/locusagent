@@ -17,7 +17,7 @@ export function LoginRoute() {
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">AgentPod</h1>
           <p className="text-sm text-muted-foreground">
-            每用户独立 AI 工作区
+            自托管 AgentPod · 每用户独立环境
           </p>
         </div>
         <a
