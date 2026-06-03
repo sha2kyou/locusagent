@@ -160,9 +160,18 @@ class MCPManager:
             await self._discard_connect_state(cfg.name, stack)
             raise
 
+    async def _list_tools_timed(self, server_name: str, session: ClientSession):
+        timeout = max(1.0, float(get_settings().mcp_call_timeout_seconds))
+        try:
+            return await asyncio.wait_for(session.list_tools(), timeout=timeout)
+        except TimeoutError as exc:
+            msg = f"list_tools timeout after {timeout:.1f}s"
+            self._last_errors[server_name] = msg
+            raise TimeoutError(f"{server_name}: {msg}") from exc
+
     async def _register_tools(self, server_name: str, session: ClientSession) -> None:
+        listed = await self._list_tools_timed(server_name, session)
         async with self._tools_lock:
-            listed = await session.list_tools()
             names: list[str] = []
             catalog: list[dict[str, Any]] = []
             category = mcp_tool_category(server_name, self._workspace_id)
@@ -232,6 +241,9 @@ class MCPManager:
                 )
                 cfg = get_mcp_server(server_name, self._workspace_id)
                 if cfg is None:
+                    await self.remove_server(server_name)
+                    continue
+                if isinstance(exc, TimeoutError):
                     await self.remove_server(server_name)
                     continue
                 runtime = await self.reconnect_server(server_name)

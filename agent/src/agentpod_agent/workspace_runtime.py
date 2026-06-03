@@ -50,15 +50,19 @@ async def ensure_workspace_context(workspace_id: str) -> None:
             removed = tool_registry.unregister_mcp_tools_outside_workspace(workspace_id)
             if removed:
                 log.info("mcp_tools_purged_for_workspace_switch", removed=removed, workspace_id=workspace_id)
-            _mcp_ready_workspace = None
+            # 仅真实切换工作区时失效 MCP 缓存；首次请求 / 容器 bootstrap 不清除预热结果。
+            if _active_workspace_id is not None:
+                _mcp_ready_workspace = None
+                log.info(
+                    "workspace_runtime_switched",
+                    workspace_id=workspace_id,
+                    previous_workspace_id=_active_workspace_id,
+                )
         _apply_builtin_tool_settings()
-        if not same_workspace:
-            log.info("workspace_runtime_switched", workspace_id=workspace_id)
         _active_workspace_id = workspace_id
 
 
-async def ensure_mcp_runtime(workspace_id: str) -> None:
-    """连接 MCP 并注册工具；对话 / MCP 管理接口在需要时再 await。"""
+async def _ensure_mcp_runtime_inner(workspace_id: str) -> None:
     global _mcp_ready_workspace
     await ensure_workspace_context(workspace_id)
     wid = get_workspace_id()
@@ -69,6 +73,18 @@ async def ensure_mcp_runtime(workspace_id: str) -> None:
     await ensure_mcp_started(wid)
     await sync_mcp_tools_for_workspace(wid)
     _mcp_ready_workspace = wid
+
+
+async def ensure_mcp_runtime(workspace_id: str) -> None:
+    """连接 MCP 并注册工具；MCP 管理页 sync 等显式同步路径使用（带总超时）。"""
+    from .config import get_settings
+
+    settings = get_settings()
+    timeout = max(30.0, float(settings.mcp_connect_timeout_seconds) * 3.0)
+    try:
+        await asyncio.wait_for(_ensure_mcp_runtime_inner(workspace_id), timeout=timeout)
+    except TimeoutError:
+        log.warning("mcp_runtime_sync_timeout", workspace_id=normalize_workspace_id(workspace_id), timeout_seconds=timeout)
 
 
 async def refresh_mcp_server(workspace_id: str, server_name: str) -> dict[str, Any]:
