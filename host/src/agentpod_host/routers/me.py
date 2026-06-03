@@ -20,7 +20,7 @@ from ..auth import AuthContext, clear_session, consume_apikey_flash, require_ses
 from ..config import get_settings
 from ..db import User, get_session
 from ..logging import get_logger
-from ..orchestrator import teardown_container
+from ..orchestrator import reconcile_container_state, teardown_container
 from ..security import generate_agent_api_key, hash_agent_api_key
 from ..workspaces import requested_workspace_id, resolve_workspace
 
@@ -34,12 +34,14 @@ class AccountDeleteIn(BaseModel):
 
 @router.get("")
 async def me(request: Request, ctx: AuthContext = Depends(require_session)) -> dict:
-    user = ctx.user
+    user_id = ctx.user.id
+    container_status = (await reconcile_container_state(user_id)).value
     settings = get_settings()
     async with get_session() as session:
+        user = (await session.execute(select(User).where(User.id == user_id))).scalar_one()
         workspace = await resolve_workspace(
             session,
-            user_id=user.id,
+            user_id=user_id,
             workspace_id=requested_workspace_id(request),
         )
     return {
@@ -47,7 +49,7 @@ async def me(request: Request, ctx: AuthContext = Depends(require_session)) -> d
         "username": user.username,
         "avatar_url": user.avatar_url,
         "current_workspace_id": workspace.id,
-        "container_status": user.container_status,
+        "container_status": container_status,
         "provision_status": user.provision_status,
         "agent_api_key_configured": bool(user.agent_api_key_hash),
         "attachment_max_bytes": settings.attachment_max_bytes,

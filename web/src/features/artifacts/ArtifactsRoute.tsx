@@ -11,6 +11,7 @@ import { Empty, listItemDescriptionClass, Loading } from "@/components/ui/list-s
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
+import { useReloadOnAgentRecovery } from "@/hooks/useReloadOnAgentRecovery";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatFull, formatRelative } from "@/lib/format-time";
 import { toastAction } from "@/lib/toast-copy";
@@ -173,10 +174,14 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
     }
   };
 
-  useEffect(() => {
+  useReloadOnAgentRecovery(() => {
     void loadCategories();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!categoryId) {
+      setItems([]);
+      return;
+    }
+    void loadArtifacts();
+  });
 
   useEffect(() => {
     if (!categoryId) {

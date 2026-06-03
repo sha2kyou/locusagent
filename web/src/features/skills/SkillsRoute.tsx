@@ -11,6 +11,7 @@ import { Tag } from "@/components/ui/tag";
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
+import { useReloadOnAgentRecovery } from "@/hooks/useReloadOnAgentRecovery";
 import { createSkill, deleteSkill, listSkills, updateSkill } from "@/api/endpoints";
 import type { Skill } from "@/api/types";
 import { toastAction } from "@/lib/toast-copy";
@@ -37,10 +38,7 @@ export function SkillsRoute() {
       setItems([]);
     }
   };
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useReloadOnAgentRecovery(load);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

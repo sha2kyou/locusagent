@@ -18,7 +18,7 @@ export function useProvisionRetry() {
   const retry = async () => {
     setRetrying(true);
     try {
-      toast("已提交重试，正在重新部署 Agent…", "info");
+      toast("已提交重试，正在重新部署 AgentPod…", "info");
       await ensureContainer();
       await reload();
     } catch (e) {

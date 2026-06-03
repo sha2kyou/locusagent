@@ -1,30 +1,30 @@
-/** Agent 容器状态相关用户文案（ReadyGate、聊天底栏、流式重试、503 错误共用） */
+/** AgentPod 容器状态相关用户文案（ReadyGate、聊天底栏、流式重试、503 错误共用） */
 
-export const AGENT_STARTING = "Agent 正在启动，请稍候…";
+export const AGENT_STARTING = "AgentPod 正在启动，请稍候…";
 
 export const AGENT_STARTING_READY_GATE = AGENT_STARTING;
 
-export const AGENT_PAUSED = "Agent 已休眠，发送消息将自动唤醒。";
+export const AGENT_PAUSED = "AgentPod 已休眠，发送消息将自动唤醒。";
 
-export const AGENT_STOPPED = "Agent 已停止，发送消息将重新启动。";
+export const AGENT_STOPPED = "AgentPod 已停止，发送消息将重新启动。";
 
-export const AGENT_WAKING = "正在唤醒 Agent…";
+export const AGENT_WAKING = "正在唤醒 AgentPod…";
 
 export const PROVISION_FAILED_STATUS =
-  "Agent 部署失败，请联系管理员检查服务端配置。";
+  "AgentPod 部署失败，请联系管理员检查服务端配置。";
 
 export const PROVISION_FAILED_HINT = `${PROVISION_FAILED_STATUS}修复后可重试。`;
 
-export const AGENT_UNAVAILABLE = "Agent 暂时不可用，请稍后重试。";
+export const AGENT_UNAVAILABLE = "AgentPod 暂时不可用，请稍后重试。";
 
 export const AGENT_STARTING_RETRY_EXHAUSTED =
-  "Agent 启动超时，请稍后再试；若持续失败请联系管理员。";
+  "AgentPod 启动超时，请稍后再试；若持续失败请联系管理员。";
 
-export const AGENT_COMPOSER_PLACEHOLDER = "给 Agent 发送消息…";
+export const AGENT_COMPOSER_PLACEHOLDER = "给 AgentPod 发送消息…";
 
-export const AGENT_COMPOSER_NOT_READY = "Agent 未就绪，请稍候…";
+export const AGENT_COMPOSER_NOT_READY = "AgentPod 未就绪，请稍候…";
 
-export const AGENT_COMPOSER_FAILED = "Agent 部署失败，暂不可发送消息…";
+export const AGENT_COMPOSER_FAILED = "AgentPod 部署失败，暂不可发送消息…";
 
 /** 顶栏/设置等处的短标签 */
 export const READINESS_LABEL_CREATING = "启动中";
@@ -47,7 +47,7 @@ export function formatStreamRetryToast(
   if (waking && attempt === 1) {
     return `${AGENT_WAKING}${retryAfterSec}s 后重试。`;
   }
-  return `Agent 启动中，${retryAfterSec}s 后重试（${attempt}/${STREAM_MAX_RETRIES}）`;
+  return `AgentPod 启动中，${retryAfterSec}s 后重试（${attempt}/${STREAM_MAX_RETRIES}）`;
 }
 
 /** 代理/容器错误 → 用户可见文案 */

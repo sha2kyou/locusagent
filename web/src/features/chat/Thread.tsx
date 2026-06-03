@@ -55,7 +55,7 @@ export function Thread() {
             <div className="flex min-h-[55vh] flex-col items-center justify-center text-center">
               <h2 className="text-2xl font-semibold tracking-tight">有什么可以帮你？</h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                Agent 可读写文件、调用工具、检索网页、记忆与回忆。
+                AgentPod 可读写文件、调用工具、检索网页、记忆与回忆。
               </p>
               {failed ? (
                 <FailedProvisionPanel className="mt-5" />

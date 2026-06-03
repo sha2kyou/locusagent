@@ -53,6 +53,8 @@ interface AuthState {
   error: string | null;
   reload: () => Promise<Me | null>;
   readiness: AgentReadiness;
+  /** 容器从非 running 恢复为 running 时递增，供各页重新拉取数据 */
+  agentRecoveryEpoch: number;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -67,7 +69,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [agentRecoveryEpoch, setAgentRecoveryEpoch] = useState(0);
   const pollRef = useRef<number | null>(null);
+  const prevContainerRef = useRef<string | undefined>(undefined);
 
   const reload = useCallback(async () => {
     setError(null);
@@ -94,6 +98,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [reload]);
 
   useEffect(() => {
+    const cur = me?.container_status;
+    const prev = prevContainerRef.current;
+    prevContainerRef.current = cur;
+    if (prev && prev !== "running" && cur === "running") {
+      setAgentRecoveryEpoch((n) => n + 1);
+    }
+  }, [me?.container_status]);
+
+  useEffect(() => {
     if (!loading && !me && !error) {
       window.location.href = "/login";
     }
@@ -113,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return;
     }
-    if (pollRef.current) return;
+    void reload();
     pollRef.current = window.setInterval(() => void reload(), 3000);
     return () => {
       if (pollRef.current) {
@@ -147,7 +160,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ me, loading, error, reload, readiness: readinessOf(me) }}>
+    <AuthContext.Provider
+      value={{ me, loading, error, reload, readiness: readinessOf(me), agentRecoveryEpoch }}
+    >
       {body}
     </AuthContext.Provider>
   );

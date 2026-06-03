@@ -17,7 +17,7 @@ export default defineConfig({
       manifest: {
         name: 'AgentPod',
         short_name: 'AgentPod',
-        description: '个人 AI Agent 工作区',
+        description: '个人 AgentPod 工作区',
         lang: 'zh-CN',
         start_url: '/',
         scope: '/',

@@ -487,6 +487,8 @@ async def reconcile_container_state(user_id: int) -> ContainerStatus:
     if docker_status == "running":
         if db_status != ContainerStatus.RUNNING:
             await _set_user_status(user_id, container_status=ContainerStatus.RUNNING)
+            if db_status in (ContainerStatus.PAUSED, ContainerStatus.STOPPED):
+                await _notify_agent_resumed(user_id)
         return ContainerStatus.RUNNING
 
     if docker_status == "paused":

@@ -5,6 +5,7 @@ import { Cron, type Locale as CronLocale } from "react-js-cron";
 import "react-js-cron/styles.css";
 import { PageContainer } from "@/components/PageContainer";
 import { ReadyGate } from "@/components/ReadyGate";
+import { useReloadOnAgentRecovery } from "@/hooks/useReloadOnAgentRecovery";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/field";
@@ -327,10 +328,7 @@ export function ScheduledTasksRoute() {
     }
   };
 
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useReloadOnAgentRecovery(() => load());
 
   useEffect(() => {
     const running = (items ?? []).some((t) => t.last_run_status === "running");
@@ -426,7 +424,7 @@ export function ScheduledTasksRoute() {
   return (
     <PageContainer
       title="定时任务"
-      subtitle="按 Cron 或指定时间自动运行 Agent；每次执行新建会话"
+      subtitle="按 Cron 或指定时间自动运行 AgentPod；每次执行新建会话"
       actions={items ? <Badge variant="outline">共 {items.length} 条</Badge> : undefined}
     >
       <ReadyGate>
@@ -501,12 +499,12 @@ export function ScheduledTasksRoute() {
                   <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例如：每日早报" />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label>指令（发给 Agent 的 prompt）</Label>
+                  <Label>指令（发给 AgentPod 的 prompt）</Label>
                   <Textarea
                     rows={5}
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
-                    placeholder="到点后 Agent 将按此指令执行…"
+                    placeholder="到点后 AgentPod 将按此指令执行…"
                   />
                 </div>
                 <div className="grid gap-2">

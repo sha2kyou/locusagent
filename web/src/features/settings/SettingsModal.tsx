@@ -296,7 +296,7 @@ function DeleteAccountModal({
       open={open}
       onClose={onClose}
       title="删除账户"
-      description="将永久删除你的 Agent、对话、记忆与技能等全部数据，无法恢复。"
+      description="将永久删除你的 AgentPod、对话、记忆与技能等全部数据，无法恢复。"
       size="sm"
       footer={
         <Button variant="danger" disabled={typed !== username} onClick={submit}>

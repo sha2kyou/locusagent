@@ -5,6 +5,7 @@ import { CollapsibleSection, ListCard } from "@/components/ui/panel";
 import { Empty, listItemBriefClass, Loading } from "@/components/ui/list-state";
 import { useToast } from "@/components/ui/toast";
 import { ReadyGate } from "@/components/ReadyGate";
+import { useReloadOnAgentRecovery } from "@/hooks/useReloadOnAgentRecovery";
 import { listToolToggles } from "@/api/endpoints";
 import type { ToolToggleOverview } from "@/api/types";
 
@@ -29,11 +30,7 @@ export function ToolsRoute() {
     }
   };
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useReloadOnAgentRecovery(load);
 
   return (
     <PageContainer

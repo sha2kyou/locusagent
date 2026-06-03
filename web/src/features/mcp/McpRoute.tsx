@@ -9,6 +9,7 @@ import { Drawer } from "@/components/ui/drawer";
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
+import { useReloadOnAgentRecovery } from "@/hooks/useReloadOnAgentRecovery";
 import { Empty, listItemBriefClass, Loading } from "@/components/ui/list-state";
 import { Tag } from "@/components/ui/tag";
 import { getWorkspaceId } from "@/api/client";
@@ -85,14 +86,14 @@ export function McpRoute() {
       setItems([]);
     }
   };
+  useReloadOnAgentRecovery(load);
+
   useEffect(() => {
-    void load();
     const params = new URLSearchParams(window.location.search);
     const oauth = params.get("oauth");
     const server = params.get("server");
     if (oauth === "success") {
       toast(server ? `「${server}」OAuth 授权成功` : "OAuth 授权成功", "success");
-      // Host 回调已通知 Agent 重连，此处仅刷新列表
       void load();
       params.delete("oauth");
       params.delete("server");

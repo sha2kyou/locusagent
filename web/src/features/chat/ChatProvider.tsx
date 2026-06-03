@@ -114,7 +114,7 @@ function chatPath(sessionId: string | null, workspaceId?: string | null): string
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const toast = useToast();
-  const { readiness, me, reload } = useAuth();
+  const { readiness, me, reload, agentRecoveryEpoch } = useAuth();
   const navigate = useNavigate();
   const params = useParams();
   const urlSessionId = params.sessionId ?? null;
@@ -317,6 +317,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
     })();
   };
+
+  // Agent 休眠恢复后刷新会话；发送消息唤醒时 isRunning 为 true，避免 abort 进行中的流
+  useEffect(() => {
+    if (agentRecoveryEpoch === 0 || isRunning) return;
+    void refreshSessions();
+    const sid = currentIdRef.current;
+    if (sid) loadSessionFromUrl(sid);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentRecoveryEpoch, isRunning]);
 
   // URL 为会话单一真相源：刷新 / 前进后退 / 侧边栏切换均由此恢复
   useEffect(() => {
