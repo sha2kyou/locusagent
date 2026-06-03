@@ -126,6 +126,23 @@ function chatPath(sessionId: string | null, workspaceId?: string | null): string
   return withWorkspacePrefix(base, workspaceId);
 }
 
+const ACTIVE_RUN_SETTLE_MS = 200;
+const ACTIVE_RUN_SETTLE_TRIES = 15;
+
+async function waitActiveRunSettled(sessionId: string): Promise<void> {
+  for (let i = 0; i < ACTIVE_RUN_SETTLE_TRIES; i++) {
+    try {
+      const { run } = await getActiveRun(sessionId);
+      if (run?.status !== "running") return;
+    } catch {
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, ACTIVE_RUN_SETTLE_MS);
+    });
+  }
+}
+
 export function ChatProvider({ children }: { children: ReactNode }) {
   const toast = useToast();
   const { readiness, me, reload, agentRecoveryEpoch } = useAuth();
@@ -421,11 +438,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     let firstToken = true;
     let handoffToPoll = false;
+    let retriedAfterStaleRun = false;
     try {
-      await streamChatCompletion(
-        body,
-        {
-          onMessage: (chunk) => {
+      for (;;) {
+        try {
+          await streamChatCompletion(
+            body,
+            {
+              onMessage: (chunk) => {
             if (!mountedRef.current || ac.signal.aborted) return;
             if (chunk.session_id) {
               if (!currentIdRef.current) setCurrent(chunk.session_id);
@@ -500,7 +520,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           },
         },
         { signal: ac.signal },
-      );
+          );
+          break;
+        } catch (inner) {
+          const innerErr = inner as { code?: string; message?: string; status?: number };
+          const sidForRetry = currentIdRef.current;
+          if (
+            !retriedAfterStaleRun &&
+            innerErr.code === "run_in_progress" &&
+            sidForRetry
+          ) {
+            retriedAfterStaleRun = true;
+            await cancelRun(sidForRetry).catch(() => {});
+            await waitActiveRunSettled(sidForRetry);
+            continue;
+          }
+          throw inner;
+        }
+      }
     } catch (e) {
       const err = e as { code?: string; message?: string; status?: number };
       if (ac.signal.aborted) {
@@ -531,7 +568,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (!mountedRef.current) return;
       if (!handoffToPoll) {
         updateLastAssistant((parts) => completeThinkingParts(parts));
-        setIsRunning(false);
+        // 用户主动中断时由 cancel() 在后端收敛后再置 false，避免可发送但 run 仍 active
+        if (!ac.signal.aborted) setIsRunning(false);
       }
       void refreshSessions();
     }
@@ -562,9 +600,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     stopActiveRunPoll();
     stopRunningTools("已停止");
     updateLastAssistant((parts) => completeThinkingParts(parts));
-    setIsRunning(false);
+
     const sid = currentIdRef.current;
-    if (sid) await cancelRun(sid).catch(() => {});
+    if (sid) {
+      try {
+        await cancelRun(sid);
+        await waitActiveRunSettled(sid);
+      } catch {
+        /* 忽略取消失败 */
+      }
+    }
+    setIsRunning(false);
   };
 
   // ---- 会话操作 ----

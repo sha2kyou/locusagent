@@ -388,7 +388,7 @@ async def cancel_active_run(session_id: str) -> bool:
     handle = _active.get(run_id)
     if handle and not handle.task.done():
         handle.task.cancel()
-        return True
+    # 立即写入终态，避免 worker 收尾前 get_active_run 仍返回 running
     await update_run(run_id, status="cancelled", error_message=CANCELLED_MARK)
     _active.pop(run_id, None)
     return True
