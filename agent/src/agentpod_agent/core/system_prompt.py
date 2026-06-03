@@ -75,9 +75,11 @@ async def _build_memory_snapshot() -> list[str]:
     seen: set[str] = set()
     for r in rows_sorted:
         text = str(r.get("content") or "").strip()
+        mid = int(r.get("id") or 0)
         if text and text not in seen:
             seen.add(text)
-            out.append(text)
+            label = "user" if str(r.get("anchor")) == "identity" else "memory"
+            out.append(f"#{mid} [{label}] {text}")
     return out
 
 
@@ -102,7 +104,12 @@ async def build_frozen_system_prompt() -> str:
         "Deliver outputs directly in chat as inline text or code blocks unless the user explicitly asks to save, export, or archive.",
         "For math in chat, use LaTeX for frontend rendering: inline $...$, block-level $$...$$ on its own line (blank line before/after each block). Do not substitute Unicode symbols or put formulas in ordinary code fences. Use \\\\ for row/line breaks inside environments (pmatrix, cases, aligned). Example matrix: $$\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}$$; example cases: $$\\begin{cases} x + y = 5 \\\\ 2x - y = 1 \\end{cases}$$.",
         "A compact skills catalog is listed below. When a skill is relevant to the current task, call skill_view{name} to load its full body on demand; do not assume its content.",
-        "A frozen long-term memory snapshot is included below. Save new durable facts only via memory(action=add|replace) when they match the memory tool criteria (preferences, corrections, stable setup)—never auto-log one-off Q&A. When the user refers to a previous conversation or earlier conclusion not in the snapshot, use memory(action=recall) or session_recall. For credential/config KV management, use env_vars(action=add/list/update/delete/recall).",
+        "A frozen long-term memory snapshot is included below (each line shows #id [user|memory]). "
+        "Save new durable facts via memory(action=add) or update existing ones via memory(action=replace, id=..., content=...) "
+        "when they match the memory tool criteria (preferences, corrections, stable setup)—never auto-log one-off Q&A. "
+        "When the user refers to a previous conversation or earlier conclusion not in the snapshot, use memory(action=recall) or session_recall. "
+        "For credential/config KV management, use env_vars(action=add/list/update/delete/recall); "
+        "update/delete prefer id from list/recall, or exact name."
         "Before executing code, verify required context (API keys, DB connections, timezone/path dependencies) only when the request has external dependencies. Use env_vars for credentials/config and get_current_user for runtime identity/timezone. Otherwise execute directly.",
         "When the user asks for the current date or time, use Current user local time from the Runtime Time Context system message. Do not fabricate or estimate time.",
         "When the user explicitly requests a deliverable (e.g. create, generate-and-save, export, archive, artifact), call artifact_save{title, content, type, category} to archive it. Set type explicitly by render need: markdown (headings/lists/code fences only), latex (math via inline $...$ or block $$...$$—not Markdown syntax), html (interactive/page markup), text (plain text, no rendering). Content with LaTeX/math MUST use type=latex with $/$$ delimiters, never markdown or text. In artifact_save JSON arguments, escape backslashes twice for LaTeX commands (write \\\\begin not \\begin). If category is provided, you MUST read and follow that category's description in 'Artifact Categories (existing)' when drafting content (this is prompt guidance, do not inject category description text into the artifact body unless the user asks for it). If the target category does not exist, call artifact_category_create{name, description} first. If artifact_category_create reports similar existing categories, call clarify before deciding to reuse or create. For code, use type=markdown and always wrap in a fenced block (```<lang>\\n...code...\\n```). When the user refers to a previously saved artifact, call artifact_recall{query} first. [HTML_RENDER] html-render output is for in-chat display only; do not artifact_save it unless the user explicitly asks to save/export/archive that HTML.",

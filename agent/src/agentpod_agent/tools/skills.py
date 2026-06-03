@@ -16,6 +16,7 @@ from ..skills import (
     update_skill,
 )
 from ..tool_settings import is_skill_enabled
+from .args import pick_action, pick_str
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 
@@ -48,13 +49,13 @@ async def _skill_view(args: dict[str, Any]) -> ToolResult:
 
 
 async def _skill_manage(args: dict[str, Any]) -> ToolResult:
-    action = str(args.get("action", "")).lower()
-    name = str(args.get("name", "")).strip()
+    action = pick_action(args)
+    name = pick_str(args, "name")
     if not name:
         raise ToolError("name is required")
 
     if action == "create":
-        body = str(args.get("body", ""))
+        body = pick_str(args, "body", "content", "text")
         verdict = await review_write(f"{args.get('description', '')}\n\n{body}", kind="skill")
         if not verdict.allowed:
             raise ToolError(f"skill write blocked by guard: {verdict.reason}")
@@ -75,6 +76,8 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
 
     if action in {"update", "edit"}:
         body = args.get("body")
+        if body is None:
+            body = args.get("content")
         if body is not None:
             verdict = await review_write(str(body), kind="skill")
             if not verdict.allowed:
@@ -95,8 +98,12 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
         return ToolResult(content=f"skill '{name}' updated{origin_label}")
 
     if action == "patch":
-        old_string = str(args.get("old_string", ""))
+        old_string = pick_str(args, "old_string", "old_text")
         new_string = args.get("new_string")
+        if new_string is None:
+            new_string = args.get("new_content")
+        if new_string is None:
+            new_string = args.get("content")
         replace_all = bool(args.get("replace_all", False))
         if not old_string:
             raise ToolError("old_string is required")

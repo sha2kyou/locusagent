@@ -176,27 +176,29 @@ async def get_content(memory_id: int) -> str | None:
     return await run_in_thread(_do)
 
 
-async def recall(query: str, top_k: int = 5) -> list[str]:
-    """召回入口。
-
-    - 总数 < FULL_INJECT_THRESHOLD：全量返回（按时间倒序）。
-    - 否则：RAG + FTS hybrid；Embedding 不可用时仅 FTS。
-    """
+async def recall_items(query: str, top_k: int = 5) -> list[dict[str, Any]]:
+    """召回记忆条目（含 id / content / anchor）。"""
     settings = get_settings()
     total = await count_memories()
     if total == 0:
         return []
     identity_rows = await _list_identity_memories(limit=20)
-    identity_texts = [r["content"] for r in identity_rows]
     if total < settings.full_inject_threshold:
         rows = await list_memories(limit=total)
-        out: list[str] = []
+        out: list[dict[str, Any]] = []
         seen: set[str] = set()
-        for t in identity_texts + [r["content"] for r in rows]:
-            if t in seen:
+        for row in identity_rows + rows:
+            text = str(row.get("content") or "").strip()
+            if not text or text in seen:
                 continue
-            seen.add(t)
-            out.append(t)
+            seen.add(text)
+            out.append(
+                {
+                    "id": int(row["id"]),
+                    "content": text,
+                    "anchor": str(row.get("anchor") or "experience"),
+                }
+            )
         return out
 
     k = max(1, top_k)
@@ -247,18 +249,18 @@ async def recall(query: str, top_k: int = 5) -> list[str]:
             log.warning("vector_recall_failed", error=str(exc))
             return []
 
-    async def _resolve(keys: list[str], _scores: dict[str, float]) -> list[str]:
+    async def _resolve(keys: list[str], _scores: dict[str, float]) -> list[dict[str, Any]]:
         if not keys:
             return []
 
-        def _do() -> list[str]:
+        def _do() -> list[dict[str, Any]]:
             placeholders = ",".join("?" * len(keys))
             with conn_scope(load_vec=False) as c:
                 rows = c.execute(
-                    f"SELECT CAST(id AS TEXT) AS id, content FROM memory WHERE id IN ({placeholders})",
+                    f"SELECT id, content, anchor FROM memory WHERE id IN ({placeholders})",
                     keys,
                 ).fetchall()
-            by_id = {str(r["id"]): str(r["content"]) for r in rows}
+            by_id = {str(r["id"]): dict(r) for r in rows}
             return [by_id[key] for key in keys if key in by_id]
 
         return await run_in_thread(_do)
@@ -274,14 +276,27 @@ async def recall(query: str, top_k: int = 5) -> list[str]:
         like_keys = await like_fallback_memory_ids(query, k)
         recalled = await _resolve(like_keys, {})
 
-    out: list[str] = []
+    out: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for t in identity_texts + recalled:
-        if t in seen:
+    for row in identity_rows + recalled:
+        text = str(row.get("content") or "").strip()
+        if not text or text in seen:
             continue
-        seen.add(t)
-        out.append(t)
+        seen.add(text)
+        out.append(
+            {
+                "id": int(row["id"]),
+                "content": text,
+                "anchor": str(row.get("anchor") or "experience"),
+            }
+        )
     return out
+
+
+async def recall(query: str, top_k: int = 5) -> list[str]:
+    """召回入口（仅正文，兼容旧调用方）。"""
+    items = await recall_items(query, top_k=top_k)
+    return [str(r["content"]) for r in items]
 
 
 async def _list_identity_memories(limit: int = 20) -> list[dict[str, Any]]:

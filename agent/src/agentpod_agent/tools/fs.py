@@ -8,6 +8,7 @@ from typing import Any
 
 from ..db import run_in_thread
 from ..workspace import workspace_data_dir
+from .args import pick_str
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 MAX_READ_BYTES = 512 * 1024
@@ -32,7 +33,7 @@ def _resolve(rel: str) -> Path:
 
 
 async def _read_file(args: dict[str, Any]) -> ToolResult:
-    rel = str(args.get("path", "")).strip()
+    rel = pick_str(args, "path", "file_path")
     offset = int(args.get("offset", 1) or 1)
     limit = int(args.get("limit", 500) or 500)
     if offset < 1:
@@ -154,10 +155,12 @@ async def _search_files(args: dict[str, Any]) -> ToolResult:
 
 
 async def _write_file(args: dict[str, Any]) -> ToolResult:
-    rel = str(args.get("path") or args.get("file_path") or "").strip()
+    rel = pick_str(args, "path", "file_path")
     content = args.get("content")
     if content is None:
         content = args.get("file_content")
+    if content is None:
+        content = args.get("text")
     if content is None:
         raise ToolError("content is required")
     text = str(content)
@@ -183,9 +186,15 @@ async def _write_file(args: dict[str, Any]) -> ToolResult:
 
 
 async def _patch_file(args: dict[str, Any]) -> ToolResult:
-    rel = str(args.get("path") or args.get("file_path") or "").strip()
+    rel = pick_str(args, "path", "file_path")
     old_string = args.get("old_string")
+    if old_string is None:
+        old_string = args.get("old_text")
     new_string = args.get("new_string")
+    if new_string is None:
+        new_string = args.get("new_content")
+    if new_string is None:
+        new_string = args.get("content")
     replace_all = bool(args.get("replace_all", False))
     if not rel:
         raise ToolError("path is required")

@@ -35,6 +35,7 @@ _MEMORY_REVIEW_PROMPT = (
     "2. Has the user expressed expectations about how you should behave or work?\n\n"
     "Use memory(action=add|replace) with target=user for stable user facts/preferences, "
     "target=memory for durable operational notes. "
+    "For replace, pass id from the snapshot plus content (full new text); old_text works when id is unavailable. "
     "Do not save one-off Q&A, task progress, or workflow knowledge that belongs in skills.\n"
     "If nothing is worth saving, reply 'Nothing to save.' and stop."
 )

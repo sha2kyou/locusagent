@@ -17,6 +17,7 @@ from .store import (
     delete_memory,
     list_memories,
     recall,
+    recall_items,
     update_memory,
 )
 
@@ -34,6 +35,7 @@ __all__ = [
     "list_memories",
     "maybe_curate_memories",
     "recall",
+    "recall_items",
     "start_embedding_worker",
     "stop_embedding_worker",
     "update_memory",

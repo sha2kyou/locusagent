@@ -1,118 +1,122 @@
 ---
 name: html-render
-description: Produce self-contained HTML for in-chat rendering via [HTML_RENDER] markers in an isolated iframe. Use for charts (pie, bar, line, trend, ratio, radar — ECharts by default), dashboards, interactive cards/widgets, or when the user asks to render HTML or visualize results in chat.
+description: 生成可在对话中渲染的自包含 HTML，供前端按 [HTML_RENDER] 标记在隔离 iframe 中展示。适用于数据可视化与各类图表（饼图/柱状图/折线图/趋势/占比/雷达等，默认 ECharts）、仪表盘与数据看板、交互卡片或小组件，以及用户要求“在对话中渲染 HTML / 把结果画出来 / 用图表展示”的场景。
 triggers:
-  - visualize
-  - chart
-  - dashboard
-  - interactive card
-  - HTML render
+  - 可视化
+  - 图表
+  - 画图
+  - 仪表盘
+  - 数据看板
+  - 交互卡片
+  - HTML 渲染
+  - 渲染 HTML
+  - ECharts
 ---
 
-# HTML Render Skill
+# HTML 渲染技能
 
-## Goal
+## 目标
 
-Output runnable HTML that follows a fixed marker protocol so the frontend can render it safely inside an isolated iframe.
+输出可直接运行的 HTML，并遵循统一标记协议，供前端在隔离 iframe 中安全渲染。
 
-## When to use
+## 何时使用
 
-Call `skill_view{name: "html-render"}` to load the full body before executing a related task.
+执行相关任务前先调用 `skill_view{name: "html-render"}` 加载完整正文。
 
-Use this skill when the user asks to:
-- show HTML visualizations in chat
-- use ECharts or other browser chart libraries
-- generate interactive cards or widgets
-- explicitly render HTML in the conversation
-- use the special marker protocol for HTML output
+当用户提出以下需求时使用本技能：
+- 在对话中展示 HTML 可视化内容
+- 使用 ECharts 或其他浏览器图表
+- 生成交互卡片或小组件
+- 明确要求“在对话中渲染”
+- 要求用图表/图形展示数据
 
-## Output protocol (required)
+## 输出协议（必须遵守）
 
-When outputting renderable HTML, wrap one complete block with these markers:
+输出可渲染 HTML 时，必须使用如下标记包裹一个完整区块：
 
 [HTML_RENDER]
 <!doctype html>
 <html>...</html>
 [/HTML_RENDER]
 
-Rules:
-- Output only one `[HTML_RENDER]...[/HTML_RENDER]` block unless the user explicitly asks for multiple.
-- HTML must be complete and self-contained (include `<!doctype html>`, `<html>`, `<head>`, `<body>`).
-- Total HTML inside the `[HTML_RENDER]` block must be <= 6000 characters (hard limit).
-- Do not wrap the block in Markdown code fences.
-- Explanatory text must appear outside the marker block.
+规则：
+- 非用户明确要求多段时，只输出一个 `[HTML_RENDER]...[/HTML_RENDER]` 区块。
+- HTML 必须完整且自包含（包含 `<!doctype html>`、`<html>`、`<head>`、`<body>`）。
+- `[HTML_RENDER]` 区块内的 HTML 总字符数必须 <= 6000（强制要求）。
+- 不要使用 Markdown 三引号包裹该区块。
+- 说明文字必须写在标记区块之外。
 
-If over the limit:
-- Trim styles, copy, and data points first to stay within 6000 characters.
-- If needed, ship a minimal core visualization and note outside the block that it was trimmed to meet the limit.
+超限处理：
+- 优先精简样式、减少文案、压缩数据点，保证在 6000 字符内。
+- 必要时仅输出核心可视化版本，并在区块外说明“已精简以满足 6000 字符限制”。
 
-Platform convention: `[HTML_RENDER]` output is for in-chat display only. Do not call `artifact_save` unless the user explicitly asks to save, export, or archive the HTML.
+平台约定：`[HTML_RENDER]` 输出仅用于对话内展示；除非用户明确要求保存/导出/归档，否则不要调用 `artifact_save`。
 
-## Default technical spec
+## 默认技术规范
 
-### 1) Prefer self-contained output
-- Inline CSS and minimal JS when possible.
-- Do not depend on project-local static assets unless the user explicitly requires it.
-- Prefer pinned-version CDNs for external libraries.
-- Background must be solid white (`#ffffff`); no dark or transparent backgrounds.
+### 1）优先自包含
+- 优先内联 CSS 与最小必要 JS。
+- 非用户明确要求时，不依赖项目本地静态资源。
+- 需要外部库时优先使用固定版本 CDN。
+- HTML 渲染背景色必须为纯白色（`#ffffff`），不得使用深色或透明背景。
 
-### 2) Charts default to ECharts
+### 2）图表默认使用 ECharts
 
-When the user requests a chart and does not specify another library, use ECharts.
+用户请求图表时，若未指定其他库，默认使用 ECharts。
 
-Default CDN:
+默认 CDN：
 - `https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js`
 
-Chart container conventions:
-- Minimum height `>= 320px`
-- Width `100%`
-- Initialize after DOM ready
-- Listen for window resize and call `chart.resize()`
+图表容器约定：
+- 设定最小高度（`>= 320px`）
+- 宽度自适应（`width: 100%`）
+- 在 DOM 就绪后初始化
+- 监听窗口变化并执行 `chart.resize()`
 
-### 3) Data organization
-- Small datasets: inline as JS constants.
-- Medium/large datasets: separate `data` and `option` with clear structure.
-- Incomplete data: sample data is OK, but state "sample data" outside the block.
+### 3）数据组织
+- 小数据量：可直接写入 JS 常量。
+- 中大数据量：将 `data` 与 `option` 分开，结构清晰。
+- 数据不完整：可用示例数据，但需在区块外明确说明“示例数据”。
 
-## Safety boundaries
+## 安全边界
 
-Generated HTML must not include by default:
-- `fetch` calls to private or internal APIs
-- Access tokens, cookies, `localStorage`, or parent-window objects
-- Hard-coded secrets (API keys, passwords, tokens)
-- Auto-triggered destructive actions (auto-submit, delete, purchase, etc.)
+生成的 HTML 默认不得包含：
+- 对私有/内网接口的 `fetch` 调用
+- 访问令牌、Cookie、`localStorage` 或父窗口对象
+- 硬编码敏感信息（API Key、密码、令牌）
+- 自动触发破坏性动作（自动提交、删除、购买等）
 
-If external network requests are truly required, state assumptions outside the marker block.
+若确需外网请求，必须在标记区块外明确假设条件。
 
-## Frontend integration (for implementation tasks)
+## 前端集成约定（用于实现任务）
 
-When the user asks you to implement frontend rendering logic, use the minimal approach:
+当用户要求实现前端渲染逻辑时，遵循最小闭包方案：
 
-1. Parse marker blocks with a multiline non-greedy regex:
+1. 多行非贪婪解析标记区块：
 - `/\[HTML_RENDER\]([\s\S]*?)\[\/HTML_RENDER\]/`
 
-2. Extract HTML into an isolated iframe:
-- `iframe.srcdoc = extractedHtml`
-- Recommended sandbox: `sandbox="allow-scripts"`
-- Do not add `allow-same-origin` unless explicitly needed
+2. 提取 HTML 并放入隔离 iframe：
+- 使用 `iframe.srcdoc = extractedHtml`
+- sandbox 推荐：`sandbox="allow-scripts"`
+- 非明确需要时不要加 `allow-same-origin`
 
-3. Fallback:
-- No marker match or parse failure: render as normal Markdown
-- iframe render failure: show a short error message
+3. 降级策略：
+- 未匹配标记或解析失败：按普通 Markdown 渲染
+- iframe 渲染失败：显示简洁错误提示
 
-4. Layout and styling:
-- Avoid layout shift
-- Keep container styling neutral; work in both light and dark chat themes
+4. 交互与样式：
+- 避免布局跳动
+- 保持容器样式中性，兼容明暗主题
 
-## Reply template
+## 回复模板
 
-When the user requests a visualization:
+当用户请求可视化输出时：
 
-1) Brief note outside the block:
-- What is being shown
-- What assumptions were used
+1）先在区块外简短说明：
+- 展示内容是什么
+- 使用了哪些假设
 
-2) The render block:
+2）输出渲染区块：
 
 [HTML_RENDER]
 <!doctype html>
@@ -122,13 +126,13 @@ When the user requests a visualization:
 </html>
 [/HTML_RENDER]
 
-3) Optional frontend integration notes outside the block if needed.
+3）如有必要，在区块外补充前端接入说明。
 
-## Quality checklist
+## 质量检查清单
 
-Before finishing, confirm:
-- Marker protocol is correct.
-- HTML is complete and runs standalone.
-- ECharts uses the pinned version when used.
-- No secrets or unsafe behavior.
-- Readable at narrow chat widths.
+完成前确认：
+- 标记协议正确。
+- HTML 完整、可独立运行。
+- 使用 ECharts 时固定版本。
+- 不含敏感信息与危险行为。
+- 在窄宽度对话区仍可读。

@@ -12,6 +12,7 @@ from ..host_scheduled_tasks import (
     update_scheduled_task,
 )
 from ..security import review_write
+from .args import pick_action, pick_int, pick_str
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 
@@ -73,16 +74,36 @@ async def _scheduled_task_view(args: dict[str, Any]) -> ToolResult:
     )
 
 
+async def _resolve_task_id(args: dict[str, Any]) -> int:
+    task_id = pick_int(args, "id", "task_id")
+    if task_id:
+        return task_id
+    title = pick_str(args, "title")
+    if not title:
+        raise ToolError("id or title is required for update/delete")
+    try:
+        items = await list_scheduled_tasks()
+    except HostScheduledTasksError as exc:
+        raise ToolError(str(exc)) from exc
+    matches = [it for it in items if str(it.get("title") or "").strip() == title]
+    if not matches:
+        raise ToolError(f"scheduled task not found: {title}")
+    if len(matches) > 1:
+        ids = [it.get("id") for it in matches[:5]]
+        raise ToolError(f"multiple tasks titled '{title}'; use id instead. matches={ids}")
+    return int(matches[0]["id"])
+
+
 async def _scheduled_task_manage(args: dict[str, Any]) -> ToolResult:
-    action = str(args.get("action", "")).strip().lower()
-    if action in {"edit"}:
+    action = pick_action(args)
+    if action == "edit":
         action = "update"
-    if action in {"remove"}:
+    if action == "remove":
         action = "delete"
 
     if action == "create":
-        title = str(args.get("title", "")).strip()
-        prompt = str(args.get("prompt", "")).strip()
+        title = pick_str(args, "title")
+        prompt = pick_str(args, "prompt", "content", "text")
         schedule_kind = str(args.get("schedule_kind", "")).strip().lower()
         enabled = bool(args.get("enabled", True))
         notify = bool(args.get("notify", True))
@@ -113,9 +134,7 @@ async def _scheduled_task_manage(args: dict[str, Any]) -> ToolResult:
         return ToolResult(content=f"scheduled_task#{item.get('id')} created", metadata={"item": item})
 
     if action == "update":
-        task_id = int(args.get("id", 0) or 0)
-        if not task_id:
-            raise ToolError("id is required for update")
+        task_id = await _resolve_task_id(args)
         payload: dict[str, Any] = {}
         for field in ("title", "enabled", "notify", "cron_expr", "run_at"):
             if field in args:
@@ -143,9 +162,7 @@ async def _scheduled_task_manage(args: dict[str, Any]) -> ToolResult:
         return ToolResult(content=f"scheduled_task#{item.get('id')} updated", metadata={"item": item})
 
     if action == "delete":
-        task_id = int(args.get("id", 0) or 0)
-        if not task_id:
-            raise ToolError("id is required for delete")
+        task_id = await _resolve_task_id(args)
         try:
             ok = await delete_scheduled_task(task_id)
         except HostScheduledTasksError as exc:
@@ -179,13 +196,13 @@ register_builtin(
 register_builtin(
     Tool(
         name="scheduled_task_manage",
-        description="管理定时任务：create / update / delete。",
+        description="管理定时任务：create / update / delete（edit、remove 为别名）。update/delete 优先 id，否则精确 title。",
         parameters={
             "type": "object",
             "properties": {
                 "action": {"type": "string", "enum": ["create", "update", "delete", "edit", "remove"]},
-                "id": {"type": "integer"},
-                "title": {"type": "string"},
+                "id": {"type": "integer", "description": "Task id from scheduled_task_view."},
+                "title": {"type": "string", "description": "Exact title lookup when id is omitted."},
                 "prompt": {"type": "string"},
                 "schedule_kind": {"type": "string", "enum": ["once", "cron"]},
                 "enabled": {"type": "boolean"},
