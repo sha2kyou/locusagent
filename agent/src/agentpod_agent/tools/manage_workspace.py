@@ -8,12 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..db import run_in_thread
-from ..mcp_.config import (
-    MCPServerConfig,
-    add_mcp_server,
-    list_mcp_servers,
-    remove_mcp_server,
-)
+from ..mcp_.probe import McpProbeError, build_http_mcp_config
 from ..memory import count_memories
 from ..skills import list_skills
 from ..tool_settings import is_mcp_server_enabled, is_skill_enabled
@@ -60,7 +55,7 @@ async def _list_mcp() -> ToolResult:
                 f"- {s.name} [http] {s.url}"
                 f" | connected={bool(r.get('connected', False))}{tool_suffix}"
             )
-        d = s.to_dict()
+        d = s.to_public_dict()
         d["connected"] = bool(r.get("connected", False))
         d["tools"] = tools
         d["tool_count"] = len(tools)
@@ -70,17 +65,28 @@ async def _list_mcp() -> ToolResult:
 
 async def _add_mcp(args: dict[str, Any]) -> ToolResult:
     transport = str(args.get("transport", "stdio")).strip()
-    auth_raw = args.get("auth")
-    auth = str(auth_raw).strip() if auth_raw is not None else ("oauth" if transport == "http" else "none")
-    cfg = MCPServerConfig(
-        name=str(args.get("name", "")).strip(),
-        transport=transport,
-        command=list(args.get("command", []) or []),
-        args=list(args.get("args", []) or []),
-        env=dict(args.get("env", {}) or {}),
-        url=args.get("url"),
-        auth=auth if auth in ("none", "oauth") else "oauth",
-    )
+    name = str(args.get("name", "")).strip()
+    if transport == "stdio":
+        cfg = MCPServerConfig(
+            name=name,
+            transport="stdio",
+            command=list(args.get("command", []) or []),
+            args=list(args.get("args", []) or []),
+            env=dict(args.get("env", {}) or {}),
+            auth="none",
+        )
+    else:
+        url = str(args.get("url", "")).strip()
+        if not url:
+            raise ToolError("url is required for http transport")
+        try:
+            cfg = await build_http_mcp_config(
+                name=name,
+                url=url,
+                headers=dict(args.get("headers", {}) or {}),
+            )
+        except McpProbeError as exc:
+            raise ToolError(str(exc)) from exc
     try:
         await run_in_thread(add_mcp_server, cfg)
     except (ValueError, FileExistsError) as exc:
@@ -169,7 +175,12 @@ register_builtin(
                 "env": {
                     "type": "object",
                     "additionalProperties": {"type": "string"},
-                    "description": "stdio 模式环境变量覆盖。",
+                    "description": "stdio 模式环境变量。",
+                },
+                "headers": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": "http 模式请求头（如 Authorization: Bearer xxx）。",
                 },
                 "url": {"type": "string", "description": "http 模式服务地址。"},
             },

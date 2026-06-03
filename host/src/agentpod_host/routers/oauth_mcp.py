@@ -52,8 +52,8 @@ async def mcp_oauth_start(
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="mcp server not found")
     if cfg.get("transport") != "http":
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="oauth only supported for http transport")
-    if cfg.get("auth", "oauth") == "none":
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="server auth is none")
+    if cfg.get("auth") != "oauth":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="server does not support oauth")
     server_url = str(cfg.get("url") or "").strip()
     if not server_url:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="mcp server url missing")

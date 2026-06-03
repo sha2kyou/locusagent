@@ -17,32 +17,32 @@ import { createMcp, deleteMcp, disconnectMcpOAuth, listMcp, reconnectMcp, update
 import type { McpInput, McpServer, McpTool } from "@/api/types";
 import { toastAction } from "@/lib/toast-copy";
 
-function parseEnvJson(raw: string): Record<string, string> {
+function parseKvJson(raw: string, label: string): Record<string, string> {
   const source = raw.trim() || "{}";
   let parsed: unknown;
   try {
     parsed = JSON.parse(source);
   } catch {
-    throw new Error("环境变量 JSON 解析失败");
+    throw new Error(`${label} JSON 解析失败`);
   }
   if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
-    throw new Error("环境变量必须是 JSON 对象");
+    throw new Error(`${label}必须是 JSON 对象`);
   }
   const entries = Object.entries(parsed as Record<string, unknown>);
   const out: Record<string, string> = {};
   for (const [k, v] of entries) {
     const key = k.trim();
-    if (!key) throw new Error("环境变量 key 不能为空");
-    if (typeof v !== "string") throw new Error(`环境变量 ${key} 的值必须是字符串`);
+    if (!key) throw new Error(`${label} key 不能为空`);
+    if (typeof v !== "string") throw new Error(`${label} ${key} 的值必须是字符串`);
     out[key] = v;
   }
   return out;
 }
 
-function envToJsonText(env?: Record<string, string>): string {
-  const keys = Object.keys(env ?? {});
+function kvToJsonText(data?: Record<string, string>): string {
+  const keys = Object.keys(data ?? {});
   if (keys.length === 0) return "";
-  return JSON.stringify(env, null, 2);
+  return JSON.stringify(data, null, 2);
 }
 
 function normalizeText(value: unknown, fallback: string): string {
@@ -67,14 +67,16 @@ export function McpRoute() {
 
   const [name, setName] = useState("");
   const [transport, setTransport] = useState<"stdio" | "http">("stdio");
-  const [auth, setAuth] = useState<"none" | "oauth">("oauth");
   const [command, setCommand] = useState("");
   const [url, setUrl] = useState("");
   const [envJson, setEnvJson] = useState("");
+  const [headersJson, setHeadersJson] = useState("");
+  const [headersConfigured, setHeadersConfigured] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selectedTool, setSelectedTool] = useState<{ serverName: string; tool: McpTool } | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
   const [envError, setEnvError] = useState<string | null>(null);
+  const [headersError, setHeadersError] = useState<string | null>(null);
 
   const load = async (opts?: { sync?: boolean }) => {
     try {
@@ -109,21 +111,46 @@ export function McpRoute() {
   }, []);
 
   useEffect(() => {
+    if (transport !== "stdio") {
+      setEnvError(null);
+      return;
+    }
     try {
-      parseEnvJson(envJson);
+      parseKvJson(envJson, "环境变量");
       setEnvError(null);
     } catch (e) {
       setEnvError((e as Error).message);
     }
-  }, [envJson]);
+  }, [envJson, transport]);
+
+  useEffect(() => {
+    if (transport !== "http") {
+      setHeadersError(null);
+      return;
+    }
+    try {
+      parseKvJson(headersJson, "请求头");
+      setHeadersError(null);
+    } catch (e) {
+      setHeadersError((e as Error).message);
+    }
+  }, [headersJson, transport]);
 
   const buildPayload = (): McpInput => {
-    const env = parseEnvJson(envJson);
-    const base: McpInput =
-      transport === "stdio"
-        ? { name, transport, command: command.trim().split(/\s+/).filter(Boolean), args: [] }
-        : { name, transport, url: url.trim(), auth };
-    if (Object.keys(env).length > 0) base.env = env;
+    if (transport === "stdio") {
+      const env = parseKvJson(envJson, "环境变量");
+      const base: McpInput = {
+        name,
+        transport,
+        command: command.trim().split(/\s+/).filter(Boolean),
+        args: [],
+      };
+      if (Object.keys(env).length > 0) base.env = env;
+      return base;
+    }
+    const headers = parseKvJson(headersJson, "请求头");
+    const base: McpInput = { name, transport, url: url.trim() };
+    if (Object.keys(headers).length > 0) base.headers = headers;
     return base;
   };
 
@@ -131,27 +158,39 @@ export function McpRoute() {
     setEditing(null);
     setName("");
     setTransport("stdio");
-    setAuth("oauth");
     setCommand("");
     setUrl("");
     setEnvJson("");
+    setHeadersJson("");
+    setHeadersConfigured(false);
     setEnvError(null);
+    setHeadersError(null);
   };
 
   const startEdit = (s: McpServer) => {
     setEditing(s.name);
     setName(s.name);
     setTransport(s.transport);
-    setAuth(s.auth ?? (s.transport === "http" ? "oauth" : "none"));
     setCommand((s.command ?? []).join(" "));
     setUrl(s.url ?? "");
-    setEnvJson(envToJsonText(s.env));
+    setEnvJson(kvToJsonText(s.env));
+    const hasHeaders = Object.keys(s.headers ?? {}).length > 0;
+    setHeadersJson(hasHeaders ? "" : kvToJsonText(s.headers));
+    setHeadersConfigured(hasHeaders);
     requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
   const formatEnvJson = () => {
     try {
-      setEnvJson(JSON.stringify(parseEnvJson(envJson), null, 2));
+      setEnvJson(JSON.stringify(parseKvJson(envJson, "环境变量"), null, 2));
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  };
+
+  const formatHeadersJson = () => {
+    try {
+      setHeadersJson(JSON.stringify(parseKvJson(headersJson, "请求头"), null, 2));
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -222,6 +261,8 @@ export function McpRoute() {
       toast((e as Error).message, "error");
     }
   };
+
+  const formInvalid = !!envError || !!headersError;
 
   return (
     <PageContainer
@@ -301,6 +342,11 @@ export function McpRoute() {
                           {JSON.stringify(s.env, null, 2)}
                         </pre>
                       ) : null}
+                      {Object.keys(s.headers ?? {}).length > 0 ? (
+                        <pre className="max-h-32 overflow-y-auto whitespace-pre-wrap rounded-md bg-surface-2 p-2 font-mono text-xs text-foreground">
+                          {JSON.stringify(s.headers, null, 2)}
+                        </pre>
+                      ) : null}
                       {s.runtime_error && <p className="text-xs text-destructive">{s.runtime_error}</p>}
                       {s.tools.length > 0 && (
                         <div className="flex flex-wrap gap-1">
@@ -349,38 +395,53 @@ export function McpRoute() {
                   <Input value={command} onChange={(e) => setCommand(e.target.value)} placeholder="npx @scope/mcp-server" />
                 </div>
               ) : (
-                <>
-                  <div className="grid gap-1.5">
-                    <Label>URL</Label>
-                    <Input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://mcp.notion.com/mcp" />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label>认证</Label>
-                    <Select value={auth} onChange={(e) => setAuth(e.target.value as "none" | "oauth")}>
-                      <option value="oauth">OAuth（远程 MCP 推荐）</option>
-                      <option value="none">无（匿名 HTTP）</option>
-                    </Select>
-                  </div>
-                </>
-              )}
-              <div className="grid gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <Label>环境变量（JSON）</Label>
-                  <Button variant="ghost" size="sm" onClick={formatEnvJson}>
-                    格式化
-                  </Button>
+                <div className="grid gap-1.5">
+                  <Label>URL</Label>
+                  <Input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://mcp.notion.com/mcp" />
                 </div>
-                <Textarea
-                  rows={8}
-                  value={envJson}
-                  onChange={(e) => setEnvJson(e.target.value)}
-                  placeholder={'{\n  "API_KEY": "xxx"\n}'}
-                  className="font-mono text-xs"
-                />
-                {envError ? <p className="text-xs text-destructive">{envError}</p> : null}
-              </div>
+              )}
+              {transport === "stdio" ? (
+                <div className="grid gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>环境变量（JSON）</Label>
+                    <Button variant="ghost" size="sm" onClick={formatEnvJson}>
+                      格式化
+                    </Button>
+                  </div>
+                  <Textarea
+                    rows={8}
+                    value={envJson}
+                    onChange={(e) => setEnvJson(e.target.value)}
+                    placeholder={'{\n  "API_KEY": "xxx"\n}'}
+                    className="font-mono text-xs"
+                  />
+                  {envError ? <p className="text-xs text-destructive">{envError}</p> : null}
+                </div>
+              ) : (
+                <div className="grid gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>请求头（JSON）</Label>
+                    <Button variant="ghost" size="sm" onClick={formatHeadersJson}>
+                      格式化
+                    </Button>
+                  </div>
+                  <Textarea
+                    rows={8}
+                    value={headersJson}
+                    onChange={(e) => setHeadersJson(e.target.value)}
+                    placeholder={'{\n  "Authorization": "Bearer ghp_xxx"\n}'}
+                    className="font-mono text-xs"
+                  />
+                  {headersError ? <p className="text-xs text-destructive">{headersError}</p> : null}
+                  <p className="text-xs text-muted-foreground">
+                    {editing && headersConfigured
+                      ? "已配置请求头，留空则保留；填写则覆盖。"
+                      : "保存时会自动探测是否支持 OAuth；支持则显示授权按钮，否则在此填写请求头凭据。"}
+                  </p>
+                </div>
+              )}
               <div className="flex gap-2">
-                <Button variant="primary" disabled={saving || !name.trim() || !!envError} onClick={submit}>
+                <Button variant="primary" disabled={saving || !name.trim() || formInvalid} onClick={submit}>
                   {saving && <Loader2 className="size-4 animate-spin" />}
                   {editing ? "保存" : "添加"}
                 </Button>

@@ -180,7 +180,9 @@ class MCPManager:
                         auth="oauth",
                     )
                     return
-                transport = await stack.enter_async_context(streamablehttp_client(cfg.url))
+                transport = await stack.enter_async_context(
+                    streamablehttp_client(cfg.url, headers=dict(cfg.headers or {}))
+                )
                 read, write, _ = transport
             else:
                 raise ValueError(f"unknown transport: {cfg.transport}")

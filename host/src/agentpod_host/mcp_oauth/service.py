@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from urllib.parse import urlencode, urljoin, urlparse
 
 import httpx
-from mcp.client.auth import OAuthTokenError
+from mcp.client.auth import OAuthRegistrationError, OAuthTokenError
 from mcp.client.auth.oauth2 import PKCEParameters
 from mcp.client.auth.utils import (
     build_oauth_authorization_server_metadata_discovery_urls,
@@ -129,11 +129,16 @@ async def _register_client(
     oauth_metadata: OAuthMetadata | None,
     redirect_uri: str,
 ) -> OAuthClientInformationFull:
+    if oauth_metadata is None or not oauth_metadata.registration_endpoint:
+        raise McpOAuthError("该 MCP 服务不支持动态客户端注册（DCR）")
     metadata = _client_metadata(redirect_uri)
     req = create_client_registration_request(oauth_metadata, metadata, _auth_base_url(server_url))
     async with httpx.AsyncClient(timeout=httpx.Timeout(20.0)) as client:
         resp = await client.post(req.url, json=json.loads(req.content.decode()), headers=dict(req.headers))
-    return await handle_registration_response(resp)
+    try:
+        return await handle_registration_response(resp)
+    except OAuthRegistrationError as exc:
+        raise McpOAuthError(str(exc)) from exc
 
 
 async def _ensure_client_info(

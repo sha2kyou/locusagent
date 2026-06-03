@@ -132,6 +132,7 @@ export interface McpServer {
   command?: string[];
   args?: string[];
   env?: Record<string, string>;
+  headers?: Record<string, string>;
   url?: string;
   auth?: "none" | "oauth";
   connected: boolean;
@@ -149,8 +150,8 @@ export interface McpInput {
   command?: string[];
   args?: string[];
   env?: Record<string, string>;
+  headers?: Record<string, string>;
   url?: string;
-  auth?: "none" | "oauth";
 }
 
 export interface ToolToggleItem {

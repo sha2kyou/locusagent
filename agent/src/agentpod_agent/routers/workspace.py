@@ -43,6 +43,7 @@ from ..env_vars import (
 from ..errors import WsError
 from ..core.run_manager import reconcile_session_active_handles
 from ..host_mcp_oauth import fetch_oauth_status
+from ..mcp_.probe import McpProbeError, build_http_mcp_config
 from ..mcp_ import (
     MCPServerConfig,
     add_mcp_server,
@@ -206,8 +207,8 @@ class MCPIn(BaseModel):
     command: list[str] = Field(default_factory=list)
     args: list[str] = Field(default_factory=list)
     env: dict[str, str] = Field(default_factory=dict)
+    headers: dict[str, str] = Field(default_factory=dict)
     url: str | None = None
-    auth: Literal["none", "oauth"] | None = None
 
 
 class ToolToggleIn(BaseModel):
@@ -240,7 +241,7 @@ async def workspace_toggle_builtin_tool(name: str, payload: ToolToggleIn) -> dic
 
 
 def _mcp_item_with_runtime(cfg: MCPServerConfig, runtime: dict[str, dict], *, oauth_connected: bool | None) -> dict:
-    d = cfg.to_dict()
+    d = cfg.to_public_dict()
     r = runtime.get(cfg.name, {})
     d["enabled"] = is_mcp_server_enabled(cfg.name)
     d["connected"] = bool(r.get("connected", False))
@@ -258,7 +259,7 @@ def _mcp_item_with_runtime(cfg: MCPServerConfig, runtime: dict[str, dict], *, oa
 
 
 def _mcp_response(cfg: MCPServerConfig, runtime: dict[str, object], *, oauth_connected: bool | None = None) -> dict:
-    d = cfg.to_dict()
+    d = cfg.to_public_dict()
     d["enabled"] = is_mcp_server_enabled(cfg.name)
     d["connected"] = bool(runtime.get("connected", False))
     d["tools"] = runtime.get("tools", [])
@@ -283,19 +284,30 @@ def _set_mcp_tools_enabled(server_name: str, enabled: bool) -> None:
             tool.enabled = enabled
 
 
-def _to_mcp_cfg(payload: MCPIn) -> MCPServerConfig:
-    auth = payload.auth
-    if auth is None:
-        auth = "oauth" if payload.transport == "http" else "none"
-    return MCPServerConfig(
-        name=payload.name.strip(),
-        transport=payload.transport,
-        command=payload.command,
-        args=payload.args,
-        env=payload.env,
-        url=payload.url,
-        auth=auth,
-    )
+async def _build_mcp_cfg(payload: MCPIn, *, existing: MCPServerConfig | None = None) -> MCPServerConfig:
+    name = payload.name.strip()
+    if payload.transport == "stdio":
+        return MCPServerConfig(
+            name=name,
+            transport="stdio",
+            command=payload.command,
+            args=payload.args,
+            env=payload.env,
+            auth="none",
+        )
+
+    url = (payload.url or "").strip()
+    if not url:
+        raise WsError("mcp_invalid", "http transport requires url", status_code=400)
+    try:
+        return await build_http_mcp_config(
+            name=name,
+            url=url,
+            headers=dict(payload.headers),
+            existing=existing,
+        )
+    except McpProbeError as exc:
+        raise WsError("mcp_probe_failed", str(exc), status_code=400) from exc
 
 
 async def _oauth_connected_map() -> set[str]:
@@ -332,7 +344,7 @@ async def workspace_add_mcp(payload: MCPIn) -> dict:
     wid = get_workspace_id()
     invalidate_mcp_runtime(wid)
     await ensure_mcp_started(wid)
-    cfg = _to_mcp_cfg(payload)
+    cfg = await _build_mcp_cfg(payload)
     try:
         added = await run_in_thread(add_mcp_server, cfg)
     except (ValueError, FileExistsError) as exc:
@@ -346,7 +358,10 @@ async def workspace_add_mcp(payload: MCPIn) -> dict:
 
 @router.put("/mcp/{name}")
 async def workspace_update_mcp(name: str, payload: MCPIn) -> dict:
-    cfg = _to_mcp_cfg(payload)
+    existing = await run_in_thread(get_mcp_server, name)
+    if existing is None:
+        raise WsError("mcp_not_found", "mcp server not found", status_code=404)
+    cfg = await _build_mcp_cfg(payload, existing=existing)
     try:
         updated = await run_in_thread(update_mcp_server, name, cfg)
     except FileNotFoundError as exc:
@@ -356,14 +371,8 @@ async def workspace_update_mcp(name: str, payload: MCPIn) -> dict:
     runtime = await refresh_mcp_server(get_workspace_id(), updated.name)
     enabled = is_mcp_server_enabled(updated.name)
     _set_mcp_tools_enabled(updated.name, enabled)
-    d = updated.to_dict()
-    d["enabled"] = enabled
-    d["connected"] = bool(runtime.get("connected", False))
-    d["tools"] = runtime.get("tools", [])
-    d["tool_count"] = len(d["tools"])
-    if runtime.get("error"):
-        d["runtime_error"] = runtime["error"]
-    return d
+    oauth_connected = updated.name in await _oauth_connected_map() if updated.auth == "oauth" else None
+    return _mcp_response(updated, runtime, oauth_connected=oauth_connected)
 
 
 @router.post("/mcp/{name}")
@@ -374,14 +383,8 @@ async def workspace_reconnect_mcp(name: str) -> dict:
     runtime = await refresh_mcp_server(get_workspace_id(), name)
     enabled = is_mcp_server_enabled(name)
     _set_mcp_tools_enabled(name, enabled)
-    d = cfg.to_dict()
-    d["enabled"] = enabled
-    d["connected"] = bool(runtime.get("connected", False))
-    d["tools"] = runtime.get("tools", [])
-    d["tool_count"] = len(d["tools"])
-    if runtime.get("error"):
-        d["runtime_error"] = runtime["error"]
-    return d
+    oauth_connected = cfg.name in await _oauth_connected_map() if cfg.auth == "oauth" else None
+    return _mcp_response(cfg, runtime, oauth_connected=oauth_connected)
 
 
 @router.delete("/mcp/{name}")

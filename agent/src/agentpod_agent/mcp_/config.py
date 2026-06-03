@@ -1,14 +1,24 @@
 """MCP server 配置：YAML 持久化在各工作区 agent.sqlite 同目录。
 
-mcp.yaml 示例（HTTP + OAuth，如 Notion）::
+mcp.yaml 示例::
 
     servers:
       - name: notion
         transport: http
         url: https://mcp.notion.com/mcp
-        auth: oauth   # 未写 auth 的 http 默认为直连 none
+        auth: oauth   # 保存时按 registration_endpoint 自动探测
 
-在 MCP 页完成 Host OAuth 后 Agent 会经 internal 重连该服。
+      - name: github
+        transport: http
+        url: https://api.githubcopilot.com/mcp/
+        headers:
+          Authorization: "Bearer ghp_xxx"
+
+      - name: local
+        transport: stdio
+        command: [npx, "@scope/mcp"]
+        env:
+          API_KEY: xxx
 """
 
 from __future__ import annotations
@@ -32,6 +42,7 @@ class MCPServerConfig:
     command: list[str] = field(default_factory=list)
     args: list[str] = field(default_factory=list)
     env: dict[str, str] = field(default_factory=dict)
+    headers: dict[str, str] = field(default_factory=dict)
     url: str | None = None
     auth: AuthMode = "none"
 
@@ -39,7 +50,27 @@ class MCPServerConfig:
         d = asdict(self)
         if not d.get("env"):
             d.pop("env", None)
+        if not d.get("headers"):
+            d.pop("headers", None)
         return d
+
+    def to_public_dict(self) -> dict:
+        d = self.to_dict()
+        if d.get("headers"):
+            d["headers"] = mask_sensitive_headers(d["headers"])
+        return d
+
+
+def mask_sensitive_headers(headers: dict[str, str]) -> dict[str, str]:
+    if not headers:
+        return {}
+    out: dict[str, str] = {}
+    for k, v in headers.items():
+        if k.lower() == "authorization" and len(v) > 12:
+            out[k] = f"{v[:8]}…"
+        else:
+            out[k] = v
+    return out
 
 
 def _resolve_workspace_id(workspace_id: str | None) -> str:
@@ -57,8 +88,18 @@ def _normalize_auth(transport: str, auth: str | None) -> AuthMode:
         return "none"
     if auth in ("none", "oauth"):
         return auth
-    # 未写 auth 时保持直连；需 OAuth 时在 mcp.yaml 显式写 auth: oauth
     return "none"
+
+
+def _str_dict(raw: object) -> dict[str, str]:
+    if not isinstance(raw, dict) or not raw:
+        return {}
+    out: dict[str, str] = {}
+    for k, v in raw.items():
+        key = str(k).strip()
+        if key:
+            out[key] = str(v)
+    return out
 
 
 def load_mcp_config(workspace_id: str | None = None) -> list[MCPServerConfig]:
@@ -68,29 +109,32 @@ def load_mcp_config(workspace_id: str | None = None) -> list[MCPServerConfig]:
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     servers = raw.get("servers") or []
     out: list[MCPServerConfig] = []
-    stale_empty_env = False
+    stale_empty = False
     for item in servers:
         if not isinstance(item, dict):
             continue
         try:
             env_raw = item.get("env")
+            headers_raw = item.get("headers")
             if isinstance(env_raw, dict) and not env_raw:
-                stale_empty_env = True
-            env = dict(env_raw) if isinstance(env_raw, dict) and env_raw else {}
+                stale_empty = True
+            if isinstance(headers_raw, dict) and not headers_raw:
+                stale_empty = True
             out.append(
                 MCPServerConfig(
                     name=str(item["name"]),
                     transport=item.get("transport", "stdio"),
                     command=list(item.get("command", []) or []),
                     args=list(item.get("args", []) or []),
-                    env=env,
+                    env=_str_dict(env_raw),
+                    headers=_str_dict(headers_raw),
                     url=item.get("url"),
                     auth=_normalize_auth(item.get("transport", "stdio"), item.get("auth")),
                 )
             )
         except KeyError:
             continue
-    if stale_empty_env and out:
+    if stale_empty and out:
         _save_all(out, workspace_id=workspace_id)
     return out
 
@@ -122,8 +166,15 @@ def _validate(cfg: MCPServerConfig) -> None:
         raise ValueError("stdio transport requires command")
     if cfg.transport == "http" and not cfg.url:
         raise ValueError("http transport requires url")
-    if cfg.transport == "stdio" and cfg.auth != "none":
-        raise ValueError("stdio transport does not support oauth auth")
+    if cfg.transport == "stdio":
+        if cfg.auth != "none":
+            raise ValueError("stdio transport does not support oauth auth")
+        if cfg.headers:
+            raise ValueError("stdio transport does not support headers")
+    if cfg.transport == "http" and cfg.env:
+        raise ValueError("http transport uses headers, not env")
+    if cfg.transport == "http" and cfg.auth == "oauth" and cfg.headers:
+        raise ValueError("oauth auth does not use headers")
 
 
 def add_mcp_server(cfg: MCPServerConfig, workspace_id: str | None = None) -> MCPServerConfig:
