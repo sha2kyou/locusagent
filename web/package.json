@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "icons": "resvg-js --fit-width 512 public/favicon.svg public/pwa-512.png && resvg-js --fit-width 192 public/favicon.svg public/pwa-192.png && resvg-js --fit-width 180 public/favicon.svg public/apple-touch-icon.png",
     "lint": "eslint .",
     "test:latex": "node --experimental-strip-types --test src/lib/latex-normalize.test.ts",
     "test:notifications": "node --experimental-strip-types --test src/features/notifications/notification-copy.test.ts",

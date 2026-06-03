@@ -13,7 +13,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'favicon-dark.svg', 'logo.svg', 'apple-touch-icon.png', 'pwa-192.png', 'pwa-512.png'],
+      includeAssets: ['favicon.ico', 'favicon-dark.ico', 'logo.png', 'logo-dark.png', 'apple-touch-icon.png', 'apple-touch-icon-dark.png', 'pwa-192.png', 'pwa-512.png', 'pwa-192-maskable.png', 'pwa-512-maskable.png'],
       manifest: {
         name: 'AgentPod',
         short_name: 'AgentPod',
@@ -27,7 +27,8 @@ export default defineConfig({
         icons: [
           { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: 'pwa-192-maskable.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: 'pwa-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {
