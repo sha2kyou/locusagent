@@ -77,24 +77,21 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             className={cn(
-              "pointer-events-auto flex items-center gap-2.5 rounded-lg border border-border-strong bg-card py-2.5 text-sm text-card-foreground shadow-xl backdrop-blur-0",
+              "pointer-events-auto flex items-center gap-2.5 rounded-lg border border-border-strong bg-card py-2.5 pl-3.5 pr-2 text-sm text-card-foreground shadow-xl backdrop-blur-0",
               "apod-enter-up",
-              t.sticky ? "pl-3.5 pr-2" : "px-3.5",
             )}
           >
             {icons[t.type]}
             <span className="flex-1">{t.message}</span>
-            {t.sticky ? (
-              <button
-                type="button"
-                className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-                onClick={() => removeToast(t.id)}
-                aria-label="关闭"
-                title="关闭"
-              >
-                <X className="size-3.5" />
-              </button>
-            ) : null}
+            <button
+              type="button"
+              className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+              onClick={() => removeToast(t.id)}
+              aria-label="关闭"
+              title="关闭"
+            >
+              <X className="size-3.5" />
+            </button>
           </div>
         ))}
       </div>

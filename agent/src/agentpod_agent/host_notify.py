@@ -88,7 +88,7 @@ async def notify_background_review(*, summary: str, session_id: str) -> None:
         return
 
     payload = {
-        "kind": "info",
+        "kind": "success",
         "category": "自我改进",
         "title": "后台已更新记忆或技能",
         "body": text[:500],
