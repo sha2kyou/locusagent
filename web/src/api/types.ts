@@ -113,6 +113,7 @@ export interface Skill {
   description: string;
   triggers: string[];
   source: "private" | "public";
+  origin?: "manual" | "auto_extract";
   body: string;
   enabled?: boolean;
 }
@@ -170,6 +171,7 @@ export interface MemoryEntry {
   id: number;
   content: string;
   anchor: MemoryAnchor;
+  origin?: "manual" | "auto_extract";
   embedding_state: "pending" | "ready" | "failed";
   created_at: string;
 }

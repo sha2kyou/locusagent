@@ -4,7 +4,7 @@ export const USAGE_SCENARIO_LABELS: Record<string, string> = {
   compression: "上下文压缩",
   title_generation: "标题生成",
   curator: "记忆策展",
-  skill_reflect: "技能反思",
+  skill_reflect: "后台自我改进",
   approval: "写入审查",
   tavily: "网络搜索",
   duckduckgo: "网络搜索",

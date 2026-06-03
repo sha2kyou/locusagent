@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS memory (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     content         TEXT NOT NULL,
     anchor          TEXT NOT NULL DEFAULT 'experience',
+    origin          TEXT NOT NULL DEFAULT 'manual',
     embedding       BLOB,
     embedding_state TEXT NOT NULL DEFAULT 'pending',
     created_at      TIMESTAMP NOT NULL DEFAULT (datetime('now'))
@@ -370,6 +371,17 @@ def conn_scope(load_vec: bool = True):
         conn.close()
 
 
+def _column_exists(c: sqlite3.Connection, table: str, column: str) -> bool:
+    rows = c.execute(f"PRAGMA table_info({table})").fetchall()
+    return any(str(row[1]) == column for row in rows)
+
+
+def _ensure_memory_origin_column(c: sqlite3.Connection) -> None:
+    if not _column_exists(c, "memory", "origin"):
+        c.execute("ALTER TABLE memory ADD COLUMN origin TEXT NOT NULL DEFAULT 'manual'")
+        log.info("memory_origin_column_added")
+
+
 def init_db() -> None:
     with conn_scope(load_vec=False) as c:
         for stmt in SCHEMA.strip().split(";"):
@@ -379,6 +391,7 @@ def init_db() -> None:
         # 兼容历史坏触发器：先清掉，避免迁移期间 UPDATE 触发 SQL logic error。
         _drop_fts_triggers(c)
         c.execute("CREATE INDEX IF NOT EXISTS idx_memory_anchor ON memory(anchor)")
+        _ensure_memory_origin_column(c)
         if _table_exists(c, "artifacts"):
             deleted = c.execute(
                 "DELETE FROM artifacts WHERE category_id IS NULL "

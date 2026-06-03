@@ -11,6 +11,7 @@ import struct
 from typing import Any
 
 from ..config import get_settings
+from ..core.write_origin import ORIGIN_AUTO_EXTRACT, ORIGIN_MANUAL
 from ..db import conn_scope, run_in_thread
 from ..logging import get_logger
 from ..recall import fts_search
@@ -29,27 +30,44 @@ def _normalize_anchor(anchor: str | None) -> str:
     return a if a in {"identity", "experience"} else "experience"
 
 
-async def add_memory(content: str, *, anchor: str = "experience") -> int:
+def _normalize_origin(origin: str | None) -> str:
+    o = str(origin or ORIGIN_MANUAL).strip().lower()
+    return o if o in {ORIGIN_MANUAL, ORIGIN_AUTO_EXTRACT} else ORIGIN_MANUAL
+
+
+async def add_memory(content: str, *, anchor: str = "experience", origin: str = ORIGIN_MANUAL) -> int:
     if not content or not content.strip():
         raise ValueError("content is empty")
     a = _normalize_anchor(anchor)
+    o = _normalize_origin(origin)
 
     def _do() -> int:
         with conn_scope(load_vec=False) as c:
-            cur = c.execute("INSERT INTO memory(content, anchor) VALUES(?, ?)", (content, a))
+            cur = c.execute(
+                "INSERT INTO memory(content, anchor, origin) VALUES(?, ?, ?)",
+                (content, a, o),
+            )
             return int(cur.lastrowid or 0)
 
     return await run_in_thread(_do)
 
 
-async def update_memory(memory_id: int, content: str | None = None, *, anchor: str | None = None) -> bool:
+async def update_memory(
+    memory_id: int,
+    content: str | None = None,
+    *,
+    anchor: str | None = None,
+    origin: str | None = None,
+) -> bool:
     has_content = content is not None
     has_anchor = anchor is not None
-    if not has_content and not has_anchor:
+    has_origin = origin is not None
+    if not has_content and not has_anchor and not has_origin:
         raise ValueError("nothing to update")
     if has_content and not str(content).strip():
         raise ValueError("content is empty")
     normalized_anchor = _normalize_anchor(anchor) if has_anchor else None
+    normalized_origin = _normalize_origin(origin) if has_origin else None
 
     def _do() -> bool:
         with conn_scope(load_vec=False) as c:
@@ -61,6 +79,9 @@ async def update_memory(memory_id: int, content: str | None = None, *, anchor: s
             if has_anchor:
                 set_parts.append("anchor=?")
                 params.append(str(normalized_anchor))
+            if has_origin:
+                set_parts.append("origin=?")
+                params.append(str(normalized_origin))
             params.append(memory_id)
             sql = f"UPDATE memory SET {', '.join(set_parts)} WHERE id=?"
             cur = c.execute(sql, params)
@@ -82,7 +103,7 @@ async def list_memories(limit: int = 100) -> list[dict[str, Any]]:
     def _do() -> list[dict[str, Any]]:
         with conn_scope(load_vec=False) as c:
             rows = c.execute(
-                "SELECT id, content, anchor, embedding_state, created_at "
+                "SELECT id, content, anchor, origin, embedding_state, created_at "
                 "FROM memory ORDER BY id DESC LIMIT ?",
                 (limit,),
             ).fetchall()

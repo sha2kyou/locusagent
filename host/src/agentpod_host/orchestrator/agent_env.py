@@ -48,5 +48,8 @@ def build_agent_environment(
         "SANDBOX_MAX_OPEN_FILES": str(s.sandbox_max_open_files),
         "SANDBOX_MAX_FILE_MB": str(s.sandbox_max_file_mb),
         "SANDBOX_KILL_GRACE_SECONDS": str(s.sandbox_kill_grace_seconds),
+        "BACKGROUND_REVIEW_ENABLED": "1" if s.background_review_enabled else "0",
+        "BACKGROUND_REVIEW_MIN_TOOL_CALLS": str(s.background_review_min_tool_calls),
+        "BACKGROUND_REVIEW_MAX_ROUNDS": str(s.background_review_max_rounds),
     }
     return env

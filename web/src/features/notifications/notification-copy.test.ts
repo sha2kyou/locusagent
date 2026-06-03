@@ -34,6 +34,19 @@ describe("toastMessageForNotification", () => {
     );
   });
 
+  it("formats background review notification", () => {
+    assert.equal(
+      toastMessageForNotification(
+        item({
+          title: "后台已更新记忆或技能",
+          category: "自我改进",
+          body: "skill 'debugging' patched · memory#12 saved [auto_extract]",
+        }),
+      ),
+      "自我改进：skill 'debugging' patched · memory#12 saved [auto_extract]",
+    );
+  });
+
   it("passes through other notifications", () => {
     assert.equal(
       toastMessageForNotification(item({ title: "定时任务已完成", category: "定时任务" })),

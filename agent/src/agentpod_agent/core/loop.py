@@ -384,6 +384,7 @@ async def _finalize_without_tools(
     working_messages: list[dict[str, Any]],
     extra: dict[str, Any] | None,
     session_id: str | None = None,
+    usage_scenario: str = "chat",
 ) -> tuple[dict[str, Any], str, str, int]:
     req_messages = list(working_messages)
     req_messages.append({"role": "system", "content": _TOOL_ROUND_LIMIT_NOTICE})
@@ -396,7 +397,7 @@ async def _finalize_without_tools(
     completion: ChatCompletion = await client.chat.completions.create(**kwargs)
     schedule_openai_usage(
         usage=completion.usage,
-        scenario="chat",
+        scenario=usage_scenario,
         model=model,
         session_id=session_id,
     )
@@ -463,6 +464,8 @@ async def run_chat_loop(
     run_id: str | None = None,
     disabled_tools: set[str] | None = None,
     blocked_tool_actions: dict[str, set[str]] | None = None,
+    max_rounds: int | None = None,
+    usage_scenario: str = "chat",
 ) -> tuple[LoopResult, list[dict[str, Any]]]:
     settings = get_settings()
     main_model = await resolve_model("main")
@@ -476,7 +479,7 @@ async def run_chat_loop(
             return vision_model
         return main_model
 
-    max_rounds = settings.max_loop_rounds
+    effective_max_rounds = max(1, max_rounds if max_rounds is not None else settings.max_loop_rounds)
     token_limit = int(_model_limit(_round_model(messages)) * settings.context_compress_ratio)
     client = get_llm_client()
     tools_schema = registry.schemas() or None
@@ -499,7 +502,7 @@ async def run_chat_loop(
     final_text = ""
     guardrail = ToolCallGuardrailController(guardrail_config_from_settings(settings))
 
-    for round_idx in range(1, max_rounds + 1):
+    for round_idx in range(1, effective_max_rounds + 1):
         working, compression_report = await compress_with_report(
             working,
             max_tokens=token_limit,
@@ -532,7 +535,7 @@ async def run_chat_loop(
             total_tokens += usage.total_tokens or 0
         schedule_openai_usage(
             usage=usage,
-            scenario="chat",
+            scenario=usage_scenario,
             model=round_model,
             session_id=session_id,
         )
@@ -568,6 +571,7 @@ async def run_chat_loop(
                     working_messages=working,
                     extra=extra,
                     session_id=session_id,
+                    usage_scenario=usage_scenario,
                 )
                 total_tokens += more_tokens
                 working.append(final_msg)
@@ -591,6 +595,7 @@ async def run_chat_loop(
                     working_messages=working + [{"role": "system", "content": _ARTIFACT_SAVE_LOOP_NOTICE}],
                     extra=extra,
                     session_id=session_id,
+                    usage_scenario=usage_scenario,
                 )
                 total_tokens += more_tokens
                 working.append(final_msg)
@@ -621,6 +626,7 @@ async def run_chat_loop(
                     working_messages=working + [{"role": "system", "content": _TOOL_GUARDRAIL_HALT_NOTICE}],
                     extra=extra,
                     session_id=session_id,
+                    usage_scenario=usage_scenario,
                 )
                 total_tokens += more_tokens
                 working.append(final_msg)

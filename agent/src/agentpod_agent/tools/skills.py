@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..core.write_origin import ORIGIN_AUTO_EXTRACT, ORIGIN_MANUAL, is_auto_extract_write
 from ..db import run_in_thread
 from ..security import review_write
 from ..skills import (
@@ -26,7 +27,12 @@ async def _skill_view(args: dict[str, Any]) -> ToolResult:
         skills = [s for s in skills if is_skill_enabled(s.name)]
         if not skills:
             return ToolResult(content="(no skills)")
-        lines = [f"- {s.name} [{s.source}]: {s.description}" for s in skills]
+        lines = []
+        for s in skills:
+            tags = [s.source]
+            if s.origin == ORIGIN_AUTO_EXTRACT:
+                tags.append("auto_extract")
+            lines.append(f"- {s.name} [{', '.join(tags)}]: {s.description}")
         return ToolResult(content="\n".join(lines))
 
     if not is_skill_enabled(name):
@@ -34,8 +40,9 @@ async def _skill_view(args: dict[str, Any]) -> ToolResult:
     s = await run_in_thread(get_skill, name)
     if s is None:
         raise ToolError(f"skill not found: {name}")
+    origin_note = f", origin={s.origin}" if s.origin == ORIGIN_AUTO_EXTRACT else ""
     return ToolResult(
-        content=f"# {s.name} [{s.source}]\n{s.description}\n\n{s.body}",
+        content=f"# {s.name} [{s.source}{origin_note}]\n{s.description}\n\n{s.body}",
         metadata={"skill": s.to_dict()},
     )
 
@@ -57,12 +64,14 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
             body=body,
             triggers=list(args.get("triggers", []) or []),
             source="private",
+            origin=ORIGIN_AUTO_EXTRACT if is_auto_extract_write() else ORIGIN_MANUAL,
         )
         try:
             await run_in_thread(create_skill, skill)
         except FileExistsError as exc:
             raise ToolError(str(exc)) from exc
-        return ToolResult(content=f"skill '{name}' created")
+        origin_label = " [auto_extract]" if skill.origin == ORIGIN_AUTO_EXTRACT else ""
+        return ToolResult(content=f"skill '{name}' created{origin_label}")
 
     if action in {"update", "edit"}:
         body = args.get("body")
@@ -70,6 +79,7 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
             verdict = await review_write(str(body), kind="skill")
             if not verdict.allowed:
                 raise ToolError(f"skill write blocked by guard: {verdict.reason}")
+        write_origin = ORIGIN_AUTO_EXTRACT if is_auto_extract_write() else None
         try:
             await run_in_thread(
                 update_skill,
@@ -77,10 +87,12 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
                 description=args.get("description"),
                 body=body,
                 triggers=args.get("triggers"),
+                origin=write_origin,
             )
         except FileNotFoundError as exc:
             raise ToolError(str(exc)) from exc
-        return ToolResult(content=f"skill '{name}' updated")
+        origin_label = " [auto_extract]" if write_origin == ORIGIN_AUTO_EXTRACT else ""
+        return ToolResult(content=f"skill '{name}' updated{origin_label}")
 
     if action == "patch":
         old_string = str(args.get("old_string", ""))
@@ -110,16 +122,21 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
         if not verdict.allowed:
             raise ToolError(f"skill write blocked by guard: {verdict.reason}")
         try:
+            write_origin = ORIGIN_AUTO_EXTRACT if is_auto_extract_write() else None
             await run_in_thread(
                 update_skill,
                 name,
                 description=None,
                 body=patched,
                 triggers=None,
+                origin=write_origin,
             )
         except FileNotFoundError as exc:
             raise ToolError(str(exc)) from exc
-        return ToolResult(content=f"skill '{name}' patched ({count} match{'es' if count != 1 else ''})")
+        origin_label = " [auto_extract]" if write_origin == ORIGIN_AUTO_EXTRACT else ""
+        return ToolResult(
+            content=f"skill '{name}' patched ({count} match{'es' if count != 1 else ''}){origin_label}"
+        )
 
     if action == "delete":
         ok = await run_in_thread(delete_skill, name)

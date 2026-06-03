@@ -38,8 +38,10 @@ class Settings(BaseSettings):
     context_keep_last: int = Field(default=8, alias="CONTEXT_KEEP_LAST")
     context_distill_min_middle: int = Field(default=4, alias="CONTEXT_DISTILL_MIN_MIDDLE")
 
-    # 技能自我改进：本轮工具调用数达到阈值才触发任务后反思沉淀
-    skill_reflect_min_tool_calls: int = Field(default=5, alias="SKILL_REFLECT_MIN_TOOL_CALLS")
+    # Background Self-Improvement Review（Hermes 对齐）
+    background_review_enabled: bool = Field(default=True, alias="BACKGROUND_REVIEW_ENABLED")
+    background_review_min_tool_calls: int = Field(default=5, alias="BACKGROUND_REVIEW_MIN_TOOL_CALLS")
+    background_review_max_rounds: int = Field(default=8, alias="BACKGROUND_REVIEW_MAX_ROUNDS")
 
     # 记忆策展：总条数超过上限触发一次 LLM 去重/合并/淘汰
     memory_max_items: int = Field(default=200, alias="MEMORY_MAX_ITEMS")

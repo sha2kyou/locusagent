@@ -165,6 +165,9 @@ export function MemoryRoute() {
                         <div className="flex items-center gap-2">
                           <span className="font-medium">记忆 #{m.id}</span>
                           <Badge variant={emb.variant}>{emb.text}</Badge>
+                          {m.origin === "auto_extract" && (
+                            <Badge variant="outline">自动提取</Badge>
+                          )}
                         </div>
                         <p className={`${listItemDescriptionClass} max-w-[56ch] whitespace-pre-wrap`}>
                           {m.content}

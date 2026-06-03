@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..core.write_origin import ORIGIN_AUTO_EXTRACT, ORIGIN_MANUAL, is_auto_extract_write
 from ..memory import add_memory, delete_memory, enqueue_embedding, list_memories, recall, update_memory
 from ..security import review_write
 from .base import Tool, ToolError, ToolResult, register_builtin
@@ -38,9 +39,15 @@ async def _memory_tool(args: dict[str, Any]) -> ToolResult:
         verdict = await review_write(content, kind="memory")
         if not verdict.allowed:
             raise ToolError(f"memory write blocked by guard: {verdict.reason}")
-        mid = await add_memory(content, anchor=anchor)
+        mid = await add_memory(
+            content,
+            anchor=anchor,
+            origin=ORIGIN_AUTO_EXTRACT if is_auto_extract_write() else ORIGIN_MANUAL,
+        )
         await enqueue_embedding(mid)
-        return ToolResult(content=f"memory#{mid} saved")
+        saved_origin = ORIGIN_AUTO_EXTRACT if is_auto_extract_write() else ORIGIN_MANUAL
+        origin_label = " [auto_extract]" if saved_origin == ORIGIN_AUTO_EXTRACT else ""
+        return ToolResult(content=f"memory#{mid} saved{origin_label}")
 
     if action == "replace":
         old_text = str(args.get("old_text", "")).strip()
@@ -53,11 +60,13 @@ async def _memory_tool(args: dict[str, Any]) -> ToolResult:
         if not verdict.allowed:
             raise ToolError(f"memory write blocked by guard: {verdict.reason}")
         mid = await _select_by_old_text(old_text)
-        ok = await update_memory(mid, content, anchor=anchor)
+        write_origin = ORIGIN_AUTO_EXTRACT if is_auto_extract_write() else None
+        ok = await update_memory(mid, content, anchor=anchor, origin=write_origin)
         if not ok:
             raise ToolError(f"memory#{mid} not found")
         await enqueue_embedding(mid, bump=True)
-        return ToolResult(content=f"memory#{mid} replaced")
+        origin_label = " [auto_extract]" if write_origin == ORIGIN_AUTO_EXTRACT else ""
+        return ToolResult(content=f"memory#{mid} replaced{origin_label}")
 
     if action == "remove":
         old_text = str(args.get("old_text", "")).strip()

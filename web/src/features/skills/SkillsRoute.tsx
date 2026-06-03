@@ -127,6 +127,9 @@ export function SkillsRoute() {
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{s.name}</span>
                         {s.source === "public" ? <Badge>公共</Badge> : <Badge variant="brand">私有</Badge>}
+                        {s.origin === "auto_extract" && (
+                          <Badge variant="outline">自动提取</Badge>
+                        )}
                       </div>
                       {s.description && <p className={listItemDescriptionClass}>{s.description}</p>}
                       {s.triggers.length > 0 && (

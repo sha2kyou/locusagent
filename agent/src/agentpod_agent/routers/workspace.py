@@ -58,6 +58,7 @@ from ..mcp_.client import (
     probe_mcp_server,
     sync_mcp_tools_for_workspace,
 )
+from ..core.write_origin import ORIGIN_MANUAL
 from ..memory import (
     add_memory,
     delete_memory,
@@ -175,6 +176,7 @@ async def workspace_update_skill(name: str, payload: SkillUpdateIn) -> dict:
             description=payload.description,
             body=payload.body,
             triggers=payload.triggers,
+            origin=ORIGIN_MANUAL,
         )
     except ValueError as exc:
         raise WsError("skill_invalid", str(exc), status_code=400) from exc
@@ -446,7 +448,12 @@ async def workspace_add_memory(payload: MemoryIn) -> dict:
 async def workspace_update_memory(entry_id: int, payload: MemoryUpdateIn) -> dict:
     if payload.content is None and payload.anchor is None:
         raise WsError("memory_update_empty", "nothing to update", status_code=400)
-    ok = await update_memory(entry_id, payload.content, anchor=payload.anchor)
+    ok = await update_memory(
+        entry_id,
+        payload.content,
+        anchor=payload.anchor,
+        origin=ORIGIN_MANUAL if payload.content is not None else None,
+    )
     if not ok:
         raise WsError("memory_not_found", "memory not found", status_code=404)
     if payload.content is not None:

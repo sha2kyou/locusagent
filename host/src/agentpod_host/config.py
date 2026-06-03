@@ -102,6 +102,10 @@ class Settings(BaseSettings):
         default=2.0, alias="SCHEDULED_TASK_RETRY_BACKOFF_MULTIPLIER"
     )
 
+    background_review_enabled: bool = Field(default=True, alias="BACKGROUND_REVIEW_ENABLED")
+    background_review_min_tool_calls: int = Field(default=5, alias="BACKGROUND_REVIEW_MIN_TOOL_CALLS")
+    background_review_max_rounds: int = Field(default=8, alias="BACKGROUND_REVIEW_MAX_ROUNDS")
+
     public_base_url: str = Field(default="http://localhost", alias="PUBLIC_BASE_URL")
 
 

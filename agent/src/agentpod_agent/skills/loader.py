@@ -16,6 +16,7 @@ from pathlib import Path
 import yaml
 
 from ..config import get_settings
+from ..core.write_origin import ORIGIN_AUTO_EXTRACT, ORIGIN_MANUAL
 from ..logging import get_logger
 from ..workspace import workspace_data_dir
 
@@ -31,6 +32,7 @@ class Skill:
     body: str
     triggers: list[str] = field(default_factory=list)
     source: str = "private"
+    origin: str = ORIGIN_MANUAL
     path: str | None = None
 
     def to_dict(self) -> dict:
@@ -39,6 +41,7 @@ class Skill:
             "description": self.description,
             "triggers": self.triggers,
             "source": self.source,
+            "origin": self.origin,
             "body": self.body,
         }
 
@@ -64,12 +67,15 @@ def _parse_skill_md(path: Path, source: str) -> Skill | None:
     description = str(fm.get("description") or "")
     triggers_raw = fm.get("trigger") or fm.get("triggers") or []
     triggers = [str(t) for t in triggers_raw] if isinstance(triggers_raw, list) else []
+    origin_raw = str(fm.get("origin") or ORIGIN_MANUAL).strip().lower()
+    origin = origin_raw if origin_raw in {ORIGIN_MANUAL, ORIGIN_AUTO_EXTRACT} else ORIGIN_MANUAL
     return Skill(
         name=name,
         description=description,
         body=body,
         triggers=triggers,
         source=source,
+        origin=origin,
         path=str(path),
     )
 
