@@ -454,6 +454,21 @@ async def _persist_compression_if_needed(
             break
 
 
+def _select_chat_model(
+    msgs: list[dict[str, Any]],
+    *,
+    default_model: str | None,
+    main_model: str,
+    vision_model: str,
+) -> str:
+    """角色专用模型优先；default_model 为会话默认（主模型），仅作无图时的回退。"""
+    if messages_include_images(msgs):
+        return vision_model
+    if default_model:
+        return default_model
+    return main_model
+
+
 async def run_chat_loop(
     messages: list[dict[str, Any]],
     *,
@@ -473,11 +488,12 @@ async def run_chat_loop(
     compression_model = await resolve_model("compression")
 
     def _round_model(msgs: list[dict[str, Any]]) -> str:
-        if model:
-            return model
-        if messages_include_images(msgs):
-            return vision_model
-        return main_model
+        return _select_chat_model(
+            msgs,
+            default_model=model,
+            main_model=main_model,
+            vision_model=vision_model,
+        )
 
     effective_max_rounds = max(1, max_rounds if max_rounds is not None else settings.max_loop_rounds)
     token_limit = int(_model_limit(_round_model(messages)) * settings.context_compress_ratio)
@@ -729,11 +745,12 @@ async def run_chat_loop_stream(
     compression_model = await resolve_model("compression")
 
     def _round_model(msgs: list[dict[str, Any]]) -> str:
-        if model:
-            return model
-        if messages_include_images(msgs):
-            return vision_model
-        return main_model
+        return _select_chat_model(
+            msgs,
+            default_model=model,
+            main_model=main_model,
+            vision_model=vision_model,
+        )
 
     max_rounds = settings.max_loop_rounds
     token_limit = int(_model_limit(_round_model(messages)) * settings.context_compress_ratio)

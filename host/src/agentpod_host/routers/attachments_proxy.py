@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import re
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
@@ -18,6 +21,7 @@ from ..storage import (
     delete_objects,
     ensure_bucket,
     get_object_bytes,
+    head_object,
     put_object_bytes,
 )
 
@@ -25,6 +29,31 @@ router = APIRouter(prefix="/internal/attachments", tags=["attachments-proxy"])
 log = get_logger("attachments_proxy")
 
 _KEY_PREFIX = "attachments/"
+_BLOB_SHA256_RE = re.compile(r"^[a-f0-9]{64}$")
+
+
+def _validate_blob_put_key(*, object_key: str, workspace_id: str) -> str:
+    _validate_object_key(object_key=object_key, workspace_id=workspace_id)
+    ws = workspace_id.strip()
+    prefix = f"{_KEY_PREFIX}{ws}/blobs/"
+    if not object_key.startswith(prefix):
+        raise HTTPException(
+            status_code=400,
+            detail="PUT requires content-addressed blob key attachments/{workspace}/blobs/{sha256}",
+        )
+    digest = object_key[len(prefix) :]
+    if not _BLOB_SHA256_RE.fullmatch(digest):
+        raise HTTPException(status_code=400, detail="invalid sha256 in blob object key")
+    return digest
+
+
+def _assert_body_matches_key_digest(*, data: bytes, expected_digest: str) -> None:
+    actual = hashlib.sha256(data).hexdigest()
+    if actual != expected_digest:
+        raise HTTPException(
+            status_code=400,
+            detail="object key sha256 does not match request body",
+        )
 
 
 async def _assert_workspace_owned(*, user_id: int, workspace_id: str) -> None:
@@ -94,21 +123,33 @@ async def attachments_put(
     max_bytes = settings.attachment_max_bytes
     if len(data) > max_bytes:
         raise HTTPException(status_code=413, detail=f"object exceeds {max_bytes} bytes")
+    key = x_object_key.strip()
+    expected_digest = _validate_blob_put_key(object_key=key, workspace_id=x_workspace_id)
+    _assert_body_matches_key_digest(data=data, expected_digest=expected_digest)
     try:
+        existing = head_object(key)
+        if existing is not None:
+            log.info("attachment_put_skipped", user_id=user.id, key=key, bytes=len(data))
+            await audit_internal_proxy(
+                "proxy.attachment.put",
+                user_id=user.id,
+                detail={"bytes": len(data), "skipped": True},
+            )
+            return {**existing, "skipped": True}
         meta = put_object_bytes(
-            object_key=x_object_key.strip(),
+            object_key=key,
             mime_type=content_type,
             data=data,
         )
     except AttachmentStorageError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    log.info("attachment_put", user_id=user.id, key=x_object_key, bytes=len(data))
+    log.info("attachment_put", user_id=user.id, key=key, bytes=len(data))
     await audit_internal_proxy(
         "proxy.attachment.put",
         user_id=user.id,
-        detail={"bytes": len(data)},
+        detail={"bytes": len(data), "skipped": False},
     )
-    return meta
+    return {**meta, "skipped": False}
 
 
 @router.get("/objects")

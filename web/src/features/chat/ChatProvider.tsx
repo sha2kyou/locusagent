@@ -21,6 +21,7 @@ import type { SessionMeta } from "@/api/types";
 import { ApiError } from "@/api/client";
 import { streamChatCompletion } from "@/api/stream";
 import { formatStreamRetryToast, userMessageFromContainerError } from "@/lib/agent-status-copy";
+import { sha256HexFile, sha256HexText } from "@/lib/file-digest";
 import { toastAction } from "@/lib/toast-copy";
 import { useToast } from "@/components/ui/toast";
 import { useAuth, type AgentReadiness } from "@/app/auth";
@@ -48,6 +49,7 @@ export interface PendingAttachment {
   mimeType?: string;
   text?: string;
   imageDataUrl?: string;
+  contentSha256?: string;
   processable: boolean;
   unsupportedReason?: string;
   truncated: boolean;
@@ -87,7 +89,19 @@ const DEFAULT_TITLE = "新对话";
 const DEFAULT_MAX_FILE_SIZE = 1024 * 1024;
 const MAX_TOTAL_ATTACHMENTS = 1;
 const MAX_ATTACHMENT_CHARS = 16000;
-const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".svg"];
+const IMAGE_LIKE_EXTS = [
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".webp",
+  ".gif",
+  ".bmp",
+  ".svg",
+  ".heic",
+  ".heif",
+  ".tif",
+  ".tiff",
+];
 type ChatRequestContent =
   | string
   | ({ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } })[];
@@ -588,6 +602,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setPendingAttachments([]);
   };
 
+  const pendingHasDigest = (digest: string) =>
+    pendingAttachmentsRef.current.some((item) => item.contentSha256 === digest);
+
   const addPendingFiles = async (files: FileList | File[]) => {
     const maxFileSize = normalizeAttachmentMaxBytes(me?.attachment_max_bytes);
     const current = pendingAttachmentsRef.current;
@@ -611,6 +628,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           const textContent = truncated
             ? `${normalized.slice(0, MAX_ATTACHMENT_CHARS)}\n...（文件过长，已截断）`
             : normalized;
+          const contentSha256 = await sha256HexText(textContent);
+          if (pendingHasDigest(contentSha256)) {
+            toast("相同文件已添加", "info");
+            continue;
+          }
           const created = await apiCreateAttachment({
             session_id: currentIdRef.current,
             name: file.name,
@@ -628,21 +650,30 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             size: file.size,
             kind: "text",
             text: created.text,
+            contentSha256,
             processable: created.processable,
             truncated: !!created.truncated,
           });
-        } else if (isImageFile(file)) {
+        } else if (isImageLikeFile(file)) {
+          const contentSha256 = await sha256HexFile(file);
+          if (pendingHasDigest(contentSha256)) {
+            toast("相同文件已添加", "info");
+            continue;
+          }
           const imageDataUrl = await fileToDataUrl(file);
           const created = await apiCreateAttachment({
             session_id: currentIdRef.current,
             name: file.name,
             size_bytes: file.size,
             kind: "image",
-            mime_type: file.type || guessMimeTypeByName(file.name) || "image/png",
+            mime_type: file.type || guessMimeTypeByName(file.name) || "application/octet-stream",
             image_data_url: imageDataUrl,
             processable: true,
             truncated: false,
           });
+          if (!created.processable) {
+            toast(created.unsupportedReason ?? "该图片格式不可解析", "info");
+          }
           next.push({
             id: uid("f"),
             attachmentId: created.id,
@@ -650,8 +681,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             size: file.size,
             kind: "image",
             mimeType: created.mimeType,
-            imageDataUrl: created.imageDataUrl,
+            imageDataUrl: created.processable ? created.imageDataUrl : undefined,
+            contentSha256,
             processable: created.processable,
+            unsupportedReason: created.unsupportedReason,
             truncated: false,
           });
         } else {
@@ -841,10 +874,10 @@ function isProcessableTextFile(file: File): boolean {
   return textExts.some((ext) => lower.endsWith(ext));
 }
 
-function isImageFile(file: File): boolean {
+function isImageLikeFile(file: File): boolean {
   if (file.type.startsWith("image/")) return true;
   const lower = file.name.toLowerCase();
-  return IMAGE_EXTS.some((ext) => lower.endsWith(ext));
+  return IMAGE_LIKE_EXTS.some((ext) => lower.endsWith(ext));
 }
 
 function guessMimeTypeByName(name: string): string | undefined {
@@ -854,7 +887,6 @@ function guessMimeTypeByName(name: string): string | undefined {
   if (lower.endsWith(".webp")) return "image/webp";
   if (lower.endsWith(".gif")) return "image/gif";
   if (lower.endsWith(".bmp")) return "image/bmp";
-  if (lower.endsWith(".svg")) return "image/svg+xml";
   return undefined;
 }
 

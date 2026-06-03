@@ -12,11 +12,14 @@ from typing import Any
 
 from ..db import conn_scope, run_in_thread
 from ..logging import get_logger
+from .attachment_images import validate_processable_image
 from ..storage import (
     AttachmentStorageError,
+    blob_object_key,
     delete_attachment_objects,
-    load_attachment_bytes,
+    resolve_attachment_bytes,
     save_attachment_bytes,
+    upload_was_skipped,
 )
 
 log = get_logger("persistence")
@@ -68,6 +71,45 @@ def _encode_data_url(mime: str, data: bytes) -> str:
     return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
 
 
+def _find_existing_blob(
+    c: Any,
+    *,
+    sha256: str,
+    kind: str,
+    canonical_key: str,
+) -> tuple[str, str] | None:
+    row = c.execute(
+        "SELECT object_key, object_etag FROM attachments "
+        "WHERE sha256 = ? AND kind = ? AND object_key IS NOT NULL AND object_key != '' "
+        "ORDER BY CASE WHEN object_key = ? THEN 0 WHEN instr(object_key, '/blobs/') > 0 THEN 1 ELSE 2 END, "
+        "created_at DESC LIMIT 1",
+        (sha256, kind, canonical_key),
+    ).fetchone()
+    if row is None:
+        return None
+    key = str(row["object_key"] or "").strip()
+    if not key:
+        return None
+    return key, str(row["object_etag"] or "")
+
+
+def _unreferenced_object_keys(c: Any, keys: list[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in keys:
+        key = str(raw or "").strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        cnt = c.execute(
+            "SELECT COUNT(*) AS n FROM attachments WHERE object_key = ?",
+            (key,),
+        ).fetchone()
+        if int(cnt["n"] or 0) == 0:
+            out.append(key)
+    return out
+
+
 def _to_attachment_meta_row(row: Any) -> dict[str, Any]:
     return {
         "id": str(row["id"]),
@@ -75,10 +117,43 @@ def _to_attachment_meta_row(row: Any) -> dict[str, Any]:
         "kind": str(row["kind"] or "other"),
         "mimeType": str(row["mime_type"] or "application/octet-stream"),
         "objectKey": str(row["object_key"] or ""),
+        "sha256": str(row["sha256"] or ""),
         "processable": bool(int(row["processable"] or 0)),
         "unsupportedReason": row["unsupported_reason"],
         "truncated": bool(int(row["truncated"] or 0)),
     }
+
+
+async def _migrate_attachment_object_key(
+    attachment_id: str,
+    *,
+    canonical_key: str,
+    legacy_key: str,
+) -> None:
+    if legacy_key == canonical_key:
+        return
+
+    def _do() -> None:
+        with conn_scope(load_vec=False) as c:
+            c.execute(
+                "UPDATE attachments SET object_key = ? WHERE id = ? AND object_key = ?",
+                (canonical_key, attachment_id, legacy_key),
+            )
+
+    await run_in_thread(_do)
+
+
+async def _delete_orphan_object_keys(keys: list[str]) -> None:
+    if not keys:
+        return
+
+    def _do() -> list[str]:
+        with conn_scope(load_vec=False) as c:
+            return _unreferenced_object_keys(c, keys)
+
+    orphan_keys = await run_in_thread(_do)
+    if orphan_keys:
+        await delete_attachment_objects(orphan_keys)
 
 
 async def _hydrate_attachment(meta: dict[str, Any]) -> dict[str, Any]:
@@ -94,13 +169,26 @@ async def _hydrate_attachment(meta: dict[str, Any]) -> dict[str, Any]:
         "truncated": bool(meta["truncated"]),
     }
     object_key = str(meta.get("objectKey") or "")
+    content_sha256 = str(meta.get("sha256") or "")
     if not object_key or not out["processable"]:
         if not object_key and out["processable"] and out["kind"] in {"text", "image"}:
             out["processable"] = False
             out["unsupportedReason"] = "附件对象不存在"
         return out
     try:
-        data = await load_attachment_bytes(object_key)
+        data, resolved_key = await resolve_attachment_bytes(
+            object_key,
+            content_sha256=content_sha256 or None,
+        )
+        if data is not None and content_sha256:
+            canonical = blob_object_key(content_sha256)
+            if object_key and object_key != canonical and resolved_key == canonical:
+                await _migrate_attachment_object_key(
+                    str(meta["id"]),
+                    canonical_key=canonical,
+                    legacy_key=object_key,
+                )
+                await _delete_orphan_object_keys([object_key])
     except AttachmentStorageError as exc:
         log.warning("attachment_load_failed", attachment_id=out["id"], error=str(exc))
         out["processable"] = False
@@ -540,26 +628,61 @@ async def create_attachment(
             parsed_mime, decoded = _decode_data_url(image_data_url)
             clean_mime = parsed_mime or clean_mime
             payload = decoded
+            if payload:
+                ok, clean_mime, reason = validate_processable_image(payload, clean_mime)
+                if not ok:
+                    processable = False
+                    unsupported_reason = reason or unsupported_reason
     elif text_content:
         payload = text_content.encode("utf-8")
 
     object_key = ""
     object_etag = ""
     content_sha256 = ""
+    uploaded_new_object = False
     if payload is not None:
-        try:
-            uploaded = await save_attachment_bytes(
-                attachment_id=attachment_id,
-                kind=kind,
-                name=name,
-                mime_type=clean_mime,
-                data=payload,
-            )
-            object_key = uploaded["object_key"]
-            object_etag = uploaded["etag"]
-            content_sha256 = hashlib.sha256(payload).hexdigest()
-        except AttachmentStorageError as exc:
-            raise RuntimeError(f"attachment storage upload failed: {exc}") from exc
+        content_sha256 = hashlib.sha256(payload).hexdigest()
+        store_blob = processable or kind != "image"
+        if store_blob:
+            canonical_key = blob_object_key(content_sha256)
+
+            def _lookup_existing() -> tuple[str, str] | None:
+                with conn_scope(load_vec=False) as c:
+                    return _find_existing_blob(
+                        c,
+                        sha256=content_sha256,
+                        kind=kind,
+                        canonical_key=canonical_key,
+                    )
+
+            existing = await run_in_thread(_lookup_existing)
+            if existing:
+                object_key, object_etag = existing
+                if object_key != canonical_key:
+                    try:
+                        canonical_data, _ = await resolve_attachment_bytes(canonical_key)
+                        if canonical_data is not None:
+                            object_key = canonical_key
+                    except AttachmentStorageError:
+                        pass
+                log.info(
+                    "attachment_blob_reused",
+                    attachment_id=attachment_id,
+                    sha256=content_sha256[:12],
+                    object_key=object_key,
+                )
+            else:
+                try:
+                    uploaded = await save_attachment_bytes(
+                        content_sha256=content_sha256,
+                        mime_type=clean_mime,
+                        data=payload,
+                    )
+                    object_key = str(uploaded["object_key"])
+                    object_etag = str(uploaded["etag"])
+                    uploaded_new_object = not upload_was_skipped(uploaded)
+                except AttachmentStorageError as exc:
+                    raise RuntimeError(f"attachment storage upload failed: {exc}") from exc
 
     def _do() -> dict[str, Any]:
         with conn_scope(load_vec=False) as c:
@@ -593,8 +716,15 @@ async def create_attachment(
     try:
         meta = await run_in_thread(_do)
     except Exception:
-        if object_key:
-            await delete_attachment_objects([object_key])
+        if uploaded_new_object and object_key:
+
+            def _rollback_keys() -> list[str]:
+                with conn_scope(load_vec=False) as c:
+                    return _unreferenced_object_keys(c, [object_key])
+
+            orphan_keys = await run_in_thread(_rollback_keys)
+            if orphan_keys:
+                await delete_attachment_objects(orphan_keys)
         raise
     return await _hydrate_attachment(meta)
 
@@ -1015,13 +1145,14 @@ async def delete_session(session_id: str) -> bool:
                     f"DELETE FROM message_attachments WHERE message_id IN ({placeholders})",
                     mids,
                 )
+            keys = [str(r["object_key"] or "") for r in attachment_rows]
             c.execute("DELETE FROM attachments WHERE session_id = ?", (session_id,))
             c.execute("DELETE FROM responses WHERE session_id = ?", (session_id,))
             c.execute("DELETE FROM runs WHERE session_id = ?", (session_id,))
             c.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
             cur = c.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
-            keys = [str(r["object_key"] or "") for r in attachment_rows]
-            return (cur.rowcount or 0) > 0, keys
+            orphan_keys = _unreferenced_object_keys(c, keys)
+            return (cur.rowcount or 0) > 0, orphan_keys
 
     deleted, object_keys = await run_in_thread(_do)
     if object_keys:

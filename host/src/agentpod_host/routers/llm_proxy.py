@@ -33,6 +33,8 @@ _HOP_RESPONSE = frozenset(
         "upgrade",
         "host",
         "content-length",
+        # httpx 已解压 body；透传会导致下游二次解压失败
+        "content-encoding",
     }
 )
 

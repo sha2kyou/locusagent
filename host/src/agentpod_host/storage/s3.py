@@ -45,6 +45,24 @@ def ensure_bucket(settings: Settings | None = None) -> None:
         raise AttachmentStorageError(f"ensure bucket failed: {exc}") from exc
 
 
+def head_object(object_key: str, settings: Settings | None = None) -> dict[str, str] | None:
+    if not object_key:
+        return None
+    s = settings or get_settings()
+    try:
+        stat = _client().stat_object(bucket_name=_bucket(s), object_name=object_key)
+    except S3Error as exc:
+        if exc.code in {"NoSuchKey", "NoSuchBucket"}:
+            return None
+        raise AttachmentStorageError(f"head object failed: {exc}") from exc
+    except Exception as exc:
+        raise AttachmentStorageError(f"head object failed: {exc}") from exc
+    return {
+        "object_key": object_key,
+        "etag": str(stat.etag or "").strip('"'),
+    }
+
+
 def put_object_bytes(
     *,
     object_key: str,

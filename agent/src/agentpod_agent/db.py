@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS attachments (
     created_at       TIMESTAMP NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_attachments_session ON attachments(session_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_attachments_sha256 ON attachments(sha256, kind);
 
 CREATE TABLE IF NOT EXISTS message_attachments (
     message_id       INTEGER NOT NULL,
@@ -391,6 +392,9 @@ def init_db() -> None:
         # 兼容历史坏触发器：先清掉，避免迁移期间 UPDATE 触发 SQL logic error。
         _drop_fts_triggers(c)
         c.execute("CREATE INDEX IF NOT EXISTS idx_memory_anchor ON memory(anchor)")
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_attachments_sha256 ON attachments(sha256, kind)"
+        )
         _ensure_memory_origin_column(c)
         if _table_exists(c, "artifacts"):
             deleted = c.execute(

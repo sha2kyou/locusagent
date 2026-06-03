@@ -3,6 +3,7 @@ from .s3 import (
     delete_objects,
     ensure_bucket,
     get_object_bytes,
+    head_object,
     put_object_bytes,
 )
 
@@ -11,5 +12,6 @@ __all__ = [
     "delete_objects",
     "ensure_bucket",
     "get_object_bytes",
+    "head_object",
     "put_object_bytes",
 ]
