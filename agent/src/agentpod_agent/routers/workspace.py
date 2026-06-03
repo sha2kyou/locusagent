@@ -55,7 +55,6 @@ from ..mcp_.client import (
     connect_mcp_server,
     ensure_mcp_started,
     list_mcp_runtime,
-    probe_mcp_server,
     sync_mcp_tools_for_workspace,
 )
 from ..core.write_origin import ORIGIN_MANUAL
@@ -343,14 +342,6 @@ async def workspace_add_mcp(payload: MCPIn) -> dict:
     mark_mcp_runtime_ready(wid)
     oauth_connected = added.name in await _oauth_connected_map() if added.auth == "oauth" else None
     return _mcp_response(added, runtime, oauth_connected=oauth_connected)
-
-
-@router.post("/mcp/test")
-async def workspace_test_mcp(payload: MCPIn) -> dict:
-    cfg = _to_mcp_cfg(payload)
-    tested = await probe_mcp_server(cfg)
-    oauth_connected = cfg.name in await _oauth_connected_map() if cfg.auth == "oauth" else None
-    return _mcp_response(cfg, tested, oauth_connected=oauth_connected)
 
 
 @router.put("/mcp/{name}")

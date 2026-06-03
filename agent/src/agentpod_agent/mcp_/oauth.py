@@ -151,27 +151,3 @@ async def connect_http_oauth_session(
         session = await stack.enter_async_context(ClientSession(read, write))
         await session.initialize()
     return session
-
-
-async def probe_http_oauth(
-    *,
-    server_name: str,
-    server_url: str,
-    workspace_id: str,
-) -> dict[str, Any]:
-    stack = AsyncExitStack()
-    try:
-        session = await connect_http_oauth_session(
-            stack,
-            server_name=server_name,
-            server_url=server_url,
-            workspace_id=workspace_id,
-        )
-        listed = await session.list_tools()
-        return {"connected": True, "tool_count": len(listed.tools)}
-    except OAuthRequiredError:
-        return {"connected": False, "error": OAUTH_REQUIRED}
-    except Exception as exc:
-        return {"connected": False, "error": str(exc)}
-    finally:
-        await stack.aclose()

@@ -25,7 +25,7 @@ from ..workspace import (
     workspace_data_dir,
 )
 from .config import MCPServerConfig, get_mcp_server, list_mcp_servers
-from .oauth import OAuthRequiredError, connect_http_oauth_session, probe_http_oauth
+from .oauth import OAuthRequiredError, connect_http_oauth_session
 
 log = get_logger("mcp")
 
@@ -431,76 +431,6 @@ class MCPManager:
             await self.remove_server(server_name)
             return await self.add_server(cfg)
 
-    async def probe_server(self, cfg: MCPServerConfig) -> dict[str, Any]:
-        stack = AsyncExitStack()
-        try:
-            if cfg.transport == "stdio":
-                params = StdioServerParameters(
-                    command=cfg.command[0] if cfg.command else "",
-                    args=cfg.command[1:] + cfg.args if len(cfg.command) > 1 else cfg.args,
-                    env=_stdio_env(cfg, self._workspace_id),
-                )
-                read, write = await stack.enter_async_context(stdio_client(params))
-            elif cfg.transport == "http":
-                if not cfg.url:
-                    raise ValueError("http transport requires url")
-                if cfg.auth == "oauth":
-                    result = await probe_http_oauth(
-                        server_name=cfg.name,
-                        server_url=cfg.url,
-                        workspace_id=self._workspace_id,
-                    )
-                    if not result.get("connected"):
-                        err = result.get("error") or "connection failed"
-                        return {"name": cfg.name, "connected": False, "tools": [], "error": err}
-                    oauth_stack = AsyncExitStack()
-                    try:
-                        session = await connect_http_oauth_session(
-                            oauth_stack,
-                            server_name=cfg.name,
-                            server_url=cfg.url,
-                            workspace_id=self._workspace_id,
-                        )
-                        listed = await session.list_tools()
-                        tools = [
-                            {
-                                "name": t.name,
-                                "full_name": mcp_tool_full_name(cfg.name, t.name, self._workspace_id),
-                                "description": t.description or f"MCP tool {t.name}@{cfg.name}",
-                                "input_schema": t.inputSchema or {"type": "object", "properties": {}},
-                                "schema_summary": _schema_summary(
-                                    t.inputSchema or {"type": "object", "properties": {}}
-                                ),
-                            }
-                            for t in listed.tools
-                        ]
-                        return {"name": cfg.name, "connected": True, "tools": tools, "error": None}
-                    finally:
-                        await oauth_stack.aclose()
-                else:
-                    transport = await stack.enter_async_context(streamablehttp_client(cfg.url))
-                    read, write, _ = transport
-            else:
-                raise ValueError(f"unknown transport: {cfg.transport}")
-            session = await stack.enter_async_context(ClientSession(read, write))
-            await session.initialize()
-            listed = await session.list_tools()
-            tools = [
-                {
-                    "name": t.name,
-                    "full_name": mcp_tool_full_name(cfg.name, t.name, self._workspace_id),
-                    "description": t.description or f"MCP tool {t.name}@{cfg.name}",
-                    "input_schema": t.inputSchema or {"type": "object", "properties": {}},
-                    "schema_summary": _schema_summary(t.inputSchema or {"type": "object", "properties": {}}),
-                }
-                for t in listed.tools
-            ]
-            return {"name": cfg.name, "connected": True, "tools": tools, "error": None}
-        except Exception as exc:
-            return {"name": cfg.name, "connected": False, "tools": [], "error": str(exc)}
-        finally:
-            await stack.aclose()
-
     async def remove_server(self, server_name: str) -> bool:
         tool_names: list[str] = []
         async with self._tools_lock:
@@ -709,11 +639,6 @@ def list_mcp_runtime() -> dict[str, dict[str, Any]]:
 async def reconnect_mcp_server(server_name: str) -> dict[str, Any]:
     mgr = await ensure_mcp_started(get_workspace_id())
     return await mgr.reconnect_server(server_name)
-
-
-async def probe_mcp_server(cfg: MCPServerConfig) -> dict[str, Any]:
-    mgr = await _get_or_create_manager(get_workspace_id())
-    return await mgr.probe_server(cfg)
 
 
 async def reconnect_all_mcp_servers_for_workspace(workspace_id: str) -> dict[str, Any]:

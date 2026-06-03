@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link2, Loader2, Network, Pencil, RefreshCw, Trash2, Unlink2 } from "lucide-react";
+import { KeyRound, Loader2, Pencil, RefreshCw, ShieldCheck, ShieldOff, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/field";
@@ -13,7 +13,7 @@ import { useReloadOnAgentRecovery } from "@/hooks/useReloadOnAgentRecovery";
 import { Empty, listItemBriefClass, Loading } from "@/components/ui/list-state";
 import { Tag } from "@/components/ui/tag";
 import { getWorkspaceId } from "@/api/client";
-import { createMcp, deleteMcp, disconnectMcpOAuth, listMcp, reconnectMcp, testMcp, updateMcp } from "@/api/endpoints";
+import { createMcp, deleteMcp, disconnectMcpOAuth, listMcp, reconnectMcp, updateMcp } from "@/api/endpoints";
 import type { McpInput, McpServer, McpTool } from "@/api/types";
 import { toastAction } from "@/lib/toast-copy";
 
@@ -72,7 +72,6 @@ export function McpRoute() {
   const [url, setUrl] = useState("");
   const [envJson, setEnvJson] = useState("");
   const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState<string | null>(null);
   const [selectedTool, setSelectedTool] = useState<{ serverName: string; tool: McpTool } | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
   const [envError, setEnvError] = useState<string | null>(null);
@@ -177,26 +176,6 @@ export function McpRoute() {
     }
   };
 
-  const testServer = async (s: McpServer) => {
-    setTesting(s.name);
-    try {
-      const payload: McpInput =
-        s.transport === "stdio"
-          ? { name: s.name, transport: s.transport, command: s.command ?? [], args: s.args ?? [] }
-          : { name: s.name, transport: s.transport, url: s.url ?? "", auth: s.auth ?? "oauth" };
-      if (s.env && Object.keys(s.env).length > 0) payload.env = s.env;
-      const r = await testMcp(payload);
-      toast(
-        r.connected ? `连接成功，发现 ${r.tool_count} 个工具` : `连接失败：${r.runtime_error ?? "未知错误"}`,
-        r.connected ? "success" : "error",
-      );
-    } catch (e) {
-      toast((e as Error).message, "error");
-    } finally {
-      setTesting(null);
-    }
-  };
-
   const reconnect = async (s: McpServer) => {
     try {
       await reconnectMcp(s.name);
@@ -271,7 +250,12 @@ export function McpRoute() {
                         <Badge>{s.transport}</Badge>
                         {s.oauth_required ? (
                           <Badge variant={s.oauth_connected ? "success" : "outline"}>
-                            OAuth {s.oauth_connected ? "已授权" : "未授权"}
+                            {s.oauth_connected ? (
+                              <ShieldCheck className="size-3.5" aria-hidden />
+                            ) : (
+                              <KeyRound className="size-3.5" aria-hidden />
+                            )}
+                            {s.oauth_connected ? "已授权" : "待授权"}
                           </Badge>
                         ) : null}
                       </div>
@@ -285,9 +269,10 @@ export function McpRoute() {
                           variant="ghost"
                           size="icon-sm"
                           onClick={() => startOAuth(s)}
-                          aria-label="OAuth 连接"
+                          aria-label="OAuth 授权"
+                          title="OAuth 授权"
                         >
-                          <Link2 />
+                          <KeyRound />
                         </Button>
                       ) : null}
                       {s.oauth_required && s.oauth_connected ? (
@@ -295,20 +280,12 @@ export function McpRoute() {
                           variant="ghost"
                           size="icon-sm"
                           onClick={() => disconnectOAuth(s)}
-                          aria-label="断开 OAuth"
+                          aria-label="解除 OAuth 授权"
+                          title="解除 OAuth 授权"
                         >
-                          <Unlink2 />
+                          <ShieldOff />
                         </Button>
                       ) : null}
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        disabled={testing === s.name}
-                        onClick={() => testServer(s)}
-                        aria-label="测试连接"
-                      >
-                        {testing === s.name ? <Loader2 className="size-4 animate-spin" /> : <Network />}
-                      </Button>
                       <Button variant="ghost" size="icon-sm" onClick={() => reconnect(s)} aria-label="重连"><RefreshCw /></Button>
                       <Button variant="ghost" size="icon-sm" onClick={() => startEdit(s)} aria-label="编辑"><Pencil /></Button>
                       <Button variant="ghost" size="icon-sm" onClick={() => remove(s)} aria-label="删除"><Trash2 /></Button>

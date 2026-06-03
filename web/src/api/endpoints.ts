@@ -143,9 +143,6 @@ export const listMcp = (opts?: { sync?: boolean }) =>
 
 export const createMcp = (body: McpInput) => apiSend<McpServer>("/api/workspace/mcp", "POST", body);
 
-export const testMcp = (body: McpInput) =>
-  apiSend<{ connected: boolean; tool_count: number; runtime_error?: string }>("/api/workspace/mcp/test", "POST", body);
-
 export const updateMcp = (name: string, body: McpInput) =>
   apiSend<McpServer>(`/api/workspace/mcp/${encodeURIComponent(name)}`, "PUT", body);
 
