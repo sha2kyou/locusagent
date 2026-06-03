@@ -107,6 +107,46 @@ class MCPManager:
 
         await asyncio.gather(*[_one(cfg) for cfg in cfgs], return_exceptions=True)
 
+    async def reconnect_missing_servers(self) -> int:
+        """连接 mcp.yaml 中已配置但当前无 session 的服务；返回新连上的数量。"""
+        if not self._started:
+            await self.start()
+            return len(self._sessions)
+
+        cfgs = list_mcp_servers(self._workspace_id)
+        missing = [cfg for cfg in cfgs if cfg.name not in self._sessions]
+        if not missing:
+            return 0
+
+        reconnected: list[str] = []
+
+        async def _one(cfg: MCPServerConfig) -> None:
+            if cfg.name in self._sessions:
+                return
+            try:
+                await self._connect_timed(cfg)
+            except Exception as exc:
+                self._last_errors[cfg.name] = str(exc)
+                log.warning(
+                    "mcp_reconnect_missing_failed",
+                    server=cfg.name,
+                    workspace_id=self._workspace_id,
+                    error=str(exc),
+                )
+                return
+            if cfg.name in self._sessions:
+                reconnected.append(cfg.name)
+
+        await asyncio.gather(*[_one(cfg) for cfg in missing], return_exceptions=True)
+        if reconnected:
+            log.info(
+                "mcp_missing_reconnected",
+                workspace_id=self._workspace_id,
+                servers=reconnected,
+                count=len(reconnected),
+            )
+        return len(reconnected)
+
     async def _connect(self, cfg: MCPServerConfig) -> None:
         if cfg.name in self._sessions:
             return
@@ -245,6 +285,7 @@ class MCPManager:
                     continue
                 if isinstance(exc, TimeoutError):
                     await self.remove_server(server_name)
+                    schedule_mcp_server_reconnect(self._workspace_id, server_name)
                     continue
                 runtime = await self.reconnect_server(server_name)
                 if not runtime.get("connected"):
@@ -557,7 +598,78 @@ async def sync_mcp_tools_for_workspace(workspace_id: str) -> None:
     """注册当前工作区 MCP 工具（全局唯一命名）；LLM schema 由 registry 按 ContextVar 过滤。"""
     wid = normalize_workspace_id(workspace_id)
     mgr = await ensure_mcp_started(wid)
+    await mgr.reconnect_missing_servers()
     await mgr.publish_tools_to_registry()
+
+
+_deferred_reconnect_inflight: set[tuple[str, str]] = set()
+
+
+async def _deferred_reconnect_server(workspace_id: str, server_name: str) -> None:
+    delay = max(0.0, float(get_settings().mcp_reconnect_delay_seconds))
+    if delay > 0:
+        await asyncio.sleep(delay)
+    wid = normalize_workspace_id(workspace_id)
+    mgr = await _get_or_create_manager(wid)
+    if server_name in mgr._sessions:
+        return
+    cfg = get_mcp_server(server_name, wid)
+    if cfg is None:
+        return
+    runtime = await mgr.reconnect_server(server_name)
+    if runtime.get("connected"):
+        await mgr.publish_tools_to_registry()
+        from ..workspace_runtime import mark_mcp_runtime_ready
+
+        mark_mcp_runtime_ready(wid)
+        log.info("mcp_deferred_reconnect_ok", server=server_name, workspace_id=wid)
+    else:
+        log.warning(
+            "mcp_deferred_reconnect_failed",
+            server=server_name,
+            workspace_id=wid,
+            error=runtime.get("error"),
+        )
+
+
+def schedule_mcp_server_reconnect(workspace_id: str, server_name: str) -> None:
+    """list_tools 超时等踢掉服务后，延迟一次后台重连。"""
+    wid = normalize_workspace_id(workspace_id)
+    name = str(server_name or "").strip()
+    if not name:
+        return
+    key = (wid, name)
+    if key in _deferred_reconnect_inflight:
+        return
+    _deferred_reconnect_inflight.add(key)
+
+    async def _run() -> None:
+        try:
+            await _deferred_reconnect_server(wid, name)
+        except Exception as exc:
+            log.warning(
+                "mcp_deferred_reconnect_error",
+                server=name,
+                workspace_id=wid,
+                error=str(exc),
+            )
+        finally:
+            _deferred_reconnect_inflight.discard(key)
+
+    asyncio.create_task(_run(), name=f"mcp-reconnect-{name}")
+
+
+async def reconnect_missing_mcp_servers(workspace_id: str) -> int:
+    """补连配置中存在但未在线的 MCP；有新连接时同步工具注册。"""
+    wid = normalize_workspace_id(workspace_id)
+    mgr = await ensure_mcp_started(wid)
+    count = await mgr.reconnect_missing_servers()
+    if count > 0:
+        await mgr.publish_tools_to_registry()
+        from ..workspace_runtime import mark_mcp_runtime_ready
+
+        mark_mcp_runtime_ready(wid)
+    return count
 
 
 async def start_mcp() -> None:

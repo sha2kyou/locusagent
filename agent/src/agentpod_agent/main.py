@@ -17,7 +17,12 @@ from .routers import internal as internal_router
 from .routers import v1 as v1_router
 from .routers import workspace as workspace_router
 from .workspace import ensure_workspace_storage_initialized, iter_workspace_ids, set_workspace_id
-from .workspace_runtime import mark_workspace_runtime_bootstrapped, warm_mcp_runtime_background
+from .workspace_runtime import (
+    mark_workspace_runtime_bootstrapped,
+    start_mcp_reconnect_loop,
+    stop_mcp_reconnect_loop,
+    warm_mcp_runtime_background,
+)
 
 
 @asynccontextmanager
@@ -59,6 +64,7 @@ async def lifespan(app: FastAPI):
     mark_workspace_runtime_bootstrapped()
     for wid in iter_workspace_ids():
         asyncio.create_task(warm_mcp_runtime_background(wid), name=f"mcp-warm-{wid}")
+    start_mcp_reconnect_loop()
 
     try:
         yield
@@ -68,6 +74,7 @@ async def lifespan(app: FastAPI):
         from .mcp_.client import stop_all_mcp
         from .routers.v1 import shutdown_v1_background_tasks
 
+        await stop_mcp_reconnect_loop()
         await shutdown_v1_background_tasks()
         await shutdown_session_title_tasks()
         await shutdown_run_manager()

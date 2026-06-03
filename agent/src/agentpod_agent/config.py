@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     mcp_call_timeout_seconds: float = Field(default=45.0, alias="MCP_CALL_TIMEOUT_SECONDS")
     # MCP 单服连接超时（秒）：start() 并行连接时每服上限，避免一服拖死整批
     mcp_connect_timeout_seconds: float = Field(default=30.0, alias="MCP_CONNECT_TIMEOUT_SECONDS")
+    # 被踢掉/离线 MCP 首次重连等待（秒），再发起连接
+    mcp_reconnect_delay_seconds: float = Field(default=5.0, alias="MCP_RECONNECT_DELAY_SECONDS")
+    # 定时扫描并重连未连接 MCP 的间隔（秒）；0 表示关闭
+    mcp_reconnect_interval_seconds: float = Field(default=60.0, alias="MCP_RECONNECT_INTERVAL_SECONDS")
 
     # 工具循环护栏（单轮对话内重复失败 / 只读无进展检测）
     tool_guardrail_warnings_enabled: bool = Field(default=True, alias="TOOL_GUARDRAIL_WARNINGS_ENABLED")

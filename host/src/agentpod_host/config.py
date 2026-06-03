@@ -106,6 +106,11 @@ class Settings(BaseSettings):
     background_review_min_tool_calls: int = Field(default=5, alias="BACKGROUND_REVIEW_MIN_TOOL_CALLS")
     background_review_max_rounds: int = Field(default=8, alias="BACKGROUND_REVIEW_MAX_ROUNDS")
 
+    mcp_call_timeout_seconds: float = Field(default=45.0, alias="MCP_CALL_TIMEOUT_SECONDS")
+    mcp_connect_timeout_seconds: float = Field(default=30.0, alias="MCP_CONNECT_TIMEOUT_SECONDS")
+    mcp_reconnect_delay_seconds: float = Field(default=5.0, alias="MCP_RECONNECT_DELAY_SECONDS")
+    mcp_reconnect_interval_seconds: float = Field(default=60.0, alias="MCP_RECONNECT_INTERVAL_SECONDS")
+
     public_base_url: str = Field(default="http://localhost", alias="PUBLIC_BASE_URL")
 
 

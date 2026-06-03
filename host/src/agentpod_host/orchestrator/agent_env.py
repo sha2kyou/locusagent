@@ -51,5 +51,9 @@ def build_agent_environment(
         "BACKGROUND_REVIEW_ENABLED": "1" if s.background_review_enabled else "0",
         "BACKGROUND_REVIEW_MIN_TOOL_CALLS": str(s.background_review_min_tool_calls),
         "BACKGROUND_REVIEW_MAX_ROUNDS": str(s.background_review_max_rounds),
+        "MCP_CALL_TIMEOUT_SECONDS": str(s.mcp_call_timeout_seconds),
+        "MCP_CONNECT_TIMEOUT_SECONDS": str(s.mcp_connect_timeout_seconds),
+        "MCP_RECONNECT_DELAY_SECONDS": str(s.mcp_reconnect_delay_seconds),
+        "MCP_RECONNECT_INTERVAL_SECONDS": str(s.mcp_reconnect_interval_seconds),
     }
     return env

@@ -16,6 +16,8 @@ _runtime_lock = asyncio.Lock()
 _active_workspace_id: str | None = None
 _mcp_ready_workspace: str | None = None
 _mcp_warm_inflight: set[str] = set()
+_mcp_reconnect_stop: asyncio.Event | None = None
+_mcp_reconnect_task: asyncio.Task | None = None
 
 
 def _apply_builtin_tool_settings() -> None:
@@ -149,3 +151,56 @@ def schedule_mcp_runtime_warm(workspace_id: str) -> None:
     if _mcp_ready_workspace == wid or wid in _mcp_warm_inflight:
         return
     asyncio.create_task(warm_mcp_runtime_background(wid), name=f"mcp-warm-{wid}")
+
+
+async def _mcp_reconnect_loop() -> None:
+    from .config import get_settings
+    from .mcp_.client import reconnect_missing_mcp_servers
+    from .workspace import iter_workspace_ids, set_workspace_id
+
+    stop = _mcp_reconnect_stop
+    if stop is None:
+        return
+    while not stop.is_set():
+        interval = max(0.0, float(get_settings().mcp_reconnect_interval_seconds))
+        if interval <= 0:
+            await stop.wait()
+            return
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=interval)
+            return
+        except TimeoutError:
+            pass
+        for wid in iter_workspace_ids():
+            if stop.is_set():
+                return
+            try:
+                set_workspace_id(wid)
+                await reconnect_missing_mcp_servers(wid)
+            except Exception as exc:
+                log.warning("mcp_periodic_reconnect_failed", workspace_id=wid, error=str(exc))
+
+
+def start_mcp_reconnect_loop() -> None:
+    """启动定时补连未在线 MCP（容器 lifespan 内调用）。"""
+    global _mcp_reconnect_stop, _mcp_reconnect_task
+    from .config import get_settings
+
+    if get_settings().mcp_reconnect_interval_seconds <= 0:
+        return
+    if _mcp_reconnect_task is not None and not _mcp_reconnect_task.done():
+        return
+    _mcp_reconnect_stop = asyncio.Event()
+    _mcp_reconnect_task = asyncio.create_task(_mcp_reconnect_loop(), name="mcp-reconnect-loop")
+
+
+async def stop_mcp_reconnect_loop() -> None:
+    global _mcp_reconnect_stop, _mcp_reconnect_task
+    if _mcp_reconnect_stop is not None:
+        _mcp_reconnect_stop.set()
+    task = _mcp_reconnect_task
+    _mcp_reconnect_task = None
+    _mcp_reconnect_stop = None
+    if task is not None and not task.done():
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
