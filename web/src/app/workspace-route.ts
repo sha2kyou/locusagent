@@ -1,3 +1,8 @@
+export function isChatRoutePath(pathname: string): boolean {
+  const { path } = stripWorkspacePrefix(pathname);
+  return path === "/chat" || path.startsWith("/chat/");
+}
+
 export function stripWorkspacePrefix(pathname: string): { workspaceId: string | null; path: string } {
   const m = pathname.match(/^\/w\/([^/]+)(\/.*)?$/);
   if (!m) return { workspaceId: null, path: pathname || "/" };

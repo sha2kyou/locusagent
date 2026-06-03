@@ -143,9 +143,9 @@ register_builtin(
     Tool(
         name="manage_workspace",
         description=(
-            "工作区运维级管理工具：查看摘要、管理 MCP 服务连接。"
-            "用于“环境状态盘点”“MCP 服务增删与排障”这类基础设施任务，"
-            "而不是常规业务内容生成。"
+            "当前 AgentPod 工作区内的运维工具：查看环境摘要、管理 MCP 服务连接。"
+            "不能创建/删除/重命名/切换 AgentPod 多工作区容器；这类操作请让用户到 Web「工作区」页面处理。"
+            "用于“环境状态盘点”“MCP 服务增删与排障”等基础设施任务，而非常规业务内容生成。"
             "支持动作：summary / list_mcp / add_mcp / remove_mcp。"
         ),
         parameters={

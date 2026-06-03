@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -18,7 +19,7 @@ import {
   listSessions,
 } from "@/api/endpoints";
 import type { SessionMeta } from "@/api/types";
-import { ApiError } from "@/api/client";
+import { ApiError, getWorkspaceId, setWorkspaceId } from "@/api/client";
 import { streamChatCompletion } from "@/api/stream";
 import { formatStreamRetryToast, userMessageFromContainerError } from "@/lib/agent-status-copy";
 import { sha256HexFile, sha256HexText } from "@/lib/file-digest";
@@ -176,6 +177,27 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const titlePollTimerRef = useRef<number | null>(null);
   const prevUrlSessionRef = useRef<string | null | undefined>(undefined);
   const loadTokenRef = useRef(0);
+  const pinnedUrlWorkspaceIdRef = useRef<string | null | undefined>(undefined);
+  const pinnedWorkspaceIdRef = useRef<string>("");
+
+  useLayoutEffect(() => {
+    if (pinnedUrlWorkspaceIdRef.current !== undefined) return;
+    pinnedUrlWorkspaceIdRef.current = urlWorkspaceId;
+    pinnedWorkspaceIdRef.current =
+      urlWorkspaceId || me?.current_workspace_id || getWorkspaceId() || "";
+    if (pinnedWorkspaceIdRef.current) setWorkspaceId(pinnedWorkspaceIdRef.current);
+  }, [urlWorkspaceId, me?.current_workspace_id]);
+
+  useEffect(() => {
+    if (pinnedUrlWorkspaceIdRef.current === undefined) return;
+    const pinnedUrl = pinnedUrlWorkspaceIdRef.current;
+    const pinnedId = pinnedWorkspaceIdRef.current;
+    if (urlWorkspaceId !== pinnedUrl) {
+      navigate(chatPath(urlSessionId, pinnedUrl ? pinnedId : null), { replace: true });
+      return;
+    }
+    if (getWorkspaceId() !== pinnedId) setWorkspaceId(pinnedId || undefined);
+  }, [urlWorkspaceId, urlSessionId, me?.current_workspace_id, navigate]);
 
   useEffect(() => {
     pendingAttachmentsRef.current = pendingAttachments;

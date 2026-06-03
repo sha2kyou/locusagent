@@ -24,7 +24,7 @@ import { ApiKeyFlashModal, SettingsModal } from "@/features/settings/SettingsMod
 import { NotificationBell } from "@/features/notifications/NotificationBell";
 import { flashApiKey, listWorkspaces } from "@/api/endpoints";
 import type { WorkspaceItem } from "@/api/types";
-import { stripWorkspacePrefix, withWorkspacePrefix } from "./workspace-route";
+import { isChatRoutePath, stripWorkspacePrefix, withWorkspacePrefix } from "./workspace-route";
 
 interface ShellApi {
   openSettings: () => void;
@@ -80,6 +80,8 @@ export function AppShell() {
   const currentWorkspaceLabel = currentWorkspace?.name || "默认工作区";
   const isDefaultWorkspace = !!currentWorkspace && currentWorkspace.is_default;
   const routeWorkspace = stripWorkspacePrefix(location.pathname);
+  const onChatRoute = isChatRoutePath(location.pathname);
+  const navContext = onChatRoute ? NAV_CONTEXT.filter((item) => item.to !== "/workspaces") : NAV_CONTEXT;
   const workspacePrefix = me?.current_workspace_id && !isDefaultWorkspace ? `/w/${me.current_workspace_id}` : "";
 
   useEffect(() => {
@@ -103,6 +105,7 @@ export function AppShell() {
   }, [me?.id, me?.current_workspace_id]);
 
   useEffect(() => {
+    if (onChatRoute) return;
     if (!me?.current_workspace_id || !defaultWorkspaceId) return;
     const shouldUsePrefix = me.current_workspace_id !== defaultWorkspaceId;
     const targetPath = routeWorkspace.path === "/" ? "/chat" : routeWorkspace.path;
@@ -117,6 +120,7 @@ export function AppShell() {
     defaultWorkspaceId,
     me?.current_workspace_id,
     navigate,
+    onChatRoute,
     routeWorkspace.path,
     routeWorkspace.workspaceId,
   ]);
@@ -211,7 +215,7 @@ export function AppShell() {
 
             <div className="mx-1 my-1.5 border-t border-sidebar-border/70" />
 
-            {NAV_CONTEXT.map((item) => (
+            {navContext.map((item) => (
               <NavRow
                 key={item.to}
                 {...item}
