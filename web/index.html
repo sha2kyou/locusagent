@@ -2,9 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" href="/favicon.ico" sizes="any" media="(prefers-color-scheme: light)" />
-    <link rel="icon" href="/favicon-dark.ico" sizes="any" media="(prefers-color-scheme: dark)" />
-    <link rel="icon" href="/favicon.ico" sizes="any" id="apod-favicon" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
@@ -21,8 +19,6 @@
           (stored !== "light" &&
             window.matchMedia("(prefers-color-scheme: dark)").matches);
         if (dark) document.documentElement.classList.add("dark");
-        var favicon = document.getElementById("apod-favicon");
-        if (favicon) favicon.setAttribute("href", dark ? "/favicon-dark.ico" : "/favicon.ico");
       })();
     </script>
   </head>

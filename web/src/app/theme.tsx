@@ -24,8 +24,6 @@ function resolveDark(pref: ThemePreference): boolean {
 export function applyTheme(pref: ThemePreference) {
   const dark = resolveDark(pref);
   document.documentElement.classList.toggle("dark", dark);
-  const favicon = document.getElementById("apod-favicon") as HTMLLinkElement | null;
-  if (favicon) favicon.href = dark ? "/favicon-dark.ico" : "/favicon.ico";
 }
 
 function loadPreference(): ThemePreference {
