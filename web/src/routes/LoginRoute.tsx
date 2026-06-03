@@ -11,9 +11,7 @@ export function LoginRoute() {
         }}
       />
       <div className="relative flex w-full max-w-sm flex-col items-center gap-4 rounded-2xl border border-border-strong bg-card p-9 text-center shadow-2xl">
-        <div className="flex size-14 items-center justify-center rounded-2xl bg-brand-soft text-brand">
-          <BrandMark className="size-7" />
-        </div>
+        <BrandMark className="size-14" />
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">AgentPod</h1>
           <p className="text-sm text-muted-foreground">

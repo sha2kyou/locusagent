@@ -166,18 +166,16 @@ export function AppShell() {
           )}
         >
           <div className={cn("flex h-14 items-center gap-2.5 px-4", !expanded && "md:justify-center md:px-2")}>
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">
-              {expanded ? (
-                <BrandMark />
-              ) : (
-                <>
-                  <span className="md:hidden">
-                    <BrandMark />
-                  </span>
-                  <NotificationBell className="hidden md:block" menuAlign="start" />
-                </>
-              )}
-            </div>
+            {expanded ? (
+              <BrandMark />
+            ) : (
+              <>
+                <span className="md:hidden">
+                  <BrandMark />
+                </span>
+                <NotificationBell className="hidden md:block" menuAlign="start" />
+              </>
+            )}
             <span className={cn("min-w-0 flex-1 truncate text-[15px] font-semibold tracking-tight", !expanded && "md:hidden")}>
               AgentPod
             </span>
