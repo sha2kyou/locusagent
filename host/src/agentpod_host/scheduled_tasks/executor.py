@@ -135,7 +135,7 @@ async def _notify_task_result(
 ) -> None:
     if not notify:
         return
-    link = f"/scheduled" if session_id else None
+    link = "/scheduled-tasks" if session_id else None
     try:
         await create_notification(
             user_id,

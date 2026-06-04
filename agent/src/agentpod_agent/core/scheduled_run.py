@@ -34,7 +34,6 @@ _NON_INTERACTIVE_SYSTEM_PROMPT = (
 _SCHEDULED_DISABLED_TOOLS = {"clarify", "scheduled_task_manage", "skill_manage"}
 _SCHEDULED_BLOCKED_TOOL_ACTIONS = {
     "env_vars": {"add", "update", "delete"},
-    "memory": {"add", "replace", "remove", "update", "delete"},
 }
 
 

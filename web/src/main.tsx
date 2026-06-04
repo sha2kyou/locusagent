@@ -40,6 +40,12 @@ function ArtifactsManageRedirect() {
   return <Navigate to={withWorkspacePrefix("/artifacts", workspaceId)} replace />;
 }
 
+function ChatFallbackRedirect() {
+  const location = useLocation();
+  const { workspaceId } = stripWorkspacePrefix(location.pathname);
+  return <Navigate to={withWorkspacePrefix("/chat", workspaceId)} replace />;
+}
+
 const shellChildren = [
   { index: true, element: <Navigate to="chat" replace /> },
   { path: "chat/:sessionId", element: <ChatRoute /> },
@@ -54,7 +60,7 @@ const shellChildren = [
   { path: "artifacts", element: <ArtifactsRoute /> },
   { path: "artifacts/manage", element: <ArtifactsManageRedirect /> },
   { path: "artifacts/c/:categoryId", element: <ArtifactsRoute /> },
-  { path: "*", element: <Navigate to="chat" replace /> },
+  { path: "*", element: <ChatFallbackRedirect /> },
 ];
 
 const router = createBrowserRouter([
