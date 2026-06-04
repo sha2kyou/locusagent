@@ -50,10 +50,10 @@ const NAV_CAPABILITIES: NavEntry[] = [
 ];
 // 上下文与密钥
 const NAV_CONTEXT: NavEntry[] = [
-  { to: "/workspaces", label: "工作区", icon: FolderOpen },
   { to: "/memory", label: "记忆", icon: Brain },
   { to: "/env-vars", label: "环境变量", icon: KeyRound },
 ];
+const NAV_WORKSPACE: NavEntry = { to: "/workspaces", label: "工作区", icon: FolderOpen };
 // 自动化：独立展示于配置组下方
 const NAV_AUTOMATION: NavEntry[] = [{ to: "/scheduled-tasks", label: "定时任务", icon: Clock }];
 
@@ -81,7 +81,6 @@ export function AppShell() {
   const isDefaultWorkspace = !!currentWorkspace && currentWorkspace.is_default;
   const routeWorkspace = stripWorkspacePrefix(location.pathname);
   const onChatRoute = isChatRoutePath(location.pathname);
-  const navContext = onChatRoute ? NAV_CONTEXT.filter((item) => item.to !== "/workspaces") : NAV_CONTEXT;
   const workspacePrefix = me?.current_workspace_id && !isDefaultWorkspace ? `/w/${me.current_workspace_id}` : "";
 
   useEffect(() => {
@@ -200,6 +199,12 @@ export function AppShell() {
               />
             ))}
             <ArtifactsNav basePrefix={workspacePrefix} expanded={expanded} onNavigate={() => setNavOpen(false)} />
+            <NavRow
+              {...NAV_WORKSPACE}
+              basePrefix={workspacePrefix}
+              expanded={expanded}
+              onNavigate={() => setNavOpen(false)}
+            />
 
             <div className="mx-1 my-1.5 border-t border-sidebar-border/70" />
 
@@ -215,7 +220,7 @@ export function AppShell() {
 
             <div className="mx-1 my-1.5 border-t border-sidebar-border/70" />
 
-            {navContext.map((item) => (
+            {NAV_CONTEXT.map((item) => (
               <NavRow
                 key={item.to}
                 {...item}
