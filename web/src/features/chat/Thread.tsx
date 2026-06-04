@@ -32,9 +32,10 @@ import type { ChatAttachment } from "./model";
 import { Drawer } from "@/components/ui/drawer";
 
 const PROMPT_CHIPS = [
-  "帮我总结这个网页的要点",
-  "用 Python 写一个快速排序",
-  "记住：我偏好简洁的回答",
+  "帮我总结这个网页的要点：sidefyapp.com",
+  "AgentPod 有哪些功能？",
+  "什么是正态分布概率密度公式？",
+  "搜索并总结最新的 AI 进展",
 ];
 const EMPTY_ATTACHMENTS: ChatAttachment[] = [];
 
@@ -60,18 +61,22 @@ export function Thread() {
               {failed ? (
                 <FailedProvisionPanel className="mt-5" />
               ) : booting ? null : (
-                <div className="mt-6 flex flex-wrap justify-center gap-2">
-                  {PROMPT_CHIPS.map((p) => (
-                    <ThreadPrimitive.Suggestion
-                      key={p}
-                      prompt={p}
-                      method="replace"
-                      asChild
-                    >
-                      <button className="rounded-full border border-border bg-surface/60 px-3.5 py-1.5 text-sm text-muted-foreground transition hover:border-border-strong hover:text-foreground">
-                        {p}
-                      </button>
-                    </ThreadPrimitive.Suggestion>
+                <div className="mt-6 flex flex-col items-center gap-2">
+                  {Array.from({ length: Math.ceil(PROMPT_CHIPS.length / 2) }, (_, row) => (
+                    <div key={row} className="flex gap-2 justify-center">
+                      {PROMPT_CHIPS.slice(row * 2, row * 2 + 2).map((p) => (
+                        <ThreadPrimitive.Suggestion
+                          key={p}
+                          prompt={p}
+                          method="replace"
+                          asChild
+                        >
+                          <button className="rounded-xl border border-border bg-surface/60 px-3.5 py-2 text-sm text-muted-foreground transition hover:border-border-strong hover:text-foreground">
+                            {p}
+                          </button>
+                        </ThreadPrimitive.Suggestion>
+                      ))}
+                    </div>
                   ))}
                 </div>
               )}
