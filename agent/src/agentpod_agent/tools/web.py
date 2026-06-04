@@ -43,18 +43,21 @@ async def _ddg_search(query: str, top_k: int) -> list[dict[str, str]]:
 
 
 async def _tavily_search_via_host(query: str, top_k: int) -> list[dict[str, str]] | None:
-    """经 Host 代理搜索；503 表示未配置 Tavily，返回 None 以降级 DuckDuckGo。"""
+    """经 Host 代理搜索；不可用时返回 None 以降级 DuckDuckGo。"""
     try:
         base, headers = internal_base_and_headers()
     except HostInternalError:
         return None
-    async with httpx.AsyncClient(timeout=TAVILY_TIMEOUT) as client:
-        resp = await client.post(
-            f"{base}/internal/tavily/search",
-            headers=headers,
-            json={"query": query, "limit": top_k},
-        )
-    if resp.status_code == 503:
+    try:
+        async with httpx.AsyncClient(timeout=TAVILY_TIMEOUT) as client:
+            resp = await client.post(
+                f"{base}/internal/tavily/search",
+                headers=headers,
+                json={"query": query, "limit": top_k},
+            )
+    except httpx.HTTPError:
+        return None
+    if resp.status_code in (502, 503):
         return None
     if resp.status_code >= 400:
         raise ToolError(error_detail(resp))
