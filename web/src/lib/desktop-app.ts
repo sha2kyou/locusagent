@@ -1,6 +1,8 @@
 import { useEffect, type HTMLAttributes, type MouseEvent as ReactMouseEvent } from "react";
 
 const DESKTOP_GATEWAY_ORIGIN = "http://127.0.0.1:1420";
+/** 与 desktop gateway 默认 upstream（AGENTPOD_API_URL）一致 */
+export const DESKTOP_API_ORIGIN = "http://127.0.0.1:1223";
 const OAUTH_LOGIN_URL = `${DESKTOP_GATEWAY_ORIGIN}/api/oauth/github/login?client=desktop`;
 
 export function isDesktopApp(): boolean {

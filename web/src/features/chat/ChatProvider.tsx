@@ -303,7 +303,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const watchTitle = (sid: string) => {
     stopTitlePoll();
     let tries = 0;
-    const timer = window.setInterval(async () => {
+    const maxTries = 24;
+    const tick = async () => {
       if (!mountedRef.current) {
         stopTitlePoll();
         return;
@@ -311,11 +312,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       tries += 1;
       const items = await refreshSessions();
       const found = items.find((s) => s.id === sid);
-      if (tries >= 12 || (found && found.title && found.title !== DEFAULT_TITLE)) {
-        clearInterval(timer);
-        titlePollTimerRef.current = null;
+      if (found && found.title && found.title !== DEFAULT_TITLE) {
+        stopTitlePoll();
+        return;
       }
-    }, 2500);
+      if (tries >= maxTries) {
+        stopTitlePoll();
+      }
+    };
+    void tick();
+    const timer = window.setInterval(() => void tick(), 2500);
     titlePollTimerRef.current = timer;
   };
 
@@ -618,6 +624,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         if (!ac.signal.aborted) setIsRunning(false);
       }
       void refreshSessions();
+      const sidAfter = currentIdRef.current;
+      if (sidAfter) watchTitle(sidAfter);
     }
   };
 

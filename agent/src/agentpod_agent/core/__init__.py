@@ -28,7 +28,7 @@ from .persistence import (
     update_run,
     upsert_session_meta,
 )
-from .session_title import maybe_generate_and_update_session_title, schedule_session_title_generation
+from .session_title import finalize_session_title, maybe_generate_and_update_session_title, schedule_session_title_generation
 
 __all__ = [
     "ERROR",

@@ -66,32 +66,44 @@ export function ArtifactCategorySidebar({
               <div
                 key={c.id}
                 className={cn(
-                  "group mb-1 flex items-center gap-1 rounded-lg text-sm transition-colors",
+                  "group flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm transition-colors",
                   isActive ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary/60",
                 )}
+                role="button"
+                tabIndex={0}
+                onClick={() => onSelectCategory(c)}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" && e.key !== " ") return;
+                  e.preventDefault();
+                  onSelectCategory(c);
+                }}
               >
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 truncate rounded-lg px-2 py-1.5 text-left font-medium"
-                  onClick={() => onSelectCategory(c)}
-                >
+                <span className="min-w-0 flex-1 truncate text-left" title={c.name}>
                   {c.name}
-                </button>
+                </span>
                 <Button
+                  type="button"
                   variant="ghost"
                   size="icon-sm"
                   className="shrink-0 text-muted-foreground"
                   aria-label="编辑类目"
-                  onClick={() => onEditCategory(c)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEditCategory(c);
+                  }}
                 >
                   <Pencil />
                 </Button>
                 <Button
+                  type="button"
                   variant="ghost"
                   size="icon-sm"
                   className="shrink-0 text-muted-foreground hover:text-destructive"
                   aria-label="删除类目"
-                  onClick={() => onDeleteCategory(c)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteCategory(c);
+                  }}
                 >
                   <Trash2 />
                 </Button>

@@ -1,8 +1,10 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { Button } from "./button";
+
+/** Former drawer `lg` variant — not `xl` (`max-w-2xl`). */
+const DRAWER_WIDTH = "max-w-xl";
 
 interface DrawerProps {
   open: boolean;
@@ -11,14 +13,7 @@ interface DrawerProps {
   description?: ReactNode;
   actions?: ReactNode;
   children?: ReactNode;
-  width?: "md" | "lg" | "xl";
 }
-
-const widths = {
-  md: "max-w-md",
-  lg: "max-w-xl",
-  xl: "max-w-2xl",
-};
 
 export function Drawer({
   open,
@@ -27,7 +22,6 @@ export function Drawer({
   description,
   actions,
   children,
-  width = "lg",
 }: DrawerProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -66,10 +60,7 @@ export function Drawer({
         role="dialog"
         aria-modal="true"
         tabIndex={-1}
-        className={cn(
-          "absolute inset-y-0 right-0 flex w-full flex-col border-l border-border-strong bg-popover shadow-2xl apod-enter-right",
-          widths[width],
-        )}
+        className={`absolute inset-y-0 right-0 flex w-full ${DRAWER_WIDTH} flex-col border-l border-border-strong bg-popover shadow-2xl apod-enter-right`}
       >
         <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
           <div className="min-w-0 space-y-1">

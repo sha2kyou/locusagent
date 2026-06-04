@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { BrandMark } from "@/app/Brand";
 import { DesktopWindowDragOverlay } from "@/app/DesktopTitlebarSpacer";
-import { desktopDragRegionProps, isDesktopApp } from "@/lib/desktop-app";
+import { desktopDragRegionProps } from "@/lib/desktop-app";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ArtifactsNav } from "@/features/artifacts/ArtifactsNav";
@@ -176,9 +176,8 @@ export function AppShell() {
           <div
             {...desktopDragRegionProps("deep")}
             className={cn(
-              "flex h-14 shrink-0 items-center gap-2.5 px-4",
-              isDesktopApp() && "md:pl-[72px]",
-              !expanded && "md:justify-center md:px-2 md:pl-2",
+              "apod-sidebar-header flex h-14 shrink-0 items-center gap-2.5 px-4",
+              !expanded && "md:justify-center md:px-2",
             )}
           >
             {expanded ? (

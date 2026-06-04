@@ -21,8 +21,16 @@ async def run_post_tasks(
     model: str | None = None,
     messages: list[dict[str, Any]] | None = None,
 ) -> None:
+    trajectory = messages if messages is not None else await build_llm_messages(session_id)
+
     try:
-        trajectory = messages if messages is not None else await build_llm_messages(session_id)
+        from .session_title import finalize_session_title
+
+        await finalize_session_title(session_id, messages=trajectory)
+    except Exception as exc:
+        log.warning("post_run_session_title_failed", error=str(exc))
+
+    try:
         if trajectory and should_run_background_review(
             tool_calls_made=tool_calls_made,
             messages=trajectory,

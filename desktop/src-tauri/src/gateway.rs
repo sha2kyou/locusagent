@@ -134,16 +134,39 @@ fn upstream_url(state: &GatewayState, uri: &axum::http::Uri) -> String {
     format!("{}{path}", state.upstream)
 }
 
+fn is_sec_websocket_header(name: &str) -> bool {
+    name.len() >= 14 && name.as_bytes()[..14].eq_ignore_ascii_case(b"sec-websocket-")
+}
+
+fn should_skip_request_header(name: &str, for_ws_upstream: bool) -> bool {
+    if name.eq_ignore_ascii_case("host") {
+        return true;
+    }
+    if HOP_BY_HOP
+        .iter()
+        .any(|hop| name.eq_ignore_ascii_case(hop))
+    {
+        return true;
+    }
+    // 上游 WS 需自行完成握手，不能复用浏览器侧的 Sec-WebSocket-*。
+    if for_ws_upstream && is_sec_websocket_header(name) {
+        return true;
+    }
+    false
+}
+
 fn copy_request_headers(src: &axum::http::HeaderMap, dst: &mut ReqHeaderMap) {
+    copy_request_headers_for(src, dst, false);
+}
+
+fn copy_request_headers_for(
+    src: &axum::http::HeaderMap,
+    dst: &mut ReqHeaderMap,
+    for_ws_upstream: bool,
+) {
     for (name, value) in src.iter() {
         let name_str = name.as_str();
-        if name_str.eq_ignore_ascii_case("host") {
-            continue;
-        }
-        if HOP_BY_HOP
-            .iter()
-            .any(|hop| name_str.eq_ignore_ascii_case(hop))
-        {
+        if should_skip_request_header(name_str, for_ws_upstream) {
             continue;
         }
         if let (Ok(req_name), Ok(req_value)) = (
@@ -255,7 +278,7 @@ async fn bridge_websocket(
     let mut request = target
         .into_client_request()
         .map_err(|err| err.to_string())?;
-    copy_request_headers(headers, request.headers_mut());
+    copy_request_headers_for(headers, request.headers_mut(), true);
 
     let (upstream, _resp) = connect_async(request)
         .await

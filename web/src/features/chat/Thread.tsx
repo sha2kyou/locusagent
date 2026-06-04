@@ -281,10 +281,7 @@ function Composer() {
         </ThreadPrimitive.If>
       </ComposerPrimitive.Root>
       <p className="mx-auto mt-2 max-w-3xl text-center text-xs text-muted-foreground/60">
-        Enter 发送 · Shift+Enter 换行 · 一次 1 个附件（支持文本与图片）
-        <ThreadPrimitive.If running>
-          <span> · Esc 停止</span>
-        </ThreadPrimitive.If>
+        Enter 发送 · Shift+Enter 换行
       </p>
     </div>
   );
@@ -391,7 +388,6 @@ function UserMessage() {
             <Download className="size-4" />
           </Button>
         }
-        width="xl"
       >
         {selectedAttachment ? (
           <div className="space-y-4">

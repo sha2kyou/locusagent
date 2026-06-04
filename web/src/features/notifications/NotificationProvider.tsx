@@ -8,12 +8,17 @@ import {
   type ReactNode,
 } from "react";
 import {
+  listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
 } from "@/api/endpoints";
 import type { NotificationEntry } from "@/api/types";
 import { useAuth } from "@/app/auth";
 import { useToast } from "@/components/ui/toast";
+import {
+  mirrorNotificationEntryToSystem,
+  mirrorNotificationSummaryToSystem,
+} from "@/lib/desktop-notification";
 import { toastMessageForNotification } from "./notification-copy";
 import { notificationWsUrl, parseNotificationWsEvent } from "./socket";
 
@@ -54,35 +59,42 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     (count: number, item?: NotificationEntry) => {
       if (item) {
         toast(toastMessageForNotification(item), toastTypeFromKind(item.kind), { sticky: true });
+        mirrorNotificationEntryToSystem(item);
       } else if (knownUnreadRef.current !== null && count > knownUnreadRef.current) {
         const delta = count - knownUnreadRef.current;
         toast(delta === 1 ? "你有 1 条新消息" : `你有 ${delta} 条新消息`, "info", { sticky: true });
+        mirrorNotificationSummaryToSystem(delta);
       }
       knownUnreadRef.current = count;
     },
     [toast],
   );
 
-  const applySync = useCallback((nextItems: NotificationEntry[], count: number) => {
-    const unreadItems = nextItems.filter((i) => !i.read);
-    const prev = knownUnreadRef.current;
-    if (prev !== null && count > prev) {
-      const delta = count - prev;
-      if (delta === 1 && unreadItems[0]) {
-        toast(
-          toastMessageForNotification(unreadItems[0]),
-          toastTypeFromKind(unreadItems[0].kind),
-          { sticky: true },
-        );
-      } else {
-        toast(delta === 1 ? "你有 1 条新消息" : `你有 ${delta} 条新消息`, "info", { sticky: true });
+  const applySync = useCallback(
+    (nextItems: NotificationEntry[], count: number) => {
+      const unreadItems = nextItems.filter((i) => !i.read);
+      const prev = knownUnreadRef.current;
+      if (prev !== null && count > prev) {
+        const delta = count - prev;
+        if (delta === 1 && unreadItems[0]) {
+          toast(
+            toastMessageForNotification(unreadItems[0]),
+            toastTypeFromKind(unreadItems[0].kind),
+            { sticky: true },
+          );
+          mirrorNotificationEntryToSystem(unreadItems[0]);
+        } else {
+          toast(delta === 1 ? "你有 1 条新消息" : `你有 ${delta} 条新消息`, "info", { sticky: true });
+          mirrorNotificationSummaryToSystem(delta);
+        }
       }
-    }
-    setItems(unreadItems);
-    setUnreadCount(count);
-    knownUnreadRef.current = count;
-    setLoading(false);
-  }, [toast]);
+      setItems(unreadItems);
+      setUnreadCount(count);
+      knownUnreadRef.current = count;
+      setLoading(false);
+    },
+    [toast],
+  );
 
   const applyPush = useCallback(
     (item: NotificationEntry, count: number) => {
@@ -107,6 +119,22 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     knownUnreadRef.current = null;
     setLoading(true);
   }, [me]);
+
+  useEffect(() => {
+    if (!me) return;
+    let cancelled = false;
+    void listNotifications()
+      .then((data) => {
+        if (cancelled) return;
+        applySync(data.items, data.unread_count);
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [me, applySync]);
 
   useEffect(() => {
     if (!me) return;

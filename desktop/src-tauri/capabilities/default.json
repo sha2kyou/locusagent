@@ -12,6 +12,7 @@
     "opener:default",
     "deep-link:default",
     "window-state:default",
+    "notification:default",
     "allow-open-oauth-login"
   ]
 }
