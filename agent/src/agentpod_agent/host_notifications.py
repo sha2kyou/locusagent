@@ -54,3 +54,16 @@ async def list_unread_notifications(limit: int = 20) -> tuple[list[dict[str, Any
     items = [it for it in raw_items if isinstance(it, dict)] if isinstance(raw_items, list) else []
     count = int(data.get("unread_count") or 0)
     return items, max(0, count)
+
+
+async def mark_notification_read(notification_id: int) -> bool:
+    base, headers = _internal_base_and_headers()
+    url = f"{base}/internal/notifications/{int(notification_id)}/read"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(url, headers=headers)
+    if resp.status_code >= 400:
+        raise HostNotificationsError(_error_detail(resp))
+    data = resp.json()
+    if not isinstance(data, dict):
+        raise HostNotificationsError("invalid host response")
+    return bool(data.get("ok"))

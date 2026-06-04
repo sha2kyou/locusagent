@@ -29,6 +29,7 @@ PY
 
 COPY agent/src ./agent/src
 COPY shared-skills ./shared-skills
+COPY README.md ./README.md
 
 # 再安装项目本身，避免每次源码变更都重下三方依赖。
 RUN pip install --no-deps ./agent && \

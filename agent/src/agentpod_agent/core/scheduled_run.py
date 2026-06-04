@@ -31,7 +31,19 @@ _NON_INTERACTIVE_SYSTEM_PROMPT = (
     "- Never call clarify; make a reasonable default decision and continue.\n"
     "- If requirements are not fully specified, proceed with the smallest sensible output.\n"
 )
-_SCHEDULED_DISABLED_TOOLS = {"clarify", "scheduled_task_manage", "skill_manage"}
+_SCHEDULED_DISABLED_TOOLS = {
+    "clarify",
+    "scheduled_task_manage",
+    "skill_manage",
+    "artifact_delete",
+    "artifact_update",
+    "artifact_category_update",
+    "artifact_category_delete",
+    "delete_file",
+    "session_delete",
+    "notification_mark_read",
+    "mcp_manage",
+}
 _SCHEDULED_BLOCKED_TOOL_ACTIONS = {
     "env_vars": {"add", "update", "delete"},
 }

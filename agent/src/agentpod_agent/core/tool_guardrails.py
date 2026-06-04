@@ -17,12 +17,16 @@ IDEMPOTENT_TOOL_NAMES = frozenset(
         "session_search",
         "session_recall",
         "artifact_recall",
+        "artifact_read",
+        "artifact_list",
         "skill_view",
         "get_current_user",
         "notification_query",
         "scheduled_task_view",
         "env_vars",
         "summarize",
+        "manage_workspace",
+        "mcp_view",
     }
 )
 
@@ -35,8 +39,15 @@ MUTATING_TOOL_NAMES = frozenset(
         "memory",
         "skill_manage",
         "artifact_save",
+        "artifact_update",
+        "artifact_delete",
         "artifact_category_create",
-        "manage_workspace",
+        "artifact_category_update",
+        "artifact_category_delete",
+        "delete_file",
+        "session_delete",
+        "notification_mark_read",
+        "mcp_manage",
         "scheduled_task_manage",
         "clarify",
     }

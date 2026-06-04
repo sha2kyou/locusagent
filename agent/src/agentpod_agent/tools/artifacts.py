@@ -12,10 +12,18 @@ from ..latex_normalize import normalize_latex_input
 from ..artifacts import (
     create_artifact,
     create_category,
+    delete_artifact,
+    delete_category,
+    get_artifact,
+    get_category_name,
+    list_artifacts,
     list_categories,
     recall_artifacts,
     resolve_category_id,
+    update_artifact,
+    update_category,
 )
+from .args import pick_str
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 _HTML_RENDER_RE = re.compile(r"\[HTML_RENDER\]([\s\S]*?)\[/HTML_RENDER\]", re.IGNORECASE)
@@ -42,6 +50,22 @@ def _category_similarity(a: str, b: str) -> float:
     if na in nb or nb in na:
         ratio = max(ratio, 0.9)
     return ratio
+
+
+async def _resolve_category_ref(args: dict[str, Any]) -> tuple[str, str]:
+    category_id = pick_str(args, "category_id", "id")
+    if category_id:
+        name = await get_category_name(category_id)
+        if not name:
+            raise ToolError(f"category not found: {category_id}")
+        return category_id, name
+    category = pick_str(args, "category")
+    if category:
+        cid = await resolve_category_id(category)
+        if not cid:
+            raise ToolError(f"category not found: {category}")
+        return cid, category
+    raise ToolError("category_id or category is required")
 
 
 async def _artifact_category_create(args: dict[str, Any]) -> ToolResult:
@@ -176,6 +200,147 @@ async def _artifact_recall(args: dict[str, Any]) -> ToolResult:
     return ToolResult(content="\n".join(lines), metadata={"items": hits, "query": query})
 
 
+async def _artifact_update(args: dict[str, Any]) -> ToolResult:
+    artifact_id = pick_str(args, "id", "artifact_id")
+    if not artifact_id:
+        raise ToolError("id is required (use id from artifact_recall)")
+
+    has_title = "title" in args
+    has_content = "content" in args
+    has_category = "category" in args
+    if not has_title and not has_content and not has_category:
+        raise ToolError("at least one of title, content, or category is required")
+
+    title: str | None = None
+    if has_title:
+        title = str(args.get("title", "")).strip()
+        if not title:
+            raise ToolError("title must be non-empty when provided")
+
+    content: str | None = None
+    if has_content:
+        content = str(args.get("content", ""))
+        if not content.strip():
+            raise ToolError("content must be non-empty when provided")
+        m = _HTML_RENDER_RE.search(content)
+        if m:
+            content = m.group(1).strip()
+        content = normalize_latex_input(content)
+
+    category_id: str | None = None
+    if has_category:
+        category = str(args.get("category", "")).strip()
+        if not category:
+            raise ToolError("category must be non-empty when provided")
+        category_id = await resolve_category_id(category)
+        if category_id is None:
+            existing = await list_categories()
+            names = [str(c.get("name") or "").strip() for c in existing]
+            names = [n for n in names if n]
+            hint = f"Existing categories: {', '.join(names)}" if names else "No categories exist."
+            raise ToolError(f"category_not_found: '{category}' does not exist. {hint}")
+
+    try:
+        ok = await update_artifact(
+            artifact_id,
+            title=title,
+            content=content,
+            category_id=category_id,
+        )
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+    if not ok:
+        raise ToolError(f"artifact not found: {artifact_id}")
+    return ToolResult(content=f"artifact#{artifact_id} updated", metadata={"artifact_id": artifact_id})
+
+
+async def _artifact_delete(args: dict[str, Any]) -> ToolResult:
+    artifact_id = pick_str(args, "id", "artifact_id")
+    if not artifact_id:
+        raise ToolError("id is required (use id from artifact_recall)")
+    ok = await delete_artifact(artifact_id)
+    if not ok:
+        raise ToolError(f"artifact not found: {artifact_id}")
+    return ToolResult(content=f"artifact#{artifact_id} deleted", metadata={"artifact_id": artifact_id})
+
+
+async def _artifact_read(args: dict[str, Any]) -> ToolResult:
+    artifact_id = pick_str(args, "id", "artifact_id")
+    if not artifact_id:
+        raise ToolError("id is required (use id from artifact_recall or artifact_list)")
+    art = await get_artifact(artifact_id)
+    if art is None:
+        raise ToolError(f"artifact not found: {artifact_id}")
+    category_name = await get_category_name(str(art.get("category_id") or ""))
+    category_label = category_name or str(art.get("category_id") or "")
+    header = (
+        f"# {art.get('title')} [{art.get('type')}] (id={art.get('id')}, category={category_label})\n\n"
+    )
+    return ToolResult(
+        content=header + str(art.get("content") or ""),
+        metadata={"item": art},
+    )
+
+
+async def _artifact_list(args: dict[str, Any]) -> ToolResult:
+    category_id, category_name = await _resolve_category_ref(args)
+    try:
+        limit = int(args.get("limit", 50))
+    except (TypeError, ValueError):
+        limit = 50
+    limit = max(1, min(200, limit))
+    rows = await list_artifacts(category_id)
+    rows = rows[:limit]
+    if not rows:
+        return ToolResult(
+            content=f"(empty category: {category_name})",
+            metadata={"items": [], "category_id": category_id, "category": category_name},
+        )
+    lines = [
+        f"- [{r.get('type')}] {r.get('title')} (id={r.get('id')})"
+        for r in rows
+    ]
+    return ToolResult(
+        content="\n".join(lines),
+        metadata={"items": rows, "category_id": category_id, "category": category_name},
+    )
+
+
+async def _artifact_category_update(args: dict[str, Any]) -> ToolResult:
+    category_id, current_name = await _resolve_category_ref(args)
+    has_name = "name" in args
+    has_description = "description" in args
+    if not has_name and not has_description:
+        raise ToolError("at least one of name or description is required")
+    name: str | None = None
+    if has_name:
+        name = str(args.get("name", "")).strip()
+        if not name:
+            raise ToolError("name must be non-empty when provided")
+    description: str | None = None
+    if has_description:
+        description = str(args.get("description", ""))
+    ok = await update_category(category_id, name=name, description=description)
+    if not ok:
+        raise ToolError(f"category not found: {category_id}")
+    label = name or current_name
+    return ToolResult(
+        content=f"category#{category_id} updated ({label})",
+        metadata={"category_id": category_id, "category_name": label},
+    )
+
+
+async def _artifact_category_delete(args: dict[str, Any]) -> ToolResult:
+    category_id, category_name = await _resolve_category_ref(args)
+    ok = await delete_category(category_id)
+    if not ok:
+        raise ToolError(f"category not found: {category_id}")
+    return ToolResult(
+        content=f"category#{category_id} deleted ({category_name})",
+        metadata={"category_id": category_id, "category_name": category_name},
+    )
+
+
 register_builtin(
     Tool(
         name="artifact_category_create",
@@ -260,5 +425,128 @@ register_builtin(
             "required": ["title", "content", "category"],
         },
         handler=_artifact_save,
+    )
+)
+
+
+register_builtin(
+    Tool(
+        name="artifact_update",
+        description=(
+            "按 id 更新已有产物。id 来自 artifact_recall。"
+            "至少提供 title、content、category 之一；category 为类目名。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "产物 id（artifact_recall 返回的 id=...）。",
+                },
+                "title": {"type": "string", "description": "新标题。"},
+                "content": {"type": "string", "description": "新正文。"},
+                "category": {
+                    "type": "string",
+                    "description": "移动到的类目名（须已存在）。",
+                },
+            },
+            "required": ["id"],
+            "additionalProperties": False,
+        },
+        handler=_artifact_update,
+    )
+)
+
+
+register_builtin(
+    Tool(
+        name="artifact_delete",
+        description="按 id 删除产物。id 来自 artifact_recall。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "产物 id（artifact_recall 返回的 id=...）。",
+                },
+            },
+            "required": ["id"],
+            "additionalProperties": False,
+        },
+        handler=_artifact_delete,
+    )
+)
+
+
+register_builtin(
+    Tool(
+        name="artifact_read",
+        description="按 id 读取产物全文。id 来自 artifact_recall 或 artifact_list。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "产物 id（artifact_recall / artifact_list 返回的 id=...）。",
+                },
+            },
+            "required": ["id"],
+            "additionalProperties": False,
+        },
+        handler=_artifact_read,
+    )
+)
+
+
+register_builtin(
+    Tool(
+        name="artifact_list",
+        description="按类目列出产物条目（id/title/type）。类目可用 category 名或 category_id。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "category": {"type": "string", "description": "类目名。"},
+                "category_id": {"type": "string", "description": "类目 id。"},
+                "limit": {"type": "integer", "default": 50, "description": "返回条数上限（1-200）。"},
+            },
+            "additionalProperties": False,
+        },
+        handler=_artifact_list,
+    )
+)
+
+
+register_builtin(
+    Tool(
+        name="artifact_category_update",
+        description="更新产物类目名称或描述。按 category_id 或 category 定位。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "category_id": {"type": "string", "description": "类目 id。"},
+                "category": {"type": "string", "description": "类目名（id 未知时）。"},
+                "name": {"type": "string", "description": "新类目名。"},
+                "description": {"type": "string", "description": "新描述。"},
+            },
+            "additionalProperties": False,
+        },
+        handler=_artifact_category_update,
+    )
+)
+
+
+register_builtin(
+    Tool(
+        name="artifact_category_delete",
+        description="删除产物类目及其下全部产物。按 category_id 或 category 定位。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "category_id": {"type": "string", "description": "类目 id。"},
+                "category": {"type": "string", "description": "类目名（id 未知时）。"},
+            },
+            "additionalProperties": False,
+        },
+        handler=_artifact_category_delete,
     )
 )

@@ -19,7 +19,7 @@
 | `/workspaces` | 多工作区切换 |
 | `/env-vars` | 工作区环境变量 |
 | `/scheduled-tasks` | 定时任务 |
-| `/artifacts` | 制品库（分类与内容） |
+| `/artifacts` | 制品库（分类与内容，支持完整 CRUD） |
 
 工作区非默认时 URL 前缀为 `/w/{workspace_id}/...`。侧栏「工具」开关页（`/tools`）已实现但默认未开放入口。
 
@@ -49,6 +49,11 @@
 ├── /v1/* /workspace/*                            (内部鉴权入口)
 ├── Chat Loop + Run Manager                       (Tool Dispatch + SSE)
 ├── Tool Registry                                 (builtin + MCP 动态工具)
+│   ├── 制品：artifact_save / artifact_read / artifact_list / artifact_update / artifact_delete / artifact_recall
+│   ├── MCP 管理：mcp_view / mcp_manage（对话内查看/新增/更新/移除 MCP 服务）
+│   ├── 会话：session_recall / session_search / session_delete
+│   ├── 通知：notification_query / notification_mark_read
+│   └── 其余：memory / skill_manage / scheduled_task_manage / env_vars / execute_code / web / …
 └── SQLite + sqlite-vec                           (sessions / messages / memory / runs)
                 │
                 ├── shared-skills（公共技能库）
@@ -56,6 +61,8 @@
 ```
 
 **MCP 连接策略（Agent）**：只读接口（如列会话）不阻塞 MCP 全量连接；对话与 MCP 管理在需要时再连接。HTTP MCP 的 OAuth 凭据由 Host 保存，Agent 用 Bearer + Host 刷新 token，不在容器内走浏览器授权。
+
+**工具安全分级**：工具分为幂等（idempotent）和变更（mutating）两类。定时任务中禁用全部破坏性工具（`artifact_delete / artifact_update / artifact_category_update / artifact_category_delete / delete_file / session_delete / notification_mark_read / mcp_manage` 等），防止无人值守时误删数据。
 
 ## 快速开始（推荐路径）
 
@@ -123,6 +130,7 @@ curl "http://localhost:1223/api/v1/models" \
 
 ## MCP OAuth 说明
 
+- **对话内管理**：Agent 对话中可直接调用 `mcp_view`（列出已配置服务及连接状态）和 `mcp_manage`（新增/更新/删除服务），无需打开 UI。
 - **UI 新建** HTTP MCP：默认认证方式为 OAuth。
 - **手写 `mcp.yaml`**：未写 `auth` 的 HTTP 服务为直连（`none`）；需要 OAuth 时显式添加：
 

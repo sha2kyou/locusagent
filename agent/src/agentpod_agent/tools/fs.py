@@ -226,6 +226,23 @@ async def _patch_file(args: dict[str, Any]) -> ToolResult:
     return ToolResult(content=await run_in_thread(_do))
 
 
+async def _delete_file(args: dict[str, Any]) -> ToolResult:
+    rel = pick_str(args, "path", "file_path")
+    if not rel:
+        raise ToolError("path is required")
+    p = _resolve(rel)
+    if not p.exists():
+        raise ToolError(f"not found: {rel}")
+    if p.is_dir():
+        raise ToolError(f"path is a directory: {rel}")
+
+    def _do() -> str:
+        p.unlink()
+        return f"deleted: {p.relative_to(_root())}"
+
+    return ToolResult(content=await run_in_thread(_do))
+
+
 register_builtin(
     Tool(
         name="read_file",
@@ -318,5 +335,22 @@ register_builtin(
             "required": ["old_string", "new_string"],
         },
         handler=_patch_file,
+    )
+)
+
+
+register_builtin(
+    Tool(
+        name="delete_file",
+        description="删除工作区内的文件。路径必须位于 workspace 内，不支持删除目录。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "相对 workspace 的目标文件路径"},
+                "file_path": {"type": "string", "description": "path 的别名（兼容）。"},
+            },
+            "required": ["path"],
+        },
+        handler=_delete_file,
     )
 )

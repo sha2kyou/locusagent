@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from ..auth.agent_internal import require_agent_internal
 from ..db import User, get_session
-from ..notifications import create_notification, list_notifications, unread_count
+from ..notifications import create_notification, list_notifications, mark_read, unread_count
 from ..workspaces import resolve_workspace
 
 router = APIRouter(prefix="/internal/notifications", tags=["internal-notifications"])
@@ -69,3 +69,16 @@ async def agent_post_notification(
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return {"item": item}
+
+
+@router.post("/{notification_id}/read")
+async def agent_mark_notification_read(
+    notification_id: int,
+    user: User = Depends(require_agent_internal),
+    x_workspace_id: str = Header(default="", alias="X-Workspace-Id"),
+) -> dict:
+    workspace_id = await _workspace_for_internal(user.id, x_workspace_id)
+    ok = await mark_read(user.id, notification_id, workspace_id=workspace_id)
+    if not ok:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="notification not found")
+    return {"ok": True}

@@ -1,190 +1,171 @@
-"""manage_workspace：高层工作区操作，目前覆盖 MCP 配置 CRUD + 状态摘要。
+"""manage_workspace：工作区环境摘要（只读）。
 
-具体 Skills/Memory CRUD 仍走 skill_manage / memory，便于审计与权限拆分。
+返回技能、MCP、记忆、环境变量、定时任务、产物的条数与各自最近 5 条数据。
+MCP 的增删改操作走 mcp_manage 工具。
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from ..db import run_in_thread
-from ..mcp_.probe import McpProbeError, build_http_mcp_config
-from ..memory import count_memories
+from ..db import conn_scope, run_in_thread
+from ..env_vars import list_env_vars
+from ..memory import count_memories, list_memories
+from ..mcp_.config import list_mcp_servers
 from ..skills import list_skills
 from ..tool_settings import is_mcp_server_enabled, is_skill_enabled
-from .base import Tool, ToolError, ToolResult, register_builtin
+from .base import Tool, ToolResult, register_builtin
 
 
-def _list_mcp_runtime():
+def _mcp_runtime() -> dict[str, dict[str, Any]]:
     from ..mcp_.client import list_mcp_runtime
-
     return list_mcp_runtime()
 
 
-async def _summary() -> ToolResult:
-    skills = [s for s in await run_in_thread(list_skills) if is_skill_enabled(s.name)]
-    servers = [s for s in await run_in_thread(list_mcp_servers) if is_mcp_server_enabled(s.name)]
-    mem_count = await count_memories()
-    lines = [
-        f"skills: {len(skills)} ({sum(1 for s in skills if s.source == 'public')} public + {sum(1 for s in skills if s.source == 'private')} private)",
-        f"mcp_servers: {len(servers)}",
-        f"memory_entries: {mem_count}",
-    ]
-    return ToolResult(content="\n".join(lines))
+async def _count_artifacts() -> int:
+    def _do() -> int:
+        with conn_scope(load_vec=False) as c:
+            (n,) = c.execute("SELECT COUNT(*) FROM artifacts").fetchone()
+            return int(n)
+    return await run_in_thread(_do)
 
 
-async def _list_mcp() -> ToolResult:
+async def _recent_artifacts(limit: int = 5) -> list[dict[str, Any]]:
+    def _do() -> list[dict[str, Any]]:
+        with conn_scope(load_vec=False) as c:
+            rows = c.execute(
+                "SELECT a.id, a.title, a.type, ac.name AS category "
+                "FROM artifacts a "
+                "LEFT JOIN artifact_categories ac ON a.category_id = ac.id "
+                "ORDER BY a.created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            return [dict(r) for r in rows]
+    return await run_in_thread(_do)
+
+
+async def _manage_workspace(_args: dict[str, Any]) -> ToolResult:
+    lines: list[str] = []
+    meta: dict[str, Any] = {}
+
+    # ── 技能 ──────────────────────────────────────────────────
+    all_skills = [s for s in await run_in_thread(list_skills) if is_skill_enabled(s.name)]
+    skill_count = len(all_skills)
+    # 私有技能优先展示，再是公共；最多取 5 条
+    private_skills = [s for s in all_skills if s.source == "private"]
+    public_skills = [s for s in all_skills if s.source != "private"]
+    recent_skills = (private_skills + public_skills)[:5]
+    lines.append(f"## 技能 ({skill_count})")
+    for s in recent_skills:
+        lines.append(f"- {s.name} [{s.source}]: {s.description[:60]}")
+    if not recent_skills:
+        lines.append("- (空)")
+    meta["skills"] = {"count": skill_count, "items": [s.to_dict() for s in recent_skills]}
+
+    # ── MCP ───────────────────────────────────────────────────
     servers = [s for s in await run_in_thread(list_mcp_servers) if is_mcp_server_enabled(s.name)]
-    if not servers:
-        return ToolResult(content="(no mcp servers)")
-    runtime = _list_mcp_runtime()
-    lines = []
-    out_servers: list[dict[str, Any]] = []
-    for s in servers:
+    mcp_count = len(servers)
+    runtime = _mcp_runtime()
+    recent_mcp = servers[:5]
+    lines.append(f"\n## MCP ({mcp_count})")
+    for s in recent_mcp:
         r = runtime.get(s.name, {})
-        tools = list(r.get("tools", []))
-        tool_names = ", ".join(t.get("name", "") for t in tools[:8] if t.get("name"))
-        tool_suffix = f" | tools={len(tools)}" + (f": {tool_names}" if tool_names else "")
-        if s.transport == "stdio":
-            lines.append(
-                f"- {s.name} [stdio] {' '.join(s.command + s.args)}"
-                f" | connected={bool(r.get('connected', False))}{tool_suffix}"
-            )
-        else:
-            lines.append(
-                f"- {s.name} [http] {s.url}"
-                f" | connected={bool(r.get('connected', False))}{tool_suffix}"
-            )
-        d = s.to_public_dict()
-        d["connected"] = bool(r.get("connected", False))
-        d["tools"] = tools
-        d["tool_count"] = len(tools)
-        out_servers.append(d)
-    return ToolResult(content="\n".join(lines), metadata={"servers": out_servers})
+        connected = bool(r.get("connected", False))
+        tool_count = len(r.get("tools", []))
+        addr = s.url if s.transport == "http" else " ".join((s.command + s.args)[:3])
+        lines.append(f"- {s.name} [{s.transport}] connected={connected} tools={tool_count} | {addr}")
+    if not recent_mcp:
+        lines.append("- (空)")
+    meta["mcp"] = {
+        "count": mcp_count,
+        "items": [
+            {**s.to_public_dict(), "connected": bool(runtime.get(s.name, {}).get("connected", False))}
+            for s in recent_mcp
+        ],
+    }
 
+    # ── 记忆 ──────────────────────────────────────────────────
+    mem_count = await count_memories()
+    recent_mem = await list_memories(limit=5)
+    lines.append(f"\n## 记忆 ({mem_count})")
+    for m in recent_mem:
+        snippet = str(m.get("content") or "")[:60]
+        anchor = str(m.get("anchor") or "experience")
+        lines.append(f"- #{m['id']} [{anchor}]: {snippet}")
+    if not recent_mem:
+        lines.append("- (空)")
+    meta["memory"] = {"count": mem_count, "items": recent_mem}
 
-async def _add_mcp(args: dict[str, Any]) -> ToolResult:
-    transport = str(args.get("transport", "stdio")).strip()
-    name = str(args.get("name", "")).strip()
-    if transport == "stdio":
-        cfg = MCPServerConfig(
-            name=name,
-            transport="stdio",
-            command=list(args.get("command", []) or []),
-            args=list(args.get("args", []) or []),
-            env=dict(args.get("env", {}) or {}),
-            auth="none",
-        )
-    else:
-        url = str(args.get("url", "")).strip()
-        if not url:
-            raise ToolError("url is required for http transport")
-        try:
-            cfg = await build_http_mcp_config(
-                name=name,
-                url=url,
-                headers=dict(args.get("headers", {}) or {}),
-            )
-        except McpProbeError as exc:
-            raise ToolError(str(exc)) from exc
+    # ── 环境变量 ──────────────────────────────────────────────
+    env_rows = await list_env_vars(limit=5)
+
+    async def _count_env() -> int:
+        def _do() -> int:
+            with conn_scope(load_vec=False) as c:
+                (n,) = c.execute("SELECT COUNT(*) FROM env_vars").fetchone()
+                return int(n)
+        return await run_in_thread(_do)
+
+    env_count = await _count_env()
+    lines.append(f"\n## 环境变量 ({env_count})")
+    for e in env_rows:
+        desc = str(e.get("description") or "").strip()
+        suffix = f" — {desc}" if desc else ""
+        lines.append(f"- {e['name']}{suffix}")
+    if not env_rows:
+        lines.append("- (空)")
+    # 不输出 value，避免敏感信息泄漏
+    meta["env_vars"] = {
+        "count": env_count,
+        "items": [{"id": e["id"], "name": e["name"], "description": e.get("description")} for e in env_rows],
+    }
+
+    # ── 定时任务 ──────────────────────────────────────────────
+    tasks: list[dict[str, Any]] = []
+    task_count = 0
     try:
-        await run_in_thread(add_mcp_server, cfg)
-    except (ValueError, FileExistsError) as exc:
-        raise ToolError(str(exc)) from exc
-    from ..mcp_.client import connect_mcp_server, ensure_mcp_started, sync_mcp_tools_for_workspace
-    from ..workspace import get_workspace_id
-    from ..workspace_runtime import invalidate_mcp_runtime, mark_mcp_runtime_ready
+        from ..host_scheduled_tasks import list_scheduled_tasks
+        tasks = await list_scheduled_tasks()
+        task_count = len(tasks)
+    except Exception:
+        pass
+    recent_tasks = sorted(tasks, key=lambda t: t.get("created_at") or "", reverse=True)[:5]
+    lines.append(f"\n## 定时任务 ({task_count})")
+    for t in recent_tasks:
+        status = str(t.get("last_run_status") or "idle")
+        enabled = "enabled" if t.get("enabled") else "disabled"
+        trigger = str(t.get("cron_expr") or t.get("run_at") or "—")
+        lines.append(f"- #{t['id']} {t.get('title', '')} [{enabled}] {trigger} | {status}")
+    if not recent_tasks:
+        lines.append("- (空)")
+    meta["scheduled_tasks"] = {"count": task_count, "items": recent_tasks}
 
-    wid = get_workspace_id()
-    invalidate_mcp_runtime(wid)
-    await ensure_mcp_started(wid)
-    runtime = await connect_mcp_server(cfg)
-    await sync_mcp_tools_for_workspace(wid)
-    mark_mcp_runtime_ready(wid)
-    if runtime.get("connected"):
-        return ToolResult(
-            content=f"mcp server '{cfg.name}' added and connected, tools={len(runtime.get('tools', []))}",
-            metadata=runtime,
-        )
-    return ToolResult(
-        content=f"mcp server '{cfg.name}' added but connect failed: {runtime.get('error', 'unknown')}",
-        metadata=runtime,
-    )
+    # ── 产物 ──────────────────────────────────────────────────
+    art_count = await _count_artifacts()
+    recent_arts = await _recent_artifacts(5)
+    lines.append(f"\n## 产物 ({art_count})")
+    for a in recent_arts:
+        cat = str(a.get("category") or "—")
+        lines.append(f"- {a.get('title')} [{a.get('type')}] ({cat})")
+    if not recent_arts:
+        lines.append("- (空)")
+    meta["artifacts"] = {"count": art_count, "items": recent_arts}
 
-
-async def _remove_mcp(args: dict[str, Any]) -> ToolResult:
-    name = str(args.get("name", "")).strip()
-    if not name:
-        raise ToolError("name is required")
-    ok = await run_in_thread(remove_mcp_server, name)
-    if not ok:
-        raise ToolError(f"mcp server not found: {name}")
-    from ..workspace import get_workspace_id
-    from ..workspace_runtime import disconnect_mcp_server_runtime
-
-    await disconnect_mcp_server_runtime(get_workspace_id(), name)
-    return ToolResult(content=f"mcp server '{name}' removed")
-
-
-async def _manage_workspace(args: dict[str, Any]) -> ToolResult:
-    action = str(args.get("action", "summary")).lower()
-    if action == "summary":
-        return await _summary()
-    if action == "list_mcp":
-        return await _list_mcp()
-    if action == "add_mcp":
-        return await _add_mcp(args)
-    if action == "remove_mcp":
-        return await _remove_mcp(args)
-    raise ToolError(f"unknown action: {action}")
+    return ToolResult(content="\n".join(lines), metadata=meta)
 
 
 register_builtin(
     Tool(
         name="manage_workspace",
         description=(
-            "当前 AgentPod 工作区内的运维工具：查看环境摘要、管理 MCP 服务连接。"
-            "不能创建/删除/重命名/切换 AgentPod 多工作区容器；这类操作请让用户到 Web「工作区」页面处理。"
-            "用于“环境状态盘点”“MCP 服务增删与排障”等基础设施任务，而非常规业务内容生成。"
-            "支持动作：summary / list_mcp / add_mcp / remove_mcp。"
+            "工作区环境摘要（只读）。"
+            "返回技能、MCP、记忆、环境变量、定时任务、产物的条数与各自最近 5 条数据。"
+            "MCP 的增删改请用 mcp_manage；其他资源 CRUD 走对应专用工具。"
         ),
         parameters={
             "type": "object",
-            "properties": {
-                "action": {
-                    "type": "string",
-                    "enum": ["summary", "list_mcp", "add_mcp", "remove_mcp"],
-                    "description": "执行动作：摘要、列出 MCP、新增 MCP、移除 MCP。",
-                },
-                "name": {"type": "string", "description": "MCP 服务名（add_mcp/remove_mcp 必填）。"},
-                "transport": {
-                    "type": "string",
-                    "enum": ["stdio", "http"],
-                    "description": "MCP 传输方式（add_mcp 时使用）。",
-                },
-                "command": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "stdio 模式启动命令（例如 ['npx','-y','@xxx/server']）。",
-                },
-                "args": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "stdio 模式附加参数。",
-                },
-                "env": {
-                    "type": "object",
-                    "additionalProperties": {"type": "string"},
-                    "description": "stdio 模式环境变量。",
-                },
-                "headers": {
-                    "type": "object",
-                    "additionalProperties": {"type": "string"},
-                    "description": "http 模式请求头（如 Authorization: Bearer xxx）。",
-                },
-                "url": {"type": "string", "description": "http 模式服务地址。"},
-            },
-            "required": ["action"],
+            "properties": {},
+            "additionalProperties": False,
         },
         handler=_manage_workspace,
     )
