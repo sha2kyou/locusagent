@@ -32,8 +32,8 @@ Host WebSocket → Gateway → 应用 toast/铃铛 + macOS 系统通知
 ## 构建
 
 ```bash
-# 推荐：仓库根目录一键构建
-./build-desktop.sh
+# 推荐：仓库根目录
+./rebuild.sh desktop
 ```
 
 或分步：
@@ -55,7 +55,7 @@ npm run build
 - `desktop/src-tauri/target/release/bundle/macos/AgentPod.app`
 - `desktop/src-tauri/target/release/bundle/dmg/AgentPod_<version>_aarch64.dmg`（版本见仓库根目录 `VERSION`）
 
-改 `web/`（桌面构建）或 `desktop/` 后需重新执行；与 `./rebuild.sh host` 独立。
+改 `web/`（桌面构建）或 `desktop/` 后执行 `./rebuild.sh desktop`（`./build-desktop.sh` 为等价别名）；与 `./rebuild.sh host` 独立。
 
 ## 开发
 

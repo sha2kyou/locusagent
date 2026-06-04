@@ -7,6 +7,7 @@
 ## 命令映射
 - 仅 `web/` 或 `host/` 变更：`./rebuild.sh host`
 - 仅 `agent/` 变更：`./rebuild.sh agent <user_id>`
+- 仅 `web/` 桌面或 `desktop/` 变更：`./rebuild.sh desktop`
 - 同时有 `web/host` 与 `agent` 变更：先 `./rebuild.sh host`，再 `./rebuild.sh agent <user_id>`
 
 ## 何时允许 full / infra

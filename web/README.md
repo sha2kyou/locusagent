@@ -56,7 +56,7 @@ uv run uvicorn agentpod_host.main:app --reload --port 8080
 | `npm run build` | `dist-web/` | Docker 在线 Web 服务（含 PWA） |
 | `npm run build:desktop` | `dist-desktop/` | macOS 桌面应用内嵌（无 PWA） |
 
-桌面壳构建见仓库根目录 `./build-desktop.sh`。
+桌面壳构建见仓库根目录 `./rebuild.sh desktop`。
 
 ## 部署（Docker）
 
@@ -68,7 +68,7 @@ uv run uvicorn agentpod_host.main:app --reload --port 8080
 
 浏览器访问 `http://localhost:1223`（或 `PUBLIC_BASE_URL` 配置的地址）。
 
-桌面应用使用 `dist-desktop/`，由 Tauri gateway 托管，不走 web 容器；变更后执行 `./build-desktop.sh`。
+桌面应用使用 `dist-desktop/`，由 Tauri gateway 托管，不走 web 容器；变更后执行 `./rebuild.sh desktop`。
 
 ## 通知
 

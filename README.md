@@ -110,7 +110,7 @@ docker build -f "agent/Dockerfile" -t "agentpod-agent:latest" "."
 
 ```bash
 # 需先启动 Host 等后端（见上）
-./build-desktop.sh
+./rebuild.sh desktop
 ```
 
 产物：`desktop/src-tauri/target/release/bundle/macos/AgentPod.app`（及 `.dmg`）。
@@ -121,7 +121,7 @@ docker build -f "agent/Dockerfile" -t "agentpod-agent:latest" "."
 | 通知 | 应用内 toast / 铃铛不变；桌面端额外将通知中心新消息镜像为 **macOS 系统通知** |
 | API 地址 | 构建时默认 `AGENTPOD_API_URL=http://127.0.0.1:1223`，可在运行前覆盖 |
 
-改 `web/` 桌面相关前端或 `desktop/` Tauri 代码后需重新 `./build-desktop.sh`；**不**包含在 `./rebuild.sh host` 中。
+改 `web/` 桌面相关前端或 `desktop/` Tauri 代码后执行 `./rebuild.sh desktop`（`./build-desktop.sh` 为等价别名）。
 
 ## 启动后验证
 
@@ -203,7 +203,7 @@ npm run build  # 产物写入 web/dist-web（Docker web 容器托管）
 | `agent/` | `./rebuild.sh agent <user_id>` |
 | host + agent 镜像 | `./rebuild.sh full [user_id]` |
 | postgres / tei 等 | `./rebuild.sh infra`（仅在基础设施异常时使用） |
-| `web/` 桌面壳 或 `desktop/` | `./build-desktop.sh`（macOS `.app` / `.dmg`） |
+| `web/` 桌面壳 或 `desktop/` | `./rebuild.sh desktop`（macOS `.app` / `.dmg`） |
 
 `agent` 镜像使用 `docker build`，不走 `compose build`。未给出 `user_id` 时不要批量重建所有用户容器。
 

@@ -20,7 +20,38 @@ Usage:
 
   ./rebuild.sh infra
       Rebuild and restart infra services only (postgres/tei/host).
+
+  ./rebuild.sh desktop
+      Build macOS desktop app (web dist-desktop + Tauri .app / .dmg).
 EOF
+}
+
+rebuild_desktop() {
+  if ! command -v cargo >/dev/null 2>&1; then
+    echo "error: Rust toolchain not found (cargo). Install from https://rustup.rs or: brew install rust"
+    exit 1
+  fi
+
+  echo "==> build desktop frontend (web/dist-desktop)"
+  cd "$ROOT_DIR/web"
+  if [[ ! -d node_modules ]]; then
+    npm install
+  fi
+  npm run build:desktop
+
+  echo "==> build AgentPod.app (Tauri)"
+  cd "$ROOT_DIR/desktop"
+  if [[ ! -d node_modules ]]; then
+    npm install
+  fi
+  npm run build
+
+  local app_path="$ROOT_DIR/desktop/src-tauri/target/release/bundle/macos/AgentPod.app"
+  if [[ -d "$app_path" ]]; then
+    echo "==> done: $app_path"
+  else
+    echo "==> build finished; check desktop/src-tauri/target/release/bundle/"
+  fi
 }
 
 ensure_user_container() {
@@ -77,6 +108,9 @@ case "$cmd" in
     ;;
   infra)
     docker compose up -d --build "postgres" "tei" "web" "host"
+    ;;
+  desktop)
+    rebuild_desktop
     ;;
   *)
     usage
