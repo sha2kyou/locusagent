@@ -16,7 +16,8 @@ import {
   // Wrench,
 } from "lucide-react";
 import { BrandMark } from "@/app/Brand";
-import { DesktopTitlebarSpacer } from "@/app/DesktopTitlebarSpacer";
+import { DesktopWindowDragOverlay } from "@/app/DesktopTitlebarSpacer";
+import { desktopDragRegionProps, isDesktopApp } from "@/lib/desktop-app";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ArtifactsNav } from "@/features/artifacts/ArtifactsNav";
@@ -154,6 +155,9 @@ export function AppShell() {
 
   return (
     <ShellContext.Provider value={{ openSettings: () => setSettingsOpen(true), setMobileAction }}>
+      <DesktopWindowDragOverlay
+        mainOffsetClassName={expanded ? "left-0 md:left-[208px]" : "left-0 md:left-[68px]"}
+      />
       <div className="flex h-full">
         {/* 移动端遮罩 */}
         {navOpen && (
@@ -169,8 +173,14 @@ export function AppShell() {
             expanded ? "md:w-[208px]" : "md:w-[68px]",
           )}
         >
-          <DesktopTitlebarSpacer />
-          <div className={cn("flex h-14 items-center gap-2.5 px-4", !expanded && "md:justify-center md:px-2")}>
+          <div
+            {...desktopDragRegionProps("deep")}
+            className={cn(
+              "flex h-14 shrink-0 items-center gap-2.5 px-4",
+              isDesktopApp() && "md:pl-[72px]",
+              !expanded && "md:justify-center md:px-2 md:pl-2",
+            )}
+          >
             {expanded ? (
               <BrandMark />
             ) : (
@@ -344,7 +354,10 @@ export function AppShell() {
         {/* 主区 */}
         <div className="flex min-w-0 flex-1 flex-col">
           {/* 移动端顶栏 */}
-          <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 md:hidden">
+          <div
+            {...desktopDragRegionProps("deep")}
+            className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 md:hidden"
+          >
             <button
               type="button"
               onClick={() => setNavOpen(true)}

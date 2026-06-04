@@ -1,5 +1,5 @@
 import { BrandMark } from "@/app/Brand";
-import { DesktopTitlebarSpacer } from "@/app/DesktopTitlebarSpacer";
+import { DesktopWindowDragOverlay } from "@/app/DesktopTitlebarSpacer";
 import { useToast } from "@/components/ui/toast";
 import { desktopOAuthErrorMessage, isDesktopApp, openDesktopOAuthLogin } from "@/lib/desktop-app";
 import { useState } from "react";
@@ -26,7 +26,7 @@ export function LoginRoute() {
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden">
-      <DesktopTitlebarSpacer />
+      <DesktopWindowDragOverlay />
       <div className="relative flex flex-1 items-center justify-center p-4">
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.12]"

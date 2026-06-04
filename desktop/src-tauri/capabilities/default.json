@@ -8,8 +8,10 @@
   },
   "permissions": [
     "core:default",
+    "core:window:allow-start-dragging",
     "opener:default",
     "deep-link:default",
+    "window-state:default",
     "allow-open-oauth-login"
   ]
 }

@@ -572,6 +572,7 @@
 html.apod-desktop [data-tauri-drag-region] {
   -webkit-app-region: drag;
   app-region: drag;
+  cursor: default;
 }
 
 html.apod-desktop [data-tauri-drag-region] button,
