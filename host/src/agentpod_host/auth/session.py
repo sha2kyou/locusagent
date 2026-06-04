@@ -81,20 +81,66 @@ def _oauth_state_serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(settings.session_secret, salt=OAUTH_STATE_SALT)
 
 
-def issue_oauth_state() -> str:
+def issue_oauth_state(*, client: str = "web") -> str:
     """签发 OAuth state（签名 token，经 GitHub 回调 URL 原样带回）。"""
     nonce = secrets.token_urlsafe(32)
-    return _oauth_state_serializer().dumps({"n": nonce})
+    client_value = "desktop" if client == "desktop" else "web"
+    return _oauth_state_serializer().dumps({"n": nonce, "c": client_value})
 
 
-def verify_oauth_state(state: str) -> bool:
+def parse_oauth_state(state: str) -> dict | None:
     if not state:
-        return False
+        return None
     try:
         payload = _oauth_state_serializer().loads(state, max_age=OAUTH_STATE_MAX_AGE)
     except (BadSignature, SignatureExpired):
-        return False
-    return isinstance(payload, dict) and isinstance(payload.get("n"), str)
+        return None
+    if not isinstance(payload, dict) or not isinstance(payload.get("n"), str):
+        return None
+    client = payload.get("c")
+    if client not in ("web", "desktop"):
+        client = "web"
+    return {"client": client}
+
+
+def verify_oauth_state(state: str) -> bool:
+    return parse_oauth_state(state) is not None
+
+
+DESKTOP_EXCHANGE_MAX_AGE = 120
+DESKTOP_EXCHANGE_SALT = "apod.oauth.desktop.exchange.v1"
+
+
+@lru_cache
+def _desktop_exchange_serializer() -> URLSafeTimedSerializer:
+    settings = get_settings()
+    if not settings.session_secret:
+        raise RuntimeError("SESSION_SECRET 未配置")
+    return URLSafeTimedSerializer(settings.session_secret, salt=DESKTOP_EXCHANGE_SALT)
+
+
+def issue_desktop_exchange(user_id: int, *, api_key_flash: str | None = None) -> str:
+    payload: dict[str, object] = {"uid": user_id, "n": secrets.token_urlsafe(16)}
+    if api_key_flash:
+        payload["flash"] = api_key_flash
+    return _desktop_exchange_serializer().dumps(payload)
+
+
+def consume_desktop_exchange(token: str) -> tuple[int, str | None] | None:
+    if not token:
+        return None
+    try:
+        payload = _desktop_exchange_serializer().loads(token, max_age=DESKTOP_EXCHANGE_MAX_AGE)
+    except (BadSignature, SignatureExpired):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    uid = payload.get("uid")
+    if not isinstance(uid, int):
+        return None
+    flash = payload.get("flash")
+    flash_value = flash if isinstance(flash, str) else None
+    return uid, flash_value
 
 
 MCP_OAUTH_STATE_MAX_AGE = 600  # 10 分钟

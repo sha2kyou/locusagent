@@ -567,3 +567,20 @@
   }
 
 }
+
+/* 桌面壳（html.apod-desktop）：Tauri 拖拽区域 */
+html.apod-desktop [data-tauri-drag-region] {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+html.apod-desktop [data-tauri-drag-region] button,
+html.apod-desktop [data-tauri-drag-region] a,
+html.apod-desktop [data-tauri-drag-region] input,
+html.apod-desktop [data-tauri-drag-region] textarea,
+html.apod-desktop [data-tauri-drag-region] select,
+html.apod-desktop [data-tauri-drag-region] label,
+html.apod-desktop [data-tauri-drag-region] [role="button"] {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}

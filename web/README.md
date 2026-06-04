@@ -26,19 +26,30 @@ uv sync
 uv run uvicorn agentpod_host.main:app --reload --port 8080
 ```
 
-## 构建与部署
+## 构建
 
-生产构建产物输出到 `host/src/agentpod_host/web/spa`，由 Host FastAPI 托管：
+| 命令 | 产物 | 用途 |
+|------|------|------|
+| `npm run build` | `dist-web/` | Docker 在线 Web 服务（含 PWA） |
+| `npm run build:desktop` | `dist-desktop/` | macOS 桌面应用内嵌 |
 
-```bash
-npm run build
+## 部署（Docker）
+
+在线页面由 **web** 容器（nginx 静态托管）提供，**Host 仅负责 API**：
+
+```
+浏览器 → Caddy :1223
+           ├─ /api/*、/health → host:8080
+           └─ 其余路径 → web:80（SPA）
 ```
 
-Docker 部署时 Host 镜像多阶段构建会自动执行 `npm ci && npm run build`。改前端后执行：
+改前端后：
 
 ```bash
 ./rebuild.sh host
 ```
+
+浏览器访问 `http://localhost:1223`（或 `PUBLIC_BASE_URL` 配置的地址）。
 
 ## 路由
 

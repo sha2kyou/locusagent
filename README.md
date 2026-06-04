@@ -27,12 +27,14 @@
 
 ```
 [入口层]
-浏览器 / PWA · 外部 API 客户端
+浏览器 / PWA · macOS 桌面应用 · 外部 API 客户端
                 │
                 ▼
         Caddy (反向代理, SSE 透传, Docker DNS)
+        ├─ /api/*、/health → Host API
+        └─ 其余 → Web 容器（SPA 静态托管）
 
-[控制平面 Host: FastAPI + PostgreSQL + Redis]
+[控制平面 Host: FastAPI + PostgreSQL + Redis]（仅 API，默认不托管 SPA）
 ├── GitHub OAuth / Session
 ├── MCP OAuth（凭据加密存库，/api/oauth/mcp）
 ├── API 网关
@@ -171,7 +173,7 @@ uv run uvicorn agentpod_agent.main:app --reload --port 8000
 cd web
 npm install
 npm run dev    # 默认 http://127.0.0.1:5173，/api 代理到 Host
-npm run build  # 产物写入 host/.../web/spa
+npm run build  # 产物写入 web/dist-web（Docker web 容器托管）
 ```
 
 ## 按需重建
@@ -212,9 +214,11 @@ docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" | rg "apod-user|a
 ├── agent/                  # 执行平面
 │   ├── Dockerfile
 │   └── src/agentpod_agent/
-├── web/                    # React SPA（Vite，构建进 host 镜像）
+├── web/                    # React SPA（Vite）
+│   ├── Dockerfile          # 在线 Web 服务（nginx）
 │   ├── public/             # favicon、PWA 图标等
 │   └── src/
+├── desktop/                # macOS 桌面壳（Tauri + 内嵌 dist-desktop）
 └── shared-skills/          # 公共技能库
 ```
 

@@ -8,7 +8,7 @@ usage() {
   cat <<'EOF'
 Usage:
   ./rebuild.sh host
-      Rebuild host image (含前端 SPA，Docker 内构建) and restart host only.
+      Rebuild web + host images (含前端 SPA) and restart web, host, caddy.
 
   ./rebuild.sh agent <user_id>
       Rebuild agent image and recreate one user isolated container.
@@ -54,9 +54,9 @@ cmd="${1:-}"
 case "$cmd" in
   host)
     export DOCKER_BUILDKIT=1
-    docker compose --progress=plain build "host"
-    docker compose up -d --no-deps "host"
-    # host 容器 IP 会变；Caddy 可能仍连旧地址导致 502，需一并刷新上游
+    docker compose --progress=plain build "web" "host"
+    docker compose up -d --no-deps "web" "host"
+    # host/web 容器 IP 会变；Caddy 可能仍连旧地址导致 502，需一并刷新上游
     docker compose restart caddy
     ;;
   agent)
@@ -67,14 +67,14 @@ case "$cmd" in
   full)
     user_id="${2:-}"
     docker build -f "agent/Dockerfile" -t "agentpod-agent:latest" "."
-    docker compose build "host"
+    docker compose build "web" "host"
     docker compose up -d
     if [[ -n "$user_id" ]]; then
       ensure_user_container "$user_id"
     fi
     ;;
   infra)
-    docker compose up -d --build "postgres" "tei" "host"
+    docker compose up -d --build "postgres" "tei" "web" "host"
     ;;
   *)
     usage

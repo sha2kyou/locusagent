@@ -112,6 +112,7 @@ class Settings(BaseSettings):
     mcp_reconnect_interval_seconds: float = Field(default=60.0, alias="MCP_RECONNECT_INTERVAL_SECONDS")
 
     public_base_url: str = Field(default="http://localhost", alias="PUBLIC_BASE_URL")
+    serve_spa: bool = Field(default=True, alias="SERVE_SPA")
 
 
 @lru_cache

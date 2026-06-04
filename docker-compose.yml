@@ -11,6 +11,16 @@ services:
       - caddy-config:/config
     depends_on:
       - host
+      - web
+    networks:
+      - agentpod-edge
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    image: agentpod-web:latest
+    restart: unless-stopped
     networks:
       - agentpod-edge
 
@@ -82,6 +92,7 @@ services:
       SCHEDULED_TASK_RETRY_MAX_DELAY_SECONDS: ${SCHEDULED_TASK_RETRY_MAX_DELAY_SECONDS:-30}
       SCHEDULED_TASK_RETRY_BACKOFF_MULTIPLIER: ${SCHEDULED_TASK_RETRY_BACKOFF_MULTIPLIER:-2}
       PUBLIC_BASE_URL:      ${PUBLIC_BASE_URL}
+      SERVE_SPA:            ${SERVE_SPA:-0}
     depends_on:
       postgres:
         condition: service_healthy

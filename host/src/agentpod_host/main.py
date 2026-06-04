@@ -114,6 +114,7 @@ install_auth_isolation(app)
 install_internal_network_guard(app)
 
 app.include_router(oauth_router.router)
+app.include_router(oauth_router.desktop_router)
 app.include_router(oauth_mcp_router.router)
 app.include_router(me_router.router)
 app.include_router(notifications_router.router)

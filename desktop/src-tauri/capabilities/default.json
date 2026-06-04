@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default AgentPod desktop capability",
+  "windows": ["main"],
+  "remote": {
+    "urls": ["http://127.0.0.1:1420", "http://127.0.0.1:1420/*"]
+  },
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "deep-link:default",
+    "allow-open-oauth-login"
+  ]
+}

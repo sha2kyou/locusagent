@@ -15,11 +15,12 @@ import {
   Sparkles,
   // Wrench,
 } from "lucide-react";
+import { BrandMark } from "@/app/Brand";
+import { DesktopTitlebarSpacer } from "@/app/DesktopTitlebarSpacer";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ArtifactsNav } from "@/features/artifacts/ArtifactsNav";
 import { useAuth } from "./auth";
-import { BrandMark } from "./Brand";
 import { ApiKeyFlashModal, SettingsModal } from "@/features/settings/SettingsModal";
 import { NotificationBell } from "@/features/notifications/NotificationBell";
 import { flashApiKey, listWorkspaces } from "@/api/endpoints";
@@ -168,6 +169,7 @@ export function AppShell() {
             expanded ? "md:w-[208px]" : "md:w-[68px]",
           )}
         >
+          <DesktopTitlebarSpacer />
           <div className={cn("flex h-14 items-center gap-2.5 px-4", !expanded && "md:justify-center md:px-2")}>
             {expanded ? (
               <BrandMark />

@@ -5,19 +5,27 @@
 - scope 最小化：仅 `read:user`。
 - access_token 仅用于一次拉取用户信息，**不入库**。
 - 新用户首次登录时生成 agent_api_key 明文一次性返回，落库仅哈希。
+- desktop：系统浏览器完成 OAuth，经 deep link 回 App 后 exchange 换 WebView session。
 """
 
 from __future__ import annotations
 
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 
 from ..audit import record_event
-from ..auth.session import issue_apikey_flash, issue_oauth_state, issue_session, verify_oauth_state
+from ..auth.session import (
+    consume_desktop_exchange,
+    issue_apikey_flash,
+    issue_desktop_exchange,
+    issue_oauth_state,
+    issue_session,
+    parse_oauth_state,
+)
 from ..config import get_settings
 from ..db import ContainerStatus, ProvisionStatus, User, get_session
 from ..logging import get_logger
@@ -25,23 +33,35 @@ from ..security import generate_agent_api_key, hash_agent_api_key
 from ..workspaces import ensure_default_workspace
 
 router = APIRouter(prefix="/api/oauth/github", tags=["oauth"])
+desktop_router = APIRouter(prefix="/api/oauth", tags=["oauth"])
 log = get_logger("oauth")
 
 GITHUB_AUTHORIZE = "https://github.com/login/oauth/authorize"
 GITHUB_TOKEN = "https://github.com/login/oauth/access_token"
 GITHUB_USER = "https://api.github.com/user"
 SCOPE = "read:user"
+DESKTOP_DEEP_LINK = "agentpod://oauth/callback"
+
+
+def _oauth_client(raw: str | None) -> str:
+    return "desktop" if (raw or "").strip().lower() == "desktop" else "web"
+
+
+def _oauth_redirect_uri() -> str:
+    return get_settings().oauth_redirect_uri
 
 
 @router.get("/login")
-async def github_login() -> RedirectResponse:
+async def github_login(client: str = Query(default="web")) -> RedirectResponse:
     settings = get_settings()
     if not settings.github_client_id:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="OAuth not configured")
-    state = issue_oauth_state()
+    client_value = _oauth_client(client)
+    state = issue_oauth_state(client=client_value)
+    redirect_uri = _oauth_redirect_uri()
     params = {
         "client_id": settings.github_client_id,
-        "redirect_uri": settings.oauth_redirect_uri,
+        "redirect_uri": redirect_uri,
         "scope": SCOPE,
         "state": state,
         "allow_signup": "true",
@@ -52,10 +72,14 @@ async def github_login() -> RedirectResponse:
 @router.get("/callback")
 async def github_callback(request: Request, code: str = "", state: str = ""):
     settings = get_settings()
-    if not verify_oauth_state(state):
+    state_payload = parse_oauth_state(state)
+    if state_payload is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="invalid state")
     if not code:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="missing code")
+
+    client_value = state_payload["client"]
+    redirect_uri = _oauth_redirect_uri()
 
     async with httpx.AsyncClient(timeout=10) as client:
         token_resp = await client.post(
@@ -64,7 +88,7 @@ async def github_callback(request: Request, code: str = "", state: str = ""):
                 "client_id": settings.github_client_id,
                 "client_secret": settings.github_client_secret,
                 "code": code,
-                "redirect_uri": settings.oauth_redirect_uri,
+                "redirect_uri": redirect_uri,
             },
             headers={"Accept": "application/json"},
         )
@@ -136,11 +160,31 @@ async def github_callback(request: Request, code: str = "", state: str = ""):
         user_id = user.id
         await ensure_default_workspace(session, user_id)
 
+    if client_value == "desktop":
+        exchange = issue_desktop_exchange(user_id, api_key_flash=new_api_key_plain)
+        target = f"{DESKTOP_DEEP_LINK}?exchange={quote(exchange, safe='')}"
+        log.info("oauth_callback_desktop", user_id=user_id, new_user=new_api_key_plain is not None)
+        return RedirectResponse(target, status_code=status.HTTP_302_FOUND)
+
     response = RedirectResponse("/chat", status_code=status.HTTP_302_FOUND)
     issue_session(response, user_id)
     if new_api_key_plain is not None:
         issue_apikey_flash(response, new_api_key_plain)
     log.info("oauth_callback_ok", user_id=user_id, new_user=new_api_key_plain is not None)
+    return response
+
+
+@desktop_router.get("/desktop/exchange")
+async def desktop_exchange(exchange: str = Query(default="")) -> RedirectResponse:
+    consumed = consume_desktop_exchange(exchange)
+    if consumed is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="invalid exchange")
+    user_id, api_key_flash = consumed
+    response = RedirectResponse("/chat", status_code=status.HTTP_302_FOUND)
+    issue_session(response, user_id)
+    if api_key_flash is not None:
+        issue_apikey_flash(response, api_key_flash)
+    log.info("oauth_desktop_exchange_ok", user_id=user_id)
     return response
 
 

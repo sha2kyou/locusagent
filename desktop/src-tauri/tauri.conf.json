@@ -1,0 +1,55 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "AgentPod",
+  "version": "0.1.0",
+  "identifier": "com.agentpod.desktop",
+  "build": {
+    "beforeDevCommand": "cd ../web && npm run build:desktop",
+    "beforeBuildCommand": "cd ../web && npm run build:desktop",
+    "devUrl": "http://127.0.0.1:1420",
+    "frontendDist": "../../web/dist-desktop"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "AgentPod",
+        "url": "http://127.0.0.1:1420",
+        "width": 1280,
+        "height": 840,
+        "resizable": true,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 16,
+          "y": 14
+        }
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["agentpod"]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "app"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.png"
+    ],
+    "resources": {
+      "../../web/dist-desktop/": "dist-desktop/"
+    }
+  }
+}

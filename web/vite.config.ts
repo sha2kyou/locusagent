@@ -13,7 +13,18 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'logo.png', 'apple-touch-icon.png', 'pwa-192.png', 'pwa-512.png', 'pwa-192-maskable.png', 'pwa-512-maskable.png'],
+      includeAssets: [
+        'favicon.ico',
+        'favicon-dark.ico',
+        'logo.png',
+        'logo-dark.png',
+        'apple-touch-icon.png',
+        'apple-touch-icon-dark.png',
+        'pwa-192.png',
+        'pwa-512.png',
+        'pwa-192-maskable.png',
+        'pwa-512-maskable.png',
+      ],
       manifest: {
         name: 'AgentPod',
         short_name: 'AgentPod',
@@ -44,9 +55,9 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
-  // 生产产物直接落到后端包内，由 FastAPI 托管
+  // 在线 Web 服务构建产物（Docker web 容器 / 本地 dist-web）
   build: {
-    outDir: fileURLToPath(new URL('../host/src/agentpod_host/web/spa', import.meta.url)),
+    outDir: 'dist-web',
     emptyOutDir: true,
     rollupOptions: {
       output: {

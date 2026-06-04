@@ -21,9 +21,15 @@ function resolveDark(pref: ThemePreference): boolean {
   return getSystemDark();
 }
 
+function applyFavicon(dark: boolean) {
+  const link = document.getElementById("apod-favicon") as HTMLLinkElement | null;
+  if (link) link.href = dark ? "/favicon-dark.ico" : "/favicon.ico";
+}
+
 export function applyTheme(pref: ThemePreference) {
   const dark = resolveDark(pref);
   document.documentElement.classList.toggle("dark", dark);
+  applyFavicon(dark);
 }
 
 function loadPreference(): ThemePreference {

@@ -34,6 +34,11 @@ class ImmutableStaticFiles(StaticFiles):
 
 
 def install_pages(app: FastAPI) -> None:
+    from ..config import get_settings
+
+    if not get_settings().serve_spa:
+        return
+
     if not SPA_INDEX.exists():
         return
 

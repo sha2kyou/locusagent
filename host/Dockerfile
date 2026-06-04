@@ -1,16 +1,3 @@
-# ---- frontend (Vite → host/.../web/spa) ----
-FROM node:22-alpine AS web
-
-WORKDIR /build/web
-
-COPY web/package.json web/package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci --prefer-offline --no-audit --no-fund
-
-COPY web/ ./
-RUN npm run build
-
-# ---- host ----
 FROM python:3.11-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -40,9 +27,6 @@ COPY host/src ./host/src
 COPY shared-skills /seed/shared-skills
 
 RUN pip install --no-deps ./host
-
-COPY --from=web /build/host/src/agentpod_host/web/spa \
-    /usr/local/lib/python3.11/site-packages/agentpod_host/web/spa
 
 EXPOSE 8080
 
