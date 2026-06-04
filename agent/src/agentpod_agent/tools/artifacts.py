@@ -174,9 +174,10 @@ async def _artifact_save(args: dict[str, Any]) -> ToolResult:
         title=title, content=content, type=art_type, category_id=category_id
     )
     suffix = f"（类目：{category}）"
+    link = f"/artifacts/c/{art['category_id']}"
     return ToolResult(
-        content=f"产物已保存：{title}{suffix}",
-        metadata={"artifact_id": art["id"], "category": category or None},
+        content=f"产物已保存：{title}{suffix}\nlink: {link}",
+        metadata={"artifact_id": art["id"], "category": category or None, "link": link},
     )
 
 
@@ -400,6 +401,7 @@ register_builtin(
             "适用于有“交付物”属性的输出：报告、方案、文案、脚本、页面片段等。"
             "category 用于归档分类（如“内容”“报告”）；若不存在可先调用 artifact_category_create。"
             "不用于临时解释或一次性对话回复。"
+            "保存完成后，在回复中总结并输出产物链接（工具返回值中的 link）。"
         ),
         parameters={
             "type": "object",

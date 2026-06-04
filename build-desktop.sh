@@ -20,6 +20,8 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   exit 0
 fi
 
+python3 "$ROOT_DIR/scripts/sync-version.py"
+
 if ! command -v cargo >/dev/null 2>&1; then
   echo "error: Rust toolchain not found (cargo). Install from https://rustup.rs or: brew install rust"
   exit 1

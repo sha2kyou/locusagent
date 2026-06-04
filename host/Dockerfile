@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
+COPY VERSION ./VERSION
 COPY host/pyproject.toml ./host/pyproject.toml
 
 # 先仅按 pyproject 安装依赖，避免 host/src 改动触发全量依赖重下。

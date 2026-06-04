@@ -8,6 +8,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
+from . import __version__
 from .config import get_settings
 from .db import dispose_engine, init_engine
 from .logging import configure_logging, get_logger
@@ -103,7 +104,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="AgentPod Host",
-    version="0.1.0",
+    version=__version__,
     lifespan=lifespan,
     docs_url=None,
     redoc_url=None,

@@ -15,7 +15,7 @@ members = [
 
 [[package]]
 name = "agentpod"
-version = "0.1.0"
+version = "0.1.1"
 source = { virtual = "." }
 
 [package.dev-dependencies]
@@ -42,7 +42,7 @@ dev = [
 
 [[package]]
 name = "agentpod-agent"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "agent" }
 dependencies = [
     { name = "fastapi" },
@@ -79,7 +79,7 @@ requires-dist = [
 
 [[package]]
 name = "agentpod-host"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "host" }
 dependencies = [
     { name = "alembic" },

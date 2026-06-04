@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     mkdir -p /data /app/skills && \
     chown -R agentpod:agentpod /data /app
 
+COPY VERSION ./VERSION
 COPY agent/pyproject.toml ./agent/pyproject.toml
 
 # 先仅按 pyproject 安装依赖（不受 agent/src 变更影响）。

@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from . import __version__
 from .config import get_settings
 from .errors import WsError, ws_error_handler, ws_validation_handler
 from .logging import configure_logging, get_logger
@@ -86,7 +87,7 @@ async def lifespan(app: FastAPI):
         log.info("agent_stopped")
 
 
-app = FastAPI(title="AgentPod Agent", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="AgentPod Agent", version=__version__, lifespan=lifespan)
 
 app.add_exception_handler(WsError, ws_error_handler)
 app.add_exception_handler(RequestValidationError, ws_validation_handler)

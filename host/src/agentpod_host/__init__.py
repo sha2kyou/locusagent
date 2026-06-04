@@ -1,3 +1,5 @@
 """AgentPod host: FastAPI web server, OAuth, orchestrator, API proxy."""
 
-__version__ = "0.1.0"
+from .version import get_version
+
+__version__ = get_version()
