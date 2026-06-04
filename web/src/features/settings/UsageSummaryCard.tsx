@@ -42,7 +42,7 @@ export function UsageSummaryCard({ active }: { active?: boolean }) {
   const aggregated: AggregatedRow[] = (() => {
     const m = new Map<string, AggregatedRow>();
     for (const row of items) {
-      const label = row.label?.trim() || usageScenarioLabel(row.scenario);
+      const label = usageScenarioLabel(row.scenario);
       const cur =
         m.get(label) ??
         {

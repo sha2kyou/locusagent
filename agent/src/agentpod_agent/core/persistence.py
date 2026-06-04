@@ -567,6 +567,7 @@ async def append_message(
     tool_call_id: str | None = None,
     run_id: str | None = None,
     tokens: int | None = None,
+    enqueue_embedding: bool = True,
 ) -> int:
     def _do() -> int:
         with conn_scope(load_vec=False) as c:
@@ -593,9 +594,10 @@ async def append_message(
     if message_id <= 0:
         return 0
     if role in {"user", "assistant"}:
-        from ..memory.queue import enqueue_message_embedding
+        if enqueue_embedding:
+            from ..memory.queue import enqueue_message_embedding
 
-        await enqueue_message_embedding(message_id)
+            await enqueue_message_embedding(message_id)
     else:
         from ..recall.messages import mark_message_embedding_skipped
 
@@ -784,6 +786,7 @@ async def update_message(
     reasoning_content: str | None = None,
     tool_calls: Any = None,
     tokens: int | None = None,
+    reindex_embedding: bool = True,
 ) -> bool:
     def _do() -> bool:
         with conn_scope(load_vec=False) as c:
@@ -809,7 +812,7 @@ async def update_message(
             return (cur.rowcount or 0) > 0
 
     ok = await run_in_thread(_do)
-    if ok and content is not None:
+    if ok and content is not None and reindex_embedding:
         from ..memory.queue import bump_message_embedding
 
         await bump_message_embedding(message_id)

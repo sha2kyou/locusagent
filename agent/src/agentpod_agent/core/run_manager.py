@@ -18,6 +18,7 @@ from .persistence import (
     update_run,
     upsert_session_meta,
 )
+from ..memory.queue import bump_message_embedding
 from .post_run import run_post_tasks
 
 log = get_logger("run_manager")
@@ -82,6 +83,7 @@ async def _persist_event(
                 content,
                 reasoning_content=reasoning,
                 run_id=run_id,
+                enqueue_embedding=False,
             )
             state["assistant_msg_id"] = mid
             await update_run(run_id, assistant_message_id=mid)
@@ -90,6 +92,7 @@ async def _persist_event(
                 assistant_msg_id,
                 content=content,
                 reasoning_content=reasoning,
+                reindex_embedding=False,
             )
         await update_run(run_id)
         return
@@ -109,6 +112,7 @@ async def _persist_event(
                 content=str(tool_msg.get("content") or partial),
                 reasoning_content=str(tool_msg.get("reasoning_content") or partial_reasoning),
                 tool_calls=tool_msg.get("tool_calls"),
+                reindex_embedding=False,
             )
         else:
             mid = await append_message(
@@ -118,6 +122,7 @@ async def _persist_event(
                 reasoning_content=str(tool_msg.get("reasoning_content") or partial_reasoning),
                 tool_calls=tool_msg.get("tool_calls"),
                 run_id=run_id,
+                enqueue_embedding=False,
             )
             state["assistant_msg_id"] = mid
             await update_run(run_id, assistant_message_id=mid)
@@ -187,7 +192,13 @@ async def _finalize_run(session_id: str, run_id: str, state: dict[str, Any], *, 
                 content=content,
                 reasoning_content=reasoning,
                 tokens=total_tokens,
+                reindex_embedding=False,
             )
+            if str(content or "").strip() or str(reasoning or "").strip():
+                asyncio.create_task(
+                    bump_message_embedding(int(assistant_msg_id)),
+                    name=f"embed-msg-{assistant_msg_id}",
+                )
         await update_run(
             run_id,
             status="completed",
@@ -256,8 +267,17 @@ async def _worker(
                     public["name"] = mapped_name
                 tool_name = str(public.get("name") or "")
                 public["tool_kind"] = _tool_kind(tool_name)
-            await _persist_event(handle.session_id, handle.run_id, public, state)
             await handle.queue.put(public)
+            try:
+                await _persist_event(handle.session_id, handle.run_id, public, state)
+            except Exception as exc:
+                log.warning(
+                    "run_persist_event_failed",
+                    run_id=handle.run_id,
+                    session_id=handle.session_id,
+                    event_type=public.get("type"),
+                    error=str(exc),
+                )
     except asyncio.CancelledError:
         stream_error = CANCELLED_MARK
         log.info("run_worker_cancelled", run_id=handle.run_id, session_id=handle.session_id)

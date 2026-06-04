@@ -108,6 +108,7 @@ async def run_scheduled_prompt(*, title: str, prompt: str) -> dict[str, Any]:
                 run_id=run_id,
                 disabled_tools=_SCHEDULED_DISABLED_TOOLS,
                 blocked_tool_actions=_SCHEDULED_BLOCKED_TOOL_ACTIONS,
+                usage_scenario="scheduled_run",
             )
             last_assistant_id = await _persist_loop_messages(
                 sid, final_messages, initial_len, run_id=run_id
