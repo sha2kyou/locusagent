@@ -13,6 +13,13 @@ from .cron import format_in_timezone, next_cron_run_utc, parse_local_datetime, v
 
 ScheduleKind = Literal["once", "cron"]
 
+_BUSY_STATUSES = frozenset({"running", "queued"})
+
+
+def _ensure_task_not_busy(row: ScheduledTask) -> None:
+    if row.last_run_status in _BUSY_STATUSES:
+        raise ValueError("task is running")
+
 
 def _row_to_dict(row: ScheduledTask, *, tz_name: str) -> dict[str, Any]:
     return {
@@ -179,6 +186,7 @@ async def update_task(
             return None
         if row.completed_at is not None:
             raise ValueError("completed task cannot be edited")
+        _ensure_task_not_busy(row)
 
         if title is not None:
             title = title.strip()
@@ -228,6 +236,7 @@ async def delete_task(user_id: int, task_id: int, *, workspace_id: str | None = 
         ).scalar_one_or_none()
         if row is None:
             return False
+        _ensure_task_not_busy(row)
         await session.delete(row)
         return True
 

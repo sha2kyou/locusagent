@@ -363,7 +363,7 @@ export function ScheduledTasksRoute() {
   };
 
   const startEdit = (task: ScheduledTask) => {
-    if (task.completed_at) return;
+    if (task.completed_at || isTaskBusy(task, pendingRunIds)) return;
     setEditingId(task.id);
     setTitle(task.title);
     setPrompt(task.prompt);
@@ -440,6 +440,7 @@ export function ScheduledTasksRoute() {
   };
 
   const remove = async (task: ScheduledTask) => {
+    if (isTaskBusy(task, pendingRunIds)) return;
     if (!(await confirm({ title: "删除定时任务", body: `确定删除「${task.title}」？`, danger: true, confirmText: "删除" }))) return;
     setSaving(true);
     try {
@@ -509,12 +510,26 @@ export function ScheduledTasksRoute() {
                             >
                               <Play />
                             </Button>
-                            <Button variant="ghost" size="icon-sm" disabled={saving} onClick={() => startEdit(task)}>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              disabled={saving || isTaskBusy(task, pendingRunIds)}
+                              onClick={() => startEdit(task)}
+                              aria-label="编辑"
+                              title="编辑"
+                            >
                               <Pencil />
                             </Button>
                           </>
                         ) : null}
-                        <Button variant="ghost" size="icon-sm" disabled={saving} onClick={() => void remove(task)}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          disabled={saving || isTaskBusy(task, pendingRunIds)}
+                          onClick={() => void remove(task)}
+                          aria-label="删除"
+                          title="删除"
+                        >
                           <Trash2 />
                         </Button>
                       </div>
