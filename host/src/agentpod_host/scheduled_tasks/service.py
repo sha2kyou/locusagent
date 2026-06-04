@@ -36,6 +36,7 @@ def _row_to_dict(row: ScheduledTask, *, tz_name: str) -> dict[str, Any]:
         "last_run_at": format_in_timezone(row.last_run_at, tz_name),
         "last_run_status": row.last_run_status,
         "last_session_id": row.last_session_id,
+        "last_run_summary": row.last_run_summary,
         "last_error": row.last_error,
         "completed_at": format_in_timezone(row.completed_at, tz_name),
         "created_at": format_in_timezone(row.created_at, tz_name),
@@ -221,6 +222,32 @@ async def update_task(
         await session.flush()
         await session.refresh(row)
         return _row_to_dict(row, tz_name=tz_name)
+
+
+async def mark_task_run_started(
+    user_id: int,
+    task_id: int,
+    session_id: str,
+    *,
+    workspace_id: str | None = None,
+) -> bool:
+    sid = str(session_id or "").strip()
+    if not sid:
+        return False
+    async with get_session() as session:
+        stmt = select(ScheduledTask).where(
+            ScheduledTask.id == task_id,
+            ScheduledTask.user_id == user_id,
+        )
+        if workspace_id:
+            stmt = stmt.where(ScheduledTask.workspace_id == workspace_id)
+        row = (await session.execute(stmt)).scalar_one_or_none()
+        if row is None:
+            return False
+        if row.last_run_status not in ("running", "queued"):
+            return False
+        row.active_run_session_id = sid
+        return True
 
 
 async def delete_task(user_id: int, task_id: int, *, workspace_id: str | None = None) -> bool:

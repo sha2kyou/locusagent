@@ -10,6 +10,8 @@ from pydantic import BaseModel, Field
 from ..auth.agent_internal import require_agent_internal
 from ..db import User, get_session
 from ..scheduled_tasks import create_task, delete_task, get_task, list_tasks, update_task
+from ..scheduled_tasks.executor import complete_task_run_from_agent
+from ..scheduled_tasks.service import mark_task_run_started
 from ..workspaces import requested_workspace_id, resolve_workspace
 
 router = APIRouter(prefix="/internal/scheduled-tasks", tags=["internal-scheduled-tasks"])
@@ -32,6 +34,17 @@ class ScheduledTaskUpdateIn(BaseModel):
     notify: bool | None = None
     cron_expr: str | None = Field(default=None, max_length=120)
     run_at: str | None = Field(default=None, max_length=32)
+
+
+class ScheduledRunStartedIn(BaseModel):
+    session_id: str = Field(..., min_length=1, max_length=128)
+
+
+class ScheduledRunFinishedIn(BaseModel):
+    ok: bool
+    session_id: str = Field(..., min_length=1, max_length=128)
+    final_text: str = Field(default="", max_length=20000)
+    error: str = Field(default="", max_length=2000)
 
 
 async def _workspace_for_request(request: Request, user_id: int) -> str:
@@ -116,6 +129,45 @@ async def agent_delete_scheduled_task(
     if not ok:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="task not found")
     return {"deleted": True}
+
+
+@router.post("/{task_id}/run-started")
+async def agent_scheduled_run_started(
+    request: Request,
+    task_id: int,
+    payload: ScheduledRunStartedIn,
+    user: User = Depends(require_agent_internal),
+) -> dict:
+    workspace_id = await _workspace_for_request(request, user.id)
+    ok = await mark_task_run_started(
+        user.id,
+        task_id,
+        payload.session_id,
+        workspace_id=workspace_id,
+    )
+    if not ok:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="task not running")
+    return {"ok": True}
+
+
+@router.post("/{task_id}/run-finished")
+async def agent_scheduled_run_finished(
+    request: Request,
+    task_id: int,
+    payload: ScheduledRunFinishedIn,
+    user: User = Depends(require_agent_internal),
+) -> dict:
+    workspace_id = await _workspace_for_request(request, user.id)
+    changed = await complete_task_run_from_agent(
+        user.id,
+        task_id,
+        workspace_id=workspace_id,
+        ok=payload.ok,
+        session_id=payload.session_id,
+        final_text=payload.final_text,
+        error=payload.error,
+    )
+    return {"ok": True, "changed": changed}
 
 
 @router.get("/{task_id}")

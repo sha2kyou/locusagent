@@ -72,7 +72,7 @@ async def _mark_run_failed(run_id: str | None, exc: Exception) -> None:
         log.warning("scheduled_run_mark_failed", error=str(mark_exc))
 
 
-async def run_scheduled_prompt(*, title: str, prompt: str) -> dict[str, Any]:
+async def run_scheduled_prompt(*, title: str, prompt: str, task_id: int | None = None) -> dict[str, Any]:
     settings = get_settings()
     from .models import resolve_model
 
@@ -83,6 +83,10 @@ async def run_scheduled_prompt(*, title: str, prompt: str) -> dict[str, Any]:
         raise ValueError("prompt is required")
 
     sid = await create_session(title=session_title, hidden=True)
+    if task_id is not None:
+        from ..host_scheduled_tasks import notify_scheduled_run_started
+
+        await notify_scheduled_run_started(task_id, sid)
     run_id: str | None = None
     lock = await session_lock(sid)
     async with lock:
@@ -130,12 +134,31 @@ async def run_scheduled_prompt(*, title: str, prompt: str) -> dict[str, Any]:
             except Exception as exc:
                 log.warning("scheduled_post_run_failed", error=str(exc))
 
-            return {
+            payload = {
                 "ok": True,
                 "session_id": sid,
                 "run_id": run_id,
                 "final_text": result.final_text,
             }
+            if task_id is not None:
+                from ..host_scheduled_tasks import notify_scheduled_run_finished
+
+                await notify_scheduled_run_finished(
+                    task_id,
+                    ok=True,
+                    session_id=sid,
+                    final_text=result.final_text,
+                )
+            return payload
         except Exception as exc:
             await _mark_run_failed(run_id, exc)
+            if task_id is not None:
+                from ..host_scheduled_tasks import notify_scheduled_run_finished
+
+                await notify_scheduled_run_finished(
+                    task_id,
+                    ok=False,
+                    session_id=sid,
+                    error=str(exc),
+                )
             raise ScheduledRunError(str(exc), session_id=sid, run_id=run_id) from exc

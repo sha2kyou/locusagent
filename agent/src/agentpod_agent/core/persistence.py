@@ -557,6 +557,34 @@ async def get_active_run(session_id: str) -> dict[str, Any] | None:
     return run
 
 
+async def get_latest_run(session_id: str) -> dict[str, Any] | None:
+    def _do() -> dict[str, Any] | None:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT id, status, error_message FROM runs "
+                "WHERE session_id = ? ORDER BY updated_at DESC LIMIT 1",
+                (session_id,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    return await run_in_thread(_do)
+
+
+async def get_last_assistant_text(session_id: str) -> str:
+    def _do() -> str:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT content FROM messages "
+                "WHERE session_id = ? AND role = 'assistant' ORDER BY id DESC LIMIT 1",
+                (session_id,),
+            ).fetchone()
+            if row is None:
+                return ""
+            return str(row["content"] or "")
+
+    return await run_in_thread(_do)
+
+
 async def append_message(
     session_id: str,
     role: str,

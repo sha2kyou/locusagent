@@ -228,6 +228,7 @@ export interface ScheduledTask {
   last_run_at: string | null;
   last_run_status: string | null;
   last_session_id: string | null;
+  last_run_summary: string | null;
   last_error: string | null;
   completed_at: string | null;
   created_at: string;

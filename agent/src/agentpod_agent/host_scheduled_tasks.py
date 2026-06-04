@@ -79,3 +79,43 @@ async def update_scheduled_task(task_id: int, payload: dict[str, Any]) -> dict[s
 async def delete_scheduled_task(task_id: int) -> bool:
     data = await _request("DELETE", f"/internal/scheduled-tasks/{task_id}")
     return bool(data.get("deleted"))
+
+
+async def notify_scheduled_run_started(task_id: int, session_id: str) -> None:
+    from .logging import get_logger
+
+    log = get_logger("host_scheduled_tasks")
+    try:
+        await _request(
+            "POST",
+            f"/internal/scheduled-tasks/{task_id}/run-started",
+            {"session_id": session_id},
+        )
+    except HostScheduledTasksError as exc:
+        log.warning("scheduled_run_started_notify_failed", task_id=task_id, error=str(exc))
+
+
+async def notify_scheduled_run_finished(
+    task_id: int,
+    *,
+    ok: bool,
+    session_id: str,
+    final_text: str = "",
+    error: str = "",
+) -> None:
+    from .logging import get_logger
+
+    log = get_logger("host_scheduled_tasks")
+    try:
+        await _request(
+            "POST",
+            f"/internal/scheduled-tasks/{task_id}/run-finished",
+            {
+                "ok": ok,
+                "session_id": session_id,
+                "final_text": final_text,
+                "error": error,
+            },
+        )
+    except HostScheduledTasksError as exc:
+        log.warning("scheduled_run_finished_notify_failed", task_id=task_id, error=str(exc))

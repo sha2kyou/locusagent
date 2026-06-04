@@ -24,6 +24,7 @@ log = get_logger("internal")
 class ScheduledRunIn(BaseModel):
     title: str = Field(default="定时任务", max_length=200)
     prompt: str = Field(..., min_length=1, max_length=20000)
+    task_id: int | None = Field(default=None, ge=1)
 
 
 class McpReconnectIn(BaseModel):
@@ -76,10 +77,43 @@ async def agent_resume() -> dict:
     return {"ok": True, "workspaces": len(iter_workspace_ids()), "mcp": results}
 
 
+@router.get("/scheduled-run-status/{session_id}")
+async def scheduled_run_status(session_id: str) -> dict:
+    from ..core.persistence import get_active_run, get_last_assistant_text, get_latest_run
+
+    sid = str(session_id or "").strip()
+    if not sid:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="session_id required")
+    active = await get_active_run(sid)
+    if active and str(active.get("status") or "") == "running":
+        return {"status": "running", "session_id": sid}
+    latest = await get_latest_run(sid)
+    if latest is None:
+        return {"status": "empty", "session_id": sid}
+    run_status = str(latest.get("status") or "")
+    if run_status == "completed":
+        return {
+            "status": "completed",
+            "session_id": sid,
+            "final_text": await get_last_assistant_text(sid),
+        }
+    if run_status == "failed":
+        return {
+            "status": "failed",
+            "session_id": sid,
+            "error": str(latest.get("error_message") or ""),
+        }
+    return {"status": "empty", "session_id": sid}
+
+
 @router.post("/scheduled-run")
 async def agent_scheduled_run(payload: ScheduledRunIn) -> dict:
     try:
-        return await run_scheduled_prompt(title=payload.title, prompt=payload.prompt)
+        return await run_scheduled_prompt(
+            title=payload.title,
+            prompt=payload.prompt,
+            task_id=payload.task_id,
+        )
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except ScheduledRunError as exc:

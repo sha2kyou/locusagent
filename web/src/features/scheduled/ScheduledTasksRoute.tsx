@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { CalendarDays, ChevronLeft, ChevronRight, Loader2, Pencil, Play, Trash2 } from "lucide-react";
 import { Cron, type Locale as CronLocale } from "react-js-cron";
 import "react-js-cron/styles.css";
@@ -488,14 +487,6 @@ export function ScheduledTasksRoute() {
                         {task.last_error ? (
                           <p className="mt-1 text-xs text-destructive">{task.last_error}</p>
                         ) : null}
-                        {task.last_session_id ? (
-                          <Link
-                            to={`/chat/${task.last_session_id}`}
-                            className="mt-1 inline-block text-xs text-brand hover:underline"
-                          >
-                            查看上次会话
-                          </Link>
-                        ) : null}
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
                         {!task.completed_at ? (
@@ -537,6 +528,11 @@ export function ScheduledTasksRoute() {
                     <CollapsibleSection summary="指令内容">
                       <pre className="whitespace-pre-wrap text-sm text-foreground">{task.prompt}</pre>
                     </CollapsibleSection>
+                    {task.last_run_summary ? (
+                      <CollapsibleSection summary="上次执行结果">
+                        <pre className="whitespace-pre-wrap text-sm text-foreground">{task.last_run_summary}</pre>
+                      </CollapsibleSection>
+                    ) : null}
                   </ListCard>
                 );
               })}

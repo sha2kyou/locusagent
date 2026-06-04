@@ -73,8 +73,11 @@ async def lifespan(app: FastAPI):
         log.warning("startup_orphan_cleanup_failed", error=str(exc))
 
     try:
-        from .scheduled_tasks.executor import recover_stale_running_tasks
+        from .scheduled_tasks.executor import reconcile_interrupted_scheduled_tasks, recover_stale_running_tasks
 
+        n = await reconcile_interrupted_scheduled_tasks()
+        if n:
+            log.info("scheduled_tasks_reconciled", count=n)
         n = await recover_stale_running_tasks()
         if n:
             log.info("scheduled_tasks_stale_recovered", count=n)

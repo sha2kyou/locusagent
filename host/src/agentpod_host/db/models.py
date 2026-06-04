@@ -151,6 +151,9 @@ class ScheduledTask(Base):
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_run_status: Mapped[str | None] = mapped_column(String(16))
     last_session_id: Mapped[str | None] = mapped_column(Text)
+    active_run_session_id: Mapped[str | None] = mapped_column(Text)
+    active_run_manual: Mapped[bool] = mapped_column(default=False, nullable=False)
+    last_run_summary: Mapped[str | None] = mapped_column(Text)
     last_error: Mapped[str | None] = mapped_column(Text)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
