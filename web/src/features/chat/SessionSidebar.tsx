@@ -36,7 +36,7 @@ export function SessionSidebar({
   mobileOpen?: boolean;
   onClose?: () => void;
 }) {
-  const { sessions, loadingSessions, currentId, query, setQuery, newSession, selectSession, deleteSession } = useChat();
+  const { sessions, loadingSessions, hasMoreSessions, loadingMoreSessions, loadMoreSessions, currentId, query, setQuery, newSession, selectSession, deleteSession } = useChat();
   const { confirm } = useDialogs();
   const toast = useToast();
 
@@ -156,46 +156,61 @@ export function SessionSidebar({
         ) : groups.length === 0 ? (
           <SidebarEmpty text={query ? "无匹配对话" : "暂无对话"} />
         ) : (
-          groups.map((g) => (
-            <div key={g.label} className="mb-2">
-              <div className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/60">
-                {g.label}
-              </div>
-              {g.items.map((s) => (
-                <div
-                  key={s.id}
-                  className={cn(
-                    "group flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm transition-colors",
-                    s.id === currentId ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary/60",
-                  )}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => handleSelect(s.id)}
-                  onKeyDown={(e) => {
-                    if (e.key !== "Enter" && e.key !== " ") return;
-                    e.preventDefault();
-                    handleSelect(s.id);
-                  }}
-                >
-                  <span className="min-w-0 flex-1 truncate text-left" title={s.title}>
-                    {sessionLabel(s.title)}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void onDelete(s);
-                    }}
-                    aria-label="删除"
-                  >
-                    <Trash2 />
-                  </Button>
+          <>
+            {groups.map((g) => (
+              <div key={g.label} className="mb-2">
+                <div className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/60">
+                  {g.label}
                 </div>
-              ))}
-            </div>
-          ))
+                {g.items.map((s) => (
+                  <div
+                    key={s.id}
+                    className={cn(
+                      "group flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm transition-colors",
+                      s.id === currentId ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary/60",
+                    )}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleSelect(s.id)}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter" && e.key !== " ") return;
+                      e.preventDefault();
+                      handleSelect(s.id);
+                    }}
+                  >
+                    <span className="min-w-0 flex-1 truncate text-left" title={s.title}>
+                      {sessionLabel(s.title)}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void onDelete(s);
+                      }}
+                      aria-label="删除"
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ))}
+            {hasMoreSessions && !query && (
+              <div className="px-2 py-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-xs text-muted-foreground/70"
+                  onClick={() => void loadMoreSessions()}
+                  disabled={loadingMoreSessions}
+                >
+                  {loadingMoreSessions ? "加载中…" : "加载更多"}
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </SecondarySidebar>

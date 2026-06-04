@@ -48,7 +48,7 @@ function parseClarify(result: unknown): ClarifyPayload | null {
 }
 
 function clarifyMessage(question: string, answer: string): string {
-  return `针对问题「${question}」，我的回答：${answer}`;
+  return `问题：${question}\n回答：${answer}`;
 }
 
 function ClarifyCard({ payload }: { payload: ClarifyPayload }) {

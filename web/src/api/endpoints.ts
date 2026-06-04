@@ -90,7 +90,7 @@ export const runScheduledTaskNow = (id: number) =>
   apiSend<{ item: ScheduledTask }>(`/api/scheduled-tasks/${id}/run`, "POST");
 
 // ---- 会话 ----
-export const listSessions = (limit = 50) =>
+export const listSessions = (limit = 20) =>
   apiGet<{ items: SessionMeta[] }>(`/api/workspace/sessions?limit=${limit}`);
 
 export const getSessionMessages = (id: string) =>

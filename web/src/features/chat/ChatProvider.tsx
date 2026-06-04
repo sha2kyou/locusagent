@@ -60,6 +60,9 @@ interface ChatContextValue {
   messages: ChatMessage[];
   sessions: SessionMeta[];
   loadingSessions: boolean;
+  hasMoreSessions: boolean;
+  loadingMoreSessions: boolean;
+  loadMoreSessions: () => Promise<void>;
   currentId: string | null;
   query: string;
   setQuery: (q: string) => void;
@@ -87,6 +90,7 @@ export function useChat() {
 }
 
 const DEFAULT_TITLE = "新对话";
+const PAGE_SIZE = 10;
 const DEFAULT_MAX_FILE_SIZE = 1024 * 1024;
 const MAX_TOTAL_ATTACHMENTS = 1;
 const MAX_ATTACHMENT_CHARS = 16000;
@@ -157,6 +161,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [lastErrored, setLastErrored] = useState(false);
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
+  const [hasMoreSessions, setHasMoreSessions] = useState(false);
+  const [loadingMoreSessions, setLoadingMoreSessions] = useState(false);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
@@ -169,6 +175,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     return map;
   }, [messages]);
 
+  const visibleLimitRef = useRef(PAGE_SIZE);
   const currentIdRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const pollTokenRef = useRef(0);
@@ -225,15 +232,32 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // ---- 会话列表 ----
   const refreshSessions = async (): Promise<SessionMeta[]> => {
     try {
-      const { items } = await listSessions();
-      items.sort((a, b) => (b.updated_at || b.created_at).localeCompare(a.updated_at || a.created_at));
-      if (mountedRef.current) setSessions(items);
-      return items;
+      const limit = visibleLimitRef.current;
+      const { items } = await listSessions(limit + 1);
+      const hasMore = items.length > limit;
+      const visible = items.slice(0, limit);
+      visible.sort((a, b) => (b.updated_at || b.created_at).localeCompare(a.updated_at || a.created_at));
+      if (mountedRef.current) {
+        setSessions(visible);
+        setHasMoreSessions(hasMore);
+      }
+      return visible;
     } catch {
       /* 容器未就绪等：忽略，由就绪提示兜底 */
       return [];
     } finally {
       if (mountedRef.current) setLoadingSessions(false);
+    }
+  };
+
+  const loadMoreSessions = async () => {
+    if (loadingMoreSessions) return;
+    setLoadingMoreSessions(true);
+    visibleLimitRef.current += PAGE_SIZE;
+    try {
+      await refreshSessions();
+    } finally {
+      if (mountedRef.current) setLoadingMoreSessions(false);
     }
   };
 
@@ -818,6 +842,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         messages,
         sessions,
         loadingSessions,
+        hasMoreSessions,
+        loadingMoreSessions,
+        loadMoreSessions,
         currentId,
         query,
         setQuery,
