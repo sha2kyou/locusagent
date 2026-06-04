@@ -277,14 +277,14 @@ def _is_openai_tool_calls(tool_calls: Any) -> bool:
     return isinstance(first, dict) and ("function" in first or first.get("type") == "function")
 
 
-async def create_session(title: str | None = None) -> str:
+async def create_session(title: str | None = None, *, hidden: bool = False) -> str:
     sid = _new_session_id()
 
     def _do() -> None:
         with conn_scope(load_vec=False) as c:
             c.execute(
-                "INSERT INTO sessions(id, title) VALUES(?, ?)",
-                (sid, title or "新对话"),
+                "INSERT INTO sessions(id, title, hidden) VALUES(?, ?, ?)",
+                (sid, title or "新对话", 1 if hidden else 0),
             )
 
     await run_in_thread(_do)
@@ -1045,14 +1045,17 @@ async def get_last_user_message(session_id: str) -> str | None:
     return await run_in_thread(_do)
 
 
-async def list_sessions(limit: int = 50) -> list[dict]:
+async def list_sessions(limit: int = 50, *, include_hidden: bool = False) -> list[dict]:
     def _do() -> list[dict]:
         with conn_scope(load_vec=False) as c:
-            rows = c.execute(
+            sql = (
                 "SELECT id, title, status, total_tokens, created_at, updated_at "
-                "FROM sessions ORDER BY updated_at DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
+                "FROM sessions "
+            )
+            if not include_hidden:
+                sql += "WHERE COALESCE(hidden, 0) = 0 "
+            sql += "ORDER BY updated_at DESC LIMIT ?"
+            rows = c.execute(sql, (limit,)).fetchall()
             return [dict(r) for r in rows]
 
     return await run_in_thread(_do)

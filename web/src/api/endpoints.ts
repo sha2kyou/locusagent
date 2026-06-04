@@ -86,6 +86,9 @@ export const updateScheduledTask = (
 export const deleteScheduledTask = (id: number) =>
   apiSend<{ deleted: boolean }>(`/api/scheduled-tasks/${id}`, "DELETE");
 
+export const runScheduledTaskNow = (id: number) =>
+  apiSend<{ item: ScheduledTask }>(`/api/scheduled-tasks/${id}/run`, "POST");
+
 // ---- 会话 ----
 export const listSessions = (limit = 50) =>
   apiGet<{ items: SessionMeta[] }>(`/api/workspace/sessions?limit=${limit}`);

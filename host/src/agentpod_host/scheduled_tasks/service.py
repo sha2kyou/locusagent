@@ -265,7 +265,7 @@ async def list_due_tasks(now: datetime | None = None) -> list[ScheduledTask]:
                     ScheduledTask.next_run_at <= now,
                     or_(
                         ScheduledTask.last_run_status.is_(None),
-                        ScheduledTask.last_run_status != "running",
+                        ScheduledTask.last_run_status.not_in(["running", "queued"]),
                     ),
                 )
                 .order_by(ScheduledTask.next_run_at.asc())

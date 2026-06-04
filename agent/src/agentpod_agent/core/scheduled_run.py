@@ -82,7 +82,7 @@ async def run_scheduled_prompt(*, title: str, prompt: str) -> dict[str, Any]:
     if not prompt:
         raise ValueError("prompt is required")
 
-    sid = await create_session(title=session_title)
+    sid = await create_session(title=session_title, hidden=True)
     run_id: str | None = None
     lock = await session_lock(sid)
     async with lock:

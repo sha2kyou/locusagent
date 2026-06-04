@@ -181,6 +181,78 @@ async def _rollback_queued_state(task_id: int, reason: str) -> None:
         )
 
 
+async def _try_claim_manual_task(task_id: int) -> bool:
+    now = datetime.now(timezone.utc)
+    async with get_session() as session:
+        result = await session.execute(
+            update(ScheduledTask)
+            .where(
+                ScheduledTask.id == task_id,
+                ScheduledTask.completed_at.is_(None),
+                ScheduledTask.last_run_status == "queued",
+            )
+            .values(last_run_status="running", last_error=None, updated_at=now)
+        )
+        return bool(result.rowcount)
+
+
+async def _mark_manual_task_queued(task_id: int) -> bool:
+    now = datetime.now(timezone.utc)
+    async with get_session() as session:
+        result = await session.execute(
+            update(ScheduledTask)
+            .where(
+                ScheduledTask.id == task_id,
+                ScheduledTask.completed_at.is_(None),
+                or_(
+                    ScheduledTask.last_run_status.is_(None),
+                    ScheduledTask.last_run_status.not_in(["running", "queued"]),
+                ),
+            )
+            .values(last_run_status="queued", last_error=None, updated_at=now)
+        )
+        return bool(result.rowcount)
+
+
+async def trigger_task_run(
+    user_id: int,
+    task_id: int,
+    *,
+    workspace_id: str | None = None,
+) -> dict:
+    from .service import get_task
+
+    async with get_session() as session:
+        stmt = select(ScheduledTask).where(
+            ScheduledTask.id == task_id,
+            ScheduledTask.user_id == user_id,
+        )
+        if workspace_id:
+            stmt = stmt.where(ScheduledTask.workspace_id == workspace_id)
+        row = (await session.execute(stmt)).scalar_one_or_none()
+        if row is None:
+            raise ValueError("task not found")
+        if row.completed_at is not None:
+            raise ValueError("task already completed")
+        if row.last_run_status in ("running", "queued"):
+            raise ValueError("task already running")
+
+    if not await _mark_manual_task_queued(task_id):
+        raise ValueError("task already running")
+
+    try:
+        await enqueue_scheduled_task(task_id, manual=True)
+    except Exception as exc:
+        err = f"enqueue failed: {str(exc) or 'unknown error'}"
+        await _rollback_queued_state(task_id, err)
+        raise RuntimeError(err) from exc
+
+    item = await get_task(user_id, task_id, workspace_id=workspace_id)
+    if item is None:
+        raise ValueError("task not found")
+    return item
+
+
 async def _try_claim_task(task_id: int) -> bool:
     now = datetime.now(timezone.utc)
     async with get_session() as session:
@@ -191,10 +263,7 @@ async def _try_claim_task(task_id: int) -> bool:
                 ScheduledTask.enabled.is_(True),
                 ScheduledTask.next_run_at.is_not(None),
                 ScheduledTask.next_run_at <= now,
-                or_(
-                    ScheduledTask.last_run_status.is_(None),
-                    ScheduledTask.last_run_status != "running",
-                ),
+                ScheduledTask.last_run_status == "queued",
             )
             .values(last_run_status="running", last_error=None, updated_at=now)
         )
@@ -241,6 +310,7 @@ async def _finish_task(
     ok: bool,
     session_id: str | None,
     error: str | None,
+    manual: bool = False,
 ) -> ScheduledTask:
     now = datetime.now(timezone.utc)
     async with get_session() as session:
@@ -255,7 +325,11 @@ async def _finish_task(
         row.last_session_id = session_id
         row.last_error = error
 
-        if row.schedule_kind == "once":
+        if manual and row.schedule_kind == "once":
+            pass
+        elif manual and row.schedule_kind == "cron" and not row.enabled:
+            pass
+        elif row.schedule_kind == "once":
             row.enabled = False
             row.next_run_at = None
             row.completed_at = now
@@ -334,6 +408,7 @@ async def _fail_task(
     user_id: int,
     session_id: str | None,
     err: str,
+    manual: bool = False,
 ) -> None:
     finished = await _finish_task(
         task_id,
@@ -341,6 +416,7 @@ async def _fail_task(
         ok=False,
         session_id=session_id,
         error=err,
+        manual=manual,
     )
     await _notify_task_result(
         user_id,
@@ -354,7 +430,7 @@ async def _fail_task(
     )
 
 
-async def execute_task_by_id(task_id: int) -> None:
+async def execute_task_by_id(task_id: int, *, manual: bool = False) -> None:
     async with get_session() as session:
         task = (
             await session.execute(select(ScheduledTask).where(ScheduledTask.id == task_id))
@@ -362,9 +438,18 @@ async def execute_task_by_id(task_id: int) -> None:
     if task is None:
         return
     user_id = task.user_id
-    if not await _try_claim_task(task_id):
+    if manual:
+        if not await _try_claim_manual_task(task_id):
+            return
+    elif not await _try_claim_task(task_id):
         return
-    log.info("scheduled_task_start", task_id=task_id, user_id=user_id, title=task.title)
+    log.info(
+        "scheduled_task_start",
+        task_id=task_id,
+        user_id=user_id,
+        title=task.title,
+        manual=manual,
+    )
     settings = get_settings()
     max_attempts = max(1, int(settings.scheduled_task_retry_max_attempts))
     delay_seconds = max(0.1, float(settings.scheduled_task_retry_initial_delay_seconds))
@@ -398,6 +483,7 @@ async def execute_task_by_id(task_id: int) -> None:
                 ok=True,
                 session_id=session_id,
                 error=None,
+                manual=manual,
             )
             await _notify_task_result(
                 user_id,
@@ -447,7 +533,7 @@ async def execute_task_by_id(task_id: int) -> None:
             retryable=retryable,
             error=err,
         )
-        await _fail_task(task_id, user_id=user_id, session_id=session_id, err=err)
+        await _fail_task(task_id, user_id=user_id, session_id=session_id, err=err, manual=manual)
         return
 
 

@@ -42,7 +42,8 @@ async def _list_sessions(limit: int) -> list[dict[str, Any]]:
         with conn_scope(load_vec=False) as c:
             rows = c.execute(
                 "SELECT id, title, status, total_tokens, created_at, updated_at "
-                "FROM sessions ORDER BY updated_at DESC LIMIT ?",
+                "FROM sessions WHERE COALESCE(hidden, 0) = 0 "
+                "ORDER BY updated_at DESC LIMIT ?",
                 (limit,),
             ).fetchall()
             return [dict(r) for r in rows]

@@ -9,7 +9,7 @@ export function truncateToastLabel(text: string, max = DEFAULT_MAX): string {
 
 /** 例：已删除产物「线性代数公式」 */
 export function toastAction(
-  action: "已删除" | "已添加" | "已更新" | "已重连" | "已断开 OAuth",
+  action: "已删除" | "已添加" | "已更新" | "已重连" | "已断开 OAuth" | "已开始运行",
   name: string,
   kind?: string,
 ): string {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarDays, ChevronLeft, ChevronRight, Loader2, Pencil, Trash2 } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Loader2, Pencil, Play, Trash2 } from "lucide-react";
 import { Cron, type Locale as CronLocale } from "react-js-cron";
 import "react-js-cron/styles.css";
 import { PageContainer } from "@/components/PageContainer";
@@ -19,6 +19,7 @@ import {
   deleteScheduledTask,
   getTimezoneConfig,
   listScheduledTasks,
+  runScheduledTaskNow,
   updateScheduledTask,
 } from "@/api/endpoints";
 import type { ScheduledTask, ScheduleKind } from "@/api/types";
@@ -288,10 +289,19 @@ function DateTimePicker({
 
 function statusBadge(task: ScheduledTask) {
   if (task.completed_at) return { text: "已完成", variant: "neutral" as const };
-  if (!task.enabled) return { text: "已停用", variant: "neutral" as const };
   if (task.last_run_status === "running") return { text: "运行中", variant: "warning" as const };
+  if (task.last_run_status === "queued") return { text: "排队中", variant: "warning" as const };
+  if (!task.enabled) return { text: "已停用", variant: "neutral" as const };
   if (task.last_run_status === "failed") return { text: "上次失败", variant: "warning" as const };
   return { text: "等待中", variant: "success" as const };
+}
+
+function isTaskBusy(task: ScheduledTask, pendingRunIds: ReadonlySet<number>): boolean {
+  return (
+    pendingRunIds.has(task.id) ||
+    task.last_run_status === "running" ||
+    task.last_run_status === "queued"
+  );
 }
 
 function scheduleLabel(task: ScheduledTask, tz: string): string {
@@ -314,6 +324,7 @@ export function ScheduledTasksRoute() {
   const [enabled, setEnabled] = useState(true);
   const [notify, setNotify] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [pendingRunIds, setPendingRunIds] = useState<Set<number>>(() => new Set());
   const [userTimezone, setUserTimezone] = useState("UTC");
   const formRef = useRef<HTMLDivElement>(null);
 
@@ -331,7 +342,9 @@ export function ScheduledTasksRoute() {
   useReloadOnAgentRecovery(() => load());
 
   useEffect(() => {
-    const running = (items ?? []).some((t) => t.last_run_status === "running");
+    const running = (items ?? []).some(
+      (t) => t.last_run_status === "running" || t.last_run_status === "queued",
+    );
     if (!running) return;
     const id = window.setInterval(() => void load(true), 5000);
     return () => clearInterval(id);
@@ -406,6 +419,26 @@ export function ScheduledTasksRoute() {
     }
   };
 
+  const runOnce = async (task: ScheduledTask) => {
+    if (isTaskBusy(task, pendingRunIds)) return;
+    setPendingRunIds((prev) => new Set(prev).add(task.id));
+    setSaving(true);
+    try {
+      await runScheduledTaskNow(task.id);
+      toast(toastAction("已开始运行", task.title, "定时任务"), "success");
+      await load();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setPendingRunIds((prev) => {
+        const next = new Set(prev);
+        next.delete(task.id);
+        return next;
+      });
+      setSaving(false);
+    }
+  };
+
   const remove = async (task: ScheduledTask) => {
     if (!(await confirm({ title: "删除定时任务", body: `确定删除「${task.title}」？`, danger: true, confirmText: "删除" }))) return;
     setSaving(true);
@@ -466,6 +499,16 @@ export function ScheduledTasksRoute() {
                       <div className="flex shrink-0 items-center gap-1">
                         {!task.completed_at ? (
                           <>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              disabled={saving || isTaskBusy(task, pendingRunIds)}
+                              onClick={() => void runOnce(task)}
+                              aria-label="运行一次"
+                              title="运行一次"
+                            >
+                              <Play />
+                            </Button>
                             <Button variant="ghost" size="icon-sm" disabled={saving} onClick={() => startEdit(task)}>
                               <Pencil />
                             </Button>

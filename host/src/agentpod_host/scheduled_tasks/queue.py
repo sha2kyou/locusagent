@@ -36,14 +36,14 @@ task_queue = App(connector=PsycopgConnector(conninfo=_CONNINFO))
 
 
 @task_queue.task(queue="scheduled_tasks")
-async def run_scheduled_task(task_id: int) -> None:
+async def run_scheduled_task(task_id: int, *, manual: bool = False) -> None:
     from .executor import execute_task_by_id
 
-    await execute_task_by_id(int(task_id))
+    await execute_task_by_id(int(task_id), manual=manual)
 
 
-async def enqueue_scheduled_task(task_id: int) -> None:
-    await run_scheduled_task.defer_async(task_id=int(task_id))
+async def enqueue_scheduled_task(task_id: int, *, manual: bool = False) -> None:
+    await run_scheduled_task.defer_async(task_id=int(task_id), manual=manual)
 
 
 async def ensure_queue_schema() -> None:

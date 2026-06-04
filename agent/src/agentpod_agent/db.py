@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     status        TEXT NOT NULL DEFAULT 'active',
     total_tokens  INTEGER NOT NULL DEFAULT 0,
     system_prompt TEXT,
+    hidden        INTEGER NOT NULL DEFAULT 0,
     created_at    TIMESTAMP NOT NULL DEFAULT (datetime('now')),
     updated_at    TIMESTAMP NOT NULL DEFAULT (datetime('now'))
 );
@@ -383,6 +384,12 @@ def _ensure_memory_origin_column(c: sqlite3.Connection) -> None:
         log.info("memory_origin_column_added")
 
 
+def _ensure_sessions_hidden_column(c: sqlite3.Connection) -> None:
+    if not _column_exists(c, "sessions", "hidden"):
+        c.execute("ALTER TABLE sessions ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0")
+        log.info("sessions_hidden_column_added")
+
+
 def init_db() -> None:
     with conn_scope(load_vec=False) as c:
         for stmt in SCHEMA.strip().split(";"):
@@ -396,6 +403,7 @@ def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_attachments_sha256 ON attachments(sha256, kind)"
         )
         _ensure_memory_origin_column(c)
+        _ensure_sessions_hidden_column(c)
         if _table_exists(c, "artifacts"):
             deleted = c.execute(
                 "DELETE FROM artifacts WHERE category_id IS NULL "

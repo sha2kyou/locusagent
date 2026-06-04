@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from ..auth import AuthContext, require_session
 from ..scheduled_tasks import create_task, delete_task, get_task, list_tasks, update_task
+from ..scheduled_tasks.executor import trigger_task_run
 from ..db import get_session
 from ..workspaces import requested_workspace_id, resolve_workspace
 
@@ -113,6 +114,22 @@ async def delete_scheduled_task(
     if not ok:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="task not found")
     return {"deleted": True}
+
+
+@router.post("/{task_id}/run")
+async def run_scheduled_task_now(
+    request: Request,
+    task_id: int,
+    ctx: AuthContext = Depends(require_session),
+) -> dict:
+    workspace_id = await _workspace_for_request(request, ctx.user.id)
+    try:
+        item = await trigger_task_run(ctx.user.id, task_id, workspace_id=workspace_id)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    return {"item": item}
 
 
 @router.get("/{task_id}")
