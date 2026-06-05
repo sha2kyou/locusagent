@@ -552,10 +552,17 @@ async def workspace_download_attachment(attachment_id: str) -> Response:
     row = await get_attachment_download(attachment_id)
     if row is None:
         raise WsError("attachment_not_found", "attachment not found", status_code=404)
-    name, mime, data = row
+    name, _mime, data = row
     ascii_name = name.encode("ascii", "ignore").decode() or "download"
-    disposition = f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}"
-    return Response(content=data, media_type=mime, headers={"Content-Disposition": disposition})
+    disposition = f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name, safe='')}"
+    return Response(
+        content=data,
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": disposition,
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.get("/sessions/{session_id}")

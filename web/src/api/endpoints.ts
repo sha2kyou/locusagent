@@ -128,12 +128,16 @@ export const createAttachment = (body: {
   truncated?: boolean;
 }>("/api/workspace/attachments", "POST", body);
 
-export async function downloadAttachment(id: string, filename: string): Promise<void> {
+export function attachmentDownloadUrl(id: string): string {
   const workspaceId = getWorkspaceId();
-  const res = await fetch(`/api/workspace/attachments/${encodeURIComponent(id)}/download`, {
-    credentials: "same-origin",
-    headers: workspaceId ? { "X-Workspace-Id": workspaceId } : {},
-  });
+  const base = `/api/workspace/attachments/${encodeURIComponent(id)}/download`;
+  if (!workspaceId) return base;
+  return `${base}?workspace_id=${encodeURIComponent(workspaceId)}`;
+}
+
+/** 保留：需编程触发下载时使用（优先用 attachmentDownloadUrl + <a download>） */
+export async function downloadAttachment(id: string, filename: string): Promise<void> {
+  const res = await fetch(attachmentDownloadUrl(id), { credentials: "same-origin" });
   if (res.status === 401) {
     redirectToLogin();
     throw new ApiError("未登录", { status: 401, code: "unauthenticated" });

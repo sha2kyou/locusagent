@@ -325,110 +325,12 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-function UserMessage() {
-  const toast = useToast();
-  const { messageAttachments } = useChat();
-  const text = useMessageText();
-  const messageId = useMessage((m) => String(m.id ?? ""));
-  const archived = useMessage((m) => (m.metadata as { archived?: boolean } | undefined)?.archived);
-  const attachments = messageAttachments[messageId] ?? EMPTY_ATTACHMENTS;
-  const [selectedAttachment, setSelectedAttachment] = useState<ChatAttachment | null>(null);
-  const hasText = text.length > 0;
-  return (
-    <MessagePrimitive.Root className="group mb-5 flex flex-col items-end">
-      {hasText || archived ? (
-        <div
-          className={cn(
-            "max-w-[80%] rounded-2xl rounded-br-sm bg-secondary px-4 py-2.5 text-sm",
-            archived && "opacity-55",
-          )}
-        >
-          {archived ? (
-            <p className="mb-1 text-[11px] text-muted-foreground">已压缩（不再带入上下文）</p>
-          ) : null}
-          <MessagePrimitive.Parts components={{ Text: UserText }} />
-        </div>
-      ) : null}
-      {attachments.length > 0 ? (
-        <div className="mt-1.5 flex max-w-[80%] flex-wrap justify-end gap-1.5">
-          {attachments.map((file) => (
-            <button
-              type="button"
-              key={file.id}
-              onClick={() => setSelectedAttachment(file)}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/70 px-2.5 py-1 text-xs text-muted-foreground transition hover:border-border-strong hover:bg-surface"
-              title={`查看 ${file.name} 内容`}
-            >
-              <Paperclip className="size-3" />
-              <span className="max-w-56 truncate">{file.name}</span>
-              {!file.processable ? <span className="text-warning">不可解析</span> : null}
-            </button>
-          ))}
-        </div>
-      ) : null}
-      <Drawer
-        open={!!selectedAttachment}
-        onClose={() => setSelectedAttachment(null)}
-        title={selectedAttachment?.name}
-        description={selectedAttachment ? attachmentDescription(selectedAttachment) : undefined}
-        actions={
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!canExportAttachment(selectedAttachment)}
-            onClick={() => {
-              if (!selectedAttachment) return;
-              const exported = exportAttachment(selectedAttachment);
-              if (!exported) {
-                toast("当前附件暂不支持导出", "info");
-              }
-            }}
-            title="导出"
-            aria-label="导出"
-          >
-            <Download className="size-4" />
-          </Button>
-        }
-      >
-        {selectedAttachment ? (
-          <div className="space-y-4">
-            {selectedAttachment.processable && selectedAttachment.kind === "text" ? (
-              <pre className="max-h-[65vh] overflow-auto whitespace-pre-wrap rounded-md bg-surface-2 p-3 font-mono text-xs text-foreground">
-                {selectedAttachment.text || "（空文件）"}
-              </pre>
-            ) : selectedAttachment.processable && selectedAttachment.kind === "image" ? (
-              selectedAttachment.imageDataUrl ? (
-                <div className="max-h-[65vh] overflow-auto rounded-md bg-surface-2 p-2">
-                  <img
-                    src={selectedAttachment.imageDataUrl}
-                    alt={selectedAttachment.name}
-                    className="mx-auto max-h-[60vh] w-auto max-w-full rounded object-contain"
-                  />
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">图片附件缺少可渲染数据。</p>
-              )
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {selectedAttachment.processable
-                  ? "该附件类型暂不支持预览。"
-                  : selectedAttachment.unsupportedReason || "该附件当前不可解析，无法展示内容。"}
-              </p>
-            )}
-            {selectedAttachment.truncated ? (
-              <p className="text-xs text-warning">附件内容过长，已截断显示。</p>
-            ) : null}
-          </div>
-        ) : null}
-      </Drawer>
-      <div className="mt-0.5 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
-        <CopyButton text={text} />
-      </div>
-    </MessagePrimitive.Root>
-  );
+function isServerDownloadable(file: ChatAttachment): boolean {
+  return file.kind === "other" && !file.processable && file.id.startsWith("att_");
 }
 
 function attachmentDescription(file: ChatAttachment): string {
+  if (isServerDownloadable(file)) return "Agent 生成的文件";
   if (!file.processable) return "不可解析";
   if (file.kind === "text") return file.truncated ? "文本附件（已截断）" : "文本附件";
   if (file.kind === "image") return "图片附件";
@@ -437,12 +339,13 @@ function attachmentDescription(file: ChatAttachment): string {
 
 function canExportAttachment(file: ChatAttachment | null): boolean {
   if (!file) return false;
+  if (isServerDownloadable(file)) return true;
   if (file.kind === "text") return typeof file.text === "string";
   if (file.kind === "image") return typeof file.imageDataUrl === "string" && file.imageDataUrl.length > 0;
   return false;
 }
 
-function exportAttachment(file: ChatAttachment): boolean {
+function exportInlineAttachment(file: ChatAttachment): boolean {
   if (file.kind === "text") {
     const blob = new Blob([file.text ?? ""], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -465,6 +368,151 @@ function triggerDownload(url: string, filename: string): void {
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+
+function MessageAttachmentChips({
+  attachments,
+  align,
+  onSelect,
+}: {
+  attachments: ChatAttachment[];
+  align: "start" | "end";
+  onSelect: (file: ChatAttachment) => void;
+}) {
+  if (attachments.length === 0) return null;
+  return (
+    <div
+      className={cn(
+        "mt-1.5 flex flex-wrap gap-1.5",
+        align === "end" ? "max-w-[80%] justify-end" : "justify-start",
+      )}
+    >
+      {attachments.map((file) => (
+        <button
+          type="button"
+          key={file.id}
+          onClick={() => onSelect(file)}
+          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/70 px-2.5 py-1 text-xs text-muted-foreground transition hover:border-border-strong hover:bg-surface"
+          title={`查看 ${file.name}`}
+        >
+          <Paperclip className="size-3" />
+          <span className="max-w-56 truncate">{file.name}</span>
+          {!file.processable && !isServerDownloadable(file) ? (
+            <span className="text-warning">不可解析</span>
+          ) : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AttachmentDrawer({
+  file,
+  onClose,
+}: {
+  file: ChatAttachment | null;
+  onClose: () => void;
+}) {
+  const toast = useToast();
+  return (
+    <Drawer
+      open={!!file}
+      onClose={onClose}
+      title={file?.name}
+      description={file ? attachmentDescription(file) : undefined}
+      actions={
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={!canExportAttachment(file)}
+          onClick={() => {
+            if (!file) return;
+            if (isServerDownloadable(file)) {
+              void downloadAttachment(file.id, file.name).catch((err: unknown) => {
+                toast(err instanceof Error ? err.message : "下载失败", "error");
+              });
+              return;
+            }
+            const exported = exportInlineAttachment(file);
+            if (!exported) {
+              toast("当前附件暂不支持导出", "info");
+            }
+          }}
+          title="下载"
+          aria-label="下载"
+        >
+          <Download className="size-4" />
+        </Button>
+      }
+    >
+      {file ? (
+        <div className="space-y-4">
+          {isServerDownloadable(file) ? (
+            <p className="text-sm text-muted-foreground">点击右上角下载按钮保存到本地。</p>
+          ) : file.processable && file.kind === "text" ? (
+            <pre className="max-h-[65vh] overflow-auto whitespace-pre-wrap rounded-md bg-surface-2 p-3 font-mono text-xs text-foreground">
+              {file.text || "（空文件）"}
+            </pre>
+          ) : file.processable && file.kind === "image" ? (
+            file.imageDataUrl ? (
+              <div className="max-h-[65vh] overflow-auto rounded-md bg-surface-2 p-2">
+                <img
+                  src={file.imageDataUrl}
+                  alt={file.name}
+                  className="mx-auto max-h-[60vh] w-auto max-w-full rounded object-contain"
+                />
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">图片附件缺少可渲染数据。</p>
+            )
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {file.processable
+                ? "该附件类型暂不支持预览。"
+                : file.unsupportedReason || "该附件当前不可解析，无法展示内容。"}
+            </p>
+          )}
+          {file.truncated ? <p className="text-xs text-warning">附件内容过长，已截断显示。</p> : null}
+        </div>
+      ) : null}
+    </Drawer>
+  );
+}
+
+function UserMessage() {
+  const { messageAttachments } = useChat();
+  const text = useMessageText();
+  const messageId = useMessage((m) => String(m.id ?? ""));
+  const archived = useMessage((m) => (m.metadata as { archived?: boolean } | undefined)?.archived);
+  const attachments = messageAttachments[messageId] ?? EMPTY_ATTACHMENTS;
+  const [selectedAttachment, setSelectedAttachment] = useState<ChatAttachment | null>(null);
+  const hasText = text.length > 0;
+  return (
+    <MessagePrimitive.Root className="group mb-5 flex flex-col items-end">
+      {hasText || archived ? (
+        <div
+          className={cn(
+            "max-w-[80%] rounded-2xl rounded-br-sm bg-secondary px-4 py-2.5 text-sm",
+            archived && "opacity-55",
+          )}
+        >
+          {archived ? (
+            <p className="mb-1 text-[11px] text-muted-foreground">已压缩（不再带入上下文）</p>
+          ) : null}
+          <MessagePrimitive.Parts components={{ Text: UserText }} />
+        </div>
+      ) : null}
+      <MessageAttachmentChips
+        attachments={attachments}
+        align="end"
+        onSelect={setSelectedAttachment}
+      />
+      <AttachmentDrawer file={selectedAttachment} onClose={() => setSelectedAttachment(null)} />
+      <div className="mt-0.5 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
+        <CopyButton text={text} />
+      </div>
+    </MessagePrimitive.Root>
+  );
 }
 
 function AssistantPartList({
@@ -504,11 +552,11 @@ function AssistantPartList({
 }
 
 function AssistantMessage() {
-  const toast = useToast();
   const { regenerate, canRegenerate, lastErrored, messages, isRunning, messageAttachments } = useChat();
   const id = useMessage((m) => m.id);
   const chatMsg = messages.find((m) => m.id === id);
   const attachments = messageAttachments[id] ?? EMPTY_ATTACHMENTS;
+  const [selectedAttachment, setSelectedAttachment] = useState<ChatAttachment | null>(null);
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
   const streaming = isRunning && lastAssistant?.id === id;
   const text = useMessageText();
@@ -521,27 +569,12 @@ function AssistantMessage() {
       <div className="min-w-0">
         <AssistantPartList chatMsg={chatMsg} streaming={streaming} />
       </div>
-      {attachments.length > 0 ? (
-        <div className="mt-1 flex flex-wrap gap-1.5">
-          {attachments.map((file) => (
-            <button
-              key={file.id}
-              type="button"
-              onClick={() => {
-                void downloadAttachment(file.id, file.name).catch((err: unknown) => {
-                  toast(err instanceof Error ? err.message : "下载失败", "error");
-                });
-              }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/70 px-2.5 py-1 text-xs text-muted-foreground transition hover:border-border-strong hover:bg-surface"
-              title={`下载 ${file.name}`}
-            >
-              <Paperclip className="size-3" />
-              <span className="max-w-56 truncate">{file.name}</span>
-              <Download className="size-3" />
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <MessageAttachmentChips
+        attachments={attachments}
+        align="start"
+        onSelect={setSelectedAttachment}
+      />
+      <AttachmentDrawer file={selectedAttachment} onClose={() => setSelectedAttachment(null)} />
       <MessagePrimitive.If last>
         <ThreadPrimitive.If running>
           <span className="apod-caret mt-0.5" aria-hidden />
