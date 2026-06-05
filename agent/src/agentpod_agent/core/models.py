@@ -17,15 +17,6 @@ ModelRole = Literal[
     "skill_reflect",
 ]
 
-# Hermes 有、AgentPod 当前无 LLM 调用
-HERMES_ROLES_NOT_IMPLEMENTED = (
-    "skills_hub",
-    "mcp",
-    "triage_specifier",
-    "kanban_decomposer",
-    "profile_describer",
-)
-
 
 async def resolve_model(role: ModelRole) -> str:
     return await get_resolved_model(role)

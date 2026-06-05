@@ -24,6 +24,7 @@ from . import skills as _skills  # noqa: F401
 from . import manage_workspace as _manage_workspace  # noqa: F401
 from . import mcp_manage as _mcp_manage  # noqa: F401
 from . import terminal as _terminal  # noqa: F401
+from . import todo as _todo  # noqa: F401
 from . import user_info as _user_info  # noqa: F401
 from . import web as _web  # noqa: F401
 

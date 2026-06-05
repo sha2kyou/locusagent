@@ -94,7 +94,7 @@ export const listSessions = (limit = 20) =>
   apiGet<{ items: SessionMeta[] }>(`/api/workspace/sessions?limit=${limit}`);
 
 export const getSessionMessages = (id: string) =>
-  apiGet<{ items: Message[] }>(`/api/workspace/sessions/${encodeURIComponent(id)}`);
+  apiGet<{ items: Message[]; todo_plan?: unknown }>(`/api/workspace/sessions/${encodeURIComponent(id)}`);
 
 export const getActiveRun = (id: string) =>
   apiGet<ActiveRunResponse>(`/api/workspace/sessions/${encodeURIComponent(id)}/active-run`);

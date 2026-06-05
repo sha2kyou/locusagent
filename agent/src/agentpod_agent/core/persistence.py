@@ -278,7 +278,11 @@ def _is_openai_tool_calls(tool_calls: Any) -> bool:
 
 
 async def create_session(title: str | None = None, *, hidden: bool = False) -> str:
+    from ..todos.store import interrupt_other_session_todos
+
     sid = _new_session_id()
+    if not hidden:
+        await interrupt_other_session_todos(sid)
 
     def _do() -> None:
         with conn_scope(load_vec=False) as c:
@@ -1314,6 +1318,7 @@ async def delete_session(session_id: str) -> bool:
             c.execute("DELETE FROM attachments WHERE session_id = ?", (session_id,))
             c.execute("DELETE FROM responses WHERE session_id = ?", (session_id,))
             c.execute("DELETE FROM runs WHERE session_id = ?", (session_id,))
+            c.execute("DELETE FROM session_todos WHERE session_id = ?", (session_id,))
             c.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
             cur = c.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
             orphan_keys = _unreferenced_object_keys(c, keys)

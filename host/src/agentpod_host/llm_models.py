@@ -1,4 +1,4 @@
-"""LLM 辅助模型角色（对齐 Hermes auxiliary 命名，空值回退主模型）。"""
+"""LLM 辅助模型角色（空值回退主模型）。"""
 
 from __future__ import annotations
 
@@ -27,15 +27,6 @@ ROLE_ENV_KEYS: dict[ModelRole, str] = {
     "curator": "AUXILIARY_CURATOR_MODEL",
     "skill_reflect": "AUXILIARY_SKILL_REFLECT_MODEL",
 }
-
-# Hermes 有、AgentPod 当前无对应 LLM 调用
-HERMES_ROLES_NOT_IMPLEMENTED = (
-    "skills_hub",
-    "mcp",
-    "triage_specifier",
-    "kanban_decomposer",
-    "profile_describer",
-)
 
 _AUXILIARY_FIELDS: list[tuple[str, str]] = [
     ("AUXILIARY_VISION_MODEL", "auxiliary_vision_model"),

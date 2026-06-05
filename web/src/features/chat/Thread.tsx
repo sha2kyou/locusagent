@@ -27,6 +27,8 @@ import {
 import { Markdown, ProseMarkdown, ThinkingBlock } from "./Markdown";
 import type { ChatMessage } from "./model";
 import { ToolPartView } from "./ToolEvent";
+import { extractLatestTodoPlan, type TodoPlan } from "./todo";
+import { TodoProgressPanel } from "./TodoProgressPanel";
 import { useChat } from "./ChatProvider";
 import type { ChatAttachment } from "./model";
 import { downloadAttachment } from "@/api/endpoints";
@@ -518,11 +520,21 @@ function UserMessage() {
 function AssistantPartList({
   chatMsg,
   streaming,
+  sessionTodoPlan,
+  useSessionTodoPlan,
 }: {
   chatMsg: ChatMessage | undefined;
   streaming: boolean;
+  sessionTodoPlan: TodoPlan | null;
+  useSessionTodoPlan: boolean;
 }) {
   if (!chatMsg) return null;
+  const fromParts = extractLatestTodoPlan(chatMsg.parts);
+  const todoPlan = useSessionTodoPlan
+    ? streaming
+      ? (fromParts ?? sessionTodoPlan)
+      : (sessionTodoPlan ?? fromParts)
+    : fromParts;
   return (
     <>
       {chatMsg.parts.map((p, i) => {
@@ -547,18 +559,21 @@ function AssistantPartList({
         return <ToolPartView key={p.id} part={p} />;
       })}
       {chatMsg.error ? <Markdown text={`\n\n> ⚠ ${chatMsg.error}`} /> : null}
+      {todoPlan ? <TodoProgressPanel plan={todoPlan} /> : null}
     </>
   );
 }
 
 function AssistantMessage() {
-  const { regenerate, canRegenerate, lastErrored, messages, isRunning, messageAttachments } = useChat();
+  const { regenerate, canRegenerate, lastErrored, messages, isRunning, messageAttachments, sessionTodoPlan } =
+    useChat();
   const id = useMessage((m) => m.id);
   const chatMsg = messages.find((m) => m.id === id);
   const attachments = messageAttachments[id] ?? EMPTY_ATTACHMENTS;
   const [selectedAttachment, setSelectedAttachment] = useState<ChatAttachment | null>(null);
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
   const streaming = isRunning && lastAssistant?.id === id;
+  const useSessionTodoPlan = lastAssistant?.id === id;
   const text = useMessageText();
   const archived = useMessage((m) => (m.metadata as { archived?: boolean } | undefined)?.archived);
   return (
@@ -567,7 +582,12 @@ function AssistantMessage() {
         <p className="text-[11px] text-muted-foreground">已压缩（不再带入上下文）</p>
       ) : null}
       <div className="min-w-0">
-        <AssistantPartList chatMsg={chatMsg} streaming={streaming} />
+        <AssistantPartList
+          chatMsg={chatMsg}
+          streaming={streaming}
+          sessionTodoPlan={sessionTodoPlan}
+          useSessionTodoPlan={useSessionTodoPlan}
+        />
       </div>
       <MessageAttachmentChips
         attachments={attachments}

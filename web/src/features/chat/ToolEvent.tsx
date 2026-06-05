@@ -8,6 +8,7 @@ import { ListCard } from "@/components/ui/panel";
 import type { ToolKind } from "@/api/types";
 import { useChat } from "./ChatProvider";
 import type { ToolPart } from "./model";
+import { isTodoTool, parseTodoPlan } from "./todo";
 
 const KIND_ICON = {
   skill: Sparkles,
@@ -133,6 +134,9 @@ export function ToolPartView({ part }: { part: ToolPart }) {
       const payload = parseClarify(part.preview);
       if (payload) return <ClarifyCard payload={payload} />;
     }
+  }
+  if (isTodoTool(part.toolName) && !part.running && parseTodoPlan(part.preview)) {
+    return null;
   }
   const running = part.running;
   return (

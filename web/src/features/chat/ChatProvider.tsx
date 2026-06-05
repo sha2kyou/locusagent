@@ -40,6 +40,7 @@ import {
 } from "./model";
 import { convertMessage } from "./convert";
 import { coalesceHistory, historyPollKey } from "./history";
+import { isTodoTool, parseTodoPlan, type TodoPlan } from "./todo";
 
 export interface PendingAttachment {
   id: string;
@@ -80,6 +81,7 @@ interface ChatContextValue {
   newSession: () => void;
   selectSession: (id: string) => void;
   deleteSession: (id: string, options?: { silent?: boolean }) => Promise<void>;
+  sessionTodoPlan: TodoPlan | null;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -157,6 +159,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const urlWorkspaceId = params.workspaceId ?? null;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [sessionTodoPlan, setSessionTodoPlan] = useState<TodoPlan | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [lastErrored, setLastErrored] = useState(false);
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
@@ -334,12 +337,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (token !== pollTokenRef.current) return;
       try {
         const { run } = await getActiveRun(sid);
-        const { items } = await getSessionMessages(sid);
+        const { items, todo_plan: todoPlan } = await getSessionMessages(sid);
         const live = run?.status === "running";
         const key = historyPollKey(items);
         if (key !== lastKey) {
           lastKey = key;
           setMessages(coalesceHistory(items, { live }));
+          setSessionTodoPlan(parseTodoPlan(todoPlan));
         }
         if (live) {
           if (token === pollTokenRef.current) window.setTimeout(tick, 2000);
@@ -363,6 +367,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     stopTitlePoll();
     setCurrent(null);
     setMessages([]);
+    setSessionTodoPlan(null);
     setIsRunning(false);
     setPendingAttachments([]);
     setLastErrored(false);
@@ -379,7 +384,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setLastErrored(false);
     void (async () => {
       try {
-        const [{ items }, { run }] = await Promise.all([
+        const [{ items, todo_plan: todoPlan }, { run }] = await Promise.all([
           getSessionMessages(id),
           getActiveRun(id),
         ]);
@@ -388,6 +393,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
         const live = run?.status === "running";
         setMessages(coalesceHistory(items, { live }));
+        setSessionTodoPlan(parseTodoPlan(todoPlan));
         if (live) {
           setIsRunning(true);
           startActiveRunPoll(id);
@@ -552,6 +558,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 }
                 return mapped;
               });
+              if (isTodoTool(chunk.x_tool_name || "")) {
+                const plan = parseTodoPlan(preview);
+                if (plan) setSessionTodoPlan(plan);
+              }
             } else if (ev === "attachment") {
               const attId = chunk.x_attachment_id;
               const attName = chunk.x_attachment_name || "file";
@@ -898,6 +908,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         newSession,
         selectSession,
         deleteSession,
+        sessionTodoPlan,
       }}
     >
       <AssistantRuntimeProvider runtime={runtime}>{children}</AssistantRuntimeProvider>

@@ -50,6 +50,7 @@ MUTATING_TOOL_NAMES = frozenset(
         "mcp_manage",
         "scheduled_task_manage",
         "clarify",
+        "todo",
     }
 )
 

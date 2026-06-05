@@ -38,6 +38,7 @@ async def lifespan(app: FastAPI):
     from .core.persistence import expire_stale_runs, interrupt_running_runs_on_startup
 
     interrupt_stats = {"runs_interrupted": 0, "sessions_marked_interrupted": 0}
+    todo_stats = {"plans_updated": 0, "steps_interrupted": 0}
     for wid in iter_workspace_ids():
         set_workspace_id(wid)
         ensure_workspace_storage_initialized(wid)
@@ -45,9 +46,16 @@ async def lifespan(app: FastAPI):
         stats = await interrupt_running_runs_on_startup()
         interrupt_stats["runs_interrupted"] += stats["runs_interrupted"]
         interrupt_stats["sessions_marked_interrupted"] += stats["sessions_marked_interrupted"]
+        from .todos.store import interrupt_in_progress_on_startup
+
+        tstats = await interrupt_in_progress_on_startup()
+        todo_stats["plans_updated"] += tstats["plans_updated"]
+        todo_stats["steps_interrupted"] += tstats["steps_interrupted"]
 
     if interrupt_stats["runs_interrupted"] > 0:
         log.info("startup_running_runs_interrupted", **interrupt_stats)
+    if todo_stats["steps_interrupted"] > 0:
+        log.info("startup_todos_interrupted", **todo_stats)
 
     expired_total = 0
     for wid in iter_workspace_ids():

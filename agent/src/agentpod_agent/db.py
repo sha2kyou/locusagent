@@ -154,6 +154,15 @@ CREATE TABLE IF NOT EXISTS env_vars (
 );
 CREATE INDEX IF NOT EXISTS idx_env_vars_name ON env_vars(name);
 CREATE INDEX IF NOT EXISTS idx_env_vars_embed_state ON env_vars(embedding_state);
+
+CREATE TABLE IF NOT EXISTS session_todos (
+    session_id  TEXT PRIMARY KEY,
+    plan_id     TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    steps_json  TEXT NOT NULL,
+    created_at  TIMESTAMP NOT NULL DEFAULT (datetime('now')),
+    updated_at  TIMESTAMP NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
