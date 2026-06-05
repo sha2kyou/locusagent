@@ -43,6 +43,7 @@ from .openai_fields import (
 from .persistence import persist_context_compression
 from ..todos.intent import messages_require_todo_intent
 from ..todos.store import get_plan
+from ..usage_report import schedule_openai_usage
 
 log = get_logger("loop")
 
