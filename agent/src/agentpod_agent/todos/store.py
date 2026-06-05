@@ -131,6 +131,19 @@ def plan_to_json(plan: dict[str, Any] | None) -> str:
     return json.dumps(plan, ensure_ascii=False)
 
 
+def plan_is_active(steps: list[dict[str, Any]] | None) -> bool:
+    return any(str(s.get("status") or "") in ("pending", "in_progress") for s in (steps or []))
+
+
+async def get_active_plan(session_id: str) -> dict[str, Any] | None:
+    plan = await get_plan(session_id)
+    if not plan:
+        return None
+    if not plan_is_active(plan.get("steps")):
+        return None
+    return plan
+
+
 async def get_plan(session_id: str) -> dict[str, Any] | None:
     sid = str(session_id or "").strip()
     if not sid:
@@ -210,6 +223,8 @@ async def confirm_step(
             if not row:
                 raise ValueError("no active todo plan; call todo(action=create) first")
             steps = json.loads(str(row["steps_json"] or "[]"))
+            if not plan_is_active(steps):
+                raise ValueError("no active todo plan; call todo(action=create) first")
             idx = next((i for i, s in enumerate(steps) if str(s.get("id")) == target_id), -1)
             if idx < 0:
                 raise ValueError(f"step not found: {target_id}")

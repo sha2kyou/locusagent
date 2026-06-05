@@ -27,7 +27,7 @@ import {
 import { Markdown, ProseMarkdown, ThinkingBlock } from "./Markdown";
 import type { ChatMessage } from "./model";
 import { ToolPartView } from "./ToolEvent";
-import { extractLatestTodoPlan, isTodoTool, type TodoPlan } from "./todo";
+import { extractLatestTodoPlan, applyHistoricalTodoInterrupt, isTodoTool, type TodoPlan } from "./todo";
 import { TodoProgressPanel } from "./TodoProgressPanel";
 import { useChat } from "./ChatProvider";
 import type { ChatAttachment } from "./model";
@@ -56,30 +56,34 @@ export function Thread() {
       <ThreadPrimitive.Viewport className="relative flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl px-4 py-6">
           <ThreadPrimitive.Empty>
-            <div className="flex min-h-[55vh] flex-col items-center justify-center text-center">
-              <h2 className="text-2xl font-semibold tracking-tight">有什么可以帮你？</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
+            <div className="relative flex min-h-[55vh] flex-col items-center justify-center text-center">
+              <div
+                className="pointer-events-none absolute inset-0 rounded-3xl"
+                style={{
+                  background:
+                    "radial-gradient(ellipse 60% 45% at 50% 42%, var(--color-brand-soft) 0%, transparent 100%)",
+                }}
+                aria-hidden
+              />
+              <h2 className="relative text-2xl font-semibold tracking-tight">有什么可以帮你？</h2>
+              <p className="relative mt-2 text-sm text-muted-foreground">
                 AgentPod 可读写文件、调用工具、检索网页、记忆与回忆。
               </p>
               {failed ? (
                 <FailedProvisionPanel className="mt-5" />
               ) : booting ? null : (
-                <div className="mt-6 flex flex-col items-center gap-2">
-                  {Array.from({ length: Math.ceil(PROMPT_CHIPS.length / 2) }, (_, row) => (
-                    <div key={row} className="flex gap-2 justify-center">
-                      {PROMPT_CHIPS.slice(row * 2, row * 2 + 2).map((p) => (
-                        <ThreadPrimitive.Suggestion
-                          key={p}
-                          prompt={p}
-                          method="replace"
-                          asChild
-                        >
-                          <button className="rounded-xl border border-border bg-surface/60 px-3.5 py-2 text-sm text-muted-foreground transition hover:border-border-strong hover:text-foreground">
-                            {p}
-                          </button>
-                        </ThreadPrimitive.Suggestion>
-                      ))}
-                    </div>
+                <div className="relative mt-6 flex max-w-lg flex-wrap justify-center gap-2">
+                  {PROMPT_CHIPS.map((p) => (
+                    <ThreadPrimitive.Suggestion
+                      key={p}
+                      prompt={p}
+                      method="replace"
+                      asChild
+                    >
+                      <button className="rounded-xl border border-border bg-background/70 px-3.5 py-2 text-sm text-muted-foreground shadow-xs backdrop-blur-sm transition-all duration-150 hover:border-border-strong hover:bg-surface hover:text-foreground hover:shadow-sm">
+                        {p}
+                      </button>
+                    </ThreadPrimitive.Suggestion>
                   ))}
                 </div>
               )}
@@ -231,7 +235,7 @@ function Composer() {
           ))}
         </div>
       ) : null}
-      <ComposerPrimitive.Root className="mx-auto flex w-full max-w-3xl items-end gap-2 rounded-2xl border border-border-strong bg-surface px-3 py-2 focus-within:border-brand/50">
+      <ComposerPrimitive.Root className="mx-auto flex w-full max-w-3xl items-end gap-2 rounded-2xl border border-border-strong bg-surface px-3 py-2 shadow-sm transition-shadow duration-150 focus-within:border-brand/40 focus-within:shadow-[0_0_0_3px_var(--color-ring)]">
         <input
           ref={fileInputRef}
           type="file"
@@ -524,7 +528,7 @@ function resolveTodoPlan(
   hasTodoInMessage: boolean,
 ): TodoPlan | null {
   if (!isLastAssistant) {
-    return fromParts;
+    return fromParts ? applyHistoricalTodoInterrupt(fromParts) : null;
   }
   if (!hasTodoInMessage && !fromParts && !sessionTodoPlan) return null;
   if (sessionTodoPlan && fromParts && sessionTodoPlan.plan_id === fromParts.plan_id) {

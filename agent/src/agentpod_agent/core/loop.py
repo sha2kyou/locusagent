@@ -42,7 +42,7 @@ from .openai_fields import (
 )
 from .persistence import persist_context_compression
 from ..todos.intent import messages_require_todo_intent
-from ..todos.store import get_plan
+from ..todos.store import get_active_plan
 from ..usage_report import schedule_openai_usage
 
 log = get_logger("loop")
@@ -291,7 +291,7 @@ async def _todo_plan_required_block(tool_name: str) -> str | None:
     session_id = get_chat_session_id()
     if not session_id:
         return None
-    plan = await get_plan(session_id)
+    plan = await get_active_plan(session_id)
     if plan:
         return None
     return (

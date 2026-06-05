@@ -404,10 +404,10 @@ function NavRow({
       onClick={onNavigate}
       className={({ isActive }) =>
         cn(
-          "group relative flex h-10 items-center gap-3 rounded-lg px-2.5 text-sm font-medium transition-colors",
+          "group relative flex h-9 items-center gap-3 rounded-lg px-2.5 text-sm font-medium transition-colors",
           !expanded && "md:justify-center",
           isActive
-            ? "bg-sidebar-accent text-foreground"
+            ? "bg-sidebar-accent text-foreground before:absolute before:left-0 before:top-1/2 before:h-4 before:-translate-y-1/2 before:w-0.5 before:rounded-full before:bg-brand/70 before:content-['']"
             : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
         )
       }

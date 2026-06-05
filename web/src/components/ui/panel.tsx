@@ -25,7 +25,7 @@ export function CollapsiblePanel({
     });
   };
   return (
-    <div className="rounded-xl border border-border bg-surface/40">
+    <div className="rounded-xl border border-border bg-surface/40 shadow-xs">
       <button
         type="button"
         onClick={toggle}
@@ -74,6 +74,6 @@ export function CollapsibleSection({
 
 export function ListCard({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn("rounded-xl border border-border bg-surface/40 p-4", className)}>{children}</div>
+    <div className={cn("rounded-xl border border-border bg-surface/40 p-4 shadow-xs", className)}>{children}</div>
   );
 }

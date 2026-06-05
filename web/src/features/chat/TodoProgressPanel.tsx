@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
 import { AlertCircle, Check, ChevronDown, Circle, ListTodo, Loader2, Minus } from "lucide-react";
 import { ListCard } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
 import { findScrollParent } from "@/lib/scroll-parent";
+import { usePinnedCollapse } from "@/lib/use-pinned-collapse";
 import type { TodoPlan, TodoStep, TodoStepStatus } from "./todo";
 
 function StepIcon({ status }: { status: TodoStepStatus }) {
@@ -27,20 +27,25 @@ function TodoStepRow({ step, index }: { step: TodoStep; index: number }) {
   const skipped = step.status === "skipped";
   const interrupted = step.status === "interrupted";
   return (
-    <li className="relative flex gap-3 pb-4 last:pb-0">
+    <li className="relative flex gap-3 pb-3.5 last:pb-0">
       <div className="flex flex-col items-center">
         <StepIcon status={step.status} />
-        <span className="mt-1 w-px flex-1 bg-border last:hidden" aria-hidden />
+        {/* 连接线：渐变淡出，最后一项隐藏 */}
+        <span
+          className="mt-1.5 w-px flex-1 last:hidden"
+          style={{ background: "linear-gradient(to bottom, var(--color-border-strong) 0%, var(--color-border) 60%, transparent 100%)" }}
+          aria-hidden
+        />
       </div>
-      <div className="min-w-0 flex-1 pt-0.5">
-        <div className="flex items-baseline gap-2">
-          <span className="text-[11px] tabular-nums text-muted-foreground">{index + 1}</span>
+      <div className="min-w-0 flex-1 pb-0.5 pt-px">
+        <div className="flex items-center gap-1.5">
+          <span className="shrink-0 tabular-nums text-[10px] text-muted-foreground/60">{index + 1}.</span>
           <span
             className={cn(
               "text-[13px] leading-snug",
               active && "font-medium text-foreground",
-              done && "text-foreground",
-              skipped && "text-muted-foreground line-through",
+              done && "text-foreground/90",
+              skipped && "text-muted-foreground/60 line-through",
               interrupted && "text-destructive/90",
               !active && !done && !skipped && !interrupted && "text-muted-foreground",
             )}
@@ -49,13 +54,13 @@ function TodoStepRow({ step, index }: { step: TodoStep; index: number }) {
           </span>
         </div>
         {step.detail && !done && !interrupted ? (
-          <p className="mt-1 pl-5 text-xs leading-relaxed text-muted-foreground">{step.detail}</p>
+          <p className="mt-0.5 pl-4 text-[11px] leading-relaxed text-muted-foreground/80">{step.detail}</p>
         ) : null}
         {step.note && (done || interrupted) ? (
           <p
             className={cn(
-              "mt-1 pl-5 text-xs leading-relaxed",
-              interrupted ? "text-destructive/80" : "text-muted-foreground",
+              "mt-0.5 pl-4 text-[11px] leading-relaxed",
+              interrupted ? "text-destructive/70" : "text-muted-foreground/70",
             )}
           >
             {step.note}
@@ -76,16 +81,12 @@ function planSummary(plan: TodoPlan): string {
 
 export function TodoProgressPanel({ plan }: { plan: TodoPlan }) {
   const hasActive = plan.steps.some((s) => s.status === "in_progress");
-  const [open, setOpen] = useState(hasActive);
-
-  useEffect(() => {
-    if (hasActive) setOpen(true);
-  }, [hasActive, plan.plan_id]);
+  const [open, toggleOpen] = usePinnedCollapse(plan.plan_id, true);
 
   const toggle = (triggerEl: HTMLButtonElement) => {
     const scroller = findScrollParent(triggerEl);
     const prevTop = scroller?.scrollTop ?? 0;
-    setOpen((v) => !v);
+    toggleOpen();
     requestAnimationFrame(() => {
       if (scroller) scroller.scrollTop = prevTop;
       setTimeout(() => {
@@ -95,7 +96,7 @@ export function TodoProgressPanel({ plan }: { plan: TodoPlan }) {
   };
 
   return (
-    <ListCard className="my-1.5 overflow-hidden border-brand/20 bg-brand/[0.035] p-0 ring-1 ring-inset ring-brand/10">
+    <ListCard className="my-1.5 overflow-hidden border-brand/20 bg-brand/[0.035] p-0 ring-1 ring-inset ring-brand/10 shadow-sm">
       <div className="flex items-start gap-3 border-b border-brand/10 px-4 py-3">
         <ListTodo className="mt-0.5 size-4 shrink-0 text-brand" />
         <div className="min-w-0 flex-1">

@@ -285,7 +285,7 @@ def _last_user_content(messages: list[dict[str, Any]]) -> str | None:
 
 async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, Any]], str]:
     from ..todos.intent import assess_todo_intent, build_todo_intent_system_message
-    from ..todos.store import interrupt_current_session_todos
+    from ..todos.store import delete_session_todos
 
     latest_user = await _extract_latest_user_payload(req)
     if latest_user is None:
@@ -297,12 +297,12 @@ async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, 
         if not attachment_ids and last_db_user == user_query_text:
             # 同一句重发即"重新生成 / 失败重试"：先清掉上一轮(可能中断的)助手输出再重跑
             await truncate_after_last_user(sid)
-            await interrupt_current_session_todos(sid)
+            await delete_session_todos(sid)
         else:
             user_mid = await append_message(sid, "user", user_query_text, run_id=None)
             if user_mid > 0 and attachment_ids:
                 await link_message_attachments(user_mid, attachment_ids)
-            await interrupt_current_session_todos(sid)
+            await delete_session_todos(sid)
         db_msgs = await build_llm_messages(sid)
         # 当前轮若带图片，需要用原始多模态 content 覆盖最后一条用户消息参与 LLM 推理。
         if db_msgs and db_msgs[-1].get("role") == "user":

@@ -73,4 +73,24 @@ export function extractLatestTodoPlan(parts: ChatPart[]): TodoPlan | null {
   return latest;
 }
 
+const HISTORICAL_INTERRUPT_NOTE = "执行中断（新话题）";
+
+/** 历史轮次气泡内的 todo 快照不会随 interrupt 更新，展示时补齐中断状态。 */
+export function applyHistoricalTodoInterrupt(plan: TodoPlan): TodoPlan {
+  let changed = false;
+  const steps = plan.steps.map((step) => {
+    if (step.status !== "pending" && step.status !== "in_progress") return step;
+    changed = true;
+    return {
+      ...step,
+      status: "interrupted" as const,
+      note: step.note || HISTORICAL_INTERRUPT_NOTE,
+    };
+  });
+  if (!changed) return plan;
+  const next: TodoPlan = { ...plan, steps };
+  delete next.active_step_id;
+  return next;
+}
+
 export { isTodoTool };

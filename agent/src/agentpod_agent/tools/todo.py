@@ -6,7 +6,7 @@ import json
 from typing import Any
 
 from ..core.run_context import get_chat_session_id
-from ..todos.store import confirm_step, create_plan, get_plan, plan_to_json
+from ..todos.store import confirm_step, create_plan, get_active_plan, plan_to_json
 from .args import pick_action, pick_str
 from .base import Tool, ToolError, ToolResult, register_builtin
 
@@ -32,7 +32,7 @@ async def _todo(args: dict[str, Any]) -> ToolResult:
 
     action = pick_action(args, default="view")
     if action == "view":
-        plan = await get_plan(session_id)
+        plan = await get_active_plan(session_id)
         return ToolResult(content=plan_to_json(plan), metadata={"todo": True})
 
     if action == "create":
@@ -70,7 +70,7 @@ register_builtin(
             "任务拆解与执行进度跟踪。由 agent 自行拆解步骤并在执行过程中确认节点状态，"
             "前端展示进度，无需用户点击确认。"
             "action=create：将复杂任务拆为 2–20 个有序步骤（每步需唯一 id 与 title，可选 detail）。"
-            "会覆盖当前会话已有计划。"
+            "会覆盖当前会话已有计划；新话题开始后必须先 create，不可继续 confirm 旧计划。"
             "action=confirm：更新某步骤状态——执行前 mark in_progress，完成后 mark done（可选 note 简述结果）；"
             "无法并行两个 in_progress 步骤。"
             "action=view：读取当前计划。"

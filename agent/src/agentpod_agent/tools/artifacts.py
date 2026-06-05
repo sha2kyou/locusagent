@@ -137,14 +137,6 @@ async def _artifact_save(args: dict[str, Any]) -> ToolResult:
 
     content = normalize_latex_input(content)
 
-    if art_type == "text" and _LATEX_RE.search(content):
-        raise ToolError(
-            "type=text does not render LaTeX. Use type=latex for content with $...$ or $$...$$ formulas."
-        )
-    if art_type == "markdown" and _LATEX_RE.search(content):
-        raise ToolError(
-            "type=markdown must not contain $...$ or $$...$$. Use type=latex for math content."
-        )
     if art_type == "latex" and not _LATEX_RE.search(content):
         raise ToolError(
             "type=latex requires LaTeX delimiters: inline $...$ or block $$...$$."
@@ -411,10 +403,9 @@ register_builtin(
                     "type": "string",
                     "enum": ["markdown", "latex", "html", "text"],
                     "description": (
-                        "渲染类型：markdown=Markdown（标题/列表/代码块，不含公式）；"
-                        "latex=LaTeX 公式（行内 $...$，块级 $$...$$）；"
-                        "html=HTML 页面；text=纯文本。"
-                        "含数学公式时必须设为 latex，不要用 markdown 或 text。"
+                        "渲染类型：markdown=Markdown；latex=LaTeX 公式（行内 $...$，块级 $$...$$）；"
+                        "html=HTML 页面；text=纯文本（不渲染 Markdown/LaTeX）。"
+                        "markdown/text 保存时不校验 $ 符号；需公式渲染时用 latex。"
                         "JSON 参数里反斜杠须双重转义（\\\\begin）。"
                     ),
                 },

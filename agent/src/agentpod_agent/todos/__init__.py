@@ -5,10 +5,12 @@ from .store import (
     confirm_step,
     create_plan,
     delete_session_todos,
+    get_active_plan,
     get_plan,
     interrupt_current_session_todos,
     interrupt_in_progress_on_startup,
     interrupt_other_session_todos,
+    plan_is_active,
     plan_to_json,
 )
 
@@ -20,8 +22,10 @@ __all__ = [
     "confirm_step",
     "create_plan",
     "delete_session_todos",
+    "get_active_plan",
     "get_plan",
     "interrupt_current_session_todos",
+    "plan_is_active",
     "interrupt_in_progress_on_startup",
     "interrupt_other_session_todos",
     "plan_to_json",
