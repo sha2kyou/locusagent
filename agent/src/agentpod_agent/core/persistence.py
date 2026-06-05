@@ -205,6 +205,41 @@ async def _hydrate_attachment(meta: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def attachment_ids_signature(attachment_ids: list[str]) -> str:
+    joined = "\n".join(attachment_ids)
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:12]
+
+
+def _attachment_persisted_lines(attachments: list[dict[str, Any]]) -> list[str]:
+    lines: list[str] = []
+    for a in attachments:
+        name = str(a.get("name") or "附件")
+        kind = str(a.get("kind") or "other")
+        aid = str(a.get("id") or "")
+        lines.append(f"[用户附件] {name} ({kind}, id={aid})")
+    return lines
+
+
+def build_persisted_user_message_text(
+    text: str,
+    *,
+    attachments: list[dict[str, Any]] | None = None,
+    attachment_ids: list[str] | None = None,
+) -> str:
+    """写入 messages.content 的纯文本：保留用户正文与附件文件名，供后续轮次与检索使用。"""
+    clean = (text or "").strip()
+    lines: list[str] = []
+    if clean:
+        lines.append(clean)
+    if attachments:
+        lines.extend(_attachment_persisted_lines(attachments))
+    ids = [str(x).strip() for x in (attachment_ids or []) if str(x).strip()]
+    if ids:
+        lines.append(f"[attachment_ids:{attachment_ids_signature(ids)}]")
+    body = "\n".join(lines).strip()
+    return body or "[attachment]"
+
+
 def _load_message_attachments_map(c: Any, message_ids: list[int]) -> dict[int, list[dict[str, Any]]]:
     if not message_ids:
         return {}
@@ -237,9 +272,18 @@ def _compose_user_content_with_attachments(text: str, attachments: list[dict[str
     if has_image:
         parts: list[dict[str, Any]] = []
         parts.append({"type": "text", "text": clean or "请结合附件内容回答。"})
+        image_index = 0
         for a in attachments:
-            if a.get("kind") == "image" and a.get("processable") and a.get("imageDataUrl"):
-                parts.append({"type": "image_url", "image_url": {"url": a["imageDataUrl"]}})
+            if a.get("kind") != "image" or not a.get("processable") or not a.get("imageDataUrl"):
+                continue
+            image_index += 1
+            parts.append(
+                {
+                    "type": "text",
+                    "text": f"[图片附件 {image_index}] name={a.get('name')}",
+                }
+            )
+            parts.append({"type": "image_url", "image_url": {"url": a["imageDataUrl"]}})
         if text_attachments:
             for i, a in enumerate(text_attachments, start=1):
                 parts.append(

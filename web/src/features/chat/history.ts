@@ -32,6 +32,20 @@ function compressionPreview(msg: Message): string {
   return body ? `${header}\n\n${body}` : `${header}\n本次未生成可展示摘要（已进行截断保留）。`;
 }
 
+/** 去掉入库用的附件元数据行，气泡只展示用户正文（附件由芯片展示）。 */
+export function userMessageDisplayText(content: string): string {
+  const lines = (content || "").split("\n");
+  const kept = lines.filter((line) => {
+    const t = line.trim();
+    if (!t) return false;
+    if (t === "[attachment]") return false;
+    if (t.startsWith("[attachment_ids:")) return false;
+    if (t.startsWith("[用户附件]")) return false;
+    return true;
+  });
+  return kept.join("\n").trim();
+}
+
 function normalizeAttachments(
   fromApi?: {
     id: string;
@@ -152,7 +166,7 @@ export function coalesceHistory(items: Message[], opts: CoalesceHistoryOptions =
         role: "user",
         archived: isArchived(msg),
         attachments: normalizeAttachments((msg as { attachments?: ChatAttachment[] }).attachments),
-        parts: [{ type: "text", text: msg.content || "" }],
+        parts: [{ type: "text", text: userMessageDisplayText(msg.content || "") }],
       });
       continue;
     }

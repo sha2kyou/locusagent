@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import time
 import uuid
@@ -38,6 +37,10 @@ from ..core import (
     truncate_after_last_user,
     update_run,
     upsert_session_meta,
+)
+from ..core.persistence import (
+    build_persisted_user_message_text,
+    _compose_user_content_with_attachments,
 )
 from ..core.post_run import run_post_tasks
 from ..core.run_manager import ERROR, FINISHED, reconcile_session_active_handles, start_stream_run
@@ -212,11 +215,6 @@ async def _resolve_response_session(req: ResponsesRequest) -> tuple[str, bool]:
     return sid, True
 
 
-def _attachment_signature(attachment_ids: list[str]) -> str:
-    joined = "\n".join(attachment_ids)
-    return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:12]
-
-
 async def _extract_latest_user_payload(req: ChatRequest) -> tuple[Any, str, str, list[str]] | None:
     for m in reversed(req.messages):
         if m.role != "user":
@@ -229,41 +227,14 @@ async def _extract_latest_user_payload(req: ChatRequest) -> tuple[Any, str, str,
             if attachment_ids:
                 attachments = await get_attachments_by_ids(attachment_ids)
                 if attachments:
-                    has_img_attachment = any(a.get("kind") == "image" and a.get("processable") for a in attachments)
-                    if has_img_attachment:
-                        parts: list[dict[str, Any]] = [
-                            {"type": "text", "text": text or "请结合附件内容回答。"}
-                        ]
-                        for a in attachments:
-                            if a.get("kind") == "image" and a.get("processable") and a.get("imageDataUrl"):
-                                parts.append({"type": "image_url", "image_url": {"url": a["imageDataUrl"]}})
-                        text_attachments = [a for a in attachments if a.get("kind") == "text" and a.get("processable")]
-                        if text_attachments:
-                            for i, a in enumerate(text_attachments, start=1):
-                                parts.append(
-                                    {
-                                        "type": "text",
-                                        "text": f"[附件 {i}] name={a.get('name')}\n{str(a.get('text') or '')}",
-                                    }
-                                )
-                        composed_content: Any = parts
-                    else:
-                        parts: list[dict[str, Any]] = [{"type": "text", "text": text or "请结合附件内容回答。"}]
-                        text_attachments = [a for a in attachments if a.get("kind") == "text" and a.get("processable")]
-                        if text_attachments:
-                            for i, a in enumerate(text_attachments, start=1):
-                                parts.append(
-                                    {
-                                        "type": "text",
-                                        "text": f"[附件 {i}] name={a.get('name')}\n{str(a.get('text') or '')}",
-                                    }
-                                )
-                        composed_content = parts
+                    composed_content = _compose_user_content_with_attachments(text, attachments)
                     if not user_query_text:
                         user_query_text = text or "[attachment]"
-                    persisted_text = (text or "").strip()
-                    sig = _attachment_signature([a["id"] for a in attachments])
-                    persisted_text = f"{persisted_text}\n[attachment_ids:{sig}]".strip()
+                    persisted_text = build_persisted_user_message_text(
+                        text,
+                        attachments=attachments,
+                        attachment_ids=[a["id"] for a in attachments],
+                    )
                     return composed_content, persisted_text, user_query_text, [a["id"] for a in attachments]
             if has_image and isinstance(m.content, list):
                 user_query_text = user_query_text or "[image attachment]"
@@ -290,7 +261,7 @@ async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, 
     latest_user = await _extract_latest_user_payload(req)
     if latest_user is None:
         raise ValueError("missing user message")
-    new_user_content, _persisted_user_text, user_query_text, attachment_ids = latest_user
+    new_user_content, persisted_user_text, user_query_text, attachment_ids = latest_user
 
     if req.session_id:
         last_db_user = await get_last_user_message(sid)
@@ -299,7 +270,7 @@ async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, 
             await truncate_after_last_user(sid)
             await delete_session_todos(sid)
         else:
-            user_mid = await append_message(sid, "user", user_query_text, run_id=None)
+            user_mid = await append_message(sid, "user", persisted_user_text, run_id=None)
             if user_mid > 0 and attachment_ids:
                 await link_message_attachments(user_mid, attachment_ids)
         db_msgs = await build_llm_messages(sid)
@@ -309,7 +280,7 @@ async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, 
         user_query = user_query_text or ""
     else:
         db_msgs = [{"role": "user", "content": new_user_content}]
-        user_mid = await append_message(sid, "user", user_query_text, run_id=None)
+        user_mid = await append_message(sid, "user", persisted_user_text, run_id=None)
         if user_mid > 0 and attachment_ids:
             await link_message_attachments(user_mid, attachment_ids)
         user_query = user_query_text or ""
