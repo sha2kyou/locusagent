@@ -27,11 +27,15 @@ import { flashApiKey, listWorkspaces } from "@/api/endpoints";
 import type { WorkspaceItem } from "@/api/types";
 import { isChatRoutePath, stripWorkspacePrefix, withWorkspacePrefix } from "./workspace-route";
 import {
-  sidebarNavGroupLabelClass,
+  sidebarNavGroupDividerClass,
+  sidebarNavGroupDividerLineClass,
+  sidebarNavContainerClass,
   sidebarNavIconClass,
   sidebarNavIconSlotClass,
   sidebarNavLabelClass,
   sidebarNavRowClass,
+  sidebarPrimaryOffsetClass,
+  sidebarPrimaryWidthClass,
 } from "./sidebar-nav-styles";
 
 interface ShellApi {
@@ -162,7 +166,11 @@ export function AppShell() {
   return (
     <ShellContext.Provider value={{ openSettings: () => setSettingsOpen(true), setMobileAction }}>
       <DesktopWindowDragOverlay
-        mainOffsetClassName={expanded ? "left-0 md:left-[220px]" : "left-0 md:left-[60px]"}
+        mainOffsetClassName={
+          expanded
+            ? cn("left-0", sidebarPrimaryOffsetClass.expanded)
+            : cn("left-0", sidebarPrimaryOffsetClass.collapsed)
+        }
       />
       <div className="flex h-full">
         {/* 移动端遮罩 */}
@@ -173,10 +181,11 @@ export function AppShell() {
         {/* 左侧导航栏 */}
         <aside
           className={cn(
-            "fixed inset-y-0 left-0 z-50 flex w-[265px] flex-col bg-sidebar transition-transform duration-200",
+            "fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar transition-transform duration-200",
+            sidebarPrimaryWidthClass.mobile,
             navOpen ? "translate-x-0" : "-translate-x-full",
             "md:static md:z-auto md:translate-x-0 md:border-r md:border-sidebar-border md:transition-[width]",
-            expanded ? "md:w-[220px]" : "md:w-[60px]",
+            expanded ? sidebarPrimaryWidthClass.expanded : sidebarPrimaryWidthClass.collapsed,
           )}
         >
           {/* Header：布局与导航行一致，收起时仅隐藏标题 */}
@@ -208,30 +217,24 @@ export function AppShell() {
           </div>
 
           {/* 导航列表 */}
-          <nav
-            ref={navListRef}
-            className={cn(
-              "flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-2",
-              !expanded && "md:items-center md:px-0",
-            )}
-          >
+          <nav ref={navListRef} className={sidebarNavContainerClass(expanded)}>
             {NAV_PRIMARY.map((item) => (
               <NavRow key={item.to} {...item} basePrefix={workspacePrefix} expanded={expanded} onNavigate={() => setNavOpen(false)} />
             ))}
             <ArtifactsNav basePrefix={workspacePrefix} expanded={expanded} onNavigate={() => setNavOpen(false)} />
             <NavRow {...NAV_WORKSPACE} basePrefix={workspacePrefix} expanded={expanded} onNavigate={() => setNavOpen(false)} />
 
-            <NavGroupLabel label="能力" expanded={expanded} />
+            <NavGroupDivider expanded={expanded} />
             {NAV_CAPABILITIES.map((item) => (
               <NavRow key={item.to} {...item} basePrefix={workspacePrefix} expanded={expanded} onNavigate={() => setNavOpen(false)} />
             ))}
 
-            <NavGroupLabel label="数据" expanded={expanded} />
+            <NavGroupDivider expanded={expanded} />
             {NAV_CONTEXT.map((item) => (
               <NavRow key={item.to} {...item} basePrefix={workspacePrefix} expanded={expanded} onNavigate={() => setNavOpen(false)} />
             ))}
 
-            <NavGroupLabel label="自动化" expanded={expanded} />
+            <NavGroupDivider expanded={expanded} />
             {NAV_AUTOMATION.map((item) => (
               <NavRow key={item.to} {...item} basePrefix={workspacePrefix} expanded={expanded} onNavigate={() => setNavOpen(false)} />
             ))}
@@ -369,8 +372,12 @@ export function AppShell() {
   );
 }
 
-function NavGroupLabel({ label, expanded }: { label: string; expanded: boolean }) {
-  return <div className={sidebarNavGroupLabelClass(expanded)}>{expanded ? label : null}</div>;
+function NavGroupDivider({ expanded }: { expanded: boolean }) {
+  return (
+    <div className={sidebarNavGroupDividerClass(expanded)} aria-hidden>
+      <div className={sidebarNavGroupDividerLineClass(expanded)} />
+    </div>
+  );
 }
 
 function NavRow({

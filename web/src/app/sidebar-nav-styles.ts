@@ -1,5 +1,26 @@
 import { cn } from "@/lib/utils";
 
+/** 侧栏宽度（桌面展开由 220px 收窄约 30% → 154px） */
+export const sidebarPrimaryWidthClass = {
+  expanded: "md:w-[154px]",
+  collapsed: "md:w-[60px]",
+  mobile: "w-[186px]",
+} as const;
+
+export const sidebarPrimaryOffsetClass = {
+  expanded: "md:left-[154px]",
+  collapsed: "md:left-[60px]",
+} as const;
+
+/** 收起侧栏 60px、36px 行居中时，18px 图标左缘距侧栏左缘 21px（13px 容器 + 8px 行内） */
+export function sidebarNavContainerClass(expanded: boolean) {
+  return cn(
+    "flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-2",
+    expanded && "md:px-[13px]",
+    !expanded && "md:items-center md:px-0",
+  );
+}
+
 /** 侧栏导航行：统一高度、间距与 active/hover 态 */
 export function sidebarNavRowClass(isActive: boolean, expanded: boolean) {
   return cn(
@@ -20,8 +41,15 @@ export function sidebarNavLabelClass(expanded: boolean) {
   return cn("min-w-0 truncate leading-none", !expanded && "md:hidden");
 }
 
-export function sidebarNavGroupLabelClass(expanded: boolean) {
-  if (!expanded) return "hidden";
-  // 与导航文字左缘对齐：px-2 + icon 槽 18px + gap-2
-  return "mb-0.5 mt-4 pl-[calc(0.5rem+18px+0.5rem)] pr-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/35";
+/** 分组线距侧栏左右边距（收起 60px + 居中 w-6 → 18px；展开 nav 13px + 分割线 5px） */
+export function sidebarNavGroupDividerClass(expanded: boolean) {
+  return cn(
+    "flex w-full shrink-0 items-center my-2.5",
+    expanded && "md:px-[5px]",
+    !expanded && "hidden md:flex md:justify-center",
+  );
+}
+
+export function sidebarNavGroupDividerLineClass(expanded: boolean) {
+  return cn("h-px bg-sidebar-border/55", expanded ? "w-full" : "w-6");
 }

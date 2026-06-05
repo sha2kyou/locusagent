@@ -458,17 +458,24 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
         onClose={closeCategoryDialog}
         closeDisabled={savingCategory}
         title={editingCategory ? "编辑类目" : "新建类目"}
+        description="名称用于展示，描述可帮助 AI 在归档时选择合适类目。"
+        size="sm"
         footer={
-          <Button
-            variant="primary"
-            disabled={savingCategory || !newCategoryName.trim()}
-            onClick={() => {
-              void submitCategory();
-            }}
-          >
-            {savingCategory && <Loader2 className="size-4 animate-spin" />}
-            {editingCategory ? "保存" : "添加"}
-          </Button>
+          <>
+            <Button variant="secondary" disabled={savingCategory} onClick={closeCategoryDialog}>
+              取消
+            </Button>
+            <Button
+              variant="primary"
+              disabled={savingCategory || !newCategoryName.trim()}
+              onClick={() => {
+                void submitCategory();
+              }}
+            >
+              {savingCategory && <Loader2 className="size-4 animate-spin" />}
+              {editingCategory ? "保存" : "添加"}
+            </Button>
+          </>
         }
       >
         <div className="grid gap-3">
@@ -516,10 +523,10 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
                 <Download className="size-4" />
               </Button>
               {exportMenuOpen && (
-                <div className="absolute right-0 top-[calc(100%+6px)] z-20 w-48 rounded-lg border border-border bg-card p-1 shadow-lg">
+                <div className="absolute right-0 top-[calc(100%+6px)] z-20 w-44 overflow-hidden rounded-xl border border-border bg-card py-1 shadow-lg apod-enter-up">
                   <button
                     type="button"
-                    className="block w-full rounded-md px-2.5 py-2 text-left text-sm text-foreground hover:bg-secondary"
+                    className="flex w-full items-center px-3 py-2 text-[13px] text-foreground transition-colors hover:bg-secondary"
                     onClick={() => {
                       downloadArtifactOriginal(selected);
                       setExportMenuOpen(false);

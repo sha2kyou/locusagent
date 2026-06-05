@@ -119,32 +119,30 @@ export function SessionSidebar({
 
   return (
     <SecondarySidebar mobileOpen={mobileOpen} mobileSide="right" onClose={onClose}>
-      {/* 头部：标题 + 操作按钮 */}
-      <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-sidebar-sub-border px-4">
-        <span className="min-w-0 flex-1 text-[14px] font-bold tracking-tight">对话</span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={handleNew}
-          title="新对话"
-          aria-label="新对话"
-        >
-          <Plus className="size-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          disabled={filteredSessions.length === 0}
-          onClick={() => { void deleteAllVisible(); }}
-          title="删除全部"
-          aria-label="删除全部"
-          className="text-muted-foreground/60 hover:text-destructive"
-        >
-          <Trash2 className="size-3.5" />
-        </Button>
-      </div>
-      {/* 搜索 */}
-      <div className="border-b border-sidebar-sub-border px-3 py-2.5">
+      <div className="shrink-0 space-y-2.5 border-b border-sidebar-sub-border/45 px-3 pb-3 pt-1">
+        <div className="flex h-11 items-center gap-2 px-1">
+          <span className="min-w-0 flex-1 text-[14px] font-bold tracking-tight">对话</span>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={handleNew}
+            title="新对话"
+            aria-label="新对话"
+          >
+            <Plus className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            disabled={filteredSessions.length === 0}
+            onClick={() => { void deleteAllVisible(); }}
+            title="删除全部"
+            aria-label="删除全部"
+            className="text-muted-foreground/60 hover:text-destructive"
+          >
+            <Trash2 className="size-3.5" />
+          </Button>
+        </div>
         <SearchInput
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -152,7 +150,7 @@ export function SessionSidebar({
         />
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 pb-3">
+      <div className="flex-1 overflow-y-auto px-2 pb-3 pt-2">
         {loadingSessions ? (
           <div className="space-y-1.5 px-1 py-2">
             {Array.from({ length: 6 }).map((_, i) => (

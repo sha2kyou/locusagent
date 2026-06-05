@@ -96,7 +96,7 @@ export function Modal({
   return createPortal(
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-black/55 backdrop-blur-sm apod-fade"
+        className="absolute inset-0 bg-black/40 apod-fade"
         onClick={() => {
           if (!closeDisabled) onClose();
         }}
@@ -107,16 +107,18 @@ export function Modal({
         aria-modal="true"
         tabIndex={-1}
         className={cn(
-          "relative flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden rounded-xl border border-border-strong bg-popover p-5 shadow-2xl apod-enter-up",
+          "relative flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl apod-enter-up",
           sizes[size],
         )}
       >
         {(title || showClose) && (
-          <div className="mb-3 flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              {title && <h2 className="text-base font-semibold">{title}</h2>}
+          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border/45 px-5 py-4">
+            <div className="min-w-0 space-y-1">
+              {title && (
+                <h2 className="text-[15px] font-semibold tracking-tight text-foreground">{title}</h2>
+              )}
               {description && (
-                <p className="text-sm text-muted-foreground">{description}</p>
+                <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
               )}
             </div>
             {showClose && !closeDisabled && (
@@ -126,10 +128,10 @@ export function Modal({
             )}
           </div>
         )}
-        <div className="min-h-0 overflow-y-auto">
-          {children}
-        </div>
-        {footer && <div className="mt-5 flex shrink-0 justify-end gap-2">{footer}</div>}
+        <div className="min-h-0 overflow-y-auto px-5 py-4">{children}</div>
+        {footer && (
+          <div className="flex shrink-0 justify-end gap-2 border-t border-border/45 px-5 py-4">{footer}</div>
+        )}
       </div>
     </div>,
     document.body,

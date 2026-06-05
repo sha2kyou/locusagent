@@ -54,25 +54,28 @@ export function Thread() {
   return (
     <ThreadPrimitive.Root className="flex h-full flex-col">
       <ThreadPrimitive.Viewport className="relative flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl px-6 py-10">
+        <ThreadPrimitive.Empty>
+          <div
+            className="pointer-events-none absolute inset-x-0 top-[8%] z-0 h-[min(55vh,440px)]"
+            style={{
+              background:
+                "radial-gradient(ellipse 680px 68% at 50% 48%, var(--color-brand-soft) 0%, transparent 70%)",
+            }}
+            aria-hidden
+          />
+        </ThreadPrimitive.Empty>
+
+        <div className="relative z-10 mx-auto w-full max-w-3xl px-6 py-10">
           <ThreadPrimitive.Empty>
-            <div className="relative flex min-h-[55vh] flex-col items-center justify-center text-center">
-              <div
-                className="pointer-events-none absolute inset-0 rounded-3xl"
-                style={{
-                  background:
-                    "radial-gradient(ellipse 60% 45% at 50% 42%, var(--color-brand-soft) 0%, transparent 100%)",
-                }}
-                aria-hidden
-              />
-              <h2 className="relative text-2xl font-semibold tracking-tight">有什么可以帮你？</h2>
-              <p className="relative mt-2 text-sm text-muted-foreground">
+            <div className="flex min-h-[55vh] flex-col items-center justify-center text-center">
+              <h2 className="text-2xl font-semibold tracking-tight">有什么可以帮你？</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
                 AgentPod 可读写文件、调用工具、检索网页、记忆与回忆。
               </p>
               {failed ? (
                 <FailedProvisionPanel className="mt-5" />
               ) : booting ? null : (
-                <div className="relative mt-6 flex max-w-lg flex-wrap justify-center gap-2">
+                <div className="mt-6 flex max-w-lg flex-wrap justify-center gap-2">
                   {PROMPT_CHIPS.map((p) => (
                     <ThreadPrimitive.Suggestion
                       key={p}
