@@ -254,81 +254,80 @@ export function AppShell() {
             ))}
           </nav>
 
-          {/* 底部：agent 状态 + 用户 */}
+          {/* 底部：用户入口 */}
           <div
             ref={menuRootRef}
             className={cn(
-              "relative shrink-0 p-3",
-              menuScrollable && "border-t border-sidebar-border/90 bg-sidebar shadow-[0_-10px_16px_-12px_rgba(2,6,23,0.8)]",
+              "relative shrink-0 p-2.5",
+              menuScrollable && "border-t border-sidebar-border/70 bg-sidebar",
             )}
           >
             {!isDefaultWorkspace && (
               <div
                 className={cn(
-                  "mb-2 inline-flex w-fit max-w-full items-center gap-1.5 self-center rounded-md border border-border/70 bg-surface/60 px-2 py-1 text-[11px] text-muted-foreground",
+                  "mb-2 inline-flex w-fit max-w-full items-center gap-1.5 self-center rounded-md border border-border/60 bg-surface/50 px-2 py-1 text-[11px] text-muted-foreground/80",
                   expanded && "justify-center",
-                  !expanded && "md:justify-center md:px-1 md:py-1",
+                  !expanded && "md:justify-center md:px-1.5 md:py-1",
                 )}
                 title={currentWorkspace?.description || currentWorkspaceLabel}
               >
                 <span className={cn("max-w-full wrap-break-word text-center leading-4 whitespace-normal", !expanded && "md:hidden")}>
                   {currentWorkspaceLabel}
                 </span>
-                {!expanded && <span className="hidden md:block">WS</span>}
+                {!expanded && <span className="hidden md:block text-[10px]">WS</span>}
               </div>
             )}
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
               className={cn(
-                "flex w-full items-center gap-2.5 rounded-lg p-1.5 transition-colors hover:bg-sidebar-accent/60",
+                "flex w-full items-center gap-2.5 rounded-xl p-2 transition-colors hover:bg-sidebar-accent",
                 !expanded && "md:justify-center",
+                menuOpen && "bg-sidebar-accent",
               )}
               title="账户"
             >
               <Avatar me={me} />
               <span className={cn("min-w-0 flex-1 text-left", !expanded && "md:hidden")}>
-                <span className="block truncate text-sm font-medium">{me?.username ?? "—"}</span>
-                <span className="block truncate text-[11px] text-muted-foreground">
-                  {typeof me?.id === "number" ? `#${me.id}` : "#—"}
+                <span className="block truncate text-[13px] font-semibold leading-tight">{me?.username ?? "—"}</span>
+                <span className="block truncate text-[11px] text-muted-foreground/70 leading-tight mt-0.5">
+                  {typeof me?.id === "number" ? `ID ${me.id}` : "—"}
                 </span>
               </span>
             </button>
 
             {menuOpen && (
-              <>
-                <div className="absolute bottom-16 left-3 right-3 z-20 overflow-hidden rounded-lg border border-border-strong bg-popover py-1 shadow-2xl apod-enter-up">
+              <div className="absolute bottom-[calc(100%+4px)] left-2.5 right-2.5 z-20 overflow-hidden rounded-xl border border-border-strong bg-popover py-1 shadow-lg apod-enter-up">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setSettingsOpen(true);
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-2.5 px-3 py-2 text-[13px] transition-colors hover:bg-secondary",
+                    !expanded && "md:justify-center",
+                  )}
+                  title="设置"
+                >
+                  <Settings className="size-4 shrink-0 text-muted-foreground" />
+                  <span className={cn(!expanded && "md:hidden")}>设置</span>
+                </button>
+                <div className="my-1 mx-2 border-t border-border/60" />
+                <form action="/api/oauth/github/logout" method="post">
                   <button
-                    type="button"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setSettingsOpen(true);
-                    }}
+                    type="submit"
                     className={cn(
-                      "flex w-full items-center gap-2.5 px-3 py-2 text-sm hover:bg-secondary",
+                      "flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-destructive transition-colors hover:bg-destructive/8",
                       !expanded && "md:justify-center",
                     )}
-                    title="设置"
+                    title="退出"
                   >
-                    <Settings className="size-4 shrink-0" />
-                    <span className={cn(!expanded && "md:hidden")}>设置</span>
+                    <LogOut className="size-4 shrink-0" />
+                    <span className={cn(!expanded && "md:hidden")}>退出</span>
                   </button>
-                  <div className="my-1 border-t border-border" />
-                  <form action="/api/oauth/github/logout" method="post">
-                    <button
-                      type="submit"
-                      className={cn(
-                        "flex w-full items-center gap-2.5 px-3 py-2 text-sm text-destructive hover:bg-destructive/10",
-                        !expanded && "md:justify-center",
-                      )}
-                      title="退出"
-                    >
-                      <LogOut className="size-4 shrink-0" />
-                      <span className={cn(!expanded && "md:hidden")}>退出</span>
-                    </button>
-                  </form>
-                </div>
-              </>
+                </form>
+              </div>
             )}
           </div>
 

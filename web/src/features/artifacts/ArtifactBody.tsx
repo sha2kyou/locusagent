@@ -1,5 +1,5 @@
 import type { ArtifactEntry } from "@/api/types";
-import { HtmlRender, Markdown } from "@/features/chat/Markdown";
+import { HtmlRender, ProseMarkdown } from "@/features/chat/Markdown";
 
 export function ArtifactBody({ artifact }: { artifact: ArtifactEntry }) {
   if (artifact.type === "html") return <HtmlRender html={artifact.content} />;
@@ -9,5 +9,8 @@ export function ArtifactBody({ artifact }: { artifact: ArtifactEntry }) {
         {artifact.content}
       </pre>
     );
-  return <Markdown text={artifact.content} />;
+  if (artifact.type === "latex" || artifact.type === "markdown") {
+    return <ProseMarkdown text={artifact.content} enableMath />;
+  }
+  return <ProseMarkdown text={artifact.content} enableMath={false} />;
 }

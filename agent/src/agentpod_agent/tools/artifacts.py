@@ -31,6 +31,13 @@ _LATEX_RE = re.compile(r"\$\$[\s\S]+?\$\$|\$[^$\n]+\$")
 _CATEGORY_SIMILARITY_THRESHOLD = 0.82
 
 
+def _prepare_artifact_content(content: str, art_type: str) -> str:
+    """text/html 原样存储；latex/markdown 才做 LaTeX 转义修复。"""
+    if art_type in ("latex", "markdown"):
+        return normalize_latex_input(content)
+    return content
+
+
 def _normalize_category_name(value: str) -> str:
     # Unicode 归一化 + casefold，尽量减少“仅大小写/全半角差异”造成的重复类目。
     text = unicodedata.normalize("NFKC", str(value or "")).strip()
@@ -135,7 +142,7 @@ async def _artifact_save(args: dict[str, Any]) -> ToolResult:
         content = m.group(1).strip()
         art_type = "html"
 
-    content = normalize_latex_input(content)
+    content = _prepare_artifact_content(content, art_type)
 
     if art_type == "latex" and not _LATEX_RE.search(content):
         raise ToolError(
@@ -217,7 +224,9 @@ async def _artifact_update(args: dict[str, Any]) -> ToolResult:
         m = _HTML_RENDER_RE.search(content)
         if m:
             content = m.group(1).strip()
-        content = normalize_latex_input(content)
+        existing = await get_artifact(artifact_id)
+        art_type = str((existing or {}).get("type") or "markdown").strip().lower() or "markdown"
+        content = _prepare_artifact_content(content, art_type)
 
     category_id: str | None = None
     if has_category:

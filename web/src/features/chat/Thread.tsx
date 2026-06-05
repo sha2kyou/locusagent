@@ -54,7 +54,7 @@ export function Thread() {
   return (
     <ThreadPrimitive.Root className="flex h-full flex-col">
       <ThreadPrimitive.Viewport className="relative flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl px-4 py-6">
+        <div className="mx-auto w-full max-w-3xl px-6 py-10">
           <ThreadPrimitive.Empty>
             <div className="relative flex min-h-[55vh] flex-col items-center justify-center text-center">
               <div
@@ -129,12 +129,10 @@ function AgentStatusBar() {
 
   if (r === "failed") {
     return (
-      <div className="px-4 pt-2">
-        <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          <div className="flex items-center gap-2">
-            <span className="size-1.5 shrink-0 rounded-full bg-current" />
-            <span>{PROVISION_FAILED_STATUS}</span>
-          </div>
+      <div className="flex justify-center pt-2 pb-0.5">
+        <div className="inline-flex items-center gap-2.5 rounded-full border border-destructive/35 bg-destructive/8 px-3.5 py-1.5 text-[11.5px] font-medium text-destructive shadow-xs">
+          <span className="size-1.5 shrink-0 rounded-full bg-current" />
+          <span>{PROVISION_FAILED_STATUS}</span>
           <ProvisionRetryButton />
         </div>
       </div>
@@ -142,16 +140,16 @@ function AgentStatusBar() {
   }
 
   const config = {
-    creating: { text: AGENT_STARTING, cls: "border-warning/30 bg-warning/10 text-warning", pulse: true },
-    paused: { text: AGENT_PAUSED, cls: "border-border bg-surface/60 text-muted-foreground", pulse: false },
-    stopped: { text: AGENT_STOPPED, cls: "border-border bg-surface/60 text-muted-foreground", pulse: false },
+    creating: { text: AGENT_STARTING, cls: "border-warning/30 bg-warning/8 text-warning", pulse: true },
+    paused: { text: AGENT_PAUSED, cls: "border-border bg-surface/70 text-muted-foreground", pulse: false },
+    stopped: { text: AGENT_STOPPED, cls: "border-border bg-surface/70 text-muted-foreground", pulse: false },
   }[r];
 
   return (
-    <div className="px-4 pt-2">
+    <div className="flex justify-center pt-2 pb-0.5">
       <div
         className={cn(
-          "mx-auto flex w-full max-w-3xl items-center gap-2 rounded-lg border px-3 py-1.5 text-xs",
+          "inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[11.5px] font-medium shadow-xs",
           config.cls,
         )}
       >
@@ -211,21 +209,21 @@ function Composer() {
   };
 
   return (
-    <div className="bg-background/80 px-4 py-3 backdrop-blur">
+    <div className="px-6 pb-6 pt-2">
       {pendingAttachments.length > 0 ? (
         <div className="mx-auto mb-2 flex w-full max-w-3xl flex-wrap gap-1.5">
           {pendingAttachments.map((file) => (
             <span
               key={file.id}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/70 px-2.5 py-1 text-xs text-muted-foreground"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/80 px-2.5 py-1 text-xs text-muted-foreground shadow-xs"
             >
-              <Paperclip className="size-3" />
+              <Paperclip className="size-3 shrink-0" />
               <span className="max-w-56 truncate">{file.name}</span>
               {!file.processable ? <span className="text-warning">不可解析</span> : null}
               <button
                 type="button"
                 onClick={() => removePendingAttachment(file.id)}
-                className="inline-flex size-4 items-center justify-center rounded-full hover:bg-accent hover:text-foreground"
+                className="inline-flex size-4 items-center justify-center rounded-full transition hover:bg-accent hover:text-foreground"
                 aria-label={`移除 ${file.name}`}
                 title="移除附件"
               >
@@ -235,7 +233,8 @@ function Composer() {
           ))}
         </div>
       ) : null}
-      <ComposerPrimitive.Root className="mx-auto flex w-full max-w-3xl items-end gap-2 rounded-2xl border border-border-strong bg-surface px-3 py-2 shadow-sm transition-shadow duration-150 focus-within:border-brand/40 focus-within:shadow-[0_0_0_3px_var(--color-ring)]">
+
+      <ComposerPrimitive.Root className="mx-auto flex w-full max-w-3xl items-end gap-2 rounded-2xl border border-border-strong bg-background px-2.5 py-2.5 shadow-md transition-[box-shadow,border-color] duration-150 focus-within:border-brand/30 focus-within:shadow-[0_0_0_3px_var(--color-ring),var(--shadow-md)]">
         <input
           ref={fileInputRef}
           type="file"
@@ -243,6 +242,18 @@ function Composer() {
           className="hidden"
           onChange={onPickFiles}
         />
+        {/* 附件按钮：移至左侧 */}
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isRunning}
+          className="mb-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+          aria-label="添加附件"
+          title="添加附件"
+        >
+          <Paperclip className="size-4" />
+        </button>
+
         <ComposerPrimitive.Input
           ref={inputRef}
           rows={1}
@@ -258,36 +269,32 @@ function Composer() {
                 ? AGENT_COMPOSER_NOT_READY
                 : AGENT_COMPOSER_PLACEHOLDER
           }
-          className="max-h-48 flex-1 resize-none bg-transparent py-1.5 text-sm outline-none placeholder:text-muted-foreground"
+          className="max-h-48 flex-1 resize-none bg-transparent py-1 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/60"
         />
-        <Button
-          type="button"
-          variant="primary"
-          size="icon"
-          className="rounded-xl"
-          aria-label="添加附件"
-          title="添加附件"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={isRunning}
-        >
-          <Paperclip />
-        </Button>
+
         <ThreadPrimitive.If running={false}>
           <ComposerPrimitive.Send asChild>
-            <Button variant="primary" size="icon" className="rounded-xl" aria-label="发送">
-              <ArrowUp />
-            </Button>
+            <button
+              className="mb-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand text-brand-foreground shadow-xs transition-[background,transform,opacity] hover:opacity-90 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="发送"
+            >
+              <ArrowUp className="size-4" />
+            </button>
           </ComposerPrimitive.Send>
         </ThreadPrimitive.If>
         <ThreadPrimitive.If running>
           <ComposerPrimitive.Cancel asChild>
-            <Button variant="secondary" size="icon" className="rounded-xl" aria-label="停止">
-              <Square className="size-3.5 fill-current" />
-            </Button>
+            <button
+              className="mb-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-border-strong bg-background text-foreground shadow-xs transition-colors hover:bg-secondary active:translate-y-px"
+              aria-label="停止"
+            >
+              <Square className="size-3 fill-current" />
+            </button>
           </ComposerPrimitive.Cancel>
         </ThreadPrimitive.If>
       </ComposerPrimitive.Root>
-      <p className="mx-auto mt-2 max-w-3xl text-center text-xs text-muted-foreground/60">
+
+      <p className="mx-auto mt-2 max-w-3xl text-center text-[11px] text-muted-foreground/50">
         Enter 发送 · Shift+Enter 换行
       </p>
     </div>
@@ -494,16 +501,16 @@ function UserMessage() {
   const [selectedAttachment, setSelectedAttachment] = useState<ChatAttachment | null>(null);
   const hasText = text.length > 0;
   return (
-    <MessagePrimitive.Root className="group mb-5 flex flex-col items-end">
+    <MessagePrimitive.Root className="group mb-5 flex flex-col items-end apod-enter-up">
       {hasText || archived ? (
         <div
           className={cn(
-            "max-w-[80%] rounded-2xl rounded-br-sm bg-secondary px-4 py-2.5 text-sm",
+            "apod-user-bubble max-w-[80%] rounded-2xl rounded-br-sm bg-brand px-4 py-2.5 text-sm text-brand-foreground shadow-sm",
             archived && "opacity-55",
           )}
         >
           {archived ? (
-            <p className="mb-1 text-[11px] text-muted-foreground">已压缩（不再带入上下文）</p>
+            <p className="mb-1 text-[11px] text-brand-foreground/50">已压缩（不再带入上下文）</p>
           ) : null}
           <MessagePrimitive.Parts components={{ Text: UserText }} />
         </div>
@@ -598,7 +605,7 @@ function AssistantMessage() {
   const text = useMessageText();
   const archived = useMessage((m) => (m.metadata as { archived?: boolean } | undefined)?.archived);
   return (
-    <MessagePrimitive.Root className={cn("group mb-6 flex flex-col gap-1 text-sm", archived && "opacity-55")}>
+    <MessagePrimitive.Root className={cn("group mb-6 flex flex-col gap-1 text-sm apod-enter-up", archived && "opacity-55")}>
       {archived ? (
         <p className="text-[11px] text-muted-foreground">已压缩（不再带入上下文）</p>
       ) : null}

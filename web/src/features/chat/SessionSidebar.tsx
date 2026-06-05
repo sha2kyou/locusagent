@@ -158,16 +158,18 @@ export function SessionSidebar({
         ) : (
           <>
             {groups.map((g) => (
-              <div key={g.label} className="mb-2">
-                <div className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/60">
+              <div key={g.label} className="mb-3">
+                <div className="px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
                   {g.label}
                 </div>
                 {g.items.map((s) => (
                   <div
                     key={s.id}
                     className={cn(
-                      "group flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm transition-colors",
-                      s.id === currentId ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary/60",
+                      "group relative flex items-center gap-1 rounded-lg px-2.5 py-2 text-[13px] transition-colors",
+                      s.id === currentId
+                        ? "bg-accent font-medium text-foreground shadow-xs"
+                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground/90",
                     )}
                     role="button"
                     tabIndex={0}
@@ -178,7 +180,10 @@ export function SessionSidebar({
                       handleSelect(s.id);
                     }}
                   >
-                    <span className="min-w-0 flex-1 truncate text-left" title={s.title}>
+                    <span
+                      className="min-w-0 flex-1 truncate text-left leading-snug"
+                      title={s.title}
+                    >
                       {sessionLabel(s.title)}
                     </span>
                     <Button
@@ -189,6 +194,7 @@ export function SessionSidebar({
                         e.stopPropagation();
                         void onDelete(s);
                       }}
+                      className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
                       aria-label="删除"
                     >
                       <Trash2 />

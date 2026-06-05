@@ -8,52 +8,52 @@
    主操作用近黑按钮，强调色集中在 --brand，换色只改这一处即可。
    ============================================================ */
 :root {
-  --radius: 0.875rem;
+  --radius: 0.75rem;
 
   /* 品牌强调色（唯一信号色）：近黑单色 */
-  --brand: oklch(0.24 0 0);
+  --brand: oklch(0.22 0 0);
   --brand-foreground: oklch(0.99 0 0);
-  --brand-soft: oklch(0.24 0 0 / 0.07);
-  --brand-ring: oklch(0.24 0 0 / 0.28);
+  --brand-soft: oklch(0.22 0 0 / 0.07);
+  --brand-ring: oklch(0.22 0 0 / 0.22);
 
-  /* 表面层次：白底 → 浅灰抬升 */
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.21 0 0);
+  /* 表面层次：带极微暖调的白底 */
+  --background: oklch(0.999 0.001 85);
+  --foreground: oklch(0.18 0 0);
 
-  --surface: oklch(0.975 0 0);
-  --surface-2: oklch(0.955 0 0);
+  --surface: oklch(0.973 0.002 80);
+  --surface-2: oklch(0.950 0.003 80);
 
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.21 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0 0);
+  --card: oklch(0.999 0.001 85);
+  --card-foreground: oklch(0.18 0 0);
+  --popover: oklch(0.999 0.001 85);
+  --popover-foreground: oklch(0.18 0 0);
 
   --primary: var(--brand);
   --primary-foreground: var(--brand-foreground);
-  --secondary: oklch(0.955 0 0);
-  --secondary-foreground: oklch(0.26 0 0);
+  --secondary: oklch(0.951 0.003 80);
+  --secondary-foreground: oklch(0.22 0 0);
 
-  --muted: oklch(0.965 0 0);
-  --muted-foreground: oklch(0.52 0 0);
+  --muted: oklch(0.963 0.002 80);
+  --muted-foreground: oklch(0.50 0 0);
 
-  --accent: oklch(0.95 0 0);
-  --accent-foreground: oklch(0.24 0 0);
+  --accent: oklch(0.948 0.003 80);
+  --accent-foreground: oklch(0.22 0 0);
 
-  --destructive: oklch(0.58 0.21 25);
+  --destructive: oklch(0.56 0.22 25);
   --destructive-foreground: oklch(0.99 0 0);
-  --success: oklch(0.6 0.14 150);
-  --warning: oklch(0.68 0.13 70);
+  --success: oklch(0.58 0.15 150);
+  --warning: oklch(0.66 0.13 70);
 
-  --border: oklch(0 0 0 / 0.1);
-  --border-strong: oklch(0 0 0 / 0.16);
-  --input: oklch(0 0 0 / 0.14);
+  --border: oklch(0 0 0 / 0.09);
+  --border-strong: oklch(0 0 0 / 0.15);
+  --input: oklch(0 0 0 / 0.12);
   --ring: var(--brand-ring);
 
-  /* 侧栏轨道：浅灰，略深于主区 */
-  --sidebar: oklch(0.97 0 0);
-  --sidebar-foreground: oklch(0.21 0 0);
-  --sidebar-accent: oklch(0.93 0 0);
-  --sidebar-border: oklch(0 0 0 / 0.08);
+  /* 侧栏轨道：微暖灰，与主区区分 */
+  --sidebar: oklch(0.966 0.002 80);
+  --sidebar-foreground: oklch(0.18 0 0);
+  --sidebar-accent: oklch(0.928 0.003 80);
+  --sidebar-border: oklch(0 0 0 / 0.07);
 
   /* 阴影：浅色模式用暖黑透明叠加 */
   --shadow-xs: 0 1px 2px oklch(0 0 0 / 0.05);
@@ -262,20 +262,28 @@
     }
   }
 
-  /* 细滚动条 */
+  /* 极细滚动条：默认隐形，滑过时浮现 */
   * {
     scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  *:hover {
     scrollbar-color: var(--color-border-strong) transparent;
   }
   *::-webkit-scrollbar {
-    width: 9px;
-    height: 9px;
+    width: 5px;
+    height: 5px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
   }
   *::-webkit-scrollbar-thumb {
-    background-color: var(--color-border-strong);
+    background-color: transparent;
     border-radius: 9999px;
-    border: 2px solid transparent;
-    background-clip: content-box;
+    transition: background-color 0.2s;
+  }
+  *:hover::-webkit-scrollbar-thumb {
+    background-color: var(--color-border-strong);
   }
 
   /* Markdown 正文排版（聊天气泡 / thinking 折叠块等）
@@ -482,6 +490,25 @@
   .dark .hljs-template-variable,
   .dark .hljs-property {
     color: oklch(0.74 0.05 280);
+  }
+
+  /* 用户消息深色气泡内：覆盖 prose 文字颜色 */
+  .apod-user-bubble .apod-prose a {
+    color: oklch(0.82 0 0);
+    text-decoration-color: oklch(0.82 0 0 / 0.5);
+  }
+  .apod-user-bubble .apod-prose :not(pre) > code {
+    background-color: oklch(1 0 0 / 0.14);
+    border-color: oklch(1 0 0 / 0.18);
+    color: oklch(0.94 0 0);
+  }
+  .dark .apod-user-bubble .apod-prose a {
+    color: oklch(0.32 0 0);
+  }
+  .dark .apod-user-bubble .apod-prose :not(pre) > code {
+    background-color: oklch(0 0 0 / 0.14);
+    border-color: oklch(0 0 0 / 0.18);
+    color: oklch(0.2 0 0);
   }
 
   /* react-js-cron: 统一到当前设计系统（内部基于 ant-select） */

@@ -83,7 +83,7 @@ function hashString(s: string): string {
   return (h >>> 0).toString(36);
 }
 
-export const Markdown = memo(function Markdown({ text }: { text: string }) {
+export const Markdown = memo(function Markdown({ text, enableMath = true }: { text: string; enableMath?: boolean }) {
   const segs = segment(text);
   return (
     <div className="apod-prose">
@@ -91,18 +91,23 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
         if (s.kind === "thinking") return <ThinkingBlock key={`t-${i}`} content={s.content} />;
         if (s.kind === "html") return <HtmlRender key={`h-${hashString(s.content)}`} html={s.content} />;
         if (s.kind === "html-pending") return <HtmlPending key="h-pending" />;
-        return <MarkdownBlock key={`m-${i}`} text={s.content} />;
+        return <MarkdownBlock key={`m-${i}`} text={s.content} enableMath={enableMath} />;
       })}
     </div>
   );
 });
 
-function MarkdownBlock({ text }: { text: string }) {
-  const normalized = useMemo(() => normalizeLatexInput(text), [text]);
+function MarkdownBlock({ text, enableMath = true }: { text: string; enableMath?: boolean }) {
+  const normalized = useMemo(
+    () => (enableMath ? normalizeLatexInput(text) : text),
+    [text, enableMath],
+  );
+  const remarkPlugins = enableMath ? [remarkMath, remarkGfm] : [remarkGfm];
+  const rehypePlugins = enableMath ? [rehypeKatex, rehypeHighlight] : [rehypeHighlight];
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkMath, remarkGfm]}
-      rehypePlugins={[rehypeKatex, rehypeHighlight]}
+      remarkPlugins={remarkPlugins}
+      rehypePlugins={rehypePlugins}
       components={{
         pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
         table: ({ children, ...props }) => (
@@ -123,10 +128,18 @@ function MarkdownBlock({ text }: { text: string }) {
 }
 
 /** 无 thinking/HTML 分段，用于用户气泡等纯 Markdown+公式场景 */
-export function ProseMarkdown({ text, className }: { text: string; className?: string }) {
+export function ProseMarkdown({
+  text,
+  className,
+  enableMath = true,
+}: {
+  text: string;
+  className?: string;
+  enableMath?: boolean;
+}) {
   return (
     <div className={cn("apod-prose max-w-none", className)}>
-      <MarkdownBlock text={text} />
+      <MarkdownBlock text={text} enableMath={enableMath} />
     </div>
   );
 }
@@ -152,16 +165,18 @@ function CodeBlock({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div ref={ref} className="group my-3 overflow-hidden rounded-lg border border-border">
-      <div className="flex items-center justify-between border-b border-border bg-surface-2 px-3 py-1.5 text-xs text-muted-foreground">
-        <span className="font-mono lowercase">{lang || "code"}</span>
+    <div ref={ref} className="group my-3 overflow-hidden rounded-xl border border-border shadow-xs">
+      <div className="flex items-center justify-between border-b border-border bg-surface-2/80 px-3.5 py-2">
+        <span className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-[11px] lowercase tracking-wide text-muted-foreground">
+          {lang || "code"}
+        </span>
         <div className="flex items-center gap-0.5">
           <button
             type="button"
             onClick={() => setWrap((v) => !v)}
             className={cn(
-              "inline-flex size-6 items-center justify-center rounded transition hover:text-foreground",
-              wrap && "text-foreground",
+              "inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface hover:text-foreground",
+              wrap && "bg-surface text-foreground",
             )}
             aria-label="自动换行"
             title={wrap ? "取消换行" : "自动换行"}
@@ -171,7 +186,7 @@ function CodeBlock({ children }: { children: ReactNode }) {
           <button
             type="button"
             onClick={copy}
-            className="inline-flex size-6 items-center justify-center rounded transition hover:text-foreground"
+            className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
             aria-label="复制代码"
             title="复制"
           >
@@ -181,7 +196,7 @@ function CodeBlock({ children }: { children: ReactNode }) {
       </div>
       <pre
         className={cn(
-          "overflow-x-auto bg-surface-2 p-3.5 text-[13px] leading-relaxed",
+          "overflow-x-auto bg-surface-2/50 p-4 text-[13px] leading-relaxed",
           wrap && "whitespace-pre-wrap wrap-break-word",
         )}
       >
@@ -210,17 +225,30 @@ export function ThinkingBlock({
   }, [isActive]);
 
   return (
-    <div className="my-2 rounded-lg border border-border bg-surface/40">
+    <div className="my-2 overflow-hidden rounded-xl border border-border/70 bg-surface/30 shadow-xs">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1.5 px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-surface/60"
       >
-        <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
-        {displayLabel}
+        {isActive ? (
+          <span className="flex size-3.5 shrink-0 items-center justify-center">
+            <span className="size-2 animate-pulse rounded-full bg-muted-foreground/60" />
+          </span>
+        ) : (
+          <ChevronRight className={cn("size-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-150", open && "rotate-90")} />
+        )}
+        <span className="shrink-0 whitespace-nowrap text-[12px] font-medium text-muted-foreground">
+          {displayLabel}
+        </span>
+        {!open && content ? (
+          <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground/50">
+            {content.slice(0, 80).replace(/\n/g, " ")}
+          </span>
+        ) : null}
       </button>
       {open && (
-        <div className="apod-prose border-t border-border px-3 py-2 text-[13px] text-muted-foreground">
+        <div className="apod-prose border-t border-border/60 px-3.5 py-3 text-[13px] text-muted-foreground/90">
           <MarkdownBlock text={content} />
         </div>
       )}
