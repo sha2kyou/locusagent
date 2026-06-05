@@ -31,9 +31,10 @@ async def run_post_tasks(
         log.warning("post_run_session_title_failed", error=str(exc))
 
     try:
-        if trajectory and should_run_background_review(
+        if trajectory and await should_run_background_review(
             tool_calls_made=tool_calls_made,
             messages=trajectory,
+            session_id=session_id,
         ):
             await run_background_review(
                 trajectory,

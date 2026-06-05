@@ -520,10 +520,12 @@ function UserMessage() {
 function resolveTodoPlan(
   fromParts: TodoPlan | null,
   sessionTodoPlan: TodoPlan | null,
-  useSessionTodoPlan: boolean,
+  isLastAssistant: boolean,
   hasTodoInMessage: boolean,
 ): TodoPlan | null {
-  if (!useSessionTodoPlan) return null;
+  if (!isLastAssistant) {
+    return fromParts;
+  }
   if (!hasTodoInMessage && !fromParts && !sessionTodoPlan) return null;
   if (sessionTodoPlan && fromParts && sessionTodoPlan.plan_id === fromParts.plan_id) {
     return sessionTodoPlan;
@@ -537,19 +539,19 @@ function AssistantPartList({
   chatMsg,
   streaming,
   sessionTodoPlan,
-  useSessionTodoPlan,
+  isLastAssistant,
 }: {
   chatMsg: ChatMessage | undefined;
   streaming: boolean;
   sessionTodoPlan: TodoPlan | null;
-  useSessionTodoPlan: boolean;
+  isLastAssistant: boolean;
 }) {
   if (!chatMsg) return null;
   const fromParts = extractLatestTodoPlan(chatMsg.parts);
   const hasTodoInMessage = chatMsg.parts.some(
     (p) => p.type === "tool" && isTodoTool(p.toolName) && (p.running || Boolean(p.preview)),
   );
-  const todoPlan = resolveTodoPlan(fromParts, sessionTodoPlan, useSessionTodoPlan, hasTodoInMessage);
+  const todoPlan = resolveTodoPlan(fromParts, sessionTodoPlan, isLastAssistant, hasTodoInMessage);
   return (
     <>
       {chatMsg.parts.map((p, i) => {
@@ -588,7 +590,7 @@ function AssistantMessage() {
   const [selectedAttachment, setSelectedAttachment] = useState<ChatAttachment | null>(null);
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
   const streaming = isRunning && lastAssistant?.id === id;
-  const useSessionTodoPlan = lastAssistant?.id === id;
+  const isLastAssistant = lastAssistant?.id === id;
   const text = useMessageText();
   const archived = useMessage((m) => (m.metadata as { archived?: boolean } | undefined)?.archived);
   return (
@@ -601,7 +603,7 @@ function AssistantMessage() {
           chatMsg={chatMsg}
           streaming={streaming}
           sessionTodoPlan={sessionTodoPlan}
-          useSessionTodoPlan={useSessionTodoPlan}
+          isLastAssistant={isLastAssistant}
         />
       </div>
       <MessageAttachmentChips

@@ -73,16 +73,16 @@ _TOOL_RESTRICTION_NOTICE = (
     "Other tools are unavailable — do not attempt them."
 )
 
-_ACTION_KEYWORDS = (
-    "created",
-    "updated",
-    "patched",
-    "saved",
-    "replaced",
-    "removed",
-    "deleted",
-    "memory#",
-    "auto_extract",
+_REVIEW_ACTION_TOOLS = frozenset({"memory", "skill_manage"})
+
+_REVIEW_TRIGGER_SYSTEM_PROMPT = (
+    "你是后台学习触发分类器。根据本轮用户请求与工具活动摘要，判断值不值得启动 memory/skill 后台审查，"
+    "从对话中沉淀可复用的用户偏好或工作流经验。\n\n"
+    "should_review=true：用户透露稳定偏好/身份/约束、纠正行为方式、出现可复用技巧或流程改进信号、"
+    "或工具密集执行且可能有经验可沉淀。\n"
+    "should_review=false：纯问答/翻译/总结、一次性小任务、无 durable 信息、"
+    "或明显只是临时排障且无可复用模式。\n\n"
+    '输出严格 JSON：{"should_review": true|false, "reason": "一句中文说明"}'
 )
 
 
@@ -127,12 +127,60 @@ def _prior_tool_contents(messages: list[dict[str, Any]]) -> set[str]:
     return out
 
 
+def _message_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            if item.get("type") in {"text", "input_text"}:
+                text = item.get("text")
+                if isinstance(text, str) and text.strip():
+                    parts.append(text.strip())
+        return "\n".join(parts).strip()
+    return ""
+
+
+def _last_user_query(messages: list[dict[str, Any]]) -> str:
+    start = _last_user_index(messages)
+    if start < 0:
+        return ""
+    msg = messages[start]
+    if not isinstance(msg, dict):
+        return ""
+    return _message_text(msg.get("content"))
+
+
+def _tool_names_by_call_id(messages: list[dict[str, Any]]) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for msg in messages or []:
+        if not isinstance(msg, dict) or msg.get("role") != "assistant":
+            continue
+        for tc in msg.get("tool_calls") or []:
+            if not isinstance(tc, dict):
+                continue
+            call_id = str(tc.get("id") or "").strip()
+            fn = tc.get("function") or {}
+            name = str(fn.get("name") or "").strip()
+            if call_id and name:
+                mapping[call_id] = name
+    return mapping
+
+
+def _is_review_noop_content(content: str) -> bool:
+    text = str(content or "").strip().lower()
+    return text in {"nothing to save.", "nothing to save"}
+
+
 def summarize_background_review_actions(
     review_messages: list[dict[str, Any]],
     prior_snapshot: list[dict[str, Any]],
 ) -> list[str]:
-    """从 review 循环的 tool 消息中提取用户可见的操作摘要。"""
+    """从 review 循环的 memory/skill_manage 成功 tool 消息中提取用户可见摘要。"""
     prior = _prior_tool_contents(prior_snapshot)
+    tool_names = _tool_names_by_call_id(review_messages)
     actions: list[str] = []
     for msg in review_messages or []:
         if not isinstance(msg, dict) or msg.get("role") != "tool":
@@ -140,9 +188,15 @@ def summarize_background_review_actions(
         content = str(msg.get("content") or "").strip()
         if not content or content in prior:
             continue
-        lowered = content.lower()
-        if any(kw in lowered for kw in _ACTION_KEYWORDS):
-            actions.append(content)
+        if content.startswith("Error:") or content.startswith("error:"):
+            continue
+        if _is_review_noop_content(content):
+            continue
+        call_id = str(msg.get("tool_call_id") or "").strip()
+        tool_name = tool_names.get(call_id, "")
+        if tool_name not in _REVIEW_ACTION_TOOLS:
+            continue
+        actions.append(content)
     return list(dict.fromkeys(actions))
 
 
@@ -162,12 +216,50 @@ def _turn_used_skill_manage(messages: list[dict[str, Any]]) -> bool:
     return False
 
 
-def should_run_background_review(
+async def assess_background_review_intent(
+    *,
+    user_query: str,
+    tool_calls_made: int,
+    session_id: str | None = None,
+) -> bool:
+    query = str(user_query or "").strip()
+    if not query:
+        return False
+
+    from .llm_classifier import classify_json
+
+    payload = (
+        f"用户请求：{query[:1500]}\n"
+        f"本轮工具调用次数：{tool_calls_made}"
+    )
+    try:
+        parsed = await classify_json(
+            system_prompt=_REVIEW_TRIGGER_SYSTEM_PROMPT,
+            user_content=payload,
+            scenario="background_review_intent",
+            session_id=session_id,
+            retry_log_event="background_review_intent_disable_thinking_retry",
+        )
+        should_review = bool(parsed.get("should_review", False))
+        log.info(
+            "background_review_intent_assessed",
+            should_review=should_review,
+            reason=str(parsed.get("reason") or "")[:120],
+            session_id=session_id,
+        )
+        return should_review
+    except Exception as exc:
+        log.warning("background_review_intent_failed", error=str(exc), session_id=session_id)
+        return True
+
+
+async def should_run_background_review(
     *,
     tool_calls_made: int,
     messages: list[dict[str, Any]],
+    session_id: str | None = None,
 ) -> bool:
-    """本轮 tool 活动达到阈值且前台未手动 skill_manage 时，触发 memory+skill 联合 review。"""
+    """tool 活动达到阈值且前台未手动 skill_manage 时，由 LLM 判断是否触发 review。"""
     settings = get_settings()
     if not settings.background_review_enabled:
         return False
@@ -177,7 +269,11 @@ def should_run_background_review(
         return False
     if _turn_used_skill_manage(messages):
         return False
-    return True
+    return await assess_background_review_intent(
+        user_query=_last_user_query(messages),
+        tool_calls_made=tool_calls_made,
+        session_id=session_id,
+    )
 
 
 def _select_review_prompt(*, review_memory: bool, review_skills: bool) -> str:

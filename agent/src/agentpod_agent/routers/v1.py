@@ -321,7 +321,7 @@ async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, 
     system_prompt = await _get_or_create_system_prompt(sid)
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     await _insert_runtime_time_context(messages)
-    todo_hint = build_todo_intent_system_message(assess_todo_intent(user_query))
+    todo_hint = build_todo_intent_system_message(await assess_todo_intent(user_query, session_id=sid))
     if todo_hint:
         messages.append({"role": "system", "content": todo_hint})
     messages.extend(db_msgs)

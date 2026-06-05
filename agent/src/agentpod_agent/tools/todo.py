@@ -74,7 +74,7 @@ register_builtin(
             "action=confirm：更新某步骤状态——执行前 mark in_progress，完成后 mark done（可选 note 简述结果）；"
             "无法并行两个 in_progress 步骤。"
             "action=view：读取当前计划。"
-            "适用：多步任务（通常 3 步及以上，或 intent 评分≥3）。简单一问一答无需调用。"
+            "适用：多步任务（通常 3 步及以上）。简单一问一答无需调用。"
             "流程：create → 对当前步骤 confirm(in_progress) → 执行工具/产出 → confirm(done) → 下一步。"
         ),
         parameters={
