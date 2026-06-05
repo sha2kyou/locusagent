@@ -177,6 +177,10 @@ export function coalesceHistory(items: Message[], opts: CoalesceHistoryOptions =
           startedAt: 0,
         });
       }
+      const atts = normalizeAttachments(msg.attachments);
+      if (atts?.length) {
+        cur!.attachments = [...(cur!.attachments ?? []), ...atts];
+      }
     } else if (msg.role === "tool") {
       const meta = (msg.tool_calls?.[0] as LegacyToolMeta | undefined);
       const id = msg.tool_call_id ?? meta?.tool_call_id;

@@ -99,12 +99,14 @@ export interface ChatChunk {
   }[];
   session_id?: string;
   run_id?: string;
-  x_event?: "tool_call" | "tool_result" | "error";
+  x_event?: "tool_call" | "tool_result" | "attachment" | "error";
   x_tool_name?: string;
   x_tool_kind?: ToolKind;
   x_tool_id?: string;
   x_tool_call_id?: string;
   x_preview?: string;
+  x_attachment_id?: string;
+  x_attachment_name?: string;
   x_message?: string;
 }
 

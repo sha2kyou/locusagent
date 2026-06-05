@@ -132,10 +132,18 @@ async def proxy_artifacts(
 
 
 @router.api_route("/attachments", methods=PROXY_METHODS)
+@router.get("/attachments/{attachment_id}/download")
 async def proxy_attachments(
     request: Request,
     ctx: AuthContext = Depends(require_session),
+    attachment_id: str | None = None,
 ):
+    if attachment_id:
+        return await proxy_to_user_container(
+            request,
+            ctx.user,
+            f"/workspace/attachments/{attachment_id}/download",
+        )
     return await proxy_to_user_container(request, ctx.user, "/workspace/attachments")
 
 

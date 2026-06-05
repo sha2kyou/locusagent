@@ -1,4 +1,4 @@
-import { apiGet, apiSend } from "./client";
+import { ApiError, apiGet, apiSend, getWorkspaceId, redirectToLogin } from "./client";
 import type {
   ActiveRunResponse,
   EnvVarEntry,
@@ -127,6 +127,33 @@ export const createAttachment = (body: {
   unsupportedReason?: string;
   truncated?: boolean;
 }>("/api/workspace/attachments", "POST", body);
+
+export async function downloadAttachment(id: string, filename: string): Promise<void> {
+  const workspaceId = getWorkspaceId();
+  const res = await fetch(`/api/workspace/attachments/${encodeURIComponent(id)}/download`, {
+    credentials: "same-origin",
+    headers: workspaceId ? { "X-Workspace-Id": workspaceId } : {},
+  });
+  if (res.status === 401) {
+    redirectToLogin();
+    throw new ApiError("未登录", { status: 401, code: "unauthenticated" });
+  }
+  if (!res.ok) {
+    const ct = res.headers.get("content-type") || "";
+    const data: unknown = ct.includes("json") ? await res.json().catch(() => null) : await res.text();
+    throw new ApiError(`下载失败 (${res.status})`, { status: res.status, data });
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || "download";
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
 
 // ---- 技能 ----
 export const listSkills = () => apiGet<{ items: Skill[] }>("/api/workspace/skills");

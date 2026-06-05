@@ -10,6 +10,7 @@ from . import agentpod as _agentpod  # noqa: F401
 from . import artifacts as _artifacts  # noqa: F401
 from . import clarify as _clarify  # noqa: F401
 from . import context_distill as _summarize  # noqa: F401
+from . import deliver_file as _deliver_file  # noqa: F401
 from . import fs as _fs  # noqa: F401
 from . import memory as _memory  # noqa: F401
 from . import notifications as _notifications  # noqa: F401

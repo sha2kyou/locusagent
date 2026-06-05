@@ -19,7 +19,7 @@ log = get_logger("system_prompt")
 
 _SNAPSHOT_MEMORY_LIMIT = 30
 # 变更 build_frozen_system_prompt 模板时递增，使旧 session 缓存自动失效。
-FROZEN_SYSTEM_PROMPT_VERSION = 11
+FROZEN_SYSTEM_PROMPT_VERSION = 13
 _CACHE_PREFIX = f"agentpod:sp:v{FROZEN_SYSTEM_PROMPT_VERSION}:"
 
 
@@ -90,13 +90,15 @@ async def build_frozen_system_prompt() -> str:
     pieces = [
         f"You are an AI agent operating in a sandboxed container for user {settings.user_id}.",
         f"Use the provided tools when appropriate. Available tools: {tool_names}.",
+        "Parallel tool calls: when several tool invocations are independent (no output of one is required to choose args for another), emit all of them as multiple tool_calls in one assistant turn—they run in parallel. Prefer this over one-tool-per-turn ReAct when the user asks to fetch, search, or read multiple things at once (e.g. several read_file paths, multiple RSS/URLs, search_files + web_search, MCP read/list calls). Do not wait for round N results before issuing independent round N+1 calls. Exceptions: clarify must be alone—never parallel with other tools; after a successful clarify, end the turn immediately. Never parallelize mutating tools (write_file, patch, delete_file, terminal, execute_code, memory/skill/artifact writes, MCP config changes) or any step where a later call depends on an earlier result.",
         "When a direction or preference would materially shape the output (e.g. naming, design style, scope, tech choice), ask the user via clarify with strict JSON arguments {question, choices, allow_other} (2–4 mutually exclusive choices; single-select). Put every selectable option in choices, not in question. Ask only ONE question per turn: call clarify at most once per turn, never in parallel; if several things need clarifying, ask them one at a time across turns. After a successful clarify call, end your turn immediately with no further output. Skip clarify when options cannot be enumerated, the user must pick multiple items, any reasonable choice is equally fine, or the user explicitly asks you to just proceed.",
         "Workspace files live under workspace/ relative to the container data directory; skill files live under /data/skills.",
         "For file operations within the workspace, use read_file, search_files, write_file, and patch.",
         "Use manage_workspace for MCP server configuration and environment summary only—not for creating, deleting, renaming, or switching AgentPod workspaces (multi-workspace containers). "
         "You operate in the user's current workspace only; if they ask to create/delete/rename/switch workspaces during chat, refuse and tell them to use the Web UI 「工作区」 page outside chat.",
         "The user cannot directly retrieve container/server files from the web UI.",
-        "Deliver outputs directly in chat as inline text or code blocks unless the user explicitly asks to save, export, or archive.",
+        "Deliver outputs directly in chat as inline text or code blocks unless the user explicitly asks to save, export, or archive. "
+        "When the user should download a generated file (pdf, zip, csv, binaries, etc.), write it under workspace/ then call deliver_file{path, name?} to attach it to your reply for in-chat download; do not paste large binary content in chat.",
         "For math in chat, use LaTeX for frontend rendering: inline $...$, block-level $$...$$ on its own line (blank line before/after each block). Do not substitute Unicode symbols or put formulas in ordinary code fences. Use \\\\ for row/line breaks inside environments (pmatrix, cases, aligned). Example matrix: $$\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}$$; example cases: $$\\begin{cases} x + y = 5 \\\\ 2x - y = 1 \\end{cases}$$.",
         "A compact skills catalog is listed below. When a skill is relevant to the current task, call skill_view{name} to load its full body on demand; do not assume its content.",
         "A frozen long-term memory snapshot is included below (each line shows #id [user|memory]). "

@@ -76,6 +76,8 @@ class Settings(BaseSettings):
     tool_guardrail_no_progress_warn_after: int = Field(default=2, alias="TOOL_GUARDRAIL_NO_PROGRESS_WARN_AFTER")
     tool_guardrail_no_progress_block_after: int = Field(default=5, alias="TOOL_GUARDRAIL_NO_PROGRESS_BLOCK_AFTER")
 
+    attachment_max_bytes: int = Field(default=1_048_576, alias="ATTACHMENT_MAX_BYTES")
+
     # 流式 LLM：单 chunk 空闲超时（秒）与整段上限（0 表示不限制整段）
     stream_chunk_timeout_s: float = Field(default=90.0, alias="STREAM_CHUNK_TIMEOUT_S")
     stream_max_duration_s: float = Field(default=600.0, alias="STREAM_MAX_DURATION_S")

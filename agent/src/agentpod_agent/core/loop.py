@@ -24,6 +24,7 @@ from .context import compress_with_report
 from .models import messages_include_images, resolve_model
 from .llm import get_llm_client
 from .stream_health import StreamHealthError, iter_with_stream_health
+from .run_context import set_chat_session_id
 from .tool_guardrails import (
     ToolCallGuardrailController,
     append_guardrail_guidance,
@@ -268,6 +269,17 @@ def _guardrail_skip_result(
     }
 
 
+def _chat_attachment_from_metadata(metadata: dict[str, Any]) -> dict[str, str] | None:
+    raw = metadata.get("chat_attachment")
+    if isinstance(raw, dict) and raw.get("id"):
+        return {"id": str(raw["id"]), "name": str(raw.get("name") or "file")}
+    return None
+
+
+def _tool_message_for_llm(msg: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in msg.items() if not str(k).startswith("_")}
+
+
 async def _execute_one_tool_call(
     registry: ToolRegistry,
     tc: Any,
@@ -319,10 +331,14 @@ async def _execute_one_tool_call(
             "tool_call_id": tc.id,
             "content": content,
         }
+    chat_attachments: list[dict[str, str]] = []
     try:
         result = await registry.call(name, args)
         log.info("tool_executed", tool=name)
         content = result.to_message()
+        att = _chat_attachment_from_metadata(result.metadata)
+        if att is not None:
+            chat_attachments.append(att)
     except ToolError as exc:
         log.warning("tool_failed", tool=name, error=str(exc))
         content = f"Error: {exc}"
@@ -334,7 +350,10 @@ async def _execute_one_tool_call(
             failed=classify_tool_failure(name, content),
         )
         content = append_guardrail_guidance(content, post)
-    return {"role": "tool", "tool_call_id": tc.id, "content": content}
+    out: dict[str, Any] = {"role": "tool", "tool_call_id": tc.id, "content": content}
+    if chat_attachments:
+        out["_chat_attachments"] = chat_attachments
+    return out
 
 
 async def _execute_tool_calls(
@@ -517,6 +536,7 @@ async def run_chat_loop(
     artifact_save_rounds_made = 0
     final_text = ""
     guardrail = ToolCallGuardrailController(guardrail_config_from_settings(settings))
+    set_chat_session_id(session_id)
 
     for round_idx in range(1, effective_max_rounds + 1):
         working, compression_report = await compress_with_report(
@@ -631,7 +651,7 @@ async def run_chat_loop(
                 blocked_tool_actions=blocked_actions,
                 guardrail=guardrail,
             )
-            working.extend(tool_results)
+            working.extend(_tool_message_for_llm(r) for r in tool_results)
             stop = guardrail.turn_stop_decision
             if stop is not None and stop.should_stop_turn:
                 halt = stop
@@ -777,6 +797,7 @@ async def run_chat_loop_stream(
     stream_max_duration = (
         settings.stream_max_duration_s if settings.stream_max_duration_s > 0 else None
     )
+    set_chat_session_id(session_id)
 
     for round_idx in range(1, max_rounds + 1):
         working, compression_report = await compress_with_report(
@@ -987,7 +1008,9 @@ async def run_chat_loop_stream(
                     "preview": preview,
                     "content": r.get("content") or "",
                 }
-            working.extend(tool_results)
+                for att in r.get("_chat_attachments") or []:
+                    yield {"type": "attachment", "id": att["id"], "name": att["name"]}
+            working.extend(_tool_message_for_llm(r) for r in tool_results)
             stop = guardrail.turn_stop_decision
             if stop is not None and stop.should_stop_turn:
                 halt = stop

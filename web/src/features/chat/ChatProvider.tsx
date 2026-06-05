@@ -169,7 +169,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const messageAttachments = useMemo<Record<string, ChatAttachment[]>>(() => {
     const map: Record<string, ChatAttachment[]> = {};
     for (const msg of messages) {
-      if (msg.role !== "user" || !msg.attachments?.length) continue;
+      if (!msg.attachments?.length) continue;
       map[msg.id] = msg.attachments;
     }
     return map;
@@ -551,6 +551,32 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                   });
                 }
                 return mapped;
+              });
+            } else if (ev === "attachment") {
+              const attId = chunk.x_attachment_id;
+              const attName = chunk.x_attachment_name || "file";
+              if (!attId) return;
+              setMessages((prev) => {
+                const next = [...prev];
+                for (let i = next.length - 1; i >= 0; i--) {
+                  if (next[i].role !== "assistant") continue;
+                  const existing = next[i].attachments ?? [];
+                  if (existing.some((a) => a.id === attId)) return prev;
+                  next[i] = {
+                    ...next[i],
+                    attachments: [
+                      ...existing,
+                      {
+                        id: attId,
+                        name: attName,
+                        kind: "other",
+                        processable: false,
+                      },
+                    ],
+                  };
+                  return next;
+                }
+                return prev;
               });
             } else if (ev === "error") {
               updateLastAssistant((p) => p, chunk.x_message || "出错了");

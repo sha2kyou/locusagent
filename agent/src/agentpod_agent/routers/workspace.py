@@ -7,8 +7,10 @@ from __future__ import annotations
 
 import asyncio
 from typing import Literal
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from ..auth import verify_internal_token
@@ -32,6 +34,7 @@ from ..core import (
     list_sessions,
     session_lock,
 )
+from ..core.persistence import get_attachment_download
 from ..db import run_in_thread
 from ..env_vars import (
     add_env_var,
@@ -542,6 +545,17 @@ async def workspace_create_attachment(payload: AttachmentCreateIn) -> dict:
         truncated=bool(payload.truncated),
     )
     return item
+
+
+@router.get("/attachments/{attachment_id}/download")
+async def workspace_download_attachment(attachment_id: str) -> Response:
+    row = await get_attachment_download(attachment_id)
+    if row is None:
+        raise WsError("attachment_not_found", "attachment not found", status_code=404)
+    name, mime, data = row
+    ascii_name = name.encode("ascii", "ignore").decode() or "download"
+    disposition = f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}"
+    return Response(content=data, media_type=mime, headers={"Content-Disposition": disposition})
 
 
 @router.get("/sessions/{session_id}")

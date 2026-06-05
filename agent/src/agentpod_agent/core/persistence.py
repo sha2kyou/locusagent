@@ -759,6 +759,137 @@ async def create_attachment(
     return await _hydrate_attachment(meta)
 
 
+async def create_binary_attachment(
+    *,
+    session_id: str | None,
+    name: str,
+    mime_type: str | None,
+    data: bytes,
+) -> dict[str, Any]:
+    """上传二进制到 MinIO，供对话内下载（不注入 LLM 上下文）。"""
+    from ..config import get_settings
+
+    if not data:
+        raise ValueError("data is empty")
+    max_bytes = max(1, int(get_settings().attachment_max_bytes))
+    if len(data) > max_bytes:
+        raise ValueError(f"file exceeds attachment limit ({max_bytes} bytes)")
+
+    attachment_id = _new_attachment_id()
+    clean_name = (name or "file").strip() or "file"
+    clean_mime = str(mime_type or "").strip() or "application/octet-stream"
+    content_sha256 = hashlib.sha256(data).hexdigest()
+    kind = "other"
+    canonical_key = blob_object_key(content_sha256)
+    object_key = ""
+    object_etag = ""
+    uploaded_new_object = False
+
+    def _lookup_existing() -> tuple[str, str] | None:
+        with conn_scope(load_vec=False) as c:
+            return _find_existing_blob(
+                c,
+                sha256=content_sha256,
+                kind=kind,
+                canonical_key=canonical_key,
+            )
+
+    existing = await run_in_thread(_lookup_existing)
+    if existing:
+        object_key, object_etag = existing
+    else:
+        try:
+            uploaded = await save_attachment_bytes(
+                content_sha256=content_sha256,
+                mime_type=clean_mime,
+                data=data,
+            )
+            object_key = str(uploaded["object_key"])
+            object_etag = str(uploaded["etag"])
+            uploaded_new_object = not upload_was_skipped(uploaded)
+        except AttachmentStorageError as exc:
+            raise RuntimeError(f"attachment storage upload failed: {exc}") from exc
+
+    def _do() -> dict[str, Any]:
+        with conn_scope(load_vec=False) as c:
+            c.execute(
+                "INSERT INTO attachments("
+                "id, session_id, kind, name, mime_type, size_bytes, object_key, object_etag, sha256, "
+                "processable, unsupported_reason, truncated"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    attachment_id,
+                    session_id,
+                    kind,
+                    clean_name,
+                    clean_mime,
+                    len(data),
+                    object_key,
+                    object_etag,
+                    content_sha256,
+                    0,
+                    None,
+                    0,
+                ),
+            )
+            row = c.execute(
+                "SELECT id, name, kind, mime_type, object_key, object_etag, sha256, processable, "
+                "unsupported_reason, truncated FROM attachments WHERE id = ?",
+                (attachment_id,),
+            ).fetchone()
+            return _to_attachment_meta_row(row)
+
+    try:
+        meta = await run_in_thread(_do)
+    except Exception:
+        if uploaded_new_object and object_key:
+
+            def _rollback_keys() -> list[str]:
+                with conn_scope(load_vec=False) as c:
+                    return _unreferenced_object_keys(c, [object_key])
+
+            orphan_keys = await run_in_thread(_rollback_keys)
+            if orphan_keys:
+                await delete_attachment_objects(orphan_keys)
+        raise
+    return await _hydrate_attachment(meta)
+
+
+async def get_attachment_download(attachment_id: str) -> tuple[str, str, bytes] | None:
+    aid = str(attachment_id or "").strip()
+    if not aid:
+        return None
+
+    def _do() -> dict[str, Any] | None:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT name, mime_type, object_key, sha256 FROM attachments WHERE id = ?",
+                (aid,),
+            ).fetchone()
+            if row is None:
+                return None
+            return {
+                "name": str(row["name"] or "file"),
+                "mime_type": str(row["mime_type"] or "application/octet-stream"),
+                "object_key": str(row["object_key"] or ""),
+                "sha256": str(row["sha256"] or ""),
+            }
+
+    meta = await run_in_thread(_do)
+    if meta is None:
+        return None
+    object_key = str(meta["object_key"] or "")
+    if not object_key:
+        return None
+    try:
+        data, _ = await resolve_attachment_bytes(object_key, content_sha256=str(meta["sha256"] or "") or None)
+    except AttachmentStorageError:
+        return None
+    if data is None:
+        return None
+    return str(meta["name"]), str(meta["mime_type"]), data
+
+
 async def get_attachments_by_ids(attachment_ids: list[str]) -> list[dict[str, Any]]:
     if not attachment_ids:
         return []

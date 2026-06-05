@@ -159,7 +159,9 @@ register_builtin(
         name="web_extract",
         description=(
             "经 Jina Reader 提取网页 URL 正文（Markdown），返回 results 列表"
-            "（每项含 url/title/content/error）。支持最多 5 个 URL。"
+            "（每项含 url/title/content/error）。单次调用最多 5 个 URL。"
+            "超过 5 个时在同轮发出多个 web_extract tool_call（并行执行），"
+            "不要分多轮 ReAct 逐个等待。"
         ),
         parameters={
             "type": "object",

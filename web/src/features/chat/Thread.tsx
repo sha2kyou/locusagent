@@ -29,6 +29,7 @@ import type { ChatMessage } from "./model";
 import { ToolPartView } from "./ToolEvent";
 import { useChat } from "./ChatProvider";
 import type { ChatAttachment } from "./model";
+import { downloadAttachment } from "@/api/endpoints";
 import { Drawer } from "@/components/ui/drawer";
 
 const PROMPT_CHIPS = [
@@ -503,9 +504,11 @@ function AssistantPartList({
 }
 
 function AssistantMessage() {
-  const { regenerate, canRegenerate, lastErrored, messages, isRunning } = useChat();
+  const toast = useToast();
+  const { regenerate, canRegenerate, lastErrored, messages, isRunning, messageAttachments } = useChat();
   const id = useMessage((m) => m.id);
   const chatMsg = messages.find((m) => m.id === id);
+  const attachments = messageAttachments[id] ?? EMPTY_ATTACHMENTS;
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
   const streaming = isRunning && lastAssistant?.id === id;
   const text = useMessageText();
@@ -518,6 +521,27 @@ function AssistantMessage() {
       <div className="min-w-0">
         <AssistantPartList chatMsg={chatMsg} streaming={streaming} />
       </div>
+      {attachments.length > 0 ? (
+        <div className="mt-1 flex flex-wrap gap-1.5">
+          {attachments.map((file) => (
+            <button
+              key={file.id}
+              type="button"
+              onClick={() => {
+                void downloadAttachment(file.id, file.name).catch((err: unknown) => {
+                  toast(err instanceof Error ? err.message : "下载失败", "error");
+                });
+              }}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/70 px-2.5 py-1 text-xs text-muted-foreground transition hover:border-border-strong hover:bg-surface"
+              title={`下载 ${file.name}`}
+            >
+              <Paperclip className="size-3" />
+              <span className="max-w-56 truncate">{file.name}</span>
+              <Download className="size-3" />
+            </button>
+          ))}
+        </div>
+      ) : null}
       <MessagePrimitive.If last>
         <ThreadPrimitive.If running>
           <span className="apod-caret mt-0.5" aria-hidden />

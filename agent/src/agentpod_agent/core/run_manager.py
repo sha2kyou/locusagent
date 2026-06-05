@@ -14,6 +14,7 @@ from .persistence import (
     append_message,
     expire_stale_run_ids,
     get_active_run,
+    link_message_attachments,
     update_message,
     update_run,
     upsert_session_meta,
@@ -154,6 +155,13 @@ async def _persist_event(
             tool_call_id=tool_call_id,
             run_id=run_id,
         )
+        return
+
+    if t == "attachment":
+        att_id = str(ev.get("id") or "")
+        assistant_msg_id = state.get("assistant_msg_id")
+        if assistant_msg_id and att_id:
+            await link_message_attachments(int(assistant_msg_id), [att_id])
         return
 
     if t == "done":

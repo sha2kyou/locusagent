@@ -497,6 +497,13 @@ async def chat_completions(req: ChatRequest):
                         x_tool_name=ev.get("name"),
                         x_preview=ev.get("preview"),
                     )
+                elif t == "attachment":
+                    yield _chunk(
+                        {},
+                        x_event="attachment",
+                        x_attachment_id=ev.get("id"),
+                        x_attachment_name=ev.get("name"),
+                    )
         except asyncio.CancelledError:
             log.info("sse_disconnected", run_id=run_id, session_id=sid)
             raise
