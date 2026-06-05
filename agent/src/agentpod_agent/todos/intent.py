@@ -9,19 +9,30 @@ from ..logging import get_logger
 
 log = get_logger("todo_intent")
 
-_TODO_INTENT_MARKER = "## Todo intent (this turn)"
+_TODO_INTENT_MARKER = "## 本回合任务拆解意图"
+
+# 与 tools/todo.py description 共享：何时应/不应拆解
+TODO_WHEN_TO_USE = (
+    "在以下情况应调用 todo 拆解任务（action 取 create）：\n"
+    "- 多步实施、开发、排查、迁移，需要按顺序推进\n"
+    "- 多个交付物或子任务（如接口、文档与测试）\n"
+    "- 用户要求分步执行或展示进度"
+)
+
+TODO_WHEN_TO_SKIP = (
+    "以下情况可跳过 todo：\n"
+    "- 单轮问答、解释、翻译、总结、概念对比\n"
+    "- 单次读、搜、看、列信息\n"
+    "- 单一小动作（改一行、查一个值、执行一条命令）"
+)
+
+TODO_TOOL_USAGE_GUIDANCE = f"{TODO_WHEN_TO_USE}\n\n{TODO_WHEN_TO_SKIP}"
 
 _TODO_INTENT_SYSTEM_PROMPT = (
-    "你是任务规划分类器。根据用户消息判断：agent 是否应先调用 todo 工具拆解步骤，再逐步执行。"
-    "todo 由 agent 自行 confirm 节点，无需用户点击确认。\n\n"
-    "needs_todo=true 典型情况：\n"
-    "- 多步实施、开发、排查、迁移，需要按顺序推进\n"
-    "- 多个交付物或子任务（如 API + 文档 + 测试）\n"
-    "- 用户要求分步、拆解、或展示执行进度\n\n"
-    "needs_todo=false 典型情况：\n"
-    "- 单轮问答、解释、翻译、总结、概念对比\n"
-    "- 单次读/搜/看/列信息\n"
-    "- 单一小动作（改一行、查一个值、执行一条命令）\n\n"
+    "你是任务规划分类器。根据用户消息判断：助手是否应先调用 todo 拆解步骤，再逐步执行。"
+    "todo 由助手自行确认节点，无需用户点击确认。\n\n"
+    f"{TODO_WHEN_TO_USE}\n\n"
+    f"{TODO_WHEN_TO_SKIP}\n\n"
     '输出严格 JSON：{"needs_todo": true|false, "reason": "一句中文说明"}'
 )
 
@@ -62,7 +73,7 @@ async def assess_todo_intent(
         return intent
     except Exception as exc:
         log.warning("todo_intent_assess_failed", error=str(exc), session_id=session_id)
-        return TodoIntent(needs_todo=False, reason="classifier unavailable")
+        return TodoIntent(needs_todo=False, reason="分类器不可用")
 
 
 def messages_require_todo_intent(messages: list[dict[str, object]]) -> bool:
@@ -78,11 +89,12 @@ def messages_require_todo_intent(messages: list[dict[str, object]]) -> bool:
 def build_todo_intent_system_message(intent: TodoIntent) -> str:
     if not intent.needs_todo:
         return ""
-    reason = intent.reason or "multi_step"
+    reason = intent.reason or "多步任务"
     return (
         f"{_TODO_INTENT_MARKER}\n"
-        f"Assessment: multi-step work likely ({reason}). "
-        "Before any mutating tool (write_file, patch, terminal, execute_code, memory/skill/artifact writes), "
-        "call todo(action=create) with 2–20 ordered steps, then todo(action=confirm) for each step as you execute. "
-        "Do not skip todo for this turn unless the request collapses to a single trivial action after inspection."
+        f"评估：疑似多步任务（{reason}）。"
+        "在调用任何会修改状态的工具之前，"
+        "先调用 todo 拆解二至二十个有序步骤（action 取 create），"
+        "执行过程中用 todo 确认节点（action 取 confirm）。"
+        "除非检查后发现请求已退化为单一琐碎操作，否则本回合不可跳过 todo。"
     )

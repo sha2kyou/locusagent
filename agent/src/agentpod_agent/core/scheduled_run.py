@@ -34,7 +34,7 @@ _NON_INTERACTIVE_SYSTEM_PROMPT = (
     "- memory tool (add/replace/remove) IS available in scheduled runs. "
     "When the prompt asks for memory maintenance, consolidation, or cleanup, "
     "execute it directly via memory tool calls—do not defer to a later interactive session.\n"
-    "- The frozen memory snapshot in system prompt is a read cache for this session start; "
+    "- The memory snapshot in the volatile system prompt layer is a read cache; "
     "it does not block memory writes during this run.\n"
 )
 _SCHEDULED_DISABLED_TOOLS = {
@@ -111,6 +111,9 @@ async def run_scheduled_prompt(*, title: str, prompt: str, task_id: int | None =
         try:
             run_id = await create_run(sid)
             await append_message(sid, "user", prompt)
+            from .session_review_state import begin_user_turn
+
+            await begin_user_turn(sid)
             system_prompt = await get_or_create_system_prompt(sid)
             db_msgs = await build_llm_messages(sid)
             messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
@@ -145,7 +148,7 @@ async def run_scheduled_prompt(*, title: str, prompt: str, task_id: int | None =
             try:
                 await run_post_tasks(
                     session_id=sid,
-                    tool_calls_made=result.tool_calls_made,
+                    loop_rounds=result.rounds,
                     model=model,
                     messages=final_messages,
                 )

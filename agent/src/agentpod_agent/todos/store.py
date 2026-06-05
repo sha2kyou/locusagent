@@ -21,6 +21,8 @@ INTERRUPT_NOTE_RESTART = "执行中断（服务重启）"
 INTERRUPT_NOTE_NEW_SESSION = "执行中断（已开新对话）"
 INTERRUPT_NOTE_NEW_TURN = "执行中断（新话题）"
 
+COMPRESSION_TODO_INJECTION_MARKER = "[上下文压缩后保留的活跃任务列表]"
+
 InterruptScope = Literal["in_progress", "active"]
 
 
@@ -142,6 +144,31 @@ async def get_active_plan(session_id: str) -> dict[str, Any] | None:
     if not plan_is_active(plan.get("steps")):
         return None
     return plan
+
+
+async def format_compression_injection(session_id: str) -> str | None:
+    """压缩后回注活跃 todo 计划（对齐 Hermes TodoStore.format_for_injection）。"""
+    plan = await get_active_plan(session_id)
+    if not plan:
+        return None
+    markers = {
+        "done": "[x]",
+        "in_progress": "[>]",
+        "pending": "[ ]",
+        "skipped": "[~]",
+    }
+    lines = [COMPRESSION_TODO_INJECTION_MARKER]
+    for step in plan.get("steps") or []:
+        status = str(step.get("status") or "")
+        if status not in {"pending", "in_progress"}:
+            continue
+        marker = markers.get(status, "[?]")
+        step_id = str(step.get("id") or "").strip()
+        title = str(step.get("title") or "").strip()
+        lines.append(f"- {marker} {step_id}. {title} ({status})")
+    if len(lines) == 1:
+        return None
+    return "\n".join(lines)
 
 
 async def get_plan(session_id: str) -> dict[str, Any] | None:

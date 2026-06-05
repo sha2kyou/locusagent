@@ -24,10 +24,10 @@ from .context import compress_with_report
 from .models import messages_include_images, resolve_model
 from .llm import get_llm_client
 from .stream_health import StreamHealthError, iter_with_stream_health
-from .run_context import get_chat_session_id, get_todo_intent_required, set_chat_session_id, set_todo_intent_required
+from .run_context import get_chat_session_id, set_chat_session_id
+from .session_review_state import reset_memory_nudge, reset_skill_nudge
 from .tool_guardrails import (
     ToolCallGuardrailController,
-    MUTATING_TOOL_NAMES,
     append_guardrail_guidance,
     guardrail_block_content,
     guardrail_config_from_settings,
@@ -41,8 +41,6 @@ from .openai_fields import (
     openai_message_text,
 )
 from .persistence import persist_context_compression
-from ..todos.intent import messages_require_todo_intent
-from ..todos.store import get_active_plan
 from ..usage_report import schedule_openai_usage
 
 log = get_logger("loop")
@@ -283,23 +281,6 @@ def _tool_message_for_llm(msg: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in msg.items() if not str(k).startswith("_")}
 
 
-async def _todo_plan_required_block(tool_name: str) -> str | None:
-    if not get_todo_intent_required():
-        return None
-    if tool_name == "todo" or tool_name not in MUTATING_TOOL_NAMES:
-        return None
-    session_id = get_chat_session_id()
-    if not session_id:
-        return None
-    plan = await get_active_plan(session_id)
-    if plan:
-        return None
-    return (
-        "Error: this turn requires todo(action=create) before mutating tools. "
-        "Call todo with 2–20 ordered steps, then proceed with todo(action=confirm) per step."
-    )
-
-
 async def _execute_one_tool_call(
     registry: ToolRegistry,
     tc: Any,
@@ -351,21 +332,16 @@ async def _execute_one_tool_call(
             "tool_call_id": tc.id,
             "content": content,
         }
-    todo_block = await _todo_plan_required_block(name)
-    if todo_block is not None:
-        content = todo_block
-        if guardrail is not None:
-            post = guardrail.after_call(name, args, content, failed=True)
-            content = append_guardrail_guidance(content, post)
-        return {
-            "role": "tool",
-            "tool_call_id": tc.id,
-            "content": content,
-        }
     chat_attachments: list[dict[str, str]] = []
     try:
         result = await registry.call(name, args)
         log.info("tool_executed", tool=name)
+        session_id = get_chat_session_id()
+        if session_id:
+            if name == "memory":
+                await reset_memory_nudge(session_id)
+            elif name == "skill_manage":
+                await reset_skill_nudge(session_id)
         content = result.to_message()
         att = _chat_attachment_from_metadata(result.metadata)
         if att is not None:
@@ -475,6 +451,24 @@ def _compression_preview(
     )
 
 
+async def _inject_todo_after_compression(
+    session_id: str | None,
+    working: list[dict[str, Any]],
+    compression_report: dict[str, Any],
+) -> None:
+    if not session_id or not compression_report.get("triggered"):
+        return
+    from ..todos.store import COMPRESSION_TODO_INJECTION_MARKER, format_compression_injection
+
+    for msg in reversed(working):
+        if msg.get("role") == "user" and COMPRESSION_TODO_INJECTION_MARKER in str(msg.get("content") or ""):
+            return
+
+    injection = await format_compression_injection(session_id)
+    if injection:
+        working.append({"role": "user", "content": injection})
+
+
 async def _persist_compression_if_needed(
     session_id: str | None,
     run_id: str | None,
@@ -568,7 +562,6 @@ async def run_chat_loop(
     final_text = ""
     guardrail = ToolCallGuardrailController(guardrail_config_from_settings(settings))
     set_chat_session_id(session_id)
-    set_todo_intent_required(messages_require_todo_intent(messages))
 
     for round_idx in range(1, effective_max_rounds + 1):
         working, compression_report = await compress_with_report(
@@ -580,6 +573,7 @@ async def run_chat_loop(
             min_middle=settings.context_distill_min_middle,
         )
         await _persist_compression_if_needed(session_id, run_id, working, compression_report)
+        await _inject_todo_after_compression(session_id, working, compression_report)
         log.info(
             "loop_round_start",
             round=round_idx,
@@ -830,7 +824,6 @@ async def run_chat_loop_stream(
         settings.stream_max_duration_s if settings.stream_max_duration_s > 0 else None
     )
     set_chat_session_id(session_id)
-    set_todo_intent_required(messages_require_todo_intent(messages))
 
     for round_idx in range(1, max_rounds + 1):
         working, compression_report = await compress_with_report(
@@ -868,6 +861,7 @@ async def run_chat_loop_stream(
                 "content": tool_content,
                 "ephemeral": True,
             }
+        await _inject_todo_after_compression(session_id, working, compression_report)
         log.info(
             "loop_round_start",
             round=round_idx,

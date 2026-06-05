@@ -86,14 +86,14 @@ async def shutdown_v1_background_tasks(*, timeout_seconds: float = 3.0) -> None:
 def _schedule_post_run(
     session_id: str,
     *,
-    tool_calls_made: int,
+    loop_rounds: int,
     model: str | None,
     messages: list[dict[str, Any]] | None,
 ) -> None:
     task = asyncio.create_task(
         run_post_tasks(
             session_id=session_id,
-            tool_calls_made=tool_calls_made,
+            loop_rounds=loop_rounds,
             model=model,
             messages=messages,
         ),
@@ -284,7 +284,7 @@ def _last_user_content(messages: list[dict[str, Any]]) -> str | None:
 
 
 async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, Any]], str]:
-    from ..todos.intent import assess_todo_intent, build_todo_intent_system_message
+    from ..core.session_review_state import begin_user_turn
     from ..todos.store import delete_session_todos
 
     latest_user = await _extract_latest_user_payload(req)
@@ -302,7 +302,6 @@ async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, 
             user_mid = await append_message(sid, "user", user_query_text, run_id=None)
             if user_mid > 0 and attachment_ids:
                 await link_message_attachments(user_mid, attachment_ids)
-            await delete_session_todos(sid)
         db_msgs = await build_llm_messages(sid)
         # 当前轮若带图片，需要用原始多模态 content 覆盖最后一条用户消息参与 LLM 推理。
         if db_msgs and db_msgs[-1].get("role") == "user":
@@ -318,12 +317,11 @@ async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, 
     if user_query:
         schedule_session_title_generation(sid, user_query=user_query)
 
+    await begin_user_turn(sid)
+
     system_prompt = await _get_or_create_system_prompt(sid)
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     await _insert_runtime_time_context(messages)
-    todo_hint = build_todo_intent_system_message(await assess_todo_intent(user_query, session_id=sid))
-    if todo_hint:
-        messages.append({"role": "system", "content": todo_hint})
     messages.extend(db_msgs)
     return messages, user_query
 
@@ -417,7 +415,7 @@ async def chat_completions(req: ChatRequest):
                 await upsert_session_meta(sid, tokens_delta=result.total_tokens)
                 _schedule_post_run(
                     sid,
-                    tool_calls_made=result.tool_calls_made,
+                    loop_rounds=result.rounds,
                     model=internal_model,
                     messages=final_messages,
                 )
@@ -599,6 +597,10 @@ async def responses(req: ResponsesRequest):
         user_query = new_user
         schedule_session_title_generation(sid, user_query=user_query)
 
+        from ..core.session_review_state import begin_user_turn
+
+        await begin_user_turn(sid)
+
         system_prompt = await _get_or_create_system_prompt(sid)
         messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
         await _insert_runtime_time_context(messages)
@@ -632,7 +634,7 @@ async def responses(req: ResponsesRequest):
             await upsert_session_meta(sid, tokens_delta=result.total_tokens)
             _schedule_post_run(
                 sid,
-                tool_calls_made=result.tool_calls_made,
+                loop_rounds=result.rounds,
                 model=internal_model,
                 messages=final_messages,
             )

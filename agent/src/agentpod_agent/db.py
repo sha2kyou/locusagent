@@ -399,6 +399,12 @@ def _ensure_sessions_hidden_column(c: sqlite3.Connection) -> None:
         log.info("sessions_hidden_column_added")
 
 
+def _ensure_sessions_review_state_column(c: sqlite3.Connection) -> None:
+    if not _column_exists(c, "sessions", "review_state"):
+        c.execute("ALTER TABLE sessions ADD COLUMN review_state TEXT")
+        log.info("sessions_review_state_column_added")
+
+
 def init_db() -> None:
     with conn_scope(load_vec=False) as c:
         for stmt in SCHEMA.strip().split(";"):
@@ -413,6 +419,7 @@ def init_db() -> None:
         )
         _ensure_memory_origin_column(c)
         _ensure_sessions_hidden_column(c)
+        _ensure_sessions_review_state_column(c)
         if _table_exists(c, "artifacts"):
             deleted = c.execute(
                 "DELETE FROM artifacts WHERE category_id IS NULL "

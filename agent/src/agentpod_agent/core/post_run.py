@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..logging import get_logger
-from .background_review import run_background_review, should_run_background_review
+from .background_review import assess_background_review_triggers, run_background_review
 from .persistence import build_llm_messages
 
 log = get_logger("post_run")
@@ -17,7 +17,7 @@ log = get_logger("post_run")
 async def run_post_tasks(
     *,
     session_id: str,
-    tool_calls_made: int,
+    loop_rounds: int = 0,
     model: str | None = None,
     messages: list[dict[str, Any]] | None = None,
 ) -> None:
@@ -31,18 +31,19 @@ async def run_post_tasks(
         log.warning("post_run_session_title_failed", error=str(exc))
 
     try:
-        if trajectory and await should_run_background_review(
-            tool_calls_made=tool_calls_made,
-            messages=trajectory,
-            session_id=session_id,
-        ):
-            await run_background_review(
-                trajectory,
-                review_memory=True,
-                review_skills=True,
-                model=model,
+        if trajectory:
+            review_memory, review_skills = await assess_background_review_triggers(
                 session_id=session_id,
+                loop_rounds=loop_rounds,
             )
+            if review_memory or review_skills:
+                await run_background_review(
+                    trajectory,
+                    review_memory=review_memory,
+                    review_skills=review_skills,
+                    model=model,
+                    session_id=session_id,
+                )
     except Exception as exc:
         log.warning("post_run_background_review_failed", error=str(exc))
 

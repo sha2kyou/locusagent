@@ -169,6 +169,7 @@ async def _persist_event(
         state["final_reasoning"] = ev.get("final_reasoning") or ""
         state["total_tokens"] = int(ev.get("total_tokens") or 0)
         state["tool_calls_made"] = int(ev.get("tool_calls_made") or 0)
+        state["loop_rounds"] = int(ev.get("rounds") or 0)
 
 
 async def _finalize_run(session_id: str, run_id: str, state: dict[str, Any], *, error: str | None) -> None:
@@ -321,7 +322,7 @@ async def _worker(
         post = asyncio.create_task(
             run_post_tasks(
                 session_id=handle.session_id,
-                tool_calls_made=int(state.get("tool_calls_made") or 0),
+                loop_rounds=int(state.get("loop_rounds") or 0),
                 model=str(state.get("model") or "") or None,
             ),
             name=f"post-run-{handle.run_id}",

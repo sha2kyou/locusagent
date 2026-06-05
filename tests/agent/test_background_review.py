@@ -46,5 +46,12 @@ def test_summarize_skips_errors_and_noop() -> None:
         },
         {"role": "tool", "tool_call_id": "call-1", "content": "Error: denied"},
         {"role": "tool", "tool_call_id": "call-2", "content": "Nothing to save."},
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {"id": "call-3", "function": {"name": "skill_manage", "arguments": "{}"}},
+            ],
+        },
+        {"role": "tool", "tool_call_id": "call-3", "content": "无需保存。"},
     ]
     assert summarize_background_review_actions(review, []) == []

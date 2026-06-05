@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from ..core.run_context import get_chat_session_id
+from ..todos.intent import TODO_TOOL_USAGE_GUIDANCE
 from ..todos.store import confirm_step, create_plan, get_active_plan, plan_to_json
 from .args import pick_action, pick_str
 from .base import Tool, ToolError, ToolResult, register_builtin
@@ -67,15 +68,16 @@ register_builtin(
     Tool(
         name="todo",
         description=(
-            "任务拆解与执行进度跟踪。由 agent 自行拆解步骤并在执行过程中确认节点状态，"
-            "前端展示进度，无需用户点击确认。"
-            "action=create：将复杂任务拆为 2–20 个有序步骤（每步需唯一 id 与 title，可选 detail）。"
-            "会覆盖当前会话已有计划；新话题开始后必须先 create，不可继续 confirm 旧计划。"
-            "action=confirm：更新某步骤状态——执行前 mark in_progress，完成后 mark done（可选 note 简述结果）；"
-            "无法并行两个 in_progress 步骤。"
-            "action=view：读取当前计划。"
-            "适用：多步任务（通常 3 步及以上）。简单一问一答无需调用。"
-            "流程：create → 对当前步骤 confirm(in_progress) → 执行工具/产出 → confirm(done) → 下一步。"
+            "任务拆解与执行进度跟踪。由助手自行拆解步骤并在执行过程中确认节点状态；"
+            "前端展示进度，无需用户点击确认。\n\n"
+            f"{TODO_TOOL_USAGE_GUIDANCE}\n\n"
+            "操作说明：\n"
+            "- action 取 create：将复杂任务拆为二至二十个有序步骤（每步需唯一步骤标识与标题，可选说明）。"
+            "会覆盖当前会话已有计划；新话题开始后必须先创建计划，不可继续确认旧计划。\n"
+            "- action 取 confirm：更新某步骤状态——执行前取进行中，完成后取已完成（可选备注）；"
+            "不可并行两个进行中步骤。\n"
+            "- action 取 view：读取当前计划。\n"
+            "推荐流程：创建计划 → 标记进行中 → 执行工具 → 标记已完成 → 下一步。"
         ),
         parameters={
             "type": "object",
@@ -83,37 +85,37 @@ register_builtin(
                 "action": {
                     "type": "string",
                     "enum": ["create", "confirm", "view"],
-                    "description": "create=拆解任务；confirm=确认节点进度；view=查看计划",
+                    "description": "create 拆解任务；confirm 确认节点进度；view 查看计划",
                 },
                 "title": {
                     "type": "string",
-                    "description": "create 时必需：任务总标题",
+                    "description": "创建计划时必需：任务总标题",
                 },
                 "steps": {
                     "type": "array",
-                    "description": "create 时必需：步骤列表",
+                    "description": "创建计划时必需：步骤列表",
                     "items": {
                         "type": "object",
                         "properties": {
-                            "id": {"type": "string", "description": "步骤唯一 id"},
+                            "id": {"type": "string", "description": "步骤唯一标识"},
                             "title": {"type": "string", "description": "步骤标题"},
-                            "detail": {"type": "string", "description": "可选说明"},
+                            "detail": {"type": "string", "description": "可选说明文字"},
                         },
                         "required": ["id", "title"],
                     },
                 },
                 "step_id": {
                     "type": "string",
-                    "description": "confirm 时必需：要更新的步骤 id",
+                    "description": "确认进度时必需：要更新的步骤标识",
                 },
                 "status": {
                     "type": "string",
                     "enum": ["pending", "in_progress", "done", "skipped"],
-                    "description": "confirm 时必需：步骤新状态",
+                    "description": "确认进度时必需：步骤新状态，取值见上方枚举",
                 },
                 "note": {
                     "type": "string",
-                    "description": "confirm 为 done 时可选：本步结果摘要",
+                    "description": "标记已完成时可选：本步结果摘要",
                 },
             },
             "required": ["action"],

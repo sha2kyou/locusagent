@@ -4,25 +4,36 @@ from __future__ import annotations
 
 from agentpod_agent.core.system_prompt import (
     FROZEN_SYSTEM_PROMPT_VERSION,
-    _unwrap_system_prompt_cache,
-    _wrap_system_prompt_cache,
+    _CTX_DELIMITER,
+    _unwrap_stable_context_cache,
+    _wrap_stable_context_cache,
+    assemble_system_prompt,
 )
 from agentpod_agent.tools.base import Tool, ToolResult
 from agentpod_agent.tools.registry import ToolRegistry
 
 
-def test_cache_invalidates_when_fingerprint_changes():
-    prompt = "hello"
-    wrapped_a = _wrap_system_prompt_cache(prompt, "aaa")
-    wrapped_b = _wrap_system_prompt_cache(prompt, "bbb")
-    assert _unwrap_system_prompt_cache(wrapped_a, "aaa") == prompt
-    assert _unwrap_system_prompt_cache(wrapped_a, "bbb") is None
-    assert _unwrap_system_prompt_cache(wrapped_b, "bbb") == prompt
+def test_stable_context_cache_invalidates_when_fingerprint_changes():
+    stable = "stable-body"
+    context = "ctx-body"
+    wrapped_a = _wrap_stable_context_cache(stable, context, "aaa")
+    wrapped_b = _wrap_stable_context_cache(stable, context, "bbb")
+    assert _unwrap_stable_context_cache(wrapped_a, "aaa") == (stable, context)
+    assert _unwrap_stable_context_cache(wrapped_a, "bbb") is None
+    assert _unwrap_stable_context_cache(wrapped_b, "bbb") == (stable, context)
 
 
-def test_cache_prefix_includes_version():
-    wrapped = _wrap_system_prompt_cache("body", "fp123")
+def test_cache_prefix_includes_version_and_context_delimiter():
+    wrapped = _wrap_stable_context_cache("stable", "context", "fp123")
     assert wrapped.startswith(f"agentpod:sp:v{FROZEN_SYSTEM_PROMPT_VERSION}:fp123:")
+    assert _CTX_DELIMITER in wrapped
+
+
+def test_assemble_system_prompt_joins_three_tiers():
+    full = assemble_system_prompt({"stable": "A", "context": "B", "volatile": "C"})
+    assert full == "A\n\nB\n\nC"
+    partial = assemble_system_prompt({"stable": "A", "context": "", "volatile": "C"})
+    assert partial == "A\n\nC"
 
 
 def test_tool_registry_lists_builtin_tools():

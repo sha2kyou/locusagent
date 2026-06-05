@@ -103,7 +103,10 @@ class Settings(BaseSettings):
     )
 
     background_review_enabled: bool = Field(default=True, alias="BACKGROUND_REVIEW_ENABLED")
-    background_review_min_tool_calls: int = Field(default=5, alias="BACKGROUND_REVIEW_MIN_TOOL_CALLS")
+    background_review_memory_nudge_turns: int = Field(default=10, alias="BACKGROUND_REVIEW_MEMORY_NUDGE_TURNS")
+    background_review_skill_nudge_loop_rounds: int = Field(
+        default=10, alias="BACKGROUND_REVIEW_SKILL_NUDGE_LOOP_ROUNDS"
+    )
     background_review_max_rounds: int = Field(default=8, alias="BACKGROUND_REVIEW_MAX_ROUNDS")
 
     mcp_call_timeout_seconds: float = Field(default=45.0, alias="MCP_CALL_TIMEOUT_SECONDS")

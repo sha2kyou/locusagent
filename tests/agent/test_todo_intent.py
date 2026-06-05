@@ -15,7 +15,7 @@ def test_build_todo_intent_system_message_empty_when_not_needed() -> None:
 
 def test_build_todo_intent_system_message_when_needed() -> None:
     hint = build_todo_intent_system_message(TodoIntent(needs_todo=True, reason="多步开发"))
-    assert hint.startswith("## Todo intent (this turn)")
+    assert hint.startswith("## 本回合任务拆解意图")
     assert "多步开发" in hint
 
 

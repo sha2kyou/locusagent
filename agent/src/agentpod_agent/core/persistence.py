@@ -1224,8 +1224,22 @@ async def list_sessions(limit: int = 50, *, include_hidden: bool = False) -> lis
     return await run_in_thread(_do)
 
 
+async def count_user_turns(session_id: str) -> int:
+    """统计会话内用户消息条数（用于 memory review 周期 nudge）。"""
+
+    def _do() -> int:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT COUNT(*) AS n FROM messages WHERE session_id = ? AND role = 'user'",
+                (session_id,),
+            ).fetchone()
+            return int(row["n"] or 0) if row is not None else 0
+
+    return await run_in_thread(_do)
+
+
 async def get_session_system_prompt(session_id: str) -> str | None:
-    """读取 session 级冻结的 system prompt 快照。"""
+    """读取 session 级 stable/context system prompt 缓存。"""
 
     def _do() -> str | None:
         with conn_scope(load_vec=False) as c:
@@ -1242,7 +1256,7 @@ async def get_session_system_prompt(session_id: str) -> str | None:
 
 
 async def set_session_system_prompt(session_id: str, system_prompt: str) -> None:
-    """写入 session 级冻结的 system prompt 快照（仅首次构建时调用）。"""
+    """写入 session 级 stable/context system prompt 缓存。"""
 
     def _do() -> None:
         with conn_scope(load_vec=False) as c:
