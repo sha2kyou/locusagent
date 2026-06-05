@@ -129,7 +129,7 @@ _TOOL_ROUND_LIMIT_NOTICE = (
 )
 _ARTIFACT_SAVE_LOOP_NOTICE = (
     "你刚完成过一次 artifact_save。请停止继续调用 artifact_save，"
-    "直接给用户简短确认结果，并在回复中总结输出产物链接。"
+    "直接给用户简短确认结果即可，无需输出链接。"
 )
 _TOOL_GUARDRAIL_HALT_NOTICE = (
     "工具循环护栏已触发：同一工具路径重复失败或无进展。请停止继续调用工具，"
