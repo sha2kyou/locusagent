@@ -19,7 +19,7 @@ log = get_logger("system_prompt")
 
 _SNAPSHOT_MEMORY_LIMIT = 30
 # 变更 build_frozen_system_prompt 模板时递增，使旧 session 缓存自动失效。
-FROZEN_SYSTEM_PROMPT_VERSION = 13
+FROZEN_SYSTEM_PROMPT_VERSION = 15
 _CACHE_PREFIX = f"agentpod:sp:v{FROZEN_SYSTEM_PROMPT_VERSION}:"
 
 
@@ -98,7 +98,8 @@ async def build_frozen_system_prompt() -> str:
         "You operate in the user's current workspace only; if they ask to create/delete/rename/switch workspaces during chat, refuse and tell them to use the Web UI 「工作区」 page outside chat.",
         "The user cannot directly retrieve container/server files from the web UI.",
         "Deliver outputs directly in chat as inline text or code blocks unless the user explicitly asks to save, export, or archive. "
-        "When the user should download a generated file (pdf, zip, csv, binaries, etc.), write it under workspace/ then call deliver_file{path, name?} to attach it to your reply for in-chat download; do not paste large binary content in chat.",
+        "When the user should download a workspace file (pdf, zip, csv, md, binaries, etc.), write it under workspace/ and call deliver_file{path, name?}—not artifact_save. The chat UI shows a download chip automatically; after deliver_file succeeds do not mention the file in your reply: no 已发送, no filename, no markdown/http links, no /artifacts/ URLs, no att_ ids. At most one optional sentence about file contents if the user needs context. "
+        "artifact_save is only for persisting markdown/html/latex/text in the artifact library when the user explicitly asks to save or archive—not for downloadable workspace exports.",
         "For math in chat, use LaTeX for frontend rendering: inline $...$, block-level $$...$$ on its own line (blank line before/after each block). Do not substitute Unicode symbols or put formulas in ordinary code fences. Use \\\\ for row/line breaks inside environments (pmatrix, cases, aligned). Example matrix: $$\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}$$; example cases: $$\\begin{cases} x + y = 5 \\\\ 2x - y = 1 \\end{cases}$$.",
         "A compact skills catalog is listed below. When a skill is relevant to the current task, call skill_view{name} to load its full body on demand; do not assume its content.",
         "A frozen long-term memory snapshot is included below (each line shows #id [user|memory]). "

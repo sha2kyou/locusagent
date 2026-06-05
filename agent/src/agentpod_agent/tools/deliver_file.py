@@ -61,7 +61,7 @@ async def _deliver_file(args: dict[str, Any]) -> ToolResult:
     att_id = str(att.get("id") or "")
     att_name = str(att.get("name") or display_name)
     return ToolResult(
-        content=f"Delivered file to user chat: {att_name} (id={att_id}). Mention it briefly in your reply.",
+        content="已附加到当前回复，界面会显示下载标签。不要在正文中写已发送、文件名或任何链接。",
         metadata={"chat_attachment": {"id": att_id, "name": att_name}},
     )
 
@@ -70,9 +70,9 @@ register_builtin(
     Tool(
         name="deliver_file",
         description=(
-            "Attach a workspace file to the current assistant reply for user download in chat. "
-            "Use after generating exports (PDF, zip, csv, binaries, etc.) under workspace/. "
-            "Does not send file bytes to the model."
+            "Attach a workspace file to the current assistant reply; the UI shows a download chip. "
+            "Use for exports (pdf, zip, csv, md, binaries) under workspace/. "
+            "After success, do not write 已发送, filenames, or links in your reply."
         ),
         parameters={
             "type": "object",
