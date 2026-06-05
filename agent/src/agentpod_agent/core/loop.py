@@ -126,16 +126,23 @@ _MODEL_TOKEN_LIMITS_SORTED: tuple[tuple[str, int], ...] = tuple(
 )
 DEFAULT_TOKEN_LIMIT = 256_000
 _TOOL_ROUND_LIMIT_NOTICE = (
-    "工具调用轮次已达到上限。请立即停止继续调用任何工具（包括 tool/mcp/skill/memory），"
-    "基于当前已知信息给出最终结论，并明确说明剩余不确定项。"
+    "【强制收尾】工具调用轮次已达上限。禁止再调用任何工具（含 tool/mcp/skill/memory）。"
+    "你必须立即输出面向用户的中文正文总结：已完成的工作、当前能给出的结论、"
+    "因轮次限制未能完成的部分，以及用户可采取的下一步。"
+    "禁止返回空回复，禁止仅输出占位符。"
+)
+_TOOL_ROUND_LIMIT_FALLBACK = (
+    "工具调用次数已达上限，无法继续执行更多步骤。"
+    "请根据上文工具结果与对话内容自行归纳；若信息不足，请缩小任务范围或说明优先完成哪一部分后重试。"
 )
 _ARTIFACT_SAVE_LOOP_NOTICE = (
     "你刚完成过一次 artifact_save。请停止继续调用 artifact_save，"
     "直接给用户简短确认结果即可，无需输出链接。"
 )
 _TOOL_GUARDRAIL_HALT_NOTICE = (
-    "工具循环护栏已触发：同一工具路径重复失败或无进展。请停止继续调用工具，"
-    "基于当前已知信息给出最终答复，并说明阻塞原因。"
+    "【强制收尾】工具循环护栏已触发：同一工具路径重复失败或无进展。"
+    "禁止再调用工具。你必须输出面向用户的中文正文总结：已知结论、阻塞原因、"
+    "已尝试过的路径，以及建议的下一步。禁止返回空回复。"
 )
 
 
@@ -403,6 +410,33 @@ async def _execute_tool_calls(
     )
 
 
+def _ensure_user_visible_text(text: str, *, fallback: str) -> str:
+    cleaned = str(text or "").strip()
+    return cleaned or fallback
+
+
+def _finalize_request_kwargs(
+    *,
+    model: str,
+    working_messages: list[dict[str, Any]],
+    extra: dict[str, Any] | None,
+    notice: str,
+) -> dict[str, Any]:
+    req_messages = list(working_messages)
+    req_messages.append({"role": "system", "content": notice})
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "messages": req_messages,
+        "tool_choice": "none",
+    }
+    if extra:
+        for key, value in extra.items():
+            if key in {"tools", "tool_choice", "stream"}:
+                continue
+            kwargs[key] = value
+    return kwargs
+
+
 async def _finalize_without_tools(
     *,
     client,
@@ -411,15 +445,15 @@ async def _finalize_without_tools(
     extra: dict[str, Any] | None,
     session_id: str | None = None,
     usage_scenario: str = "chat",
+    notice: str = _TOOL_ROUND_LIMIT_NOTICE,
+    fallback_text: str = _TOOL_ROUND_LIMIT_FALLBACK,
 ) -> tuple[dict[str, Any], str, str, int]:
-    req_messages = list(working_messages)
-    req_messages.append({"role": "system", "content": _TOOL_ROUND_LIMIT_NOTICE})
-    kwargs: dict[str, Any] = {
-        "model": model,
-        "messages": req_messages,
-    }
-    if extra:
-        kwargs.update(extra)
+    kwargs = _finalize_request_kwargs(
+        model=model,
+        working_messages=working_messages,
+        extra=extra,
+        notice=notice,
+    )
     completion: ChatCompletion = await client.chat.completions.create(**kwargs)
     schedule_openai_usage(
         usage=completion.usage,
@@ -429,8 +463,28 @@ async def _finalize_without_tools(
     )
     usage_tokens = int((completion.usage.total_tokens if completion.usage else 0) or 0)
     msg = completion.choices[0].message
+    if getattr(msg, "tool_calls", None):
+        log.warning("finalize_still_requested_tools", model=model)
+        retry_kwargs = _finalize_request_kwargs(
+            model=model,
+            working_messages=working_messages,
+            extra=extra,
+            notice=notice + "\n再次强调：禁止 tool_calls，只输出用户可见正文。",
+        )
+        completion = await client.chat.completions.create(**retry_kwargs)
+        schedule_openai_usage(
+            usage=completion.usage,
+            scenario=usage_scenario,
+            model=model,
+            session_id=session_id,
+        )
+        usage_tokens += int((completion.usage.total_tokens if completion.usage else 0) or 0)
+        msg = completion.choices[0].message
     msg_dict = _serialize_message(msg)
-    return msg_dict, openai_message_text(msg), openai_message_reasoning(msg), usage_tokens
+    final_text = _ensure_user_visible_text(openai_message_text(msg), fallback=fallback_text)
+    if not str(msg_dict.get("content") or "").strip():
+        msg_dict["content"] = final_text
+    return msg_dict, final_text, openai_message_reasoning(msg), usage_tokens
 
 
 def _compression_preview(
@@ -639,7 +693,7 @@ async def run_chat_loop(
                 working.append(final_msg)
                 return (
                     LoopResult(
-                        final_text=final_text or "[tool round limit reached]",
+                        final_text=final_text,
                         rounds=round_idx,
                         total_tokens=total_tokens,
                         tool_calls_made=tool_calls_made,
@@ -654,10 +708,12 @@ async def run_chat_loop(
                 final_msg, final_text, final_reasoning, more_tokens = await _finalize_without_tools(
                     client=client,
                     model=_round_model(working),
-                    working_messages=working + [{"role": "system", "content": _ARTIFACT_SAVE_LOOP_NOTICE}],
+                    working_messages=working,
                     extra=extra,
                     session_id=session_id,
                     usage_scenario=usage_scenario,
+                    notice=_ARTIFACT_SAVE_LOOP_NOTICE,
+                    fallback_text="已保存。",
                 )
                 total_tokens += more_tokens
                 working.append(final_msg)
@@ -685,16 +741,18 @@ async def run_chat_loop(
                 final_msg, final_text, final_reasoning, more_tokens = await _finalize_without_tools(
                     client=client,
                     model=_round_model(working),
-                    working_messages=working + [{"role": "system", "content": _TOOL_GUARDRAIL_HALT_NOTICE}],
+                    working_messages=working,
                     extra=extra,
                     session_id=session_id,
                     usage_scenario=usage_scenario,
+                    notice=_TOOL_GUARDRAIL_HALT_NOTICE,
+                    fallback_text=halt.message or _TOOL_ROUND_LIMIT_FALLBACK,
                 )
                 total_tokens += more_tokens
                 working.append(final_msg)
                 return (
                     LoopResult(
-                        final_text=final_text or halt.message,
+                        final_text=final_text,
                         rounds=round_idx,
                         total_tokens=total_tokens,
                         tool_calls_made=tool_calls_made,
@@ -980,12 +1038,11 @@ async def run_chat_loop_stream(
                 )
                 total_tokens += more_tokens
                 working.append(final_msg)
-                if capped_text:
-                    yield {"type": "delta", "content": capped_text}
+                yield {"type": "delta", "content": capped_text}
                 final_text = capped_text
                 yield {
                     "type": "done",
-                    "final_text": final_text or "[tool round limit reached]",
+                    "final_text": final_text,
                     "final_reasoning": capped_reasoning,
                     "rounds": round_idx,
                     "total_tokens": total_tokens,
@@ -999,15 +1056,16 @@ async def run_chat_loop_stream(
                 final_msg, capped_text, capped_reasoning, more_tokens = await _finalize_without_tools(
                     client=client,
                     model=_round_model(working),
-                    working_messages=working + [{"role": "system", "content": _ARTIFACT_SAVE_LOOP_NOTICE}],
+                    working_messages=working,
                     extra=extra,
                     session_id=session_id,
+                    notice=_ARTIFACT_SAVE_LOOP_NOTICE,
+                    fallback_text="已保存。",
                 )
                 total_tokens += more_tokens
                 working.append(final_msg)
-                if capped_text:
-                    yield {"type": "delta", "content": capped_text}
-                final_text = capped_text or "已保存。"
+                yield {"type": "delta", "content": capped_text}
+                final_text = capped_text
                 yield {
                     "type": "done",
                     "final_text": final_text,
@@ -1051,15 +1109,16 @@ async def run_chat_loop_stream(
                 final_msg, capped_text, capped_reasoning, more_tokens = await _finalize_without_tools(
                     client=client,
                     model=_round_model(working),
-                    working_messages=working + [{"role": "system", "content": _TOOL_GUARDRAIL_HALT_NOTICE}],
+                    working_messages=working,
                     extra=extra,
                     session_id=session_id,
+                    notice=_TOOL_GUARDRAIL_HALT_NOTICE,
+                    fallback_text=halt.message or _TOOL_ROUND_LIMIT_FALLBACK,
                 )
                 total_tokens += more_tokens
                 working.append(final_msg)
-                if capped_text:
-                    yield {"type": "delta", "content": capped_text}
-                final_text = capped_text or halt.message
+                yield {"type": "delta", "content": capped_text}
+                final_text = capped_text
                 yield {
                     "type": "done",
                     "final_text": final_text,

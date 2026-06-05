@@ -170,6 +170,30 @@ async def _persist_event(
         state["total_tokens"] = int(ev.get("total_tokens") or 0)
         state["tool_calls_made"] = int(ev.get("tool_calls_made") or 0)
         state["loop_rounds"] = int(ev.get("rounds") or 0)
+        final_text = str(state.get("final_text") or "")
+        if final_text and not str(state.get("partial_text") or "").strip():
+            state["partial_text"] = final_text
+            state["partial_reasoning"] = str(state.get("final_reasoning") or "")
+            assistant_msg_id = state.get("assistant_msg_id")
+            if assistant_msg_id is None:
+                mid = await append_message(
+                    session_id,
+                    "assistant",
+                    final_text,
+                    reasoning_content=str(state.get("partial_reasoning") or ""),
+                    run_id=run_id,
+                    enqueue_embedding=False,
+                )
+                state["assistant_msg_id"] = mid
+                await update_run(run_id, assistant_message_id=mid)
+            else:
+                await update_message(
+                    assistant_msg_id,
+                    content=final_text,
+                    reasoning_content=str(state.get("partial_reasoning") or ""),
+                    reindex_embedding=False,
+                )
+            await update_run(run_id)
 
 
 async def _finalize_run(session_id: str, run_id: str, state: dict[str, Any], *, error: str | None) -> None:

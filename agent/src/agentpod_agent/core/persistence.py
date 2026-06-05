@@ -963,6 +963,94 @@ async def get_attachments_by_ids(attachment_ids: list[str]) -> list[dict[str, An
     return [await _hydrate_attachment(m) for m in metas]
 
 
+_ATTACHMENT_TEXT_PREVIEW_MAX = 8000
+
+
+async def get_attachment_detail(attachment_id: str) -> dict[str, Any] | None:
+    aid = str(attachment_id or "").strip()
+    if not aid:
+        return None
+
+    def _do() -> dict[str, Any] | None:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT id, session_id, kind, name, mime_type, size_bytes, object_key, "
+                "object_etag, sha256, processable, unsupported_reason, truncated, created_at "
+                "FROM attachments WHERE id = ?",
+                (aid,),
+            ).fetchone()
+            if row is None:
+                return None
+            link_count = c.execute(
+                "SELECT COUNT(*) AS n FROM message_attachments WHERE attachment_id = ?",
+                (aid,),
+            ).fetchone()
+            return {
+                **_to_attachment_meta_row(row),
+                "sessionId": row["session_id"],
+                "sizeBytes": int(row["size_bytes"] or 0),
+                "createdAt": str(row["created_at"] or ""),
+                "messageLinkCount": int(link_count["n"] or 0),
+            }
+
+    meta = await run_in_thread(_do)
+    if meta is None:
+        return None
+
+    hydrated = await _hydrate_attachment(meta)
+    detail: dict[str, Any] = {
+        "id": hydrated["id"],
+        "name": hydrated["name"],
+        "kind": hydrated["kind"],
+        "mimeType": hydrated["mimeType"],
+        "objectKey": meta.get("objectKey") or "",
+        "sha256": meta.get("sha256") or "",
+        "sessionId": meta.get("sessionId"),
+        "sizeBytes": meta.get("sizeBytes", 0),
+        "createdAt": meta.get("createdAt", ""),
+        "messageLinkCount": meta.get("messageLinkCount", 0),
+        "processable": bool(hydrated.get("processable")),
+        "unsupportedReason": hydrated.get("unsupportedReason"),
+        "truncated": bool(hydrated.get("truncated")),
+    }
+    text = hydrated.get("text")
+    if isinstance(text, str) and text:
+        if len(text) > _ATTACHMENT_TEXT_PREVIEW_MAX:
+            detail["textPreview"] = text[:_ATTACHMENT_TEXT_PREVIEW_MAX]
+            detail["textPreviewTruncated"] = True
+        else:
+            detail["textPreview"] = text
+    elif hydrated.get("kind") == "image" and hydrated.get("imageDataUrl"):
+        detail["imageAvailable"] = True
+    return detail
+
+
+async def delete_attachment_by_id(attachment_id: str) -> bool:
+    aid = str(attachment_id or "").strip()
+    if not aid:
+        return False
+
+    def _do() -> tuple[bool, list[str]]:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT object_key FROM attachments WHERE id = ?",
+                (aid,),
+            ).fetchone()
+            if row is None:
+                return False, []
+            object_key = str(row["object_key"] or "")
+            c.execute("DELETE FROM message_attachments WHERE attachment_id = ?", (aid,))
+            cur = c.execute("DELETE FROM attachments WHERE id = ?", (aid,))
+            deleted = (cur.rowcount or 0) > 0
+            orphan_keys = _unreferenced_object_keys(c, [object_key] if object_key else [])
+            return deleted, orphan_keys
+
+    deleted, object_keys = await run_in_thread(_do)
+    if object_keys:
+        await delete_attachment_objects(object_keys)
+    return deleted
+
+
 async def link_message_attachments(message_id: int, attachment_ids: list[str]) -> None:
     if message_id <= 0 or not attachment_ids:
         return

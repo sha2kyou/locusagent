@@ -28,7 +28,7 @@ log = get_logger("system_prompt")
 _SNAPSHOT_MEMORY_LIMIT = 30
 _CTX_DELIMITER = "\n<<AGENTPOD_CTX>>\n"
 # 变更 stable 模板时递增，使旧 session 缓存自动失效。
-FROZEN_SYSTEM_PROMPT_VERSION = 23
+FROZEN_SYSTEM_PROMPT_VERSION = 24
 _CACHE_PREFIX = f"agentpod:sp:v{FROZEN_SYSTEM_PROMPT_VERSION}:"
 
 MEMORY_GUIDANCE = (
@@ -53,6 +53,13 @@ ARTIFACT_GUIDANCE = (
     "artifact_save 用于保存用户明确要求保存或归档的交付物。"
     "可下载的工作区文件用 deliver_file。"
     "当用户提及已保存的产物时，先调用 artifact_recall{query}。"
+)
+
+TOOL_LOOP_LIMIT_GUIDANCE = (
+    "当工具调用轮次、循环护栏或上下文限制迫使你停止继续调工具时，"
+    "必须基于对话与工具结果中已有的信息，向用户输出完整的中文总结答复："
+    "已完成的进展、当前结论、未完成项与原因、建议的下一步。"
+    "不要沉默结束，不要返回空回复，也不要再尝试调用工具。"
 )
 
 
@@ -141,6 +148,7 @@ async def build_stable_prompt() -> str:
         "不要为了等第 N 轮结果才发出本可并行的第 N+1 轮独立调用。"
         "例外：clarify 必须单独调用，不得与其他工具并行；clarify 成功后立即结束本轮，不再输出。"
         "不要并行调用会修改状态的工具，也不要并行化前后步骤有依赖的调用。",
+        TOOL_LOOP_LIMIT_GUIDANCE,
         "当方向或偏好会显著影响输出（如命名、设计风格、范围、技术选型）时，"
         "通过 clarify 向用户提问，参数为严格 JSON：{question, choices, allow_other}（2–4 个互斥选项，单选）。"
         "所有可选项写在 choices 中，不要写在 question 里。"

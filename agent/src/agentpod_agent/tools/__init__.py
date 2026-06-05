@@ -13,6 +13,7 @@ from . import context_distill as _summarize  # noqa: F401
 from . import deliver_file as _deliver_file  # noqa: F401
 from . import fs as _fs  # noqa: F401
 from . import memory as _memory  # noqa: F401
+from . import minio as _minio  # noqa: F401
 from . import notifications as _notifications  # noqa: F401
 from . import scheduled_tasks as _scheduled_tasks  # noqa: F401
 from . import env_vars as _env_vars  # noqa: F401
