@@ -78,12 +78,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             className={cn(
-              "pointer-events-auto flex items-center gap-2.5 rounded-xl py-2.5 pl-3.5 pr-2 text-sm",
+              "pointer-events-auto flex items-start gap-2.5 rounded-xl py-2.5 pl-3.5 pr-2 text-sm",
               floatingPanelClass,
             )}
           >
-            {icons[t.type]}
-            <span className="flex-1">{t.message}</span>
+            <span className="mt-0.5 shrink-0">{icons[t.type]}</span>
+            <span className="flex-1 line-clamp-2 break-words leading-snug">{t.message}</span>
             <button
               type="button"
               className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-foreground"

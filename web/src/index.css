@@ -508,7 +508,27 @@
     color: oklch(0.74 0.05 280);
   }
 
-  /* 用户消息深色气泡内：覆盖 prose 文字颜色 */
+  /* 用户消息气泡：正文继承气泡前景色，避免 prose/katex 套到页面 foreground 后不可见 */
+  .apod-user-bubble .apod-prose {
+    color: inherit;
+  }
+  .apod-user-bubble .apod-prose :where(p, li, h1, h2, h3, h4, strong, em, span, td, th) {
+    color: inherit;
+  }
+  .apod-user-bubble .apod-prose .katex {
+    color: inherit;
+  }
+  /* 选中/复制：高对比高亮，且选中文字用深色，避免粘贴到白底文档后「看不见」 */
+  .apod-user-bubble ::selection {
+    background-color: oklch(0.78 0.1 250 / 0.55);
+    color: oklch(0.16 0 0);
+  }
+  .dark .apod-user-bubble ::selection {
+    background-color: oklch(0.62 0.12 250 / 0.5);
+    color: oklch(0.12 0 0);
+  }
+
+  /* 用户消息深色气泡内：覆盖 prose 链接与行内代码 */
   .apod-user-bubble .apod-prose a {
     color: oklch(0.82 0 0);
     text-decoration-color: oklch(0.82 0 0 / 0.5);

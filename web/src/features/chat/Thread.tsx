@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent } from "react";
 import {
   ComposerPrimitive,
   MessagePrimitive,
@@ -506,6 +506,13 @@ function AttachmentDrawer({
   );
 }
 
+function copyUserBubbleAsPlainText(e: ClipboardEvent<HTMLDivElement>) {
+  const selection = window.getSelection()?.toString();
+  if (!selection) return;
+  e.preventDefault();
+  e.clipboardData.setData("text/plain", selection);
+}
+
 function UserMessage() {
   const { messageAttachments } = useChat();
   const text = useMessageText();
@@ -522,6 +529,7 @@ function UserMessage() {
             "apod-user-bubble max-w-[80%] rounded-2xl rounded-br-sm bg-brand px-4 py-2.5 text-sm text-brand-foreground shadow-sm",
             archived && "opacity-55",
           )}
+          onCopy={copyUserBubbleAsPlainText}
         >
           {archived ? (
             <p className="mb-1 text-[11px] text-brand-foreground/50">已压缩（不再带入上下文）</p>
