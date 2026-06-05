@@ -1,7 +1,7 @@
 """System prompt 三层动态组装与 session 级缓存（对齐 Hermes stable/context/volatile）。
 
 - stable：身份、工具规则、技能目录、产物类目 — session 内缓存，保 prefix cache 温热
-- context：工作区/会话级上下文（当前为空占位，可扩展）
+- context：工作区资源摘要（技能/MCP/记忆/env/定时任务/产物），每轮重建
 - volatile：记忆快照、会话元数据 — 每轮重建，记忆写入后下轮自动可见
 """
 
@@ -28,7 +28,7 @@ log = get_logger("system_prompt")
 _SNAPSHOT_MEMORY_LIMIT = 30
 _CTX_DELIMITER = "\n<<AGENTPOD_CTX>>\n"
 # 变更 stable 模板时递增，使旧 session 缓存自动失效。
-FROZEN_SYSTEM_PROMPT_VERSION = 24
+FROZEN_SYSTEM_PROMPT_VERSION = 25
 _CACHE_PREFIX = f"agentpod:sp:v{FROZEN_SYSTEM_PROMPT_VERSION}:"
 
 MEMORY_GUIDANCE = (
@@ -222,10 +222,23 @@ async def build_stable_prompt() -> str:
     return "\n".join(pieces)
 
 
+_CONTEXT_HEADER = (
+    "以下为当前工作区资源快照（只读）；环境变量仅列名称与说明，不含取值。"
+    "需要完整列表或修改时请用对应专用工具（manage_workspace、env_vars、mcp_manage 等）。"
+)
+
+
 async def build_context_prompt(*, session_id: str | None = None) -> str:
-    """Context 层：工作区/项目级上下文。当前无 cwd 注入，保留扩展点。"""
+    """Context 层：工作区资源摘要，与 manage_workspace 工具同源。"""
     _ = session_id
-    return ""
+    from ..workspace import get_workspace_id
+    from ..workspace_summary import build_workspace_summary
+
+    summary, _ = await build_workspace_summary()
+    if not summary.strip():
+        return ""
+    wid = get_workspace_id()
+    return f"## 工作区上下文（{wid}）\n{_CONTEXT_HEADER}\n\n{summary}"
 
 
 async def build_volatile_prompt(*, session_id: str | None = None) -> str:
@@ -288,7 +301,8 @@ async def get_cached_stable_context(session_id: str) -> SystemPromptParts:
 
 
 async def get_or_create_system_prompt(session_id: str) -> str:
-    stable, context = await _get_or_create_stable_context(session_id)
+    stable, _ = await _get_or_create_stable_context(session_id)
+    context = await build_context_prompt(session_id=session_id)
     volatile = await build_volatile_prompt(session_id=session_id)
     return assemble_system_prompt({"stable": stable, "context": context, "volatile": volatile})
 

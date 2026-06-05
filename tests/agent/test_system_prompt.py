@@ -8,6 +8,7 @@ from agentpod_agent.core.system_prompt import (
     _unwrap_stable_context_cache,
     _wrap_stable_context_cache,
     assemble_system_prompt,
+    build_context_prompt,
 )
 from agentpod_agent.tools.base import Tool, ToolResult
 from agentpod_agent.tools.registry import ToolRegistry
@@ -27,6 +28,23 @@ def test_cache_prefix_includes_version_and_context_delimiter():
     wrapped = _wrap_stable_context_cache("stable", "context", "fp123")
     assert wrapped.startswith(f"agentpod:sp:v{FROZEN_SYSTEM_PROMPT_VERSION}:fp123:")
     assert _CTX_DELIMITER in wrapped
+
+
+async def test_build_context_prompt_includes_workspace_summary(monkeypatch):
+    async def _fake_summary(*, recent_limit: int = 5):
+        assert recent_limit == 5
+        return "## 技能 (1)\n- demo [private]: test", {"skills": {"count": 1}}
+
+    monkeypatch.setattr(
+        "agentpod_agent.workspace_summary.build_workspace_summary",
+        _fake_summary,
+    )
+    monkeypatch.setattr("agentpod_agent.workspace.get_workspace_id", lambda: "ws_test1234")
+
+    text = await build_context_prompt(session_id="sess_1")
+    assert "## 工作区上下文（ws_test1234）" in text
+    assert "环境变量仅列名称" in text
+    assert "## 技能 (1)" in text
 
 
 def test_assemble_system_prompt_joins_three_tiers():
