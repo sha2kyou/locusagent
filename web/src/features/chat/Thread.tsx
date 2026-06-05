@@ -27,7 +27,7 @@ import {
 import { Markdown, ProseMarkdown, ThinkingBlock } from "./Markdown";
 import type { ChatMessage } from "./model";
 import { ToolPartView } from "./ToolEvent";
-import { extractLatestTodoPlan, type TodoPlan } from "./todo";
+import { extractLatestTodoPlan, isTodoTool, type TodoPlan } from "./todo";
 import { TodoProgressPanel } from "./TodoProgressPanel";
 import { useChat } from "./ChatProvider";
 import type { ChatAttachment } from "./model";
@@ -517,6 +517,22 @@ function UserMessage() {
   );
 }
 
+function resolveTodoPlan(
+  fromParts: TodoPlan | null,
+  sessionTodoPlan: TodoPlan | null,
+  useSessionTodoPlan: boolean,
+  hasTodoInMessage: boolean,
+): TodoPlan | null {
+  if (!useSessionTodoPlan) return null;
+  if (!hasTodoInMessage && !fromParts && !sessionTodoPlan) return null;
+  if (sessionTodoPlan && fromParts && sessionTodoPlan.plan_id === fromParts.plan_id) {
+    return sessionTodoPlan;
+  }
+  if (fromParts) return fromParts;
+  if (hasTodoInMessage && sessionTodoPlan) return sessionTodoPlan;
+  return null;
+}
+
 function AssistantPartList({
   chatMsg,
   streaming,
@@ -530,11 +546,10 @@ function AssistantPartList({
 }) {
   if (!chatMsg) return null;
   const fromParts = extractLatestTodoPlan(chatMsg.parts);
-  const todoPlan = useSessionTodoPlan
-    ? streaming
-      ? (fromParts ?? sessionTodoPlan)
-      : (sessionTodoPlan ?? fromParts)
-    : fromParts;
+  const hasTodoInMessage = chatMsg.parts.some(
+    (p) => p.type === "tool" && isTodoTool(p.toolName) && (p.running || Boolean(p.preview)),
+  );
+  const todoPlan = resolveTodoPlan(fromParts, sessionTodoPlan, useSessionTodoPlan, hasTodoInMessage);
   return (
     <>
       {chatMsg.parts.map((p, i) => {

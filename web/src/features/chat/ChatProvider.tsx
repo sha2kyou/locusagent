@@ -464,6 +464,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
     abortChat();
     setLastErrored(false);
+    if (opts.appendUser) {
+      setSessionTodoPlan(null);
+    }
     setMessages((prev) => {
       if (opts.appendUser) {
         return [

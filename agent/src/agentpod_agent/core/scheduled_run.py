@@ -43,6 +43,7 @@ _SCHEDULED_DISABLED_TOOLS = {
     "session_delete",
     "notification_mark_read",
     "mcp_manage",
+    "todo",
 }
 _SCHEDULED_BLOCKED_TOOL_ACTIONS = {
     "env_vars": {"add", "update", "delete"},

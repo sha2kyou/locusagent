@@ -24,9 +24,10 @@ from .context import compress_with_report
 from .models import messages_include_images, resolve_model
 from .llm import get_llm_client
 from .stream_health import StreamHealthError, iter_with_stream_health
-from .run_context import set_chat_session_id
+from .run_context import get_chat_session_id, get_todo_intent_required, set_chat_session_id, set_todo_intent_required
 from .tool_guardrails import (
     ToolCallGuardrailController,
+    MUTATING_TOOL_NAMES,
     append_guardrail_guidance,
     guardrail_block_content,
     guardrail_config_from_settings,
@@ -40,7 +41,8 @@ from .openai_fields import (
     openai_message_text,
 )
 from .persistence import persist_context_compression
-from ..usage_report import schedule_openai_usage
+from ..todos.intent import messages_require_todo_intent
+from ..todos.store import get_plan
 
 log = get_logger("loop")
 
@@ -280,6 +282,23 @@ def _tool_message_for_llm(msg: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in msg.items() if not str(k).startswith("_")}
 
 
+async def _todo_plan_required_block(tool_name: str) -> str | None:
+    if not get_todo_intent_required():
+        return None
+    if tool_name == "todo" or tool_name not in MUTATING_TOOL_NAMES:
+        return None
+    session_id = get_chat_session_id()
+    if not session_id:
+        return None
+    plan = await get_plan(session_id)
+    if plan:
+        return None
+    return (
+        "Error: this turn requires todo(action=create) before mutating tools. "
+        "Call todo with 2–20 ordered steps, then proceed with todo(action=confirm) per step."
+    )
+
+
 async def _execute_one_tool_call(
     registry: ToolRegistry,
     tc: Any,
@@ -323,6 +342,17 @@ async def _execute_one_tool_call(
     action = str(args.get("action", "")).strip().lower()
     if blocked_actions and action in blocked_actions:
         content = f"Error: action '{action}' is disabled for tool '{name}' in this run"
+        if guardrail is not None:
+            post = guardrail.after_call(name, args, content, failed=True)
+            content = append_guardrail_guidance(content, post)
+        return {
+            "role": "tool",
+            "tool_call_id": tc.id,
+            "content": content,
+        }
+    todo_block = await _todo_plan_required_block(name)
+    if todo_block is not None:
+        content = todo_block
         if guardrail is not None:
             post = guardrail.after_call(name, args, content, failed=True)
             content = append_guardrail_guidance(content, post)
@@ -537,6 +567,7 @@ async def run_chat_loop(
     final_text = ""
     guardrail = ToolCallGuardrailController(guardrail_config_from_settings(settings))
     set_chat_session_id(session_id)
+    set_todo_intent_required(messages_require_todo_intent(messages))
 
     for round_idx in range(1, effective_max_rounds + 1):
         working, compression_report = await compress_with_report(
@@ -798,6 +829,7 @@ async def run_chat_loop_stream(
         settings.stream_max_duration_s if settings.stream_max_duration_s > 0 else None
     )
     set_chat_session_id(session_id)
+    set_todo_intent_required(messages_require_todo_intent(messages))
 
     for round_idx in range(1, max_rounds + 1):
         working, compression_report = await compress_with_report(

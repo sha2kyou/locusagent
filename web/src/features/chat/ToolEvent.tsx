@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMessage, type ToolCallMessagePartComponent } from "@assistant-ui/react";
 import { Blocks, Brain, ChevronDown, HelpCircle, Loader2, Send, Sparkles, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { findScrollParent } from "@/lib/scroll-parent";
 import { useImeEnterGuard } from "@/lib/ime-enter";
 import { Button } from "@/components/ui/button";
 import { ListCard } from "@/components/ui/panel";
@@ -225,17 +226,4 @@ function GenericToolBlock({
       ) : null}
     </ListCard>
   );
-}
-
-function findScrollParent(el: HTMLElement | null): HTMLElement | null {
-  let node: HTMLElement | null = el;
-  while (node) {
-    const style = window.getComputedStyle(node);
-    const overflowY = style.overflowY;
-    if ((overflowY === "auto" || overflowY === "scroll") && node.scrollHeight > node.clientHeight) {
-      return node;
-    }
-    node = node.parentElement;
-  }
-  return null;
 }

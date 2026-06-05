@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertCircle, Check, ChevronDown, Circle, ListTodo, Loader2, Minus } from "lucide-react";
 import { ListCard } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
+import { findScrollParent } from "@/lib/scroll-parent";
 import type { TodoPlan, TodoStep, TodoStepStatus } from "./todo";
 
 function StepIcon({ status }: { status: TodoStepStatus }) {
@@ -65,19 +66,6 @@ function TodoStepRow({ step, index }: { step: TodoStep; index: number }) {
   );
 }
 
-function findScrollParent(el: HTMLElement | null): HTMLElement | null {
-  let node: HTMLElement | null = el;
-  while (node) {
-    const style = window.getComputedStyle(node);
-    const overflowY = style.overflowY;
-    if ((overflowY === "auto" || overflowY === "scroll") && node.scrollHeight > node.clientHeight) {
-      return node;
-    }
-    node = node.parentElement;
-  }
-  return null;
-}
-
 function planSummary(plan: TodoPlan): string {
   const doneCount = plan.steps.filter((s) => s.status === "done" || s.status === "skipped").length;
   const interruptedCount = plan.steps.filter((s) => s.status === "interrupted").length;
@@ -89,6 +77,10 @@ function planSummary(plan: TodoPlan): string {
 export function TodoProgressPanel({ plan }: { plan: TodoPlan }) {
   const hasActive = plan.steps.some((s) => s.status === "in_progress");
   const [open, setOpen] = useState(hasActive);
+
+  useEffect(() => {
+    if (hasActive) setOpen(true);
+  }, [hasActive, plan.plan_id]);
 
   const toggle = (triggerEl: HTMLButtonElement) => {
     const scroller = findScrollParent(triggerEl);

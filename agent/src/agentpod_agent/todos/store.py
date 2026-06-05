@@ -9,13 +9,33 @@ from typing import Any, Literal
 from ..db import conn_scope, run_in_thread
 
 STEP_STATUSES = frozenset({"pending", "in_progress", "done", "skipped", "interrupted"})
-_AGENT_STEP_STATUSES = frozenset({"pending", "in_progress", "done", "skipped"})
-_MAX_STEPS = 20
+_AGENT_STEP_TRANSITIONS: dict[str, frozenset[str]] = {
+    "pending": frozenset({"in_progress", "skipped", "done"}),
+    "in_progress": frozenset({"done", "skipped", "pending"}),
+    "done": frozenset({"done"}),
+    "skipped": frozenset({"skipped"}),
+    "interrupted": frozenset(),
+}
 
 INTERRUPT_NOTE_RESTART = "执行中断（服务重启）"
 INTERRUPT_NOTE_NEW_SESSION = "执行中断（已开新对话）"
+INTERRUPT_NOTE_NEW_TURN = "执行中断（新话题）"
 
 InterruptScope = Literal["in_progress", "active"]
+
+
+_AGENT_STEP_STATUSES = frozenset({"pending", "in_progress", "done", "skipped"})
+_MAX_STEPS = 20
+
+
+def _validate_step_transition(current: str, next_status: str) -> None:
+    allowed = _AGENT_STEP_TRANSITIONS.get(current, frozenset())
+    if next_status not in allowed:
+        if current == "interrupted":
+            raise ValueError("step is interrupted and cannot be updated")
+        raise ValueError(
+            f"invalid status transition: {current} -> {next_status}"
+        )
 
 
 def _new_plan_id() -> str:
@@ -202,6 +222,8 @@ async def confirm_step(
                         )
 
             step = dict(steps[idx])
+            current_status = str(step.get("status") or "pending").strip().lower()
+            _validate_step_transition(current_status, next_status)
             step["status"] = next_status
             if note_text:
                 step["note"] = note_text
@@ -272,6 +294,39 @@ async def interrupt_other_session_todos(exclude_session_id: str) -> dict[str, in
                 _persist_steps(c, sid, updated)
                 plans_updated += 1
         return {"plans_updated": plans_updated, "steps_interrupted": steps_interrupted}
+
+    return await run_in_thread(_do)
+
+
+async def interrupt_current_session_todos(
+    session_id: str,
+    *,
+    note: str = INTERRUPT_NOTE_NEW_TURN,
+) -> dict[str, int]:
+    """同会话新 user 消息或重试时，将未完成步骤标为 interrupted。"""
+
+    sid = str(session_id or "").strip()
+    if not sid:
+        return {"plans_updated": 0, "steps_interrupted": 0}
+
+    def _do() -> dict[str, int]:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT session_id, steps_json FROM session_todos WHERE session_id=?",
+                (sid,),
+            ).fetchone()
+            if not row:
+                return {"plans_updated": 0, "steps_interrupted": 0}
+            steps = json.loads(str(row["steps_json"] or "[]"))
+            updated, count = _interrupt_steps(
+                steps,
+                scope="active",
+                note=note,
+            )
+            if count <= 0:
+                return {"plans_updated": 0, "steps_interrupted": 0}
+            _persist_steps(c, sid, updated)
+            return {"plans_updated": 1, "steps_interrupted": count}
 
     return await run_in_thread(_do)
 
