@@ -1,5 +1,6 @@
 import type { LegacyToolMeta, Message, OpenAIToolCall, ToolKind } from "@/api/types";
 import { type ChatAttachment, type ChatMessage, type ToolPart, uid } from "./model";
+import { formatToolArgsPreview } from "./tool-args";
 
 function isOpenAIToolCall(tc: OpenAIToolCall | LegacyToolMeta | Record<string, unknown>): tc is OpenAIToolCall {
   return "function" in tc && !!(tc as OpenAIToolCall).function;
@@ -175,6 +176,7 @@ export function coalesceHistory(items: Message[], opts: CoalesceHistoryOptions =
           toolKind: "tool",
           running: true,
           startedAt: 0,
+          argsPreview: formatToolArgsPreview(tc.function.arguments),
         });
       }
       const atts = normalizeAttachments(msg.attachments);

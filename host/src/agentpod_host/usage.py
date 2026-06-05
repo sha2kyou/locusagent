@@ -21,6 +21,8 @@ SCENARIO_LABELS: dict[str, str] = {
     "jina": "网页阅读",
     "embedding": "向量嵌入",
     "scheduled_run": "定时任务",
+    "todo_intent": "任务意图识别",
+    "background_review_intent": "后台改进意图",
 }
 
 

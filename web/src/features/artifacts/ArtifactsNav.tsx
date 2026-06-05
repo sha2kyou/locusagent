@@ -1,9 +1,11 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { Package } from "lucide-react";
-import { cn } from "@/lib/utils";
-
-const rowBase =
-  "group relative flex h-10 items-center gap-3 rounded-lg px-2.5 text-sm font-medium transition-colors";
+import {
+  sidebarNavIconClass,
+  sidebarNavIconSlotClass,
+  sidebarNavLabelClass,
+  sidebarNavRowClass,
+} from "@/app/sidebar-nav-styles";
 
 export function ArtifactsNav({
   basePrefix,
@@ -22,16 +24,12 @@ export function ArtifactsNav({
       to={`${basePrefix}/artifacts`}
       title="产物"
       onClick={onNavigate}
-      className={cn(
-        rowBase,
-        !expanded && "md:justify-center",
-        artifactsActive
-          ? "bg-sidebar-accent text-foreground"
-          : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
-      )}
+      className={sidebarNavRowClass(artifactsActive, expanded)}
     >
-      <Package className="size-[18px] shrink-0" />
-      <span className={cn("truncate", !expanded && "md:hidden")}>产物</span>
+      <span className={sidebarNavIconSlotClass} aria-hidden>
+        <Package className={sidebarNavIconClass} strokeWidth={1.75} />
+      </span>
+      <span className={sidebarNavLabelClass(expanded)}>产物</span>
     </NavLink>
   );
 }

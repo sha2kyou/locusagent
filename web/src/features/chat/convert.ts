@@ -30,7 +30,11 @@ export function convertMessage(message: ChatMessage): ThreadMessageLike {
         toolCallId: p.id,
         toolName: p.toolName,
         argsText: "",
-        args: { kind: p.toolKind, startedAt: p.startedAt },
+        args: {
+          kind: p.toolKind,
+          startedAt: p.startedAt,
+          ...(p.argsPreview ? { argsPreview: p.argsPreview } : {}),
+        },
         result: p.running ? undefined : (p.preview ?? ""),
       });
     }

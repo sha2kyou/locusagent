@@ -19,7 +19,6 @@ import { BrandMark } from "@/app/Brand";
 import { DesktopWindowDragOverlay } from "@/app/DesktopTitlebarSpacer";
 import { desktopDragRegionProps } from "@/lib/desktop-app";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { ArtifactsNav } from "@/features/artifacts/ArtifactsNav";
 import { useAuth } from "./auth";
 import { ApiKeyFlashModal, SettingsModal } from "@/features/settings/SettingsModal";
@@ -27,6 +26,13 @@ import { NotificationBell } from "@/features/notifications/NotificationBell";
 import { flashApiKey, listWorkspaces } from "@/api/endpoints";
 import type { WorkspaceItem } from "@/api/types";
 import { isChatRoutePath, stripWorkspacePrefix, withWorkspacePrefix } from "./workspace-route";
+import {
+  sidebarNavGroupLabelClass,
+  sidebarNavIconClass,
+  sidebarNavIconSlotClass,
+  sidebarNavLabelClass,
+  sidebarNavRowClass,
+} from "./sidebar-nav-styles";
 
 interface ShellApi {
   openSettings: () => void;
@@ -156,7 +162,7 @@ export function AppShell() {
   return (
     <ShellContext.Provider value={{ openSettings: () => setSettingsOpen(true), setMobileAction }}>
       <DesktopWindowDragOverlay
-        mainOffsetClassName={expanded ? "left-0 md:left-[208px]" : "left-0 md:left-[68px]"}
+        mainOffsetClassName={expanded ? "left-0 md:left-[220px]" : "left-0 md:left-[60px]"}
       />
       <div className="flex h-full">
         {/* 移动端遮罩 */}
@@ -164,93 +170,69 @@ export function AppShell() {
           <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={() => setNavOpen(false)} />
         )}
 
-        {/* 图标导航轨（移动端为抽屉） */}
+        {/* 左侧导航栏 */}
         <aside
           className={cn(
-            "fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col border-r border-sidebar-border bg-sidebar transition-transform duration-200",
+            "fixed inset-y-0 left-0 z-50 flex w-[265px] flex-col bg-sidebar transition-transform duration-200",
             navOpen ? "translate-x-0" : "-translate-x-full",
-            "md:static md:z-auto md:translate-x-0 md:transition-[width]",
-            expanded ? "md:w-[208px]" : "md:w-[68px]",
+            "md:static md:z-auto md:translate-x-0 md:border-r md:border-sidebar-border md:transition-[width]",
+            expanded ? "md:w-[220px]" : "md:w-[60px]",
           )}
         >
+          {/* Header：布局与导航行一致，收起时仅隐藏标题 */}
           <div
             {...desktopDragRegionProps("deep")}
             className={cn(
-              "apod-sidebar-header flex h-14 shrink-0 items-center gap-2.5 px-4",
-              !expanded && "md:justify-center md:px-2",
+              "apod-sidebar-header flex h-[52px] shrink-0 items-center px-2",
+              !expanded && "md:justify-center",
             )}
           >
-            {expanded ? (
-              <BrandMark />
-            ) : (
-              <>
-                <span className="md:hidden">
-                  <BrandMark />
-                </span>
-                <NotificationBell className="hidden md:block" menuAlign="start" />
-              </>
-            )}
-            <span className={cn("min-w-0 flex-1 truncate text-[15px] font-semibold tracking-tight", !expanded && "md:hidden")}>
-              AgentPod
-            </span>
-            <NotificationBell className={cn("hidden md:block", !expanded && "md:hidden")} menuAlign="start" />
+            <div
+              className={cn(
+                "flex min-w-0 items-center gap-2 px-2",
+                expanded ? "flex-1" : "md:justify-center md:px-0",
+              )}
+            >
+              <span className="flex w-6 shrink-0 items-center justify-center">
+                <BrandMark className="size-6 rounded-full" />
+              </span>
+              <span
+                className={cn(
+                  "min-w-0 text-[14px] font-bold leading-snug tracking-tight",
+                  !expanded && "md:hidden",
+                )}
+              >
+                AgentPod
+              </span>
+            </div>
           </div>
 
+          {/* 导航列表 */}
           <nav
             ref={navListRef}
-            className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-2"
+            className={cn(
+              "flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-2",
+            )}
           >
             {NAV_PRIMARY.map((item) => (
-              <NavRow
-                key={item.to}
-                {...item}
-                basePrefix={workspacePrefix}
-                expanded={expanded}
-                onNavigate={() => setNavOpen(false)}
-              />
+              <NavRow key={item.to} {...item} basePrefix={workspacePrefix} expanded={expanded} onNavigate={() => setNavOpen(false)} />
             ))}
             <ArtifactsNav basePrefix={workspacePrefix} expanded={expanded} onNavigate={() => setNavOpen(false)} />
-            <NavRow
-              {...NAV_WORKSPACE}
-              basePrefix={workspacePrefix}
-              expanded={expanded}
-              onNavigate={() => setNavOpen(false)}
-            />
+            <NavRow {...NAV_WORKSPACE} basePrefix={workspacePrefix} expanded={expanded} onNavigate={() => setNavOpen(false)} />
 
-            <div className="mx-1 my-1.5 border-t border-sidebar-border/70" />
-
+            <NavGroupLabel label="能力" expanded={expanded} />
             {NAV_CAPABILITIES.map((item) => (
-              <NavRow
-                key={item.to}
-                {...item}
-                basePrefix={workspacePrefix}
-                expanded={expanded}
-                onNavigate={() => setNavOpen(false)}
-              />
+              <NavRow key={item.to} {...item} basePrefix={workspacePrefix} expanded={expanded} onNavigate={() => setNavOpen(false)} />
             ))}
 
-            <div className="mx-1 my-1.5 border-t border-sidebar-border/70" />
-
+            <NavGroupLabel label="数据" expanded={expanded} />
             {NAV_CONTEXT.map((item) => (
-              <NavRow
-                key={item.to}
-                {...item}
-                basePrefix={workspacePrefix}
-                expanded={expanded}
-                onNavigate={() => setNavOpen(false)}
-              />
+              <NavRow key={item.to} {...item} basePrefix={workspacePrefix} expanded={expanded} onNavigate={() => setNavOpen(false)} />
             ))}
 
-            <div className="mx-1 my-1.5 border-t border-sidebar-border/70" />
-
+            <NavGroupLabel label="自动化" expanded={expanded} />
             {NAV_AUTOMATION.map((item) => (
-              <NavRow
-                key={item.to}
-                {...item}
-                basePrefix={workspacePrefix}
-                expanded={expanded}
-                onNavigate={() => setNavOpen(false)}
-              />
+              <NavRow key={item.to} {...item} basePrefix={workspacePrefix} expanded={expanded} onNavigate={() => setNavOpen(false)} />
             ))}
           </nav>
 
@@ -258,20 +240,19 @@ export function AppShell() {
           <div
             ref={menuRootRef}
             className={cn(
-              "relative shrink-0 p-2.5",
-              menuScrollable && "border-t border-sidebar-border/70 bg-sidebar",
+              "relative shrink-0 border-t border-sidebar-border/40 p-2.5",
+              menuScrollable && "bg-sidebar",
             )}
           >
             {!isDefaultWorkspace && (
               <div
                 className={cn(
-                  "mb-2 inline-flex w-fit max-w-full items-center gap-1.5 self-center rounded-md border border-border/60 bg-surface/50 px-2 py-1 text-[11px] text-muted-foreground/80",
-                  expanded && "justify-center",
-                  !expanded && "md:justify-center md:px-1.5 md:py-1",
+                  "mb-2 inline-flex w-fit max-w-full items-center gap-1.5 rounded-md border border-border/50 bg-surface/40 px-2 py-1 text-[11px] text-muted-foreground/70",
+                  !expanded && "md:justify-center md:px-1.5",
                 )}
                 title={currentWorkspace?.description || currentWorkspaceLabel}
               >
-                <span className={cn("max-w-full wrap-break-word text-center leading-4 whitespace-normal", !expanded && "md:hidden")}>
+                <span className={cn("max-w-full truncate leading-4", !expanded && "md:hidden")}>
                   {currentWorkspaceLabel}
                 </span>
                 {!expanded && <span className="hidden md:block text-[10px]">WS</span>}
@@ -281,8 +262,8 @@ export function AppShell() {
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
               className={cn(
-                "flex w-full items-center gap-2.5 rounded-xl p-2 transition-colors hover:bg-sidebar-accent",
-                !expanded && "md:justify-center",
+                "flex w-full items-center gap-2.5 rounded-xl px-2 py-2 transition-colors hover:bg-sidebar-accent",
+                !expanded && "md:justify-center md:px-0",
                 menuOpen && "bg-sidebar-accent",
               )}
               title="账户"
@@ -290,30 +271,26 @@ export function AppShell() {
               <Avatar me={me} />
               <span className={cn("min-w-0 flex-1 text-left", !expanded && "md:hidden")}>
                 <span className="block truncate text-[13px] font-semibold leading-tight">{me?.username ?? "—"}</span>
-                <span className="block truncate text-[11px] text-muted-foreground/70 leading-tight mt-0.5">
-                  {typeof me?.id === "number" ? `ID ${me.id}` : "—"}
+                <span className="mt-0.5 block truncate text-[11px] leading-tight text-muted-foreground/60">
+                  {typeof me?.id === "number" ? `#${me.id}` : "—"}
                 </span>
               </span>
             </button>
 
             {menuOpen && (
-              <div className="absolute bottom-[calc(100%+4px)] left-2.5 right-2.5 z-20 overflow-hidden rounded-xl border border-border-strong bg-popover py-1 shadow-lg apod-enter-up">
+              <div className="absolute bottom-[calc(100%+6px)] left-2.5 right-2.5 z-20 overflow-hidden rounded-xl border border-border-strong bg-popover py-1.5 shadow-lg apod-enter-up">
                 <button
                   type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setSettingsOpen(true);
-                  }}
+                  onClick={() => { setMenuOpen(false); setSettingsOpen(true); }}
                   className={cn(
                     "flex w-full items-center gap-2.5 px-3 py-2 text-[13px] transition-colors hover:bg-secondary",
                     !expanded && "md:justify-center",
                   )}
-                  title="设置"
                 >
                   <Settings className="size-4 shrink-0 text-muted-foreground" />
                   <span className={cn(!expanded && "md:hidden")}>设置</span>
                 </button>
-                <div className="my-1 mx-2 border-t border-border/60" />
+                <div className="mx-2 my-1 border-t border-border/50" />
                 <form action="/api/oauth/github/logout" method="post">
                   <button
                     type="submit"
@@ -321,7 +298,6 @@ export function AppShell() {
                       "flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-destructive transition-colors hover:bg-destructive/8",
                       !expanded && "md:justify-center",
                     )}
-                    title="退出"
                   >
                     <LogOut className="size-4 shrink-0" />
                     <span className={cn(!expanded && "md:hidden")}>退出</span>
@@ -331,26 +307,25 @@ export function AppShell() {
             )}
           </div>
 
-          {/* 收起按钮：仅桌面 */}
-          <div className="hidden shrink-0 border-t border-sidebar-border p-2 md:block">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className={cn(
-                "w-full gap-2.5 px-2.5 text-muted-foreground",
-                expanded ? "justify-start" : "justify-center",
-              )}
+          {/* 收起/展开：仅桌面，置于最底部 */}
+          <div className="hidden shrink-0 border-t border-sidebar-border/40 p-2 md:block">
+            <button
+              type="button"
               onClick={() => setExpanded((v) => !v)}
               title={expanded ? "收起" : "展开"}
+              className={cn(
+                "flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-xs text-muted-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-foreground",
+                expanded ? "justify-start" : "justify-center",
+              )}
             >
-              {expanded ? <ChevronsLeft className="size-4" /> : <PanelLeft className="size-4" />}
-              {expanded && <span className="text-xs">收起</span>}
-            </Button>
+              {expanded ? <ChevronsLeft className="size-4 shrink-0" /> : <PanelLeft className="size-4 shrink-0" />}
+              {expanded && <span>收起</span>}
+            </button>
           </div>
         </aside>
 
         {/* 主区 */}
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="relative flex min-w-0 flex-1 flex-col">
           {/* 移动端顶栏 */}
           <div
             {...desktopDragRegionProps("deep")}
@@ -370,7 +345,11 @@ export function AppShell() {
               {mobileAction}
             </div>
           </div>
-          <main className="min-w-0 flex-1 overflow-hidden">
+          <main className="relative min-w-0 flex-1 overflow-hidden">
+            {/* 桌面端：右上角浮动，不占布局高度 */}
+            <div className="pointer-events-none absolute right-3 top-3 z-[70] hidden md:block">
+              <NotificationBell menuAlign="end" className="pointer-events-auto" />
+            </div>
             <Suspense fallback={<RouteFallback />}>
               <Outlet />
             </Suspense>
@@ -388,6 +367,10 @@ export function AppShell() {
   );
 }
 
+function NavGroupLabel({ label, expanded }: { label: string; expanded: boolean }) {
+  return <div className={sidebarNavGroupLabelClass(expanded)}>{expanded ? label : null}</div>;
+}
+
 function NavRow({
   to,
   label,
@@ -401,18 +384,12 @@ function NavRow({
       to={`${basePrefix}${to}`}
       title={label}
       onClick={onNavigate}
-      className={({ isActive }) =>
-        cn(
-          "group relative flex h-9 items-center gap-3 rounded-lg px-2.5 text-sm font-medium transition-colors",
-          !expanded && "md:justify-center",
-          isActive
-            ? "bg-sidebar-accent text-foreground before:absolute before:left-0 before:top-1/2 before:h-4 before:-translate-y-1/2 before:w-0.5 before:rounded-full before:bg-brand/70 before:content-['']"
-            : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
-        )
-      }
+      className={({ isActive }) => sidebarNavRowClass(isActive, expanded)}
     >
-      <Icon className="size-[18px] shrink-0" />
-      <span className={cn("truncate", !expanded && "md:hidden")}>{label}</span>
+      <span className={sidebarNavIconSlotClass} aria-hidden>
+        <Icon className={sidebarNavIconClass} strokeWidth={1.75} />
+      </span>
+      <span className={sidebarNavLabelClass(expanded)}>{label}</span>
     </NavLink>
   );
 }

@@ -6,8 +6,8 @@ import rehypeHighlight from "rehype-highlight";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import {
+  Brain,
   Check,
-  ChevronRight,
   Code2,
   Copy,
   ExternalLink,
@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { normalizeLatexInput } from "@/lib/latex-normalize";
+import { CollapsibleMetaBlock } from "./CollapsibleMetaBlock";
 
 interface Segment {
   kind: "md" | "thinking" | "html" | "html-pending";
@@ -88,7 +89,14 @@ export const Markdown = memo(function Markdown({ text, enableMath = true }: { te
   return (
     <div className="apod-prose">
       {segs.map((s, i) => {
-        if (s.kind === "thinking") return <ThinkingBlock key={`t-${i}`} content={s.content} />;
+        if (s.kind === "thinking")
+          return (
+            <ThinkingBlock
+              key={`t-${i}`}
+              blockId={`md-think-${hashString(s.content)}`}
+              content={s.content}
+            />
+          );
         if (s.kind === "html") return <HtmlRender key={`h-${hashString(s.content)}`} html={s.content} />;
         if (s.kind === "html-pending") return <HtmlPending key="h-pending" />;
         return <MarkdownBlock key={`m-${i}`} text={s.content} enableMath={enableMath} />;
@@ -210,49 +218,29 @@ export function ThinkingBlock({
   content,
   isActive = false,
   defaultOpen = false,
-  label = "思考过程",
+  label = "thinking",
+  blockId,
 }: {
   content: string;
   isActive?: boolean;
   defaultOpen?: boolean;
   label?: string;
+  blockId?: string;
 }) {
-  const [open, setOpen] = useState(defaultOpen || isActive);
-  const displayLabel = isActive ? "思考中" : label;
-
-  useEffect(() => {
-    if (isActive) setOpen(true);
-  }, [isActive]);
-
   return (
-    <div className="my-2 overflow-hidden rounded-xl border border-border/70 bg-surface/30 shadow-xs">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-surface/60"
-      >
-        {isActive ? (
-          <span className="flex size-3.5 shrink-0 items-center justify-center">
-            <span className="size-2 animate-pulse rounded-full bg-muted-foreground/60" />
-          </span>
-        ) : (
-          <ChevronRight className={cn("size-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-150", open && "rotate-90")} />
-        )}
-        <span className="shrink-0 whitespace-nowrap text-[12px] font-medium text-muted-foreground">
-          {displayLabel}
-        </span>
-        {!open && content ? (
-          <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground/50">
-            {content.slice(0, 80).replace(/\n/g, " ")}
-          </span>
-        ) : null}
-      </button>
-      {open && (
-        <div className="apod-prose border-t border-border/60 px-3.5 py-3 text-[13px] text-muted-foreground/90">
-          <MarkdownBlock text={content} />
-        </div>
-      )}
-    </div>
+    <CollapsibleMetaBlock
+      blockId={blockId ?? `think-${hashString(content)}`}
+      defaultOpen={defaultOpen || isActive}
+      title={label}
+      activeTitle="thinking"
+      running={isActive}
+      icon={<Brain className="size-3.5" />}
+      preview={content}
+    >
+      <div className="apod-prose text-[13px] text-muted-foreground/90">
+        <MarkdownBlock text={content} />
+      </div>
+    </CollapsibleMetaBlock>
   );
 }
 

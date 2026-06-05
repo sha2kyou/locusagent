@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMessage, type ToolCallMessagePartComponent } from "@assistant-ui/react";
-import { Blocks, Brain, ChevronDown, HelpCircle, Loader2, Send, Sparkles, Wrench } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { findScrollParent } from "@/lib/scroll-parent";
-import { usePinnedCollapse } from "@/lib/use-pinned-collapse";
+import { Blocks, Brain, HelpCircle, Send, Sparkles, Wrench } from "lucide-react";
+import { CollapsibleMetaBlock } from "./CollapsibleMetaBlock";
 import { useImeEnterGuard } from "@/lib/ime-enter";
 import { Button } from "@/components/ui/button";
-import { ListCard } from "@/components/ui/panel";
 import type { ToolKind } from "@/api/types";
 import { useChat } from "./ChatProvider";
 import type { ChatMessage, ChatPart, ToolPart } from "./model";
+import { formatToolArgsPreview } from "./tool-args";
 import { isTodoTool, parseTodoPlan } from "./todo";
 
 function isRenderableGenericTool(part: ChatPart): part is ToolPart {
@@ -144,7 +142,7 @@ export const ToolEvent: ToolCallMessagePartComponent = (props) => {
     const payload = parseClarify(props.result);
     if (payload) return <ClarifyCard payload={payload} />;
   }
-  return <GenericToolBlock blockId={props.toolCallId} toolName={props.toolName} args={props.args} result={props.result} status={props.status} />;
+  return <GenericToolBlock blockId={props.toolCallId} toolName={props.toolName} args={props.args} argsPreview={resolveArgsPreviewFromProps(props.args)} result={props.result} status={props.status} />;
 };
 
 /** 按 ChatPart 时间线直接渲染工具块（不依赖 MessagePrimitive.Parts 顺序） */
@@ -165,6 +163,7 @@ export function ToolPartView({ part }: { part: ToolPart }) {
       blockId={part.id}
       toolName={part.toolName}
       args={{ kind: part.toolKind, startedAt: part.startedAt }}
+      argsPreview={part.argsPreview}
       result={running ? undefined : (part.preview ?? "")}
       status={{ type: running ? "running" : "complete" }}
     />
@@ -173,16 +172,30 @@ export function ToolPartView({ part }: { part: ToolPart }) {
 
 type ToolBlockStatus = { type?: string } | undefined;
 
+function resolveArgsPreviewFromProps(args: unknown): string | undefined {
+  if (!args || typeof args !== "object") return undefined;
+  const row = args as Record<string, unknown>;
+  if (typeof row.argsPreview === "string" && row.argsPreview.trim()) return row.argsPreview.trim();
+  const rest = { ...row };
+  delete rest.kind;
+  delete rest.startedAt;
+  delete rest.argsPreview;
+  if (Object.keys(rest).length === 0) return undefined;
+  return formatToolArgsPreview(JSON.stringify(rest));
+}
+
 function GenericToolBlock({
   blockId,
   toolName,
   args,
+  argsPreview,
   result,
   status,
 }: {
   blockId: string;
   toolName: string;
   args: unknown;
+  argsPreview?: string;
   result: unknown;
   status?: ToolBlockStatus;
 }) {
@@ -204,67 +217,31 @@ function GenericToolBlock({
   const elapsed = startedAt ? fmtElapsed((running ? now : Date.now()) - startedAt) : null;
   const hasResult = preview.trim().length > 0;
   const defaultExpanded = blockId === lastGenericToolId;
-  const [open, toggleOpen] = usePinnedCollapse(blockId, defaultExpanded);
-
-  const toggleResult = (triggerEl: HTMLButtonElement) => {
-    const scroller = findScrollParent(triggerEl);
-    const prevTop = scroller?.scrollTop ?? 0;
-    toggleOpen();
-    // assistant-ui 在消息尺寸变化时可能触发自动跟随到底部，这里强制恢复用户当前阅读位置。
-    requestAnimationFrame(() => {
-      if (scroller) scroller.scrollTop = prevTop;
-      setTimeout(() => {
-        if (scroller) scroller.scrollTop = prevTop;
-      }, 0);
-    });
-  };
+  const paramPreview = argsPreview ?? resolveArgsPreviewFromProps(args);
 
   return (
-    <ListCard className="my-1.5 overflow-hidden p-0">
-      <div className="flex items-center gap-3 px-3.5 py-2.5">
-        <span
-          className={cn(
-            "flex size-6 shrink-0 items-center justify-center rounded-md",
-            running
-              ? "bg-brand/10 text-brand"
-              : "bg-muted text-muted-foreground",
-          )}
-        >
-          {running ? <Loader2 className="size-3.5 animate-spin" /> : <Icon className="size-3.5" />}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-[13px] font-medium text-foreground">{toolName}</span>
-            {running && (
-              <span className="shrink-0 rounded-full bg-brand/10 px-1.5 py-0.5 text-[10px] font-medium text-brand">
-                执行中
-              </span>
-            )}
-          </div>
-        </div>
-        {elapsed && (
+    <CollapsibleMetaBlock
+      blockId={blockId}
+      defaultOpen={defaultExpanded}
+      title={toolName}
+      running={running}
+      showRunningBadge
+      icon={<Icon className="size-3.5" />}
+      preview={paramPreview}
+      hidePreviewWhenOpen={false}
+      trailing={
+        elapsed ? (
           <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
             {elapsed}
           </span>
-        )}
-      </div>
+        ) : undefined
+      }
+    >
       {!running && hasResult ? (
-        <>
-          <button
-            type="button"
-            onClick={(e) => toggleResult(e.currentTarget)}
-            className="flex w-full items-center justify-between border-t border-border px-3.5 py-2 text-left transition-colors hover:bg-surface/60"
-          >
-            <span className="text-xs text-muted-foreground">查看结果</span>
-            <ChevronDown className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform duration-150", open && "rotate-180")} />
-          </button>
-          {open ? (
-            <div className="border-t border-border bg-surface/30 px-3.5 py-3">
-              <pre className="max-h-[40vh] overflow-y-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-foreground/80">{preview}</pre>
-            </div>
-          ) : null}
-        </>
-      ) : null}
-    </ListCard>
+        <pre className="max-h-[40vh] overflow-y-auto whitespace-pre-wrap font-mono text-xs leading-relaxed text-foreground/80">
+          {preview}
+        </pre>
+      ) : undefined}
+    </CollapsibleMetaBlock>
   );
 }

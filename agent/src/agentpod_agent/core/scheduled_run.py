@@ -30,6 +30,12 @@ _NON_INTERACTIVE_SYSTEM_PROMPT = (
     "- No user is present to answer follow-up questions.\n"
     "- Never call clarify; make a reasonable default decision and continue.\n"
     "- If requirements are not fully specified, proceed with the smallest sensible output.\n"
+    "- Do NOT ask the user to switch to interactive mode or wait for confirmation.\n"
+    "- memory tool (add/replace/remove) IS available in scheduled runs. "
+    "When the prompt asks for memory maintenance, consolidation, or cleanup, "
+    "execute it directly via memory tool calls—do not defer to a later interactive session.\n"
+    "- The frozen memory snapshot in system prompt is a read cache for this session start; "
+    "it does not block memory writes during this run.\n"
 )
 _SCHEDULED_DISABLED_TOOLS = {
     "clarify",

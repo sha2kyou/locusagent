@@ -787,7 +787,7 @@ async def run_chat_loop_stream(
     yield 事件类型：
     - {"type": "reasoning_delta", "content": str}             思考链增量
     - {"type": "delta", "content": str}                       正文增量
-    - {"type": "tool_call", "name": str, "id": str}           工具开始
+    - {"type": "tool_call", "name": str, "id": str, "arguments": str}  工具开始
     - {"type": "tool_result", "tool_call_id": str, "preview": str}
     - {"type": "done", "final_text", "final_reasoning", "rounds", "total_tokens", "tool_calls_made"}
     """
@@ -1025,7 +1025,7 @@ async def run_chat_loop_stream(
                 return
             yield {"type": "assistant_tools", "message": msg_dict}
             for stub in stub_calls:
-                yield {"type": "tool_call", "name": stub.function.name, "id": stub.id}
+                yield {"type": "tool_call", "name": stub.function.name, "id": stub.id, "arguments": stub.function.arguments}
             tool_results = await _execute_tool_calls(
                 registry,
                 stub_calls,

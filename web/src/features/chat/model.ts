@@ -7,6 +7,7 @@ export interface ToolPart {
   toolKind: ToolKind;
   running: boolean;
   preview?: string;
+  argsPreview?: string;
   startedAt: number;
   elapsedMs?: number;
 }

@@ -19,7 +19,7 @@ log = get_logger("system_prompt")
 
 _SNAPSHOT_MEMORY_LIMIT = 30
 # 变更 build_frozen_system_prompt 模板时递增，使旧 session 缓存自动失效。
-FROZEN_SYSTEM_PROMPT_VERSION = 18
+FROZEN_SYSTEM_PROMPT_VERSION = 19
 _CACHE_PREFIX = f"agentpod:sp:v{FROZEN_SYSTEM_PROMPT_VERSION}:"
 
 
@@ -90,6 +90,9 @@ async def build_frozen_system_prompt() -> str:
     pieces = [
         f"You are an AI agent operating in a sandboxed container for user {settings.user_id}.",
         f"Use the provided tools when appropriate. Available tools: {tool_names}.",
+        "Invoke tools ONLY via native tool_calls (OpenAI function calling)—never write tool invocations in message content. "
+        "Do not output <tool_call>, <function=...>, <parameter=...>, JSON tool stubs, or any pseudo-XML/text simulation of tools in content or reasoning; such text is not executed. "
+        "If you need a tool, emit tool_calls and keep content empty or user-facing prose only.",
         "Parallel tool calls: when several tool invocations are independent (no output of one is required to choose args for another), emit all of them as multiple tool_calls in one assistant turn—they run in parallel. Prefer this over one-tool-per-turn ReAct when the user asks to fetch, search, or read multiple things at once (e.g. several read_file paths, multiple RSS/URLs, search_files + web_search, MCP read/list calls). Do not wait for round N results before issuing independent round N+1 calls. Exceptions: clarify must be alone—never parallel with other tools; after a successful clarify, end the turn immediately. Never parallelize mutating tools (write_file, patch, delete_file, terminal, execute_code, memory/skill/artifact writes, MCP config changes) or any step where a later call depends on an earlier result.",
         "When a direction or preference would materially shape the output (e.g. naming, design style, scope, tech choice), ask the user via clarify with strict JSON arguments {question, choices, allow_other} (2–4 mutually exclusive choices; single-select). Put every selectable option in choices, not in question. Ask only ONE question per turn: call clarify at most once per turn, never in parallel; if several things need clarifying, ask them one at a time across turns. After a successful clarify call, end your turn immediately with no further output. Skip clarify when options cannot be enumerated, the user must pick multiple items, any reasonable choice is equally fine, or the user explicitly asks you to just proceed.",
         "For multi-step work, use todo to decompose and track execution yourself—flow-node confirmation by you, not user approval. When a runtime Todo intent system message is present for this turn, you MUST call todo(action=create) before mutating tools. Otherwise use todo when the task clearly needs 3+ ordered steps or distinct sequential phases (design then implement, backend then frontend, research then write, multiple files/systems). Skip todo for single-shot Q&A, one read/search/summarize, or one file patch with no broader goal. Call todo(action=create) with ordered steps (unique id + title; optional detail); before each step todo(action=confirm, status=in_progress); when done todo(action=confirm, status=done, note=brief result). Only one in_progress step at a time. The chat UI shows live progress from todo calls.",

@@ -119,26 +119,32 @@ export function SessionSidebar({
 
   return (
     <SecondarySidebar mobileOpen={mobileOpen} mobileSide="right" onClose={onClose}>
-      <div className="p-3">
-        <div className="flex items-center gap-2">
-          <Button variant="primary" className="flex-1" onClick={handleNew}>
-            <Plus className="size-4" /> 新对话
-          </Button>
-          <Button
-            variant="secondary"
-            size="icon-sm"
-            disabled={filteredSessions.length === 0}
-            onClick={() => {
-              void deleteAllVisible();
-            }}
-            title="删除全部"
-            aria-label="删除全部"
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        </div>
+      {/* 头部：标题 + 操作按钮 */}
+      <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-sidebar-sub-border px-4">
+        <span className="min-w-0 flex-1 text-[14px] font-bold tracking-tight">对话</span>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={handleNew}
+          title="新对话"
+          aria-label="新对话"
+        >
+          <Plus className="size-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          disabled={filteredSessions.length === 0}
+          onClick={() => { void deleteAllVisible(); }}
+          title="删除全部"
+          aria-label="删除全部"
+          className="text-muted-foreground/60 hover:text-destructive"
+        >
+          <Trash2 className="size-3.5" />
+        </Button>
       </div>
-      <div className="px-3 pb-2">
+      {/* 搜索 */}
+      <div className="border-b border-sidebar-sub-border px-3 py-2.5">
         <SearchInput
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -168,8 +174,8 @@ export function SessionSidebar({
                     className={cn(
                       "group relative flex items-center gap-1 rounded-lg px-2.5 py-2 text-[13px] transition-colors",
                       s.id === currentId
-                        ? "bg-accent font-medium text-foreground shadow-xs"
-                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground/90",
+                        ? "bg-sidebar-sub-accent font-medium text-foreground shadow-xs"
+                        : "text-muted-foreground hover:bg-sidebar-sub-accent/70 hover:text-foreground/90",
                     )}
                     role="button"
                     tabIndex={0}

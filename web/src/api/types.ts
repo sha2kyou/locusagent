@@ -104,6 +104,7 @@ export interface ChatChunk {
   x_tool_kind?: ToolKind;
   x_tool_id?: string;
   x_tool_call_id?: string;
+  x_tool_args?: string;
   x_preview?: string;
   x_attachment_id?: string;
   x_attachment_name?: string;

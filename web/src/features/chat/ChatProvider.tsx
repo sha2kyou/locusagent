@@ -41,6 +41,7 @@ import {
 import { convertMessage } from "./convert";
 import { coalesceHistory, historyPollKey } from "./history";
 import { isTodoTool, parseTodoPlan, type TodoPlan } from "./todo";
+import { formatToolArgsPreview } from "./tool-args";
 
 export interface PendingAttachment {
   id: string;
@@ -528,6 +529,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                   toolKind: chunk.x_tool_kind || "tool",
                   running: true,
                   startedAt: Date.now(),
+                  argsPreview: formatToolArgsPreview(chunk.x_tool_args),
                 },
               ]);
             } else if (ev === "tool_result") {

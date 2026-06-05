@@ -496,6 +496,7 @@ async def chat_completions(req: ChatRequest):
                         x_tool_name=tool_name,
                         x_tool_kind=kind,
                         x_tool_id=ev.get("id"),
+                        x_tool_args=ev.get("arguments"),
                     )
                 elif t == "tool_result":
                     yield _chunk(

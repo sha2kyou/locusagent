@@ -343,7 +343,6 @@ function isServerDownloadable(file: ChatAttachment): boolean {
 }
 
 function attachmentDescription(file: ChatAttachment): string {
-  if (isServerDownloadable(file)) return "Agent 生成的文件";
   if (!file.processable) return "不可解析";
   if (file.kind === "text") return file.truncated ? "文本附件（已截断）" : "文本附件";
   if (file.kind === "image") return "图片附件";
@@ -352,7 +351,6 @@ function attachmentDescription(file: ChatAttachment): string {
 
 function canExportAttachment(file: ChatAttachment | null): boolean {
   if (!file) return false;
-  if (isServerDownloadable(file)) return true;
   if (file.kind === "text") return typeof file.text === "string";
   if (file.kind === "image") return typeof file.imageDataUrl === "string" && file.imageDataUrl.length > 0;
   return false;
@@ -406,9 +404,13 @@ function MessageAttachmentChips({
           key={file.id}
           onClick={() => onSelect(file)}
           className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/70 px-2.5 py-1 text-xs text-muted-foreground transition hover:border-border-strong hover:bg-surface"
-          title={`查看 ${file.name}`}
+          title={isServerDownloadable(file) ? `下载 ${file.name}` : `查看 ${file.name}`}
         >
-          <Paperclip className="size-3" />
+          {isServerDownloadable(file) ? (
+            <Download className="size-3" />
+          ) : (
+            <Paperclip className="size-3" />
+          )}
           <span className="max-w-56 truncate">{file.name}</span>
           {!file.processable && !isServerDownloadable(file) ? (
             <span className="text-warning">不可解析</span>
@@ -417,6 +419,23 @@ function MessageAttachmentChips({
       ))}
     </div>
   );
+}
+
+function useAttachmentSelect() {
+  const toast = useToast();
+  const [selectedAttachment, setSelectedAttachment] = useState<ChatAttachment | null>(null);
+
+  const selectAttachment = (file: ChatAttachment) => {
+    if (isServerDownloadable(file)) {
+      void downloadAttachment(file.id, file.name).catch((err: unknown) => {
+        toast(err instanceof Error ? err.message : "下载失败", "error");
+      });
+      return;
+    }
+    setSelectedAttachment(file);
+  };
+
+  return { selectedAttachment, setSelectedAttachment, selectAttachment };
 }
 
 function AttachmentDrawer({
@@ -440,12 +459,6 @@ function AttachmentDrawer({
           disabled={!canExportAttachment(file)}
           onClick={() => {
             if (!file) return;
-            if (isServerDownloadable(file)) {
-              void downloadAttachment(file.id, file.name).catch((err: unknown) => {
-                toast(err instanceof Error ? err.message : "下载失败", "error");
-              });
-              return;
-            }
             const exported = exportInlineAttachment(file);
             if (!exported) {
               toast("当前附件暂不支持导出", "info");
@@ -460,9 +473,7 @@ function AttachmentDrawer({
     >
       {file ? (
         <div className="space-y-4">
-          {isServerDownloadable(file) ? (
-            <p className="text-sm text-muted-foreground">点击右上角下载按钮保存到本地。</p>
-          ) : file.processable && file.kind === "text" ? (
+          {file.processable && file.kind === "text" ? (
             <pre className="max-h-[65vh] overflow-auto whitespace-pre-wrap rounded-md bg-surface-2 p-3 font-mono text-xs text-foreground">
               {file.text || "（空文件）"}
             </pre>
@@ -498,7 +509,7 @@ function UserMessage() {
   const messageId = useMessage((m) => String(m.id ?? ""));
   const archived = useMessage((m) => (m.metadata as { archived?: boolean } | undefined)?.archived);
   const attachments = messageAttachments[messageId] ?? EMPTY_ATTACHMENTS;
-  const [selectedAttachment, setSelectedAttachment] = useState<ChatAttachment | null>(null);
+  const { selectedAttachment, setSelectedAttachment, selectAttachment } = useAttachmentSelect();
   const hasText = text.length > 0;
   return (
     <MessagePrimitive.Root className="group mb-5 flex flex-col items-end apod-enter-up">
@@ -518,7 +529,7 @@ function UserMessage() {
       <MessageAttachmentChips
         attachments={attachments}
         align="end"
-        onSelect={setSelectedAttachment}
+        onSelect={selectAttachment}
       />
       <AttachmentDrawer file={selectedAttachment} onClose={() => setSelectedAttachment(null)} />
       <div className="mt-0.5 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
@@ -575,6 +586,7 @@ function AssistantPartList({
           return (
             <ThinkingBlock
               key={`think-${i}`}
+              blockId={`${chatMsg.id}-think-${i}`}
               content={p.text}
               isActive={isActiveThinking}
             />
@@ -598,7 +610,7 @@ function AssistantMessage() {
   const id = useMessage((m) => m.id);
   const chatMsg = messages.find((m) => m.id === id);
   const attachments = messageAttachments[id] ?? EMPTY_ATTACHMENTS;
-  const [selectedAttachment, setSelectedAttachment] = useState<ChatAttachment | null>(null);
+  const { selectedAttachment, setSelectedAttachment, selectAttachment } = useAttachmentSelect();
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
   const streaming = isRunning && lastAssistant?.id === id;
   const isLastAssistant = lastAssistant?.id === id;
@@ -620,7 +632,7 @@ function AssistantMessage() {
       <MessageAttachmentChips
         attachments={attachments}
         align="start"
-        onSelect={setSelectedAttachment}
+        onSelect={selectAttachment}
       />
       <AttachmentDrawer file={selectedAttachment} onClose={() => setSelectedAttachment(null)} />
       <MessagePrimitive.If last>
