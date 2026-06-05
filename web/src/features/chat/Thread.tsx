@@ -83,7 +83,7 @@ export function Thread() {
                       method="replace"
                       asChild
                     >
-                      <button className="rounded-xl border border-border bg-background/70 px-3.5 py-2 text-sm text-muted-foreground shadow-xs backdrop-blur-sm transition-all duration-150 hover:border-border-strong hover:bg-surface hover:text-foreground hover:shadow-sm">
+                      <button className="rounded-lg border border-border bg-background/80 px-3.5 py-2 text-sm text-muted-foreground shadow-xs transition-all duration-150 hover:border-border hover:bg-surface hover:text-foreground hover:shadow-sm">
                         {p}
                       </button>
                     </ThreadPrimitive.Suggestion>
@@ -237,7 +237,7 @@ function Composer() {
         </div>
       ) : null}
 
-      <ComposerPrimitive.Root className="mx-auto flex w-full max-w-3xl items-end gap-2 rounded-2xl border border-border-strong bg-background px-2.5 py-2.5 shadow-md transition-[box-shadow,border-color] duration-150 focus-within:border-brand/30 focus-within:shadow-[0_0_0_3px_var(--color-ring),var(--shadow-md)]">
+      <ComposerPrimitive.Root className="mx-auto flex w-full max-w-3xl items-end gap-2 rounded-xl border border-border bg-background px-2.5 py-2.5 shadow-sm transition-[box-shadow,border-color] duration-150 focus-within:border-brand/30 focus-within:shadow-[0_0_0_3px_var(--color-ring),var(--shadow-sm)]">
         <input
           ref={fileInputRef}
           type="file"
@@ -288,7 +288,7 @@ function Composer() {
         <ThreadPrimitive.If running>
           <ComposerPrimitive.Cancel asChild>
             <button
-              className="mb-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-border-strong bg-background text-foreground shadow-xs transition-colors hover:bg-secondary active:translate-y-px"
+              className="mb-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground shadow-xs transition-colors hover:bg-secondary active:translate-y-px"
               aria-label="停止"
             >
               <Square className="size-3 fill-current" />
@@ -406,7 +406,7 @@ function MessageAttachmentChips({
           type="button"
           key={file.id}
           onClick={() => onSelect(file)}
-          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/70 px-2.5 py-1 text-xs text-muted-foreground transition hover:border-border-strong hover:bg-surface"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/70 px-2.5 py-1 text-xs text-muted-foreground transition hover:bg-surface"
           title={isServerDownloadable(file) ? `下载 ${file.name}` : `查看 ${file.name}`}
         >
           {isServerDownloadable(file) ? (

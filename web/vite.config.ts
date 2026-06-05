@@ -2,54 +2,12 @@ import { defineConfig } from 'vite'
 import { fileURLToPath, URL } from 'node:url'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { VitePWA } from 'vite-plugin-pwa'
 
 const API_TARGET = process.env.API_TARGET ?? 'http://127.0.0.1:8080'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: [
-        'favicon.ico',
-        'favicon-dark.ico',
-        'logo.png',
-        'logo-dark.png',
-        'apple-touch-icon.png',
-        'apple-touch-icon-dark.png',
-        'pwa-192.png',
-        'pwa-512.png',
-        'pwa-192-maskable.png',
-        'pwa-512-maskable.png',
-      ],
-      manifest: {
-        name: 'AgentPod',
-        short_name: 'AgentPod',
-        description: '自托管 AI AgentPod · 支持多工作区',
-        lang: 'zh-CN',
-        start_url: '/',
-        scope: '/',
-        display: 'standalone',
-        theme_color: '#262626',
-        background_color: '#ffffff',
-        icons: [
-          { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'pwa-192-maskable.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
-          { src: 'pwa-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-        ],
-      },
-      workbox: {
-        navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api(?:\/|$)/, /^\/health(?:\/|$)?/],
-        globPatterns: ['**/*.{js,css,html,ico,jpg,png,svg,woff2,webmanifest}'],
-        globIgnores: ['**/node_modules/**'],
-      },
-    }),
-  ],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

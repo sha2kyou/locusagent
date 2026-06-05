@@ -19,6 +19,11 @@ import { BrandMark } from "@/app/Brand";
 import { DesktopWindowDragOverlay } from "@/app/DesktopTitlebarSpacer";
 import { desktopDragRegionProps } from "@/lib/desktop-app";
 import { cn } from "@/lib/utils";
+import {
+  floatingMenuDividerClass,
+  floatingMenuItemClass,
+  floatingPanelClass,
+} from "@/components/ui/surface-styles";
 import { ArtifactsNav } from "@/features/artifacts/ArtifactsNav";
 import { useAuth } from "./auth";
 import { ApiKeyFlashModal, SettingsModal } from "@/features/settings/SettingsModal";
@@ -283,24 +288,22 @@ export function AppShell() {
             </button>
 
             {menuOpen && (
-              <div className="absolute bottom-[calc(100%+6px)] left-2.5 right-2.5 z-20 overflow-hidden rounded-xl border border-border-strong bg-popover py-1.5 shadow-lg apod-enter-up">
+              <div className={cn("absolute bottom-[calc(100%+6px)] left-2.5 right-2.5 z-20 py-1.5", floatingPanelClass)}>
                 <button
                   type="button"
                   onClick={() => { setMenuOpen(false); setSettingsOpen(true); }}
-                  className={cn(
-                    "flex w-full items-center gap-2.5 px-3 py-2 text-[13px] transition-colors hover:bg-secondary",
-                    !expanded && "md:justify-center",
-                  )}
+                  className={cn(floatingMenuItemClass, !expanded && "md:justify-center")}
                 >
                   <Settings className="size-4 shrink-0 text-muted-foreground" />
                   <span className={cn(!expanded && "md:hidden")}>设置</span>
                 </button>
-                <div className="mx-2 my-1 border-t border-border/50" />
+                <div className={floatingMenuDividerClass} />
                 <form action="/api/oauth/github/logout" method="post">
                   <button
                     type="submit"
                     className={cn(
-                      "flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-destructive transition-colors hover:bg-destructive/8",
+                      floatingMenuItemClass,
+                      "text-destructive hover:bg-destructive/8",
                       !expanded && "md:justify-center",
                     )}
                   >

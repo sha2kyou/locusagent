@@ -7,7 +7,9 @@ import { SearchInput } from "@/components/ui/search-input";
 import { Modal } from "@/components/ui/modal";
 import { ListCard } from "@/components/ui/panel";
 import { Drawer } from "@/components/ui/drawer";
-import { Empty, listItemDescriptionClass, Loading } from "@/components/ui/list-state";
+import { Empty, listItemDescriptionClass, listRowHoverActionsClass, Loading } from "@/components/ui/list-state";
+import { PageContainer } from "@/components/PageContainer";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
@@ -28,6 +30,7 @@ import { useShell } from "@/app/AppShell";
 import { stripWorkspacePrefix, withWorkspacePrefix } from "@/app/workspace-route";
 import { defaultArtifactsPath } from "./artifact-routes";
 import { ArtifactCategorySidebar } from "./ArtifactCategorySidebar";
+import { floatingMenuItemClass, floatingPanelClass } from "@/components/ui/surface-styles";
 
 const LazyArtifactBody = lazy(() =>
   import("./ArtifactBody").then((m) => ({ default: m.ArtifactBody })),
@@ -77,7 +80,7 @@ function ArtifactRow({
   onDelete: () => void;
 }) {
   return (
-    <ListCard className="p-0 overflow-hidden">
+    <ListCard className="group p-0 overflow-hidden">
       <div className="flex items-start justify-between gap-3 px-4 py-3">
         <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
           <div className="flex items-center gap-2">
@@ -88,8 +91,14 @@ function ArtifactRow({
           </div>
           <p className={listItemDescriptionClass}>{excerpt(a.content)}</p>
         </button>
-        <Button variant="ghost" size="icon-sm" onClick={onDelete} aria-label="删除">
-          <Trash2 />
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className={listRowHoverActionsClass}
+          onClick={onDelete}
+          aria-label="删除"
+        >
+          <Trash2 className="size-3.5" />
         </Button>
       </div>
     </ListCard>
@@ -225,36 +234,6 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
     );
   }, [items, artifactQuery]);
 
-  const deleteAllVisible = async () => {
-    if (filtered.length === 0) return;
-    const q = artifactQuery.trim();
-    const ok = await confirm({
-      title: "删除全部产物",
-      body: q
-        ? `确定删除当前搜索结果中的 ${filtered.length} 个产物？此操作不可恢复。`
-        : `确定删除该类目下的全部 ${filtered.length} 个产物？此操作不可恢复。`,
-      danger: true,
-      confirmText: "删除",
-    });
-    if (!ok) return;
-    try {
-      const ids = filtered.map((a) => a.id);
-      const res = await Promise.allSettled(ids.map((id) => deleteArtifact(id)));
-      const failed = res.filter((r) => r.status === "rejected").length;
-      if (selected && ids.includes(selected.id)) {
-        setSelected(null);
-      }
-      await loadArtifacts();
-      if (failed > 0) {
-        toast(`已删除 ${ids.length - failed} 个，失败 ${failed} 个`, "error");
-      } else {
-        toast(`已删除 ${ids.length} 个产物`, "success");
-      }
-    } catch (e) {
-      toast((e as Error).message, "error");
-    }
-  };
-
   const closeCategoryDialog = () => {
     setCategoryDialogOpen(false);
     setEditingCategory(null);
@@ -385,69 +364,52 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
         <div className="min-w-0 flex-1 overflow-y-auto">
           <ReadyGate>
             {categories === null ? (
-              <Loading />
+              <PageContainer embedded title="产物" subtitle="创建类目后，可在此查看归档产物">
+                <Loading />
+              </PageContainer>
             ) : !showCategoryView ? (
-              <div className="mx-auto w-full max-w-4xl px-6 py-10">
-                <header className="mb-6 space-y-1">
-                  <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-                  <p className="text-sm text-muted-foreground">{subtitle}</p>
-                </header>
-                <Empty text="暂无类目。点击左侧「新建类目」创建第一个类目。" />
-              </div>
+              <PageContainer embedded title={title} subtitle={subtitle}>
+                <Empty text="暂无类目。点击侧栏「新建类目」创建第一个类目。" />
+              </PageContainer>
             ) : currentCategory === null ? (
-              <Loading />
+              <PageContainer embedded title={title} subtitle={subtitle}>
+                <Loading />
+              </PageContainer>
             ) : (
-              <div className="mx-auto w-full max-w-4xl px-6 py-10">
-                <header className="mb-6 space-y-1">
-                  <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-                  <p className="text-sm text-muted-foreground">{subtitle}</p>
-                </header>
-                <div className="mb-4 flex items-center gap-2">
+              <PageContainer embedded title={title} subtitle={subtitle}>
+                <div className="space-y-4">
                   <SearchInput
                     value={artifactQuery}
                     onChange={(e) => setArtifactQuery(e.target.value)}
                     placeholder="搜索产物…"
-                    className="flex-1"
                   />
-                  <Button
-                    variant="secondary"
-                    size="icon-sm"
-                    disabled={filtered.length === 0}
-                    onClick={() => {
-                      void deleteAllVisible();
-                    }}
-                    title="删除全部"
-                    aria-label="删除全部"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </div>
 
-                {items === null ? (
-                  <Loading />
-                ) : filtered.length === 0 ? (
-                  <Empty
-                    text={
-                      artifactQuery
-                        ? "无匹配产物"
-                        : "暂无产物。在对话中请 AI 保存、导出或归档内容后，会出现在这里"
-                    }
-                  />
-                ) : (
-                  <div className="space-y-2">
-                    {filtered.map((a) => (
-                      <ArtifactRow
-                        key={a.id}
-                        a={a}
-                        onOpen={() => setSelected(a)}
-                        onDelete={() => {
-                          void removeArtifact(a);
-                        }}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
+                  {items === null ? (
+                    <Loading />
+                  ) : filtered.length === 0 ? (
+                    <Empty
+                      text={
+                        artifactQuery
+                          ? "无匹配产物"
+                          : "暂无产物。在对话中请 AI 保存、导出或归档内容后，会出现在这里"
+                      }
+                    />
+                  ) : (
+                    <div className="space-y-2">
+                      {filtered.map((a) => (
+                        <ArtifactRow
+                          key={a.id}
+                          a={a}
+                          onOpen={() => setSelected(a)}
+                          onDelete={() => {
+                            void removeArtifact(a);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </PageContainer>
             )}
           </ReadyGate>
         </div>
@@ -523,10 +485,10 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
                 <Download className="size-4" />
               </Button>
               {exportMenuOpen && (
-                <div className="absolute right-0 top-[calc(100%+6px)] z-20 w-44 overflow-hidden rounded-xl border border-border bg-card py-1 shadow-lg apod-enter-up">
+                <div className={cn("absolute right-0 top-[calc(100%+6px)] z-20 w-44 py-1", floatingPanelClass)}>
                   <button
                     type="button"
-                    className="flex w-full items-center px-3 py-2 text-[13px] text-foreground transition-colors hover:bg-secondary"
+                    className={floatingMenuItemClass}
                     onClick={() => {
                       downloadArtifactOriginal(selected);
                       setExportMenuOpen(false);

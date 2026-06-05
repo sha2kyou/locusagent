@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/field";
 import { CollapsiblePanel, CollapsibleSection, ListCard } from "@/components/ui/panel";
 import { SegmentControl } from "@/components/ui/segment-control";
-import { Empty, listItemBriefClass, Loading } from "@/components/ui/list-state";
+import { Empty, listItemBriefClass, listRowHoverActionsClass, Loading } from "@/components/ui/list-state";
 import { useDialogs } from "@/components/ui/dialogs";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -471,7 +471,7 @@ export function ScheduledTasksRoute() {
               {items.map((task) => {
                 const st = statusBadge(task);
                 return (
-                  <ListCard key={task.id} className="p-0 overflow-hidden">
+                  <ListCard key={task.id} className="group p-0 overflow-hidden">
                     <div className="flex items-start gap-2 px-4 py-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -494,6 +494,7 @@ export function ScheduledTasksRoute() {
                             <Button
                               variant="ghost"
                               size="icon-sm"
+                              className={listRowHoverActionsClass}
                               disabled={saving || isTaskBusy(task, pendingRunIds)}
                               onClick={() => void runOnce(task)}
                               aria-label="运行一次"
@@ -504,6 +505,7 @@ export function ScheduledTasksRoute() {
                             <Button
                               variant="ghost"
                               size="icon-sm"
+                              className={listRowHoverActionsClass}
                               disabled={saving || isTaskBusy(task, pendingRunIds)}
                               onClick={() => startEdit(task)}
                               aria-label="编辑"
@@ -516,6 +518,7 @@ export function ScheduledTasksRoute() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
+                          className={listRowHoverActionsClass}
                           disabled={saving || isTaskBusy(task, pendingRunIds)}
                           onClick={() => void remove(task)}
                           aria-label="删除"

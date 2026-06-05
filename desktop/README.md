@@ -117,7 +117,6 @@ MCP OAuth 仍建议在浏览器版完成；桌面 MCP 授权可后续扩展。
 
 ## 与浏览器版的差异
 
-- 无 PWA / Service Worker（桌面构建未启用 `vite-plugin-pwa`）
 - 需本地 gateway 与 Host 同时可达
 - 默认 API 指向 Caddy 端口 `1223`，与 `docker-compose.yml` 一致
 - 通知中心新消息会额外触发 macOS 系统通知

@@ -8,7 +8,7 @@ import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { useAuth } from "@/app/auth";
 import { useTheme, type ThemePreference } from "@/app/theme";
-import { cn } from "@/lib/utils";
+import { SegmentControl } from "@/components/ui/segment-control";
 import {
   deleteAccount,
   getTimezoneConfig,
@@ -22,7 +22,6 @@ const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: "light", label: "浅色" },
   { value: "dark", label: "深色" },
 ];
-const THEME_OPTION_VALUES = THEME_OPTIONS.map((opt) => opt.value);
 
 const TIMEZONE_OPTIONS = [
   "UTC",
@@ -52,13 +51,6 @@ export function SettingsModal({ open, onClose, onLogout }: Props) {
 
   const [flashKey, setFlashKey] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const themeIndex = THEME_OPTION_VALUES.indexOf(themePreference);
-
-  const selectThemeByOffset = (offset: number) => {
-    const len = THEME_OPTION_VALUES.length;
-    const next = (themeIndex + offset + len) % len;
-    setThemePreference(THEME_OPTION_VALUES[next]);
-  };
 
   useEffect(() => {
     if (!open) return;
@@ -111,59 +103,13 @@ export function SettingsModal({ open, onClose, onLogout }: Props) {
 
           <section className="rounded-lg border border-border bg-surface/40 p-4">
             <h3 className="mb-3 text-sm font-semibold">主题</h3>
-            <div
-              className="grid grid-cols-3 gap-1 rounded-lg border border-border bg-surface/40 p-1"
-              role="radiogroup"
-              aria-label="主题"
-            >
-              {THEME_OPTIONS.map((opt) => {
-                const selected = themePreference === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    tabIndex={selected ? 0 : -1}
-                    onClick={() => setThemePreference(opt.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
-                        e.preventDefault();
-                        selectThemeByOffset(1);
-                        return;
-                      }
-                      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
-                        e.preventDefault();
-                        selectThemeByOffset(-1);
-                        return;
-                      }
-                      if (e.key === "Home") {
-                        e.preventDefault();
-                        setThemePreference(THEME_OPTION_VALUES[0]);
-                        return;
-                      }
-                      if (e.key === "End") {
-                        e.preventDefault();
-                        setThemePreference(THEME_OPTION_VALUES[THEME_OPTION_VALUES.length - 1]);
-                        return;
-                      }
-                      if (e.key === " " || e.key === "Enter") {
-                        e.preventDefault();
-                        setThemePreference(opt.value);
-                      }
-                    }}
-                    className={cn(
-                      "rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
-                      selected
-                        ? "bg-secondary text-foreground"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
+            <SegmentControl
+              value={themePreference}
+              onChange={setThemePreference}
+              options={THEME_OPTIONS}
+              className="w-full"
+              optionClassName="flex-1 text-center"
+            />
           </section>
 
           <section className="rounded-lg border border-border bg-surface/40 p-4">

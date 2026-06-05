@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, Loader2, Pencil, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { ReadyGate } from "@/components/ReadyGate";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { Input, Label, Textarea } from "@/components/ui/field";
 import { SearchInput } from "@/components/ui/search-input";
 import { Badge } from "@/components/ui/badge";
 import { CollapsiblePanel, ListCard } from "@/components/ui/panel";
-import { Empty, listItemDescriptionClass, Loading } from "@/components/ui/list-state";
+import { Empty, listItemDescriptionClass, listRowHoverActionsClass, Loading } from "@/components/ui/list-state";
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import {
@@ -32,7 +32,6 @@ export function WorkspacesRoute() {
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<WorkspaceItem | null>(null);
   const [saving, setSaving] = useState(false);
-  const [formOpen, setFormOpen] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
 
   const currentWorkspaceId = me?.current_workspace_id || "";
@@ -77,7 +76,6 @@ export function WorkspacesRoute() {
     setEditing(null);
     setName("");
     setDescription("");
-    setFormOpen(false);
   };
 
   const submit = async () => {
@@ -127,32 +125,15 @@ export function WorkspacesRoute() {
     }
   };
 
-  const startCreate = () => {
-    setEditing(null);
-    setName("");
-    setDescription("");
-    setFormOpen(true);
-    requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
-  };
-
   const startEdit = (workspace: WorkspaceItem) => {
     setEditing(workspace);
     setName(workspace.name);
     setDescription(workspace.description || "");
-    setFormOpen(true);
     requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
   return (
-    <PageContainer
-      title="工作区"
-      subtitle="创建、切换与管理工作区"
-      actions={
-        <Button variant="secondary" size="sm" onClick={startCreate}>
-          <Plus className="size-4" /> 新建工作区
-        </Button>
-      }
-    >
+    <PageContainer title="工作区" subtitle="创建、切换与管理工作区">
       <ReadyGate>
         <div className="space-y-4">
           <SearchInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索工作区…" />
@@ -166,7 +147,7 @@ export function WorkspacesRoute() {
               {filtered.map((w) => {
                 const isCurrent = w.id === currentWorkspaceId;
                 return (
-                  <ListCard key={w.id} className="p-0 overflow-hidden">
+                  <ListCard key={w.id} className="group p-0 overflow-hidden">
                     <div className="flex items-start justify-between gap-3 px-4 py-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
@@ -183,6 +164,7 @@ export function WorkspacesRoute() {
                           <Button
                             variant="ghost"
                             size="icon-sm"
+                            className={listRowHoverActionsClass}
                             title="切换到该工作区"
                             aria-label="切换到该工作区"
                             onClick={() => switchWorkspace(w.id)}
@@ -193,6 +175,7 @@ export function WorkspacesRoute() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
+                          className={listRowHoverActionsClass}
                           title="编辑工作区"
                           aria-label="编辑工作区"
                           onClick={() => startEdit(w)}
@@ -203,6 +186,7 @@ export function WorkspacesRoute() {
                           <Button
                             variant="ghost"
                             size="icon-sm"
+                            className={listRowHoverActionsClass}
                             title="删除工作区"
                             aria-label="删除工作区"
                             onClick={() => {
@@ -223,7 +207,7 @@ export function WorkspacesRoute() {
           <div ref={formRef}>
             <CollapsiblePanel
               summary={editing ? "编辑工作区" : "新建工作区"}
-              defaultOpen={formOpen}
+              defaultOpen={!!editing}
               onOpenChange={(open) => {
                 if (!open) resetForm();
               }}

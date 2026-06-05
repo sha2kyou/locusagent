@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Eye, EyeOff, Loader2, Pencil, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { ReadyGate } from "@/components/ReadyGate";
@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
 import { CollapsiblePanel, CollapsibleSection, ListCard } from "@/components/ui/panel";
-import { Empty, listItemDescriptionClass, Loading } from "@/components/ui/list-state";
+import { SearchInput } from "@/components/ui/search-input";
+import { Empty, listItemDescriptionClass, listRowHoverActionsClass, Loading } from "@/components/ui/list-state";
 import { useDialogs } from "@/components/ui/dialogs";
 import { useToast } from "@/components/ui/toast";
 import { createEnvVar, deleteEnvVar, listEnvVars, updateEnvVar } from "@/api/endpoints";
@@ -19,6 +20,7 @@ export function EnvVarsRoute() {
   const toast = useToast();
   const { confirm } = useDialogs();
   const [items, setItems] = useState<EnvVarEntry[] | null>(null);
+  const [query, setQuery] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
@@ -98,6 +100,17 @@ export function EnvVarsRoute() {
     }
   };
 
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = items ?? [];
+    if (!q) return list;
+    return list.filter(
+      (item) =>
+        item.name.toLowerCase().includes(q) ||
+        item.description.toLowerCase().includes(q),
+    );
+  }, [items, query]);
+
   return (
     <PageContainer
       title="环境变量"
@@ -106,16 +119,22 @@ export function EnvVarsRoute() {
     >
       <ReadyGate>
         <div className="space-y-4">
+          <SearchInput
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="搜索环境变量…"
+          />
+
           {items === null ? (
             <Loading />
-          ) : items.length === 0 ? (
-            <Empty text="暂无环境变量" />
+          ) : filtered.length === 0 ? (
+            <Empty text={query ? "无匹配环境变量" : "暂无环境变量"} />
           ) : (
             <div className="space-y-2">
-              {items.map((item) => {
+              {filtered.map((item) => {
                 const emb = EMBEDDING_LABEL[item.embedding_state];
                 return (
-                  <ListCard key={item.id} className="p-0 overflow-hidden">
+                  <ListCard key={item.id} className="group p-0 overflow-hidden">
                     <div className="flex items-start justify-between gap-3 px-4 py-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
@@ -127,8 +146,8 @@ export function EnvVarsRoute() {
                         ) : null}
                       </div>
                       <div className="flex shrink-0 gap-1">
-                        <Button variant="ghost" size="icon-sm" onClick={() => startEdit(item)} aria-label="编辑"><Pencil /></Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => remove(item)} aria-label="删除"><Trash2 /></Button>
+                        <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => startEdit(item)} aria-label="编辑"><Pencil /></Button>
+                        <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => remove(item)} aria-label="删除"><Trash2 /></Button>
                       </div>
                     </div>
                     <CollapsibleSection summary="值与描述">

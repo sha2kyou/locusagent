@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { KeyRound, Loader2, Pencil, RefreshCw, ShieldCheck, ShieldOff, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,8 @@ import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
 import { useReloadOnAgentRecovery } from "@/hooks/useReloadOnAgentRecovery";
-import { Empty, listItemBriefClass, Loading } from "@/components/ui/list-state";
+import { SearchInput } from "@/components/ui/search-input";
+import { Empty, listItemBriefClass, listRowHoverActionsClass, Loading } from "@/components/ui/list-state";
 import { Tag } from "@/components/ui/tag";
 import { getWorkspaceId } from "@/api/client";
 import { createMcp, deleteMcp, disconnectMcpOAuth, listMcp, reconnectMcp, updateMcp } from "@/api/endpoints";
@@ -63,6 +64,7 @@ export function McpRoute() {
   const toast = useToast();
   const { confirm } = useDialogs();
   const [items, setItems] = useState<McpServer[] | null>(null);
+  const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
 
   const [name, setName] = useState("");
@@ -264,6 +266,18 @@ export function McpRoute() {
 
   const formInvalid = !!envError || !!headersError;
 
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = items ?? [];
+    if (!q) return list;
+    return list.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        (s.url || "").toLowerCase().includes(q) ||
+        (s.command ?? []).join(" ").toLowerCase().includes(q),
+    );
+  }, [items, query]);
+
   return (
     <PageContainer
       title="MCP"
@@ -272,14 +286,20 @@ export function McpRoute() {
     >
       <ReadyGate>
         <div className="space-y-4">
+          <SearchInput
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="搜索 MCP 服务…"
+          />
+
           {items === null ? (
             <Loading />
-          ) : items.length === 0 ? (
-            <Empty text="暂无 MCP 服务" />
+          ) : filtered.length === 0 ? (
+            <Empty text={query ? "无匹配 MCP 服务" : "暂无 MCP 服务"} />
           ) : (
             <div className="space-y-2">
-              {items.map((s) => (
-                <ListCard key={s.name} className="p-0 overflow-hidden">
+              {filtered.map((s) => (
+                <ListCard key={s.name} className="group p-0 overflow-hidden">
                   <div className="flex items-start justify-between gap-3 px-4 py-3">
                     <div className="min-w-0">
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -309,6 +329,7 @@ export function McpRoute() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
+                          className={listRowHoverActionsClass}
                           onClick={() => startOAuth(s)}
                           aria-label="OAuth 授权"
                           title="OAuth 授权"
@@ -320,6 +341,7 @@ export function McpRoute() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
+                          className={listRowHoverActionsClass}
                           onClick={() => disconnectOAuth(s)}
                           aria-label="解除 OAuth 授权"
                           title="解除 OAuth 授权"
@@ -327,9 +349,9 @@ export function McpRoute() {
                           <ShieldOff />
                         </Button>
                       ) : null}
-                      <Button variant="ghost" size="icon-sm" onClick={() => reconnect(s)} aria-label="重连"><RefreshCw /></Button>
-                      <Button variant="ghost" size="icon-sm" onClick={() => startEdit(s)} aria-label="编辑"><Pencil /></Button>
-                      <Button variant="ghost" size="icon-sm" onClick={() => remove(s)} aria-label="删除"><Trash2 /></Button>
+                      <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => reconnect(s)} aria-label="重连"><RefreshCw /></Button>
+                      <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => startEdit(s)} aria-label="编辑"><Pencil /></Button>
+                      <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => remove(s)} aria-label="删除"><Trash2 /></Button>
                     </div>
                   </div>
                   <CollapsibleSection summary="详情">

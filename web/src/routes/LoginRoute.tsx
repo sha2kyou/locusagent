@@ -35,7 +35,7 @@ export function LoginRoute() {
             "radial-gradient(55% 45% at 50% 0%, var(--brand), transparent 70%)",
         }}
       />
-      <div className="relative flex w-full max-w-sm flex-col items-center gap-4 rounded-2xl border border-border-strong bg-card p-9 text-center shadow-2xl">
+      <div className="relative flex w-full max-w-sm flex-col items-center gap-4 rounded-xl border border-border bg-card p-9 text-center shadow-lg">
         <BrandMark className="size-14" />
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">AgentPod</h1>

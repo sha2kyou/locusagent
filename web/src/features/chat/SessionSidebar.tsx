@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import type { SessionMeta } from "@/api/types";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { SidebarEmpty } from "@/components/ui/list-state";
@@ -10,6 +9,17 @@ import { useDialogs } from "@/components/ui/dialogs";
 import { useToast } from "@/components/ui/toast";
 import { useChat } from "./ChatProvider";
 import { SecondarySidebar } from "@/components/SecondarySidebar";
+import {
+  SecondarySidebarHeader,
+  SecondarySidebarListRow,
+} from "@/components/SecondarySidebarList";
+import {
+  secondarySidebarGroupClass,
+  secondarySidebarGroupLabelClass,
+  secondarySidebarListClass,
+  secondarySidebarScrollClass,
+  secondarySidebarSkeletonWrapClass,
+} from "@/components/secondary-sidebar-styles";
 
 function groupLabel(iso: string): string {
   const d = new Date(iso).getTime();
@@ -60,10 +70,6 @@ export function SessionSidebar({
     }
     return ORDER.filter((k) => map.has(k)).map((k) => ({ label: k, items: map.get(k)! }));
   }, [sessions, query]);
-  const filteredSessions = useMemo(
-    () => groups.flatMap((g) => g.items),
-    [groups],
-  );
 
   const onDelete = async (s: SessionMeta) => {
     const label = sessionLabel(s.title);
@@ -81,47 +87,11 @@ export function SessionSidebar({
     }
   };
 
-  const deleteAllVisible = async () => {
-    if (filteredSessions.length === 0) return;
-    const q = query.trim();
-    const ok = await confirm({
-      title: "删除全部对话",
-      body: q
-        ? `确定删除当前搜索结果中的 ${filteredSessions.length} 个对话？此操作不可恢复。`
-        : `确定删除全部 ${filteredSessions.length} 个对话？此操作不可恢复。`,
-      danger: true,
-      confirmText: "删除",
-    });
-    if (!ok) return;
-    try {
-      const ids = filteredSessions.map((s) => s.id);
-      const ordered =
-        currentId && ids.includes(currentId)
-          ? [...ids.filter((id) => id !== currentId), currentId]
-          : ids;
-      let failed = 0;
-      for (const id of ordered) {
-        try {
-          await deleteSession(id, { silent: true });
-        } catch {
-          failed++;
-        }
-      }
-      if (failed > 0) {
-        toast(`已删除 ${ids.length - failed} 个，失败 ${failed} 个`, "error");
-      } else {
-        toast(`已删除 ${ids.length} 个对话`, "success");
-      }
-    } catch (e) {
-      toast((e as Error).message, "error");
-    }
-  };
-
   return (
     <SecondarySidebar mobileOpen={mobileOpen} mobileSide="right" onClose={onClose}>
-      <div className="shrink-0 space-y-2.5 border-b border-sidebar-sub-border/45 px-3 pb-3 pt-1">
-        <div className="flex h-11 items-center gap-2 px-1">
-          <span className="min-w-0 flex-1 text-[14px] font-bold tracking-tight">对话</span>
+      <SecondarySidebarHeader
+        title="对话"
+        actions={
           <Button
             variant="ghost"
             size="icon-sm"
@@ -131,28 +101,19 @@ export function SessionSidebar({
           >
             <Plus className="size-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            disabled={filteredSessions.length === 0}
-            onClick={() => { void deleteAllVisible(); }}
-            title="删除全部"
-            aria-label="删除全部"
-            className="text-muted-foreground/60 hover:text-destructive"
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        </div>
-        <SearchInput
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜索对话…"
-        />
-      </div>
+        }
+        search={
+          <SearchInput
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="搜索对话…"
+          />
+        }
+      />
 
-      <div className="flex-1 overflow-y-auto px-2 pb-3 pt-2">
+      <div className={secondarySidebarScrollClass}>
         {loadingSessions ? (
-          <div className="space-y-1.5 px-1 py-2">
+          <div className={secondarySidebarSkeletonWrapClass}>
             {Array.from({ length: 6 }).map((_, i) => (
               <Skeleton key={i} className="h-8 w-full" />
             ))}
@@ -162,49 +123,32 @@ export function SessionSidebar({
         ) : (
           <>
             {groups.map((g) => (
-              <div key={g.label} className="mb-3">
-                <div className="px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
-                  {g.label}
-                </div>
-                {g.items.map((s) => (
-                  <div
-                    key={s.id}
-                    className={cn(
-                      "group relative flex items-center gap-1 rounded-lg px-2.5 py-2 text-[13px] transition-colors",
-                      s.id === currentId
-                        ? "bg-sidebar-sub-accent font-medium text-foreground shadow-xs"
-                        : "text-muted-foreground hover:bg-sidebar-sub-accent/70 hover:text-foreground/90",
-                    )}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => handleSelect(s.id)}
-                    onKeyDown={(e) => {
-                      if (e.key !== "Enter" && e.key !== " ") return;
-                      e.preventDefault();
-                      handleSelect(s.id);
-                    }}
-                  >
-                    <span
-                      className="min-w-0 flex-1 truncate text-left leading-snug"
+              <div key={g.label} className={secondarySidebarGroupClass}>
+                <div className={secondarySidebarGroupLabelClass}>{g.label}</div>
+                <div className={secondarySidebarListClass}>
+                  {g.items.map((s) => (
+                    <SecondarySidebarListRow
+                      key={s.id}
+                      active={s.id === currentId}
+                      label={sessionLabel(s.title)}
                       title={s.title}
-                    >
-                      {sessionLabel(s.title)}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void onDelete(s);
-                      }}
-                      className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
-                      aria-label="删除"
-                    >
-                      <Trash2 />
-                    </Button>
-                  </div>
-                ))}
+                      onClick={() => handleSelect(s.id)}
+                      actions={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => {
+                            void onDelete(s);
+                          }}
+                          aria-label="删除"
+                        >
+                          <Trash2 />
+                        </Button>
+                      }
+                    />
+                  ))}
+                </div>
               </div>
             ))}
             {hasMoreSessions && !query && (

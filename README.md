@@ -1,6 +1,6 @@
 # AgentPod
 
-自托管 AI Agent 平台：GitHub 登录、每用户独立 Docker 容器、OpenAI 兼容 API、内置 Skills / MCP / Memory，支持 MCP OAuth、PWA 与 macOS 桌面应用。
+自托管 AI Agent 平台：GitHub 登录、每用户独立 Docker 容器、OpenAI 兼容 API、内置 Skills / MCP / Memory，支持 MCP OAuth 与 macOS 桌面应用。
 
 ## 项目目标
 
@@ -30,7 +30,7 @@
 ```
                     【客户端】
 
-  [1] 浏览器 / PWA ──→ Caddy :1223
+  [1] 浏览器 ──→ Caddy :1223
                          ├─ 页面 ──→ web 容器 · dist-web（nginx）
                          └─ API  ──→ Host :8080
 
@@ -164,14 +164,6 @@ servers:
 - 授权流程：MCP 页点击连接 → Host 跳转提供商 → 回调后 Agent 自动重连该服务。
 - `MCP_OAUTH_REDIRECT_URI` 必须与浏览器实际访问的 Host 地址一致。
 
-## PWA
-
-前端启用 `vite-plugin-pwa`：可「添加到主屏幕」，静态资源离线缓存；**不缓存** `/api`、`/health` 请求。
-
-- 图标源文件：`web/public/app-icon.svg`
-- 重新导出 PNG：`cd web && npm run icons`
-- 更新后需 `./rebuild.sh host` 并强刷浏览器（必要时清除旧 Service Worker）
-
 ## 本地开发（不走 compose）
 
 ```bash
@@ -235,7 +227,7 @@ docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" | rg "apod-user|a
 │   └── src/agentpod_agent/
 ├── web/                    # React SPA（Vite）
 │   ├── Dockerfile          # 在线 Web 服务（nginx）
-│   ├── public/             # favicon、PWA 图标等
+│   ├── public/             # favicon、logo 等
 │   └── src/
 ├── desktop/                # macOS 桌面壳（Tauri + 内嵌 dist-desktop）
 └── shared-skills/          # 公共技能库
@@ -251,7 +243,6 @@ docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" | rg "apod-user|a
 | Host 重建后偶发 `502` | 执行 `./rebuild.sh host`（会 restart caddy） |
 | MCP 显示已授权但离线 | MCP 页点「重连」；或等待后台预热后刷新列表 |
 | OAuth 后仍连不上 | 确认 `MCP_OAUTH_REDIRECT_URI`、yaml 中 `auth: oauth` |
-| PWA 异常 / 旧页面 | 强刷或清除站点数据；确认未把 `node_modules` 放进 `web/public/` |
 | 登录后无法对话 | 检查 Host `.env` 中 `LLM_API_KEY`、`LLM_MODEL` |
 | 桌面登录浏览器打不开 `127.0.0.1:1420` | 须先启动 **AgentPod.app**（gateway 随应用启动）；1420 不是 GitHub callback URL |
 | 桌面无系统通知 | 系统设置 → 通知 → AgentPod 允许通知；用正式 `.app` 测试（非仅 `tauri dev`） |

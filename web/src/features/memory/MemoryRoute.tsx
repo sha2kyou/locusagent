@@ -7,7 +7,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { Badge } from "@/components/ui/badge";
 import { CollapsiblePanel, CollapsibleSection, ListCard } from "@/components/ui/panel";
 import { SegmentControl } from "@/components/ui/segment-control";
-import { Empty, listItemDescriptionClass, Loading } from "@/components/ui/list-state";
+import { Empty, listItemDescriptionClass, listRowHoverActionsClass, Loading } from "@/components/ui/list-state";
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
@@ -128,11 +128,11 @@ export function MemoryRoute() {
   return (
     <PageContainer
       title="记忆"
-      subtitle="长期记忆条目管理"
+      subtitle="长期与短期记忆管理"
       actions={
         items && (
           <Badge variant="outline">
-            常驻 {counts.identity} / 检索 {counts.experience}
+            长期 {counts.identity} / 短期 {counts.experience}
           </Badge>
         )
       }
@@ -143,8 +143,8 @@ export function MemoryRoute() {
             value={tab}
             onChange={setTab}
             options={[
-              { value: "identity", label: "常驻记忆" },
-              { value: "experience", label: "按需检索" },
+              { value: "identity", label: "长期记忆" },
+              { value: "experience", label: "短期记忆" },
             ]}
           />
 
@@ -159,7 +159,7 @@ export function MemoryRoute() {
               {filtered.map((m) => {
                 const emb = EMBEDDING_LABEL[m.embedding_state];
                 return (
-                  <ListCard key={m.id} className="p-0 overflow-hidden">
+                  <ListCard key={m.id} className="group p-0 overflow-hidden">
                     <div className="flex items-start justify-between gap-3 px-4 py-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
@@ -174,13 +174,13 @@ export function MemoryRoute() {
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
-                        <Button variant="ghost" size="icon-sm" onClick={() => move(m)} aria-label="切换分类">
+                        <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => move(m)} aria-label="切换分类">
                           {m.anchor === "identity" ? <ArrowDown /> : <ArrowUp />}
                         </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => startEdit(m)} aria-label="编辑">
+                        <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => startEdit(m)} aria-label="编辑">
                           <Pencil />
                         </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => remove(m)} aria-label="删除">
+                        <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => remove(m)} aria-label="删除">
                           <Trash2 />
                         </Button>
                       </div>

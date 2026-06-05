@@ -4,6 +4,10 @@ import { useNavigate } from "react-router-dom";
 import { Bell, BrushCleaning, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  floatingPanelClass,
+  floatingPanelHeaderClass,
+} from "@/components/ui/surface-styles";
 import { formatRelative } from "@/lib/format-time";
 import { useNotifications } from "./NotificationProvider";
 import type { NotificationEntry } from "@/api/types";
@@ -51,7 +55,7 @@ function NotificationRow({
   const title = displayTitle(item);
   return (
     <div
-      className="group flex gap-1 rounded-lg transition-colors hover:bg-surface/80"
+      className="group flex gap-1 rounded-lg transition-colors hover:bg-secondary"
       role="button"
       tabIndex={0}
       onClick={onOpen}
@@ -143,11 +147,11 @@ export function NotificationBell({
           <div
             ref={panelRef}
             style={{ top: panelPos.top, left: panelPos.left, width: panelPos.width }}
-            className="fixed z-200 overflow-hidden rounded-xl border border-border-strong bg-card text-card-foreground shadow-2xl apod-enter-up"
+            className={cn("fixed z-200", floatingPanelClass)}
           >
-            <div className="flex items-center justify-between border-b border-border bg-surface px-3.5 py-2.5">
+            <div className={floatingPanelHeaderClass}>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold">消息</span>
+                <span className="text-[13px] font-semibold tracking-tight">消息</span>
                 {unreadCount > 0 && (
                   <span className="rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-semibold leading-none text-brand-foreground">
                     {unreadCount > 99 ? "99+" : unreadCount}
@@ -172,7 +176,7 @@ export function NotificationBell({
               </div>
             </div>
 
-            <div className="max-h-[min(24rem,60vh)] overflow-y-auto bg-card p-1.5">
+            <div className="max-h-[min(24rem,60vh)] overflow-y-auto p-1.5">
               {loading && items.length === 0 ? (
                 <p className="px-3 py-10 text-center text-sm text-muted-foreground">加载中…</p>
               ) : items.length === 0 ? (

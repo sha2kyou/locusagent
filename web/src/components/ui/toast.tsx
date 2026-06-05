@@ -9,6 +9,7 @@ import {
 } from "react";
 import { CheckCircle2, Info, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { floatingPanelClass } from "@/components/ui/surface-styles";
 
 const AUTO_DISMISS_MS = 3400;
 const STICKY_DISMISS_MS = 7800;
@@ -77,8 +78,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             className={cn(
-              "pointer-events-auto flex items-center gap-2.5 rounded-lg border border-border-strong bg-card py-2.5 pl-3.5 pr-2 text-sm text-card-foreground shadow-xl backdrop-blur-0",
-              "apod-enter-up",
+              "pointer-events-auto flex items-center gap-2.5 rounded-xl py-2.5 pl-3.5 pr-2 text-sm",
+              floatingPanelClass,
             )}
           >
             {icons[t.type]}
