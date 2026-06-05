@@ -184,7 +184,7 @@ export function AppShell() {
             {...desktopDragRegionProps("deep")}
             className={cn(
               "apod-sidebar-header flex h-[52px] shrink-0 items-center px-2",
-              !expanded && "md:justify-center",
+              !expanded && "md:justify-center md:px-0",
             )}
           >
             <div
@@ -212,6 +212,7 @@ export function AppShell() {
             ref={navListRef}
             className={cn(
               "flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-2",
+              !expanded && "md:items-center md:px-0",
             )}
           >
             {NAV_PRIMARY.map((item) => (
@@ -241,6 +242,7 @@ export function AppShell() {
             ref={menuRootRef}
             className={cn(
               "relative shrink-0 border-t border-sidebar-border/40 p-2.5",
+              !expanded && "md:flex md:flex-col md:items-center md:p-2",
               menuScrollable && "bg-sidebar",
             )}
           >
@@ -248,7 +250,7 @@ export function AppShell() {
               <div
                 className={cn(
                   "mb-2 inline-flex w-fit max-w-full items-center gap-1.5 rounded-md border border-border/50 bg-surface/40 px-2 py-1 text-[11px] text-muted-foreground/70",
-                  !expanded && "md:justify-center md:px-1.5",
+                  !expanded && "md:mb-2 md:justify-center md:px-1.5",
                 )}
                 title={currentWorkspace?.description || currentWorkspaceLabel}
               >
@@ -263,7 +265,7 @@ export function AppShell() {
               onClick={() => setMenuOpen((v) => !v)}
               className={cn(
                 "flex w-full items-center gap-2.5 rounded-xl px-2 py-2 transition-colors hover:bg-sidebar-accent",
-                !expanded && "md:justify-center md:px-0",
+                !expanded && "md:size-9 md:justify-center md:px-0 md:py-0",
                 menuOpen && "bg-sidebar-accent",
               )}
               title="账户"
@@ -308,14 +310,14 @@ export function AppShell() {
           </div>
 
           {/* 收起/展开：仅桌面，置于最底部 */}
-          <div className="hidden shrink-0 border-t border-sidebar-border/40 p-2 md:block">
+          <div className={cn("hidden shrink-0 border-t border-sidebar-border/40 p-2 md:block", !expanded && "md:flex md:justify-center")}>
             <button
               type="button"
               onClick={() => setExpanded((v) => !v)}
               title={expanded ? "收起" : "展开"}
               className={cn(
-                "flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-xs text-muted-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-foreground",
-                expanded ? "justify-start" : "justify-center",
+                "flex h-9 items-center gap-2.5 rounded-lg px-2 text-xs text-muted-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-foreground",
+                expanded ? "w-full justify-start" : "w-9 justify-center",
               )}
             >
               {expanded ? <ChevronsLeft className="size-4 shrink-0" /> : <PanelLeft className="size-4 shrink-0" />}
