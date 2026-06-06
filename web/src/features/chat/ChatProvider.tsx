@@ -535,6 +535,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             } else if (ev === "tool_result") {
               const id = chunk.x_tool_call_id || chunk.x_tool_id;
               const preview = chunk.x_preview;
+              const streamElapsedMs =
+                typeof chunk.x_elapsed_ms === "number" && chunk.x_elapsed_ms >= 0
+                  ? chunk.x_elapsed_ms
+                  : undefined;
               updateLastAssistant((parts) => {
                 let done = false;
                 const mapped = parts.map((p) => {
@@ -545,7 +549,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                       running: false,
                       preview,
                       toolName: chunk.x_tool_name || p.toolName,
-                      elapsedMs: p.startedAt ? Date.now() - p.startedAt : undefined,
+                      elapsedMs:
+                        streamElapsedMs ?? (p.startedAt ? Date.now() - p.startedAt : undefined),
                     };
                   }
                   return p;
@@ -559,6 +564,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                     running: false,
                     preview,
                     startedAt: 0,
+                    ...(streamElapsedMs !== undefined ? { elapsedMs: streamElapsedMs } : {}),
                   });
                 }
                 return mapped;

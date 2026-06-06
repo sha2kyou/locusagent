@@ -138,6 +138,7 @@ async def _persist_event(
         tool_call_id = str(ev.get("tool_call_id") or "")
         tool_name = str(ev.get("name") or "")
         tool_kind = str(ev.get("tool_kind") or _tool_kind(tool_name))
+        elapsed_ms = ev.get("elapsed_ms")
         tool_meta = [
             {
                 "event_type": "tool_result",
@@ -145,6 +146,11 @@ async def _persist_event(
                 "tool_name": tool_name,
                 "tool_kind": tool_kind,
                 "preview": preview,
+                **(
+                    {"elapsed_ms": int(elapsed_ms)}
+                    if elapsed_ms is not None and int(elapsed_ms) >= 0
+                    else {}
+                ),
             }
         ]
         await append_message(

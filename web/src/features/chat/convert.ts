@@ -9,6 +9,7 @@ export function convertMessage(message: ChatMessage): ThreadMessageLike {
     const text = message.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
     const metadata = {
       ...(message.archived ? { archived: true } : {}),
+      ...(message.createdAt ? { createdAt: message.createdAt } : {}),
     };
     return {
       role: "user",
@@ -33,6 +34,7 @@ export function convertMessage(message: ChatMessage): ThreadMessageLike {
         args: {
           kind: p.toolKind,
           startedAt: p.startedAt,
+          ...(p.elapsedMs !== undefined ? { elapsedMs: p.elapsedMs } : {}),
           ...(p.argsPreview ? { argsPreview: p.argsPreview } : {}),
         },
         result: p.running ? undefined : (p.preview ?? ""),
@@ -47,7 +49,12 @@ export function convertMessage(message: ChatMessage): ThreadMessageLike {
   return {
     role: "assistant",
     id: message.id,
-    metadata: message.archived ? ({ archived: true } as never) : undefined,
+    metadata: (message.archived || message.createdAt
+      ? {
+          ...(message.archived ? { archived: true } : {}),
+          ...(message.createdAt ? { createdAt: message.createdAt } : {}),
+        }
+      : undefined) as never,
     content,
   };
 }

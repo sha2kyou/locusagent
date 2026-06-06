@@ -40,6 +40,22 @@ function fmtElapsed(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
+function resolveElapsedLabel(opts: {
+  startedAt?: number;
+  elapsedMs?: number;
+  running: boolean;
+  now: number;
+}): string | null {
+  const { startedAt, elapsedMs, running, now } = opts;
+  if (!running && typeof elapsedMs === "number" && elapsedMs >= 0) {
+    return fmtElapsed(elapsedMs);
+  }
+  if (startedAt) {
+    return fmtElapsed((running ? now : Date.now()) - startedAt);
+  }
+  return null;
+}
+
 interface ClarifyPayload {
   question: string;
   choices: string[];
@@ -162,7 +178,7 @@ export function ToolPartView({ part }: { part: ToolPart }) {
       key={part.id}
       blockId={part.id}
       toolName={part.toolName}
-      args={{ kind: part.toolKind, startedAt: part.startedAt }}
+      args={{ kind: part.toolKind, startedAt: part.startedAt, elapsedMs: part.elapsedMs }}
       argsPreview={part.argsPreview}
       result={running ? undefined : (part.preview ?? "")}
       status={{ type: running ? "running" : "complete" }}
@@ -179,6 +195,7 @@ function resolveArgsPreviewFromProps(args: unknown): string | undefined {
   const rest = { ...row };
   delete rest.kind;
   delete rest.startedAt;
+  delete rest.elapsedMs;
   delete rest.argsPreview;
   if (Object.keys(rest).length === 0) return undefined;
   return formatToolArgsPreview(JSON.stringify(rest));
@@ -199,22 +216,24 @@ function GenericToolBlock({
   result: unknown;
   status?: ToolBlockStatus;
 }) {
-  const kind = ((args as { kind?: ToolKind })?.kind ?? "tool") as ToolKind;
-  const startedAt = (args as { startedAt?: number })?.startedAt ?? 0;
+  const argRow = args as { kind?: ToolKind; startedAt?: number; elapsedMs?: number };
+  const kind = (argRow.kind ?? "tool") as ToolKind;
+  const startedAt = argRow.startedAt ?? 0;
+  const elapsedMs = argRow.elapsedMs;
   const running = status?.type === "running" || status?.type === "requires-action";
   const Icon = KIND_ICON[kind] ?? Wrench;
 
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
-    if (!running || !startedAt) return;
+    if (!running || (!startedAt && elapsedMs === undefined)) return;
     const t = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(t);
-  }, [running, startedAt]);
+  }, [running, startedAt, elapsedMs]);
 
   const { messages } = useChat();
   const lastGenericToolId = useMemo(() => findLastGenericToolId(messages), [messages]);
   const preview = typeof result === "string" ? result : result ? JSON.stringify(result) : "";
-  const elapsed = startedAt ? fmtElapsed((running ? now : Date.now()) - startedAt) : null;
+  const elapsed = resolveElapsedLabel({ startedAt, elapsedMs, running, now });
   const hasResult = preview.trim().length > 0;
   const defaultExpanded = blockId === lastGenericToolId;
   const paramPreview = argsPreview ?? resolveArgsPreviewFromProps(args);

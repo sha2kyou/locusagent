@@ -30,6 +30,8 @@ export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   parts: ChatPart[];
+  /** ISO 8601，消息开始时间（用户发送 / 助手回合首条入库时间） */
+  createdAt?: string;
   sourceText?: string;
   attachments?: ChatAttachment[];
   error?: string;
@@ -63,13 +65,14 @@ export function userMessage(
     id: uid("u"),
     role: "user",
     parts: [{ type: "text", text }],
+    createdAt: new Date().toISOString(),
     sourceText,
     attachments: attachments?.length ? attachments : undefined,
   };
 }
 
 export function emptyAssistant(): ChatMessage {
-  return { id: uid("a"), role: "assistant", parts: [] };
+  return { id: uid("a"), role: "assistant", parts: [], createdAt: new Date().toISOString() };
 }
 
 /** 将尚未结束的 thinking 段全部标记为已完成 */

@@ -41,6 +41,7 @@ export interface LegacyToolMeta {
   tool_name?: string;
   tool_kind?: ToolKind;
   preview?: string;
+  elapsed_ms?: number;
 }
 
 export interface Message {
@@ -106,6 +107,7 @@ export interface ChatChunk {
   x_tool_call_id?: string;
   x_tool_args?: string;
   x_preview?: string;
+  x_elapsed_ms?: number;
   x_attachment_id?: string;
   x_attachment_name?: string;
   x_message?: string;

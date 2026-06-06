@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from collections.abc import AsyncIterator, Iterable
 from dataclasses import dataclass
 from typing import Any
@@ -288,6 +289,11 @@ def _tool_message_for_llm(msg: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in msg.items() if not str(k).startswith("_")}
 
 
+def _with_elapsed_ms(out: dict[str, Any], started: float) -> dict[str, Any]:
+    out["_elapsed_ms"] = max(0, int((time.monotonic() - started) * 1000))
+    return out
+
+
 async def _execute_one_tool_call(
     registry: ToolRegistry,
     tc: Any,
@@ -295,11 +301,12 @@ async def _execute_one_tool_call(
     blocked_actions: set[str] | None = None,
     guardrail: ToolCallGuardrailController | None = None,
 ) -> dict[str, Any]:
+    started = time.monotonic()
     name = tc.function.name
     if guardrail is not None:
         skipped = _guardrail_skip_result(guardrail, tc)
         if skipped is not None:
-            return skipped
+            return _with_elapsed_ms(skipped, started)
     raw_args = tc.function.arguments or "{}"
     try:
         args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
@@ -309,11 +316,14 @@ async def _execute_one_tool_call(
         if guardrail is not None:
             post = guardrail.after_call(name, {}, content, failed=True)
             content = append_guardrail_guidance(content, post)
-        return {
-            "role": "tool",
-            "tool_call_id": tc.id,
-            "content": content,
-        }
+        return _with_elapsed_ms(
+            {
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": content,
+            },
+            started,
+        )
     if guardrail is not None:
         pre = guardrail.before_call(name, args)
         if not pre.allows_execution:
@@ -323,22 +333,28 @@ async def _execute_one_tool_call(
                 code=pre.code,
                 count=pre.count,
             )
-            return {
-                "role": "tool",
-                "tool_call_id": tc.id,
-                "content": guardrail_block_content(pre),
-            }
+            return _with_elapsed_ms(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": guardrail_block_content(pre),
+                },
+                started,
+            )
     action = str(args.get("action", "")).strip().lower()
     if blocked_actions and action in blocked_actions:
         content = f"Error: action '{action}' is disabled for tool '{name}' in this run"
         if guardrail is not None:
             post = guardrail.after_call(name, args, content, failed=True)
             content = append_guardrail_guidance(content, post)
-        return {
-            "role": "tool",
-            "tool_call_id": tc.id,
-            "content": content,
-        }
+        return _with_elapsed_ms(
+            {
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": content,
+            },
+            started,
+        )
     chat_attachments: list[dict[str, str]] = []
     try:
         result = await registry.call(name, args)
@@ -367,7 +383,7 @@ async def _execute_one_tool_call(
     out: dict[str, Any] = {"role": "tool", "tool_call_id": tc.id, "content": content}
     if chat_attachments:
         out["_chat_attachments"] = chat_attachments
-    return out
+    return _with_elapsed_ms(out, started)
 
 
 async def _execute_tool_calls(
@@ -1092,6 +1108,7 @@ async def run_chat_loop_stream(
                     "name": stub.function.name,
                     "preview": preview,
                     "content": r.get("content") or "",
+                    "elapsed_ms": r.get("_elapsed_ms"),
                 }
                 for att in r.get("_chat_attachments") or []:
                     yield {"type": "attachment", "id": att["id"], "name": att["name"]}

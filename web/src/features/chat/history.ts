@@ -127,10 +127,17 @@ export function coalesceHistory(items: Message[], opts: CoalesceHistoryOptions =
     return undefined;
   };
 
-  const startAssistant = () => {
+  const startAssistant = (createdAt?: string) => {
     if (!cur) {
-      cur = { id: uid("a"), role: "assistant", parts: [] };
+      cur = {
+        id: uid("a"),
+        role: "assistant",
+        parts: [],
+        ...(createdAt ? { createdAt } : {}),
+      };
       curArchived = false;
+    } else if (!cur.createdAt && createdAt) {
+      cur.createdAt = createdAt;
     }
   };
 
@@ -142,6 +149,7 @@ export function coalesceHistory(items: Message[], opts: CoalesceHistoryOptions =
       result.push({
         id: uid("a"),
         role: "assistant",
+        createdAt: msg.created_at,
         parts: [
           {
             type: "tool",
@@ -164,6 +172,7 @@ export function coalesceHistory(items: Message[], opts: CoalesceHistoryOptions =
       result.push({
         id: uid("u"),
         role: "user",
+        createdAt: msg.created_at,
         archived: isArchived(msg),
         attachments: normalizeAttachments((msg as { attachments?: ChatAttachment[] }).attachments),
         parts: [{ type: "text", text: userMessageDisplayText(msg.content || "") }],
@@ -172,7 +181,7 @@ export function coalesceHistory(items: Message[], opts: CoalesceHistoryOptions =
     }
     if (msg.role === "system") continue;
 
-    startAssistant();
+    startAssistant(msg.created_at);
     if (isArchived(msg)) curArchived = true;
 
     if (msg.role === "assistant") {
@@ -202,11 +211,14 @@ export function coalesceHistory(items: Message[], opts: CoalesceHistoryOptions =
       const id = msg.tool_call_id ?? meta?.tool_call_id;
       const existing = findTool(id);
       const preview = meta?.preview ?? (msg.content || "");
+      const elapsedMs =
+        typeof meta?.elapsed_ms === "number" && meta.elapsed_ms >= 0 ? meta.elapsed_ms : undefined;
       if (existing) {
         existing.running = false;
         existing.preview = preview;
         if (meta?.tool_name) existing.toolName = meta.tool_name;
         if (meta?.tool_kind) existing.toolKind = meta.tool_kind;
+        if (elapsedMs !== undefined) existing.elapsedMs = elapsedMs;
       } else {
         cur!.parts.push({
           type: "tool",
@@ -216,6 +228,7 @@ export function coalesceHistory(items: Message[], opts: CoalesceHistoryOptions =
           running: false,
           preview,
           startedAt: 0,
+          ...(elapsedMs !== undefined ? { elapsedMs } : {}),
         });
       }
     }

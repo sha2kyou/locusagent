@@ -474,6 +474,7 @@ async def chat_completions(req: ChatRequest):
                         x_tool_call_id=ev.get("tool_call_id"),
                         x_tool_name=ev.get("name"),
                         x_preview=ev.get("preview"),
+                        x_elapsed_ms=ev.get("elapsed_ms"),
                     )
                 elif t == "attachment":
                     yield _chunk(

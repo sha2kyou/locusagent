@@ -33,6 +33,7 @@ import { useChat } from "./ChatProvider";
 import type { ChatAttachment } from "./model";
 import { downloadAttachment } from "@/api/endpoints";
 import { Drawer } from "@/components/ui/drawer";
+import { formatFull, formatMessageTime } from "@/lib/format-time";
 
 const PROMPT_CHIPS = [
   "帮我总结这个网页的要点：sidefyapp.com",
@@ -506,6 +507,22 @@ function AttachmentDrawer({
   );
 }
 
+const messageMetaRowClass =
+  "flex items-center gap-2 opacity-100 transition md:opacity-0 md:group-hover:opacity-100";
+
+function MessageTimestamp({ iso }: { iso?: string }) {
+  if (!iso) return null;
+  return (
+    <time
+      dateTime={iso}
+      title={formatFull(iso)}
+      className="text-[11px] tabular-nums text-muted-foreground/75"
+    >
+      {formatMessageTime(iso)}
+    </time>
+  );
+}
+
 function copyUserBubbleAsPlainText(e: ClipboardEvent<HTMLDivElement>) {
   const selection = window.getSelection()?.toString();
   if (!selection) return;
@@ -514,9 +531,10 @@ function copyUserBubbleAsPlainText(e: ClipboardEvent<HTMLDivElement>) {
 }
 
 function UserMessage() {
-  const { messageAttachments } = useChat();
+  const { messageAttachments, messages } = useChat();
   const text = useMessageText();
   const messageId = useMessage((m) => String(m.id ?? ""));
+  const chatMsg = messages.find((m) => m.id === messageId);
   const archived = useMessage((m) => (m.metadata as { archived?: boolean } | undefined)?.archived);
   const attachments = messageAttachments[messageId] ?? EMPTY_ATTACHMENTS;
   const { selectedAttachment, setSelectedAttachment, selectAttachment } = useAttachmentSelect();
@@ -543,7 +561,8 @@ function UserMessage() {
         onSelect={selectAttachment}
       />
       <AttachmentDrawer file={selectedAttachment} onClose={() => setSelectedAttachment(null)} />
-      <div className="mt-0.5 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
+      <div className={cn(messageMetaRowClass, "mt-0.5 justify-end")}>
+        <MessageTimestamp iso={chatMsg?.createdAt} />
         <CopyButton text={text} />
       </div>
     </MessagePrimitive.Root>
@@ -667,7 +686,8 @@ function AssistantMessage() {
       </MessagePrimitive.If>
 
       <ThreadPrimitive.If running={false}>
-        <div className="flex items-center gap-0.5 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
+        <div className={messageMetaRowClass}>
+          <MessageTimestamp iso={chatMsg?.createdAt} />
           <CopyButton text={text} />
           <MessagePrimitive.If last>
             <button
