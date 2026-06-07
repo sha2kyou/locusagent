@@ -97,7 +97,8 @@ class ToolGuardrailDecision:
 
     @property
     def should_stop_turn(self) -> bool:
-        return self.action in {"block", "halt"}
+        # block 仅拦截当前调用；halt 才熔断整轮工具循环
+        return self.action == "halt"
 
 
 class ToolCallGuardrailController:
@@ -148,7 +149,7 @@ class ToolCallGuardrailController:
 
         exact_count = self._exact_failure_counts.get(signature, 0)
         if exact_count >= self.config.exact_failure_block_after:
-            decision = ToolGuardrailDecision(
+            return ToolGuardrailDecision(
                 action="block",
                 code="repeated_exact_failure_block",
                 message=(
@@ -159,15 +160,13 @@ class ToolCallGuardrailController:
                 count=exact_count,
                 signature=signature,
             )
-            self._turn_stop_decision = decision
-            return decision
 
         if self._is_idempotent(tool_name, args):
             record = self._no_progress.get(signature)
             if record is not None:
                 _result_hash, repeat_count = record
                 if repeat_count >= self.config.no_progress_block_after:
-                    decision = ToolGuardrailDecision(
+                    return ToolGuardrailDecision(
                         action="block",
                         code="idempotent_no_progress_block",
                         message=(
@@ -178,8 +177,6 @@ class ToolCallGuardrailController:
                         count=repeat_count,
                         signature=signature,
                     )
-                    self._turn_stop_decision = decision
-                    return decision
 
         return ToolGuardrailDecision(tool_name=tool_name, signature=signature)
 
@@ -348,6 +345,7 @@ def guardrail_config_from_settings(settings: Any) -> ToolCallGuardrailConfig:
         getattr(settings, "tool_guardrail_same_tool_failure_warn_after", 3),
         getattr(settings, "tool_guardrail_same_tool_failure_halt_after", 8),
     )
+    same_halt = max(2, same_halt)
     prog_warn, prog_block = _cap_warn_block(
         getattr(settings, "tool_guardrail_no_progress_warn_after", 2),
         getattr(settings, "tool_guardrail_no_progress_block_after", 5),

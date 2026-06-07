@@ -47,11 +47,14 @@ function resolveElapsedLabel(opts: {
   now: number;
 }): string | null {
   const { startedAt, elapsedMs, running, now } = opts;
-  if (!running && typeof elapsedMs === "number" && elapsedMs >= 0) {
-    return fmtElapsed(elapsedMs);
+  if (!running) {
+    if (typeof elapsedMs === "number" && elapsedMs >= 0) {
+      return fmtElapsed(elapsedMs);
+    }
+    return null;
   }
   if (startedAt) {
-    return fmtElapsed((running ? now : Date.now()) - startedAt);
+    return fmtElapsed(now - startedAt);
   }
   return null;
 }
@@ -224,16 +227,36 @@ function GenericToolBlock({
   const Icon = KIND_ICON[kind] ?? Wrench;
 
   const [now, setNow] = useState(Date.now());
+  const [frozenElapsedMs, setFrozenElapsedMs] = useState<number | undefined>(undefined);
   useEffect(() => {
-    if (!running || (!startedAt && elapsedMs === undefined)) return;
+    if (!running || !startedAt) return;
     const t = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(t);
-  }, [running, startedAt, elapsedMs]);
+  }, [running, startedAt]);
+
+  useEffect(() => {
+    if (running) {
+      setFrozenElapsedMs(undefined);
+      return;
+    }
+    if (typeof elapsedMs === "number" && elapsedMs >= 0) {
+      setFrozenElapsedMs(elapsedMs);
+      return;
+    }
+    if (startedAt) {
+      setFrozenElapsedMs(Math.max(0, Date.now() - startedAt));
+    }
+  }, [running, elapsedMs, startedAt]);
 
   const { messages } = useChat();
   const lastGenericToolId = useMemo(() => findLastGenericToolId(messages), [messages]);
   const preview = typeof result === "string" ? result : result ? JSON.stringify(result) : "";
-  const elapsed = resolveElapsedLabel({ startedAt, elapsedMs, running, now });
+  const elapsed = resolveElapsedLabel({
+    startedAt,
+    elapsedMs: running ? elapsedMs : (frozenElapsedMs ?? elapsedMs),
+    running,
+    now,
+  });
   const hasResult = preview.trim().length > 0;
   const defaultExpanded = blockId === lastGenericToolId;
   const paramPreview = argsPreview ?? resolveArgsPreviewFromProps(args);

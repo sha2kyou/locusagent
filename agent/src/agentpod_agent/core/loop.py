@@ -269,7 +269,7 @@ def _guardrail_skip_result(
     tc: Any,
 ) -> dict[str, Any] | None:
     stop = guardrail.turn_stop_decision
-    if stop is None:
+    if stop is None or not stop.should_stop_turn:
         return None
     return {
         "role": "tool",

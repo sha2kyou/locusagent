@@ -45,8 +45,8 @@ def test_exact_failure_blocks_repeat_call() -> None:
     pre = ctrl.before_call("read_file", args)
     assert pre.action == "block"
     assert not pre.allows_execution
-    assert pre.should_stop_turn
-    assert ctrl.turn_stop_decision is not None
+    assert not pre.should_stop_turn
+    assert ctrl.turn_stop_decision is None
 
 
 def test_idempotent_no_progress_warning() -> None:

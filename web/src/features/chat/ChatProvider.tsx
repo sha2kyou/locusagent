@@ -666,9 +666,30 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (abortRef.current === ac) abortRef.current = null;
       if (!mountedRef.current) return;
       if (!handoffToPoll) {
-        updateLastAssistant((parts) => completeThinkingParts(parts));
+        updateLastAssistant((parts) =>
+          completeThinkingParts(parts).map((p) =>
+            p.type === "tool" && p.running
+              ? {
+                  ...p,
+                  running: false,
+                  elapsedMs: p.elapsedMs ?? (p.startedAt ? Date.now() - p.startedAt : undefined),
+                }
+              : p,
+          ),
+        );
         // 用户主动中断时由 cancel() 在后端收敛后再置 false，避免可发送但 run 仍 active
-        if (!ac.signal.aborted) setIsRunning(false);
+        if (!ac.signal.aborted) {
+          setIsRunning(false);
+          const sidAfterRun = currentIdRef.current;
+          if (sidAfterRun) {
+            void getActiveRun(sidAfterRun)
+              .then(({ run }) => {
+                if (!mountedRef.current || currentIdRef.current !== sidAfterRun) return;
+                if (run?.status === "running") startActiveRunPoll(sidAfterRun);
+              })
+              .catch(() => {});
+          }
+        }
       }
       void refreshSessions();
       const sidAfter = currentIdRef.current;
