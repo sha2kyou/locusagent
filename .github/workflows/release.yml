@@ -118,8 +118,11 @@ jobs:
 
             postflight do
               app_path = "#{appdir}/AgentPod.app"
+              next unless File.exist?(app_path)
+
               system_command "/usr/bin/xattr",
-                             args: ["-dr", "com.apple.quarantine", app_path] if File.exist?(app_path)
+                             args: ["-dr", "com.apple.quarantine", app_path],
+                             must_succeed: false
             end
 
             zap trash: [
