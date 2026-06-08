@@ -51,6 +51,7 @@ def update_tauri_conf_version(path: Path, ver: str) -> None:
 def main() -> None:
     ver = read_version()
     update_pyproject(ROOT / "pyproject.toml", ver)
+    update_pyproject(ROOT / "shared" / "pyproject.toml", ver)
     update_pyproject(ROOT / "host" / "pyproject.toml", ver)
     update_pyproject(ROOT / "agent" / "pyproject.toml", ver)
     update_json_version(ROOT / "frontend" / "package.json", ver)
