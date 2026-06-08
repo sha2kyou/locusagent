@@ -48,7 +48,7 @@ setup_bundle_resources() {
   if [[ "$fresh" == "1" || ! -x "$bundle_venv/bin/python" ]]; then
     echo "==> prepare bundled sidecar venv (full install, may take several minutes)"
     rm -rf "$bundle_venv"
-    python3 -m venv "$bundle_venv"
+    python3 -m venv --copies "$bundle_venv"
   else
     echo "==> refresh bundled sidecar venv (incremental)"
   fi
@@ -127,6 +127,12 @@ rebuild_desktop() {
     npm install
   fi
   npm run build
+
+  if [[ -d "$ROOT_DIR/desktop/src-tauri/target/release/bundle/macos/AgentPod.app" ]]; then
+    echo "==> embed Python.framework into AgentPod.app"
+    bash "$ROOT_DIR/scripts/relocate-bundle-python.sh" \
+      "$ROOT_DIR/desktop/src-tauri/target/release/bundle/macos/AgentPod.app"
+  fi
 
   publish_desktop_artifacts
 }
