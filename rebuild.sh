@@ -44,19 +44,40 @@ setup_bundle_resources() {
   local bundle_root="$ROOT_DIR/desktop/src-tauri/resources"
   local bundle_venv="$bundle_root/sidecar-venv"
   local fresh="${1:-0}"
+  local py
 
-  if [[ "$fresh" == "1" || ! -x "$bundle_venv/bin/python" ]]; then
-    echo "==> prepare bundled sidecar venv (full install, may take several minutes)"
-    rm -rf "$bundle_venv"
-    python3 -m venv --copies "$bundle_venv"
-  else
-    echo "==> refresh bundled sidecar venv (incremental)"
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "error: uv required for desktop bundle (https://docs.astral.sh/uv/)" >&2
+    exit 1
   fi
 
-  # shellcheck disable=SC1091
-  source "$bundle_venv/bin/activate"
-  pip install -U pip
-  pip install "$ROOT_DIR/shared" "$ROOT_DIR/host" "$ROOT_DIR/agent" "$ROOT_DIR/sidecar"
+  if [[ "$fresh" == "1" || ! -x "$bundle_venv/bin/python3" ]]; then
+    local standalone_root
+    echo "==> prepare bundled sidecar python (uv standalone 3.11, may take several minutes)"
+    rm -rf "$bundle_venv"
+    standalone_root="$(bash "$ROOT_DIR/scripts/resolve-standalone-python.sh")"
+    echo "==> copy standalone python from $standalone_root"
+    mkdir -p "$bundle_venv"
+    ditto "$standalone_root/" "$bundle_venv/"
+    rm -f "$bundle_venv/lib/python3.11/EXTERNALLY-MANAGED"
+  else
+    echo "==> refresh bundled sidecar python (incremental)"
+  fi
+
+  py="$bundle_venv/bin/python3"
+  ln -sf python3 "$bundle_venv/bin/python"
+
+  "$py" -m ensurepip --upgrade >/dev/null 2>&1 || true
+  "$py" -m pip install -U pip
+  "$py" -m pip install --no-cache-dir \
+    "$ROOT_DIR/shared" "$ROOT_DIR/host" "$ROOT_DIR/agent" "$ROOT_DIR/sidecar"
+
+  echo "==> prune bundle python (drop pip tooling, bytecode cache)"
+  "$py" -m pip uninstall -y pip setuptools wheel >/dev/null 2>&1 || true
+  find "$bundle_venv" -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
+
+  echo "==> verify bundled sidecar import"
+  "$py" -c "import agentpod, agentpod_host, agentpod_agent, agentpod_shared"
 
   echo "==> copy shared-skills into bundle resources"
   rm -rf "$bundle_root/shared-skills"
@@ -77,7 +98,7 @@ repackage_dmg() {
 
   rm -f "$dmg_dir"/AgentPod_*.dmg
   mkdir -p "$dmg_dir"
-  echo "==> repackage DMG from relocated AgentPod.app"
+  echo "==> repackage DMG from AgentPod.app"
   hdiutil create -volname "AgentPod" -srcfolder "$app_src" -ov -format UDZO "$dmg_out"
 }
 
@@ -147,9 +168,6 @@ rebuild_desktop() {
   npm run build
 
   if [[ -d "$ROOT_DIR/desktop/src-tauri/target/release/bundle/macos/AgentPod.app" ]]; then
-    echo "==> embed Python.framework into AgentPod.app"
-    bash "$ROOT_DIR/scripts/relocate-bundle-python.sh" \
-      "$ROOT_DIR/desktop/src-tauri/target/release/bundle/macos/AgentPod.app"
     repackage_dmg
   fi
 
