@@ -11,6 +11,11 @@
     "tavily_api_key": "",
     "jina_api_key": ""
   },
+  "terminal": {
+    "enable_terminal": false,
+    "whitelist": "",
+    "denylist": "sh,bash,zsh,dash,fish"
+  },
   "paths": {
     "data_dir": ""
   },

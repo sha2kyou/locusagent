@@ -15,6 +15,7 @@ import { SETTINGS_NAV } from "./settings-nav";
 const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   general: { title: "通用", subtitle: "主题与时区" },
   models: { title: "模型与服务", subtitle: "LLM、向量嵌入与第三方工具" },
+  tools: { title: "工具", subtitle: "Terminal 开关、白名单与禁止项" },
   usage: { title: "用量统计", subtitle: "按场景汇总 Token 与 API 调用" },
 };
 

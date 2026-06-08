@@ -39,7 +39,7 @@ from ..core.persistence import (
     build_persisted_user_message_text,
     _compose_user_content_with_attachments,
 )
-from ..core.post_run import run_post_tasks
+from ..core.post_run import schedule_post_run
 from ..core.run_manager import ERROR, FINISHED, reconcile_session_active_handles, start_stream_run
 from ..core.session_title import schedule_session_title_generation
 from ..core.system_prompt import get_or_create_system_prompt as _get_or_create_system_prompt
@@ -90,17 +90,12 @@ def _schedule_post_run(
     model: str | None,
     messages: list[dict[str, Any]] | None,
 ) -> None:
-    task = asyncio.create_task(
-        run_post_tasks(
-            session_id=session_id,
-            loop_rounds=loop_rounds,
-            model=model,
-            messages=messages,
-        ),
-        name="post-run",
+    schedule_post_run(
+        session_id=session_id,
+        loop_rounds=loop_rounds,
+        model=model,
+        messages=messages,
     )
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
 
 
 class ChatMessage(BaseModel):

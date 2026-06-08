@@ -62,10 +62,17 @@ class AppSection(BaseModel):
     mcp_oauth_redirect_uri: str = "http://127.0.0.1:1420/api/oauth/mcp/callback"
 
 
+class TerminalSection(BaseModel):
+    enable_terminal: bool = False
+    whitelist: str = ""
+    denylist: str = "sh,bash,zsh,dash,fish"
+
+
 class SettingsDocument(BaseModel):
     llm: LlmSection = Field(default_factory=LlmSection)
     embedding: EmbeddingSection = Field(default_factory=EmbeddingSection)
     tools: ToolsSection = Field(default_factory=ToolsSection)
+    terminal: TerminalSection = Field(default_factory=TerminalSection)
     paths: PathsSection = Field(default_factory=PathsSection)
     secrets: SecretsSection = Field(default_factory=SecretsSection)
     app: AppSection = Field(default_factory=AppSection)
@@ -178,6 +185,9 @@ def apply_app_config_update(
     tavily_api_key: str | None = None,
     jina_api_key: str | None = None,
     embedding_model: str | None = None,
+    enable_terminal: bool | None = None,
+    terminal_whitelist: str | None = None,
+    terminal_denylist: str | None = None,
 ) -> SettingsDocument:
     doc = load_settings_document()
     if llm_base_url is not None:
@@ -206,6 +216,12 @@ def apply_app_config_update(
         doc.tools.jina_api_key = jina_api_key.strip()
     if embedding_model is not None:
         doc.embedding.model = embedding_model.strip() or doc.embedding.model
+    if enable_terminal is not None:
+        doc.terminal.enable_terminal = enable_terminal
+    if terminal_whitelist is not None:
+        doc.terminal.whitelist = terminal_whitelist.strip()
+    if terminal_denylist is not None:
+        doc.terminal.denylist = terminal_denylist.strip() or doc.terminal.denylist
     save_settings_document(doc)
     clear_settings_cache()
     return doc
@@ -270,6 +286,11 @@ def app_config_for_api(doc: SettingsDocument | None = None) -> dict[str, Any]:
         "embedding": {
             "model": d.embedding.model,
         },
+        "terminal": {
+            "enable_terminal": d.terminal.enable_terminal,
+            "whitelist": d.terminal.whitelist,
+            "denylist": d.terminal.denylist,
+        },
         "app": {
             "timezone": get_app_timezone(d),
         },
@@ -304,6 +325,9 @@ def document_to_host_kwargs(doc: SettingsDocument | None = None) -> dict[str, An
         "attachment_storage": "local",
         "attachment_max_bytes": 1_048_576,
         "public_base_url": d.app.public_base_url,
+        "enable_terminal": d.terminal.enable_terminal,
+        "terminal_whitelist": d.terminal.whitelist,
+        "terminal_denylist": d.terminal.denylist,
         "internal_network_guard_enabled": False,
         "internal_rate_limit_per_minute": 600,
     }
@@ -324,4 +348,7 @@ def document_to_agent_kwargs(doc: SettingsDocument | None = None) -> dict[str, A
         "shared_skills_dir": skills or (home / "skills"),
         "attachment_storage": "local",
         "attachment_max_bytes": 1_048_576,
+        "enable_terminal": d.terminal.enable_terminal,
+        "terminal_whitelist": d.terminal.whitelist,
+        "terminal_denylist": d.terminal.denylist,
     }

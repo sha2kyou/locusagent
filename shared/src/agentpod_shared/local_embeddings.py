@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 from typing import Any
 
@@ -13,6 +14,7 @@ from fastembed import TextEmbedding
 from .settings_store import embedding_cache_dir, get_settings_document
 
 _model_lock = asyncio.Lock()
+_EMBED_THREAD_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="agentpod-embed")
 
 
 @lru_cache
@@ -37,7 +39,7 @@ async def embed_vector(text: str) -> list[float]:
     if not text:
         raise ValueError("text is empty")
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, _embed_sync, text)
+    return await loop.run_in_executor(_EMBED_THREAD_POOL, _embed_sync, text)
 
 
 async def embed_openai_response(*, text: str, model: str | None = None) -> dict[str, Any]:
@@ -77,4 +79,8 @@ async def embed_openai_response_from_body(body: bytes) -> tuple[dict[str, Any], 
 async def warm_embedding_model() -> None:
     async with _model_lock:
         loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, _embed_sync, "warmup")
+        await loop.run_in_executor(_EMBED_THREAD_POOL, _embed_sync, "warmup")
+
+
+def shutdown_embed_thread_pool() -> None:
+    _EMBED_THREAD_POOL.shutdown(wait=False, cancel_futures=True)

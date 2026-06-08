@@ -210,6 +210,11 @@ export interface AppConfig {
   embedding: {
     model: string;
   };
+  terminal: {
+    enable_terminal: boolean;
+    whitelist: string;
+    denylist: string;
+  };
   app: {
     timezone: string;
   };
@@ -230,6 +235,9 @@ export interface AppConfigUpdate {
   jina_api_key?: string;
   embedding_model?: string;
   timezone?: string;
+  enable_terminal?: boolean;
+  terminal_whitelist?: string;
+  terminal_denylist?: string;
 }
 
 export interface UsageSummaryRow {

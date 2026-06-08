@@ -10,6 +10,8 @@ from __future__ import annotations
 import asyncio
 import sqlite3
 from collections.abc import Awaitable, Callable
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, TypeVar
@@ -21,6 +23,8 @@ from .workspace import workspace_data_dir
 
 T = TypeVar("T")
 log = get_logger("db")
+
+_DB_THREAD_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="agentpod-db")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS memory (
@@ -451,7 +455,14 @@ def init_db() -> None:
 
 
 async def run_in_thread(func: Callable[..., T], /, *args: Any, **kwargs: Any) -> T:
-    return await asyncio.to_thread(func, *args, **kwargs)
+    loop = asyncio.get_running_loop()
+    if kwargs:
+        return await loop.run_in_executor(_DB_THREAD_POOL, partial(func, *args, **kwargs))
+    return await loop.run_in_executor(_DB_THREAD_POOL, func, *args)
+
+
+def shutdown_db_thread_pool() -> None:
+    _DB_THREAD_POOL.shutdown(wait=False, cancel_futures=True)
 
 
 async def run_async(func: Callable[..., Awaitable[T]]) -> T:

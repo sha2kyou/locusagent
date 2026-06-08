@@ -16,7 +16,7 @@ from ..core.persistence import (
     update_run,
     upsert_session_meta,
 )
-from ..core.post_run import run_post_tasks
+from ..core.post_run import schedule_post_run
 from ..core.system_prompt import get_or_create_system_prompt
 from ..host_settings import build_runtime_time_context
 from ..logging import get_logger
@@ -146,15 +146,12 @@ async def run_scheduled_prompt(*, title: str, prompt: str, task_id: int | None =
             )
             await upsert_session_meta(sid, tokens_delta=result.total_tokens)
 
-            try:
-                await run_post_tasks(
-                    session_id=sid,
-                    loop_rounds=result.rounds,
-                    model=model,
-                    messages=final_messages,
-                )
-            except Exception as exc:
-                log.warning("scheduled_post_run_failed", error=str(exc))
+            schedule_post_run(
+                session_id=sid,
+                loop_rounds=result.rounds,
+                model=model,
+                messages=final_messages,
+            )
 
             payload = {
                 "ok": True,

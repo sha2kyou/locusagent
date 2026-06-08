@@ -54,10 +54,17 @@ class EmbeddingConfigOut(BaseModel):
     model: str
 
 
+class TerminalConfigOut(BaseModel):
+    enable_terminal: bool
+    whitelist: str
+    denylist: str
+
+
 class AppConfigOut(BaseModel):
     llm: LlmConfigOut
     tools: ToolsConfigOut
     embedding: EmbeddingConfigOut
+    terminal: TerminalConfigOut
     app: AppSectionOut
 
 
@@ -76,6 +83,9 @@ class AppConfigIn(BaseModel):
     jina_api_key: str | None = Field(default=None, max_length=512)
     embedding_model: str | None = Field(default=None, max_length=256)
     timezone: str | None = Field(default=None, max_length=64)
+    enable_terminal: bool | None = None
+    terminal_whitelist: str | None = Field(default=None, max_length=2048)
+    terminal_denylist: str | None = Field(default=None, max_length=2048)
 
 
 @router.get("/usage-summary", response_model=UsageSummaryOut)
@@ -145,6 +155,9 @@ async def save_app_config(
         tavily_api_key=payload.tavily_api_key,
         jina_api_key=payload.jina_api_key,
         embedding_model=payload.embedding_model,
+        enable_terminal=payload.enable_terminal,
+        terminal_whitelist=payload.terminal_whitelist,
+        terminal_denylist=payload.terminal_denylist,
     )
     if payload.timezone is not None:
         doc = set_app_timezone(validate_timezone(payload.timezone))

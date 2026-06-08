@@ -80,6 +80,10 @@ class Settings(BaseSettings):
 
     attachment_max_bytes: int = Field(default=1_048_576, alias="ATTACHMENT_MAX_BYTES")
 
+    enable_terminal: bool = Field(default=False, alias="ENABLE_TERMINAL")
+    terminal_whitelist: str = Field(default="", alias="TERMINAL_WHITELIST")
+    terminal_denylist: str = Field(default="sh,bash,zsh,dash,fish", alias="TERMINAL_DENYLIST")
+
     # 流式 LLM：单 chunk 空闲超时（秒）与整段上限（0 表示不限制整段）
     stream_chunk_timeout_s: float = Field(default=90.0, alias="STREAM_CHUNK_TIMEOUT_S")
     stream_max_duration_s: float = Field(default=600.0, alias="STREAM_MAX_DURATION_S")

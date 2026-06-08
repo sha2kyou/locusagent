@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import shlex
 import shutil
 from pathlib import Path
 from typing import Any
 
+from ..config import get_settings
 from ..subprocess_sandbox import (
     build_sandbox_preexec_fn,
     resolve_workdir,
@@ -22,23 +22,25 @@ DEFAULT_TIMEOUT = 180.0
 MAX_OUTPUT = 100 * 1024
 
 
+def _command_set(raw: str) -> set[str]:
+    return {x.strip().lower() for x in raw.split(",") if x.strip()}
+
+
 def _enabled() -> bool:
-    return os.environ.get("ENABLE_TERMINAL", "").lower() in ("1", "true", "yes")
+    return get_settings().enable_terminal
 
 
 def _whitelist() -> set[str]:
-    raw = os.environ.get("TERMINAL_WHITELIST", "")
-    return {x.strip().lower() for x in raw.split(",") if x.strip()}
+    return _command_set(get_settings().terminal_whitelist)
 
 
 def _denylist() -> set[str]:
-    raw = os.environ.get("TERMINAL_DENYLIST", "sh,bash,zsh,dash,fish")
-    return {x.strip().lower() for x in raw.split(",") if x.strip()}
+    return _command_set(get_settings().terminal_denylist)
 
 
 async def _terminal(args: dict[str, Any]) -> ToolResult:
     if not _enabled():
-        raise ToolError("terminal is disabled (set ENABLE_TERMINAL=1 to enable)")
+        raise ToolError("terminal 已禁用，请在 设置 → 工具 中开启")
     cmd = str(args.get("command", "")).strip()
     if not cmd:
         raise ToolError("command is required")
@@ -54,7 +56,7 @@ async def _terminal(args: dict[str, Any]) -> ToolResult:
         raise ToolError("command must be a bare executable name, path is not allowed")
     wl = _whitelist()
     if not wl:
-        raise ToolError("TERMINAL_WHITELIST is empty; refuse to run anything")
+        raise ToolError("terminal 白名单为空，请在 设置 → 工具 中配置允许执行的命令")
     if head not in wl:
         raise ToolError(f"command '{head}' not in whitelist")
     if head in _denylist():
@@ -117,7 +119,7 @@ register_builtin(
         name="terminal",
         description=(
             "执行 shell 命令。用于构建、安装、git、进程管理与脚本执行。"
-            "默认受 ENABLE_TERMINAL=1、TERMINAL_WHITELIST 白名单、TERMINAL_DENYLIST 禁止项约束，"
+            "默认受设置中的 terminal 开关、白名单与禁止项约束，"
             "并应用资源限制与超时进程组回收；"
             "不用于文件读写/搜索（优先 read_file 与 search_files）。"
         ),

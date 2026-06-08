@@ -20,7 +20,7 @@ from .persistence import (
     upsert_session_meta,
 )
 from ..memory.queue import bump_message_embedding
-from .post_run import run_post_tasks
+from .post_run import schedule_post_run
 
 log = get_logger("run_manager")
 
@@ -30,7 +30,6 @@ CANCELLED_MARK = "run cancelled by user"
 HEARTBEAT_SECONDS = 60
 
 _active: dict[str, StreamRunHandle] = {}
-_post_tasks: set[asyncio.Task] = set()
 
 
 @dataclass
@@ -364,16 +363,11 @@ async def _worker(
     _active.pop(handle.run_id, None)
 
     if stream_error is None:
-        post = asyncio.create_task(
-            run_post_tasks(
-                session_id=handle.session_id,
-                loop_rounds=int(state.get("loop_rounds") or 0),
-                model=str(state.get("model") or "") or None,
-            ),
-            name=f"post-run-{handle.run_id}",
+        schedule_post_run(
+            session_id=handle.session_id,
+            loop_rounds=int(state.get("loop_rounds") or 0),
+            model=str(state.get("model") or "") or None,
         )
-        _post_tasks.add(post)
-        post.add_done_callback(_post_tasks.discard)
 
 
 def start_stream_run(
@@ -439,15 +433,9 @@ async def shutdown_run_manager(*, timeout_seconds: float = 3.0) -> None:
             pass
     _active.clear()
 
-    post_tasks = [t for t in list(_post_tasks) if not t.done()]
-    for task in post_tasks:
-        task.cancel()
-    if post_tasks:
-        try:
-            await asyncio.wait_for(asyncio.gather(*post_tasks, return_exceptions=True), timeout=timeout_seconds)
-        except TimeoutError:
-            pass
-    _post_tasks.clear()
+    from .post_run import shutdown_post_run_worker
+
+    await shutdown_post_run_worker(timeout_seconds=timeout_seconds)
 
 
 async def cancel_active_run(session_id: str) -> bool:

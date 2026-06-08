@@ -164,12 +164,16 @@ async def lifespan(app: FastAPI):
         from agentpod_agent.core.run_manager import shutdown_run_manager
         from agentpod_agent.core.session_title import shutdown_session_title_tasks
         from agentpod_agent.mcp_.client import stop_all_mcp
+        from agentpod_agent.db import shutdown_db_thread_pool
         from agentpod_agent.routers.v1 import shutdown_v1_background_tasks
+        from agentpod_shared.local_embeddings import shutdown_embed_thread_pool
 
         await stop_mcp_reconnect_loop()
         await shutdown_v1_background_tasks()
         await shutdown_session_title_tasks()
         await shutdown_run_manager()
+        shutdown_db_thread_pool()
+        shutdown_embed_thread_pool()
         try:
             await stop_all_mcp()
         except Exception as exc:
