@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  macos:
+  build-macos:
     name: Build macOS app
     runs-on: macos-latest
     timeout-minutes: 60
@@ -33,17 +33,110 @@ jobs:
       - name: Build desktop app
         run: ./rebuild.sh desktop --fresh-venv
 
-      - name: Upload artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AgentPod-macos-aarch64
-          path: |
-            dist/AgentPod.app
-            dist/AgentPod_*.dmg
+          name: AgentPod-${{ github.ref_name }}
+          path: dist/AgentPod_*.dmg
           if-no-files-found: error
+
+  release:
+    name: Release
+    needs: build-macos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AgentPod-${{ github.ref_name }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/AgentPod_*.dmg
+          files: AgentPod_*.dmg
           generate_release_notes: true
+          fail_on_unmatched_files: true
+
+  update-homebrew-tap:
+    name: Update Homebrew Tap
+    needs: release
+    runs-on: ubuntu-latest
+    env:
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+    steps:
+      - name: Check tap token
+        id: token
+        run: |
+          if [ -z "${HOMEBREW_TAP_TOKEN}" ]; then
+            echo "run_update=false" >> "${GITHUB_OUTPUT}"
+            echo "HOMEBREW_TAP_TOKEN is empty, skip tap update."
+          else
+            echo "run_update=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Download artifact
+        if: ${{ steps.token.outputs.run_update == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: AgentPod-${{ github.ref_name }}
+
+      - name: Compute version and SHA256
+        if: ${{ steps.token.outputs.run_update == 'true' }}
+        id: vars
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          DMG_NAME="AgentPod_${VERSION}_aarch64.dmg"
+          SHA256="$(shasum -a 256 "${DMG_NAME}" | awk '{print $1}')"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "sha256=${SHA256}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout tap repository
+        if: ${{ steps.token.outputs.run_update == 'true' }}
+        run: |
+          git clone "https://x-access-token:${{ secrets.HOMEBREW_TAP_TOKEN }}@github.com/sha2kyou/homebrew-tap.git" tap
+
+      - name: Update cask file
+        if: ${{ steps.token.outputs.run_update == 'true' }}
+        run: |
+          cat > tap/Casks/agentpod.rb <<EOF
+          cask "agentpod" do
+            version "${{ steps.vars.outputs.version }}"
+            sha256 "${{ steps.vars.outputs.sha256 }}"
+
+            url "https://github.com/sha2kyou/agentpod/releases/download/v#{version}/AgentPod_#{version}_aarch64.dmg",
+                verified: "github.com/sha2kyou/agentpod/"
+            name "AgentPod"
+            desc "macOS desktop AI agent with chat, skills, MCP, and memory"
+            homepage "https://github.com/sha2kyou/agentpod"
+
+            auto_updates true
+            app "AgentPod.app"
+
+            postflight do
+              app_path = "#{appdir}/AgentPod.app"
+              system_command "/usr/bin/xattr",
+                             args: ["-dr", "com.apple.quarantine", app_path] if File.exist?(app_path)
+            end
+
+            zap trash: [
+              "~/.agentpod",
+              "~/Library/Preferences/com.agentpod.desktop.plist",
+              "~/Library/Saved Application State/com.agentpod.desktop.savedState",
+            ]
+          end
+          EOF
+
+      - name: Commit and push tap changes
+        if: ${{ steps.token.outputs.run_update == 'true' }}
+        run: |
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/agentpod.rb
+          if git diff --cached --quiet; then
+            echo "No tap changes to commit."
+            exit 0
+          fi
+          git commit -m "chore(cask): update agentpod for ${GITHUB_REF_NAME}"
+          git push
