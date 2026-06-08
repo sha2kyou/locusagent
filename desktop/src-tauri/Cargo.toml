@@ -1,6 +1,6 @@
 [package]
 name = "agentpod-desktop"
-version = "0.1.7"
+version = "0.1.8"
 description = "AgentPod macOS desktop shell"
 authors = ["AgentPod"]
 edition = "2021"
