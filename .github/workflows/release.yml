@@ -93,8 +93,11 @@ jobs:
 
       - name: Checkout tap repository
         if: ${{ steps.token.outputs.run_update == 'true' }}
-        run: |
-          git clone "https://x-access-token:${{ secrets.HOMEBREW_TAP_TOKEN }}@github.com/sha2kyou/homebrew-tap.git" tap
+        uses: actions/checkout@v4
+        with:
+          repository: sha2kyou/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
 
       - name: Update cask file
         if: ${{ steps.token.outputs.run_update == 'true' }}
@@ -129,14 +132,17 @@ jobs:
 
       - name: Commit and push tap changes
         if: ${{ steps.token.outputs.run_update == 'true' }}
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           cd tap
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/sha2kyou/homebrew-tap.git"
           git add Casks/agentpod.rb
           if git diff --cached --quiet; then
             echo "No tap changes to commit."
             exit 0
           fi
           git commit -m "chore(cask): update agentpod for ${GITHUB_REF_NAME}"
-          git push
+          git push origin HEAD:main
