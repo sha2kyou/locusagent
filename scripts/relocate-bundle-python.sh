@@ -13,13 +13,13 @@ if [[ ! -f "$PY_BIN" ]]; then
   exit 1
 fi
 
-mapfile -t FW_DEPS < <(otool -L "$PY_BIN" | tail -n +2 | awk '{print $1}' | grep Python.framework || true)
-if ((${#FW_DEPS[@]} == 0)); then
+FW_DEP="$(otool -L "$PY_BIN" | tail -n +2 | awk '{print $1}' | grep Python.framework | head -1 || true)"
+if [[ -z "$FW_DEP" ]]; then
   echo "==> no Python.framework dependency; skip relocate"
   exit 0
 fi
 
-FW_SRC="$(echo "${FW_DEPS[0]}" | sed -E 's|(/.*/Python.framework)/Versions/.*|\1|')"
+FW_SRC="$(echo "$FW_DEP" | sed -E 's|(/.*/Python.framework)/Versions/.*|\1|')"
 if [[ ! -d "$FW_SRC" ]]; then
   echo "error: Python.framework not found at $FW_SRC (build machine must have source framework)" >&2
   exit 1
@@ -81,14 +81,13 @@ def change_dep(path: Path, old: str, new: str) -> None:
     )
 
 
-for macho in macho_files(venv):
+machos = macho_files(venv)
+for macho in machos:
     for old in deps(macho):
         change_dep(macho, old, rel_loader_path(macho))
 
-print(f"relocated {len(macho_files(venv))} Mach-O files under {venv}")
+print(f"relocated {len(machos)} Mach-O files under {venv}")
 PY
 
 echo "==> verify bundled python"
 otool -L "$PY_BIN" | head -3
-
-PY
