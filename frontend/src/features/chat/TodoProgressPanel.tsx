@@ -1,4 +1,4 @@
-import { AlertCircle, Check, ChevronRight, Circle, ListTodo, Loader2, Minus } from "lucide-react";
+import { AlertCircle, Check, Circle, ListTodo, Loader2, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CollapsibleMetaBlock } from "./CollapsibleMetaBlock";
 import type { TodoPlan, TodoStep, TodoStepStatus } from "./todo";
