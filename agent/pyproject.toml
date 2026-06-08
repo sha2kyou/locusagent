@@ -1,6 +1,6 @@
 [project]
 name = "agentpod-agent"
-version = "0.1.6"
+version = "0.1.7"
 description = "AgentPod agent: per-user container with chat loop, tools, skills, MCP, memory"
 requires-python = ">=3.11"
 dependencies = [
