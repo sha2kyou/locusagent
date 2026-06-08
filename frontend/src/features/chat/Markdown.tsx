@@ -16,6 +16,7 @@ import {
   WrapText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { openExternalUrl } from "@/lib/open-external";
 import { normalizeLatexInput } from "@/lib/latex-normalize";
 import { CollapsibleMetaBlock } from "./CollapsibleMetaBlock";
 
@@ -124,7 +125,11 @@ function MarkdownBlock({ text, enableMath = true }: { text: string; enableMath?:
           </div>
         ),
         a: ({ children, href }) => (
-          <a href={href} target="_blank" rel="noreferrer" className="text-brand underline underline-offset-2">
+          <a
+            href={href}
+            rel="noreferrer"
+            className="text-brand underline underline-offset-2"
+          >
             {children}
           </a>
         ),
@@ -308,11 +313,8 @@ export function HtmlRender({ html }: { html: string }) {
     setTimeout(() => setCopied(false), 1500);
   };
   const openNew = () => {
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const win = window.open(url, "_blank", "noopener");
-    if (win) win.addEventListener?.("load", () => URL.revokeObjectURL(url));
-    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+    void openExternalUrl(dataUrl);
   };
   const fullscreen = () => void ref.current?.requestFullscreen?.();
 

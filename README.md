@@ -1,258 +1,119 @@
 # AgentPod
 
-自托管 AI Agent 平台：GitHub 登录、每用户独立 Docker 容器、OpenAI 兼容 API、内置 Skills / MCP / Memory，支持 MCP OAuth 与 macOS 桌面应用。
+macOS 桌面 AI Agent：打开即用，内置对话、Skills、MCP、Memory、定时任务与多工作区。
 
-## 项目目标
+单体 sidecar（Host + Agent 同进程），无 Docker、无多用户账户；配置在 `settings.json`，数据在本地 SQLite。
 
-- 对外提供标准 OpenAI 风格接口（`/api/v1/*`）。
-- 对内提供可视化工作台（见下表）。
-- 通过容器隔离保证多用户运行与数据隔离。
+## 架构
 
-### 工作台路由
+```
+AgentPod.app
+  ├─ Gateway :1420   内嵌 React UI（frontend/dist-desktop）
+  └─ Sidecar :8080   Python 单体 FastAPI（host + agent + sidecar）
+        └─ ~/.agentpod/
+             ├── settings.json          LLM / 工具 Key / 时区 / secrets
+             ├── host.sqlite            工作区、通知、定时任务、用量、MCP OAuth
+             ├── workspaces/<id>/
+             │    ├── agent.sqlite      会话、消息、记忆、产物…
+             │    └── …                 MCP 配置等
+             ├── attachments/           聊天附件
+             ├── models/                fastembed ONNX 缓存
+             └── skills/                用户技能
+```
+
+Embedding 使用内嵌 fastembed（默认 `BAAI/bge-small-zh-v1.5`），不依赖外部 TEI 服务。
+
+## 快速开始
+
+**依赖：** Python 3.11+、Node.js + npm、Rust + Cargo（打桌面包时需要）
+
+```bash
+# 1. 开发用 Python 环境（可选，调试后端）
+./rebuild.sh sidecar
+
+# 2. 构建桌面 App（默认命令）
+./rebuild.sh
+open dist/AgentPod.app
+```
+
+首次使用在 **设置 → 模型** 填写 LLM API Key，或编辑 `~/.agentpod/settings.json`（示例见 `shared/settings.example.json`）。
+
+### 仅调试 Python（不打包）
+
+```bash
+./rebuild.sh sidecar
+cd sidecar && source .venv/bin/activate
+AGENTPOD_MONOLITH=1 uvicorn agentpod.main:app --host 127.0.0.1 --port 8080
+```
+
+前端开发：`cd frontend && npm run dev`（需 sidecar 已在 8080 运行或由 Tauri 拉起）。
+
+## 重建命令
+
+| 场景 | 命令 |
+|------|------|
+| 打安装包（改 frontend / host / agent 后） | `./rebuild.sh` |
+| 只更新开发 venv | `./rebuild.sh sidecar` |
+| bundle 内 Python 环境异常 | `./rebuild.sh desktop --fresh-venv` |
+| 从旧 Docker 卷迁移数据 | `./rebuild.sh migrate-docker` |
+
+## 应用路由
 
 | 路径 | 功能 |
 |------|------|
-| `/chat` | 对话（SSE 流式、附件、会话管理） |
-| `/skills` | 技能库（公共 / 私有） |
-| `/mcp` | MCP 服务配置、OAuth 授权、连接测试 |
+| `/chat` | 对话（SSE、附件、会话） |
+| `/skills` | 技能库 |
+| `/mcp` | MCP 服务与 OAuth |
 | `/memory` | 长期记忆 |
-| `/workspaces` | 多工作区切换 |
-| `/env-vars` | 工作区环境变量 |
+| `/workspaces` | 工作区 |
+| `/env-vars` | 环境变量 |
 | `/scheduled-tasks` | 定时任务 |
-| `/artifacts` | 制品库（分类与内容，支持完整 CRUD） |
+| `/artifacts` | 制品库 |
+| `/settings` | 通用 / 模型 / 用量 |
 
-工作区非默认时 URL 前缀为 `/w/{workspace_id}/...`。侧栏「工具」开关页（`/tools`）已实现但默认未开放入口。
-
-## 架构概览
-
-图例：`──→` 请求流向，`├─` 分流，`↓` 下一层
+## 仓库结构
 
 ```
-                    【客户端】
-
-  [1] 浏览器 ──→ Caddy :1223
-                         ├─ 页面 ──→ web 容器 · dist-web（nginx）
-                         └─ API  ──→ Host :8080
-
-  [2] macOS 桌面 ────→ Gateway :1420（Tauri App 内）
-                         ├─ 页面 ──→ dist-desktop（内嵌，不经 web 容器）
-                         └─ API  ──→ Caddy :1223 ──→ Host :8080
-                         OAuth：浏览器 → Gateway → Host → GitHub → agentpod:// 回 App
-                         通知：Host WS → toast/铃铛 + macOS 系统通知
-
-  [3] 外部 API ──────→ Caddy :1223/api/v1/*（Bearer agent_api_key）
-
-                    【服务端】
-
-  Host :8080（FastAPI）
-    ├─ OAuth / Session / MCP OAuth
-    ├─ API 网关（Session 与 Bearer 分流）
-    ├─ Orchestrator（Agent 容器生命周期）
-    ├─ 内部代理（LLM · embedding · tavily · jina）
-    └─ 通知 Hub + WebSocket
-          ↓ Internal Token + Workspace-Id
-  Agent 容器（每用户独立）
-    ├─ Chat Loop · Tool Registry
-    └─ SQLite + sqlite-vec
-          ↓
-  shared-skills · TEI Embedding（经 Host 代理）
+shared/          公共库（settings.json、embedding、存储）
+host/            控制面 API（工作区、设置、代理、定时任务）
+agent/           执行面（chat loop、tools、memory）
+sidecar/         单体入口 agentpod.main
+frontend/        React UI → dist-desktop
+desktop/         Tauri macOS 壳
+shared-skills/   内置技能模板
+scripts/         版本同步、打包辅助、数据迁移
 ```
 
-**入口分流**：在线 Web 与桌面共用同一 Host API；桌面多一层本地 gateway（`:1420`）托管内嵌前端并反代 API，Cookie / Session / WebSocket 语义与浏览器一致。GitHub OAuth App 的 Callback URL 只配置 Host 上的 `OAUTH_REDIRECT_URI`，桌面登录入口 `127.0.0.1:1420` 不是 Callback。
+## Python 工程说明
 
-**MCP 连接策略（Agent）**：只读接口（如列会话）不阻塞 MCP 全量连接；对话与 MCP 管理在需要时再连接。HTTP MCP 的 OAuth 凭据由 Host 保存，Agent 用 Bearer + Host 刷新 token，不在容器内走浏览器授权。
+各 Python 包在 `shared/`、`host/`、`agent/`、`sidecar/` 各有 `pyproject.toml` 声明依赖。
 
-**工具安全分级**：工具分为幂等（idempotent）和变更（mutating）两类。定时任务中禁用全部破坏性工具（`artifact_delete / artifact_update / artifact_category_update / artifact_category_delete / delete_file / session_delete / notification_mark_read / mcp_manage` 等），防止无人值守时误删数据。
+根目录 `pyproject.toml` 用于：
 
-## 快速开始（推荐路径）
+- **`scripts/sync-version.py`** 同步 `VERSION` 到各包版本号
+- **pytest / ruff** 配置（`testpaths`、`pythonpath`、lint 规则）
+- **可选 uv workspace**（存在 `uv.lock`；`uv sync` 可装 dev 依赖）
 
-### 1) 准备依赖
-
-- Python 3.11+
-- `uv`
-- Docker + Docker Compose
-
-### 2) 初始化环境变量
+**打包与 `./rebuild.sh sidecar` 走 `pip install -e`，不依赖 uv。** 日常测试示例：
 
 ```bash
-cp .env.example .env
-openssl rand -base64 32
+./rebuild.sh sidecar
+cd sidecar && source .venv/bin/activate
+pytest ../tests/host -q
 ```
 
-将生成值写入 `.env` 的 `ENCRYPTION_KEY` 和 `SESSION_SECRET`。
+## 鉴权
 
-至少补齐：
-
-| 变量 | 说明 |
-|------|------|
-| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub 登录 |
-| `OAUTH_REDIRECT_URI` | GitHub 回调（与对外访问域名一致） |
-| `MCP_OAUTH_REDIRECT_URI` | MCP OAuth 回调，如 `http://localhost:1223/api/oauth/mcp/callback` |
-| `ENCRYPTION_KEY` / `SESSION_SECRET` | 加密与 Session |
-| `DB_PASSWORD` | 与 `DATABASE_URL` 中密码一致 |
-| `LLM_API_KEY` | 及 `LLM_MODEL`、辅助模型等（见 `.env.example`） |
-| `PUBLIC_BASE_URL` | 对外根 URL（OAuth 与链接生成） |
-
-首次部署后 Host 会执行数据库迁移（含 `mcp_oauth_credentials` 表）。
-
-### 3) 启动整套服务
-
-```bash
-docker compose up -d --build
-docker build -f "agent/Dockerfile" -t "agentpod-agent:latest" "."
-```
-
-默认入口：`http://localhost:1223`（以 `docker-compose.yml` / Caddy 映射为准）。
-
-## macOS 桌面应用
-
-内嵌 SPA + 本地 gateway（`:1420`）反代 Host API，后端仍走同一套 Docker 服务。详见 [`desktop/README.md`](desktop/README.md)。
-
-```bash
-# 需先启动 Host 等后端（见上）
-./rebuild.sh desktop
-```
-
-产物：`desktop/src-tauri/target/release/bundle/macos/AgentPod.app`（及 `.dmg`）。
-
-| 能力 | 说明 |
-|------|------|
-| GitHub 登录 | 系统浏览器授权 + Deep Link 回 App（callback URL 与 Web 共用 `OAUTH_REDIRECT_URI`） |
-| 通知 | 应用内 toast / 铃铛不变；桌面端额外将通知中心新消息镜像为 **macOS 系统通知** |
-| API 地址 | 构建时默认 `AGENTPOD_API_URL=http://127.0.0.1:1223`，可在运行前覆盖 |
-
-改 `web/` 桌面相关前端或 `desktop/` Tauri 代码后执行 `./rebuild.sh desktop`（`./build-desktop.sh` 为等价别名）。
-
-## 启动后验证
-
-### 健康检查
-
-```bash
-curl "http://localhost:1223/health"
-curl "http://localhost:1223/api/v1/health"
-```
-
-### 首次使用
-
-1. 浏览器打开站点，使用 GitHub 登录。
-2. 进入 `/chat` 发起对话（模型由 Host `.env` 注入，无需在 UI 填写 API Key）。
-3. 可选：在 `/mcp` 添加 HTTP MCP；需 OAuth 时在服务配置中选 OAuth，或在 `mcp.yaml` 中写 `auth: oauth` 后于页面完成授权。
-
-### 外部 API（Bearer）
-
-设置中可查看/轮换 `agent_api_key`，然后：
-
-```bash
-curl "http://localhost:1223/api/v1/models" \
-  -H "Authorization: Bearer <agent_api_key>"
-```
-
-## MCP OAuth 说明
-
-- **对话内管理**：Agent 对话中可直接调用 `mcp_view`（列出已配置服务及连接状态）和 `mcp_manage`（新增/更新/删除服务），无需打开 UI。
-- **UI 新建** HTTP MCP：默认认证方式为 OAuth。
-- **手写 `mcp.yaml`**：未写 `auth` 的 HTTP 服务为直连（`none`）；需要 OAuth 时显式添加：
-
-```yaml
-servers:
-  - name: notion
-    transport: http
-    url: https://mcp.notion.com/mcp
-    auth: oauth
-```
-
-- 授权流程：MCP 页点击连接 → Host 跳转提供商 → 回调后 Agent 自动重连该服务。
-- `MCP_OAUTH_REDIRECT_URI` 必须与浏览器实际访问的 Host 地址一致。
-
-## 本地开发（不走 compose）
-
-```bash
-uv sync
-
-# Host（8080）
-uv run uvicorn agentpod_host.main:app --reload --port 8080
-
-# Agent（8000，另开终端）
-uv run uvicorn agentpod_agent.main:app --reload --port 8000
-```
-
-前端：
-
-```bash
-cd web
-npm install
-npm run dev    # 默认 http://127.0.0.1:5173，/api 代理到 Host
-npm run build  # 产物写入 web/dist-web（Docker web 容器托管）
-```
-
-## 按需重建
-
-原则：**只重建受影响层**。详见仓库根目录 `CLAUDE.md` 与 `rebuild.sh`。
-
-| 变更范围 | 命令 |
-|----------|------|
-| `web/` 或 `host/` | `./rebuild.sh host`（含 SPA 构建，并 **restart caddy**） |
-| `agent/` | `./rebuild.sh agent <user_id>` |
-| host + agent 镜像 | `./rebuild.sh full [user_id]` |
-| postgres / tei 等 | `./rebuild.sh infra`（仅在基础设施异常时使用） |
-| `web/` 桌面壳 或 `desktop/` | `./rebuild.sh desktop`（macOS `.app` / `.dmg`） |
-
-`agent` 镜像使用 `docker build`，不走 `compose build`。未给出 `user_id` 时不要批量重建所有用户容器。
-
-```bash
-docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" | rg "apod-user|agentpod-host"
-```
-
-## 鉴权与路由边界
-
-- **Bearer** 仅允许：`/api/v1/chat/completions`、`/api/v1/responses`、`/api/v1/models`、`/api/v1/health`
-- **Session** 用于：`/api/workspace/*`、`/api/me*`、`/api/settings/*`、OAuth 浏览器流程等
-- `agent_api_key` 访问 `/api/workspace/*` → `403`
-- Session 访问 `/api/v1/*` → `403`
-
-## 目录结构
-
-```
-.
-├── pyproject.toml          # uv workspace 根
-├── docker-compose.yml
-├── Caddyfile
-├── rebuild.sh
-├── build-desktop.sh        # macOS 桌面应用打包
-├── host/                   # 控制平面
-│   ├── Dockerfile
-│   └── src/agentpod_host/
-├── agent/                  # 执行平面
-│   ├── Dockerfile
-│   └── src/agentpod_agent/
-├── web/                    # React SPA（Vite）
-│   ├── Dockerfile          # 在线 Web 服务（nginx）
-│   ├── public/             # favicon、logo 等
-│   └── src/
-├── desktop/                # macOS 桌面壳（Tauri + 内嵌 dist-desktop）
-└── shared-skills/          # 公共技能库
-```
+浏览器通过 **session cookie** 访问 `/api/*`；Agent 内部调用 Host 代理时使用 `X-Internal-Token`。无对外 Bearer API、无用户表。
 
 ## 常见问题
 
 | 现象 | 处理 |
 |------|------|
-| `503` + `Retry-After` | 用户 Agent 容器冷启动，稍后重试 |
-| 对话无输出 / SSE 卡住 | 检查 Caddy 未缓冲 SSE；见 `Caddyfile` |
-| `/api/workspace/*` 返回 `403` | 使用了 Bearer 而非浏览器 Session |
-| Host 重建后偶发 `502` | 执行 `./rebuild.sh host`（会 restart caddy） |
-| MCP 显示已授权但离线 | MCP 页点「重连」；或等待后台预热后刷新列表 |
-| OAuth 后仍连不上 | 确认 `MCP_OAUTH_REDIRECT_URI`、yaml 中 `auth: oauth` |
-| 登录后无法对话 | 检查 Host `.env` 中 `LLM_API_KEY`、`LLM_MODEL` |
-| 桌面登录浏览器打不开 `127.0.0.1:1420` | 须先启动 **AgentPod.app**（gateway 随应用启动）；1420 不是 GitHub callback URL |
-| 桌面无系统通知 | 系统设置 → 通知 → AgentPod 允许通知；用正式 `.app` 测试（非仅 `tauri dev`） |
+| 无法对话 | 设置页或 `settings.json` 配置 `llm.api_key` |
+| 向量检索首次很慢 | 等待模型下载到 `~/.agentpod/models` |
+| 桌面打不开后端 | 重新 `./rebuild.sh` |
+| 旧 Docker 数据未出现 | `./rebuild.sh migrate-docker --force` |
+| MCP OAuth 失败 | `app.mcp_oauth_redirect_uri` 应为 `http://127.0.0.1:1420/api/oauth/mcp/callback` |
 
-## P0 验收标准（DoD）
-
-- 新用户首次登录 10s 内进入工作台，首轮对话首包 30s 内返回（需已配置 `LLM_API_KEY`）。
-- `/api/v1/chat/completions`、`/api/v1/responses`、`/api/v1/models` 鉴权通过；冷启动返回 `503 + Retry-After`。
-- `agent_api_key` 访问 `/api/workspace/*` 一律 `403`；Session 访问 `/api/v1/*` 一律 `403`。
-- 用户 A 容器从网络层无法访问用户 B 容器。
-- 容器以 `uid=10001`、`cap_drop=ALL`、`read_only=true` 启动。
-- 日志不出现明文密钥；业务容器无 `docker.sock` 挂载。
-- SSE：首包 &lt; 1s（不含 LLM），chunk 间隔 &lt; 200ms。
+更多桌面打包细节见 [`desktop/README.md`](desktop/README.md)。

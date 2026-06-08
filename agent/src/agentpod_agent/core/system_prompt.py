@@ -136,7 +136,7 @@ async def build_stable_prompt() -> str:
     tool_names = sorted(_format_available_tools())
     enabled = set(tool_names)
     pieces = [
-        f"你是为用户 {settings.user_id} 在沙箱容器中运行的 AI 代理。",
+        f"你是在沙箱容器中运行的 AI 代理。",
         f"在合适时使用提供的工具。可用工具：{', '.join(tool_names)}。",
         "仅通过原生 tool_calls 调用工具，切勿在消息正文中书写工具调用。"
         "不要输出伪工具标签、伪函数调用、伪参数、JSON 工具桩或任何文本形式的工具模拟，此类内容不会被执行。"

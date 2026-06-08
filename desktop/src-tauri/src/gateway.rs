@@ -336,7 +336,7 @@ pub fn resolve_static_dir(app: &tauri::AppHandle) -> PathBuf {
     use tauri::path::BaseDirectory;
 
     if cfg!(debug_assertions) {
-        let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../web/dist-desktop");
+        let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../frontend/dist-desktop");
         if dev.join("index.html").is_file() {
             return dev;
         }
@@ -344,5 +344,5 @@ pub fn resolve_static_dir(app: &tauri::AppHandle) -> PathBuf {
 
     app.path()
         .resolve("dist-desktop", BaseDirectory::Resource)
-        .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../web/dist-desktop"))
+        .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../frontend/dist-desktop"))
 }

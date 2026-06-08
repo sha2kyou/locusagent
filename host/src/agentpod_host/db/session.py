@@ -1,49 +1,61 @@
-"""异步数据库引擎与会话管理。"""
+"""异步 SQLite 引擎与会话管理。"""
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from ..config import get_settings
-from .migrate import bootstrap_data, run_migrations
+from .legacy import repair_legacy_bigint_autoincrement
+from .models import Base
 
 _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
+_engine_db_path: Path | None = None
+
+
+def _sqlite_url(path: Path) -> str:
+    return f"sqlite+aiosqlite:///{path}"
 
 
 async def init_engine() -> AsyncEngine:
-    """启动时初始化引擎并应用 Alembic 迁移。"""
-    global _engine, _sessionmaker
-    if _engine is not None:
-        return _engine
+    global _engine, _sessionmaker, _engine_db_path
+
     settings = get_settings()
-    await _run_blocking_migrations(settings.database_url)
+    db_path = Path(settings.host_sqlite_path)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if _engine is not None and _engine_db_path == db_path:
+        return _engine
+
+    if _engine is not None:
+        await dispose_engine()
+
     _engine = create_async_engine(
-        settings.database_url,
+        _sqlite_url(db_path),
         pool_pre_ping=True,
-        pool_size=10,
-        max_overflow=20,
+        connect_args={"check_same_thread": False},
     )
     _sessionmaker = async_sessionmaker(_engine, expire_on_commit=False, class_=AsyncSession)
+    _engine_db_path = db_path
+
+    async with _engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(repair_legacy_bigint_autoincrement)
+
     return _engine
 
 
-async def _run_blocking_migrations(database_url: str) -> None:
-    import asyncio
-
-    await asyncio.to_thread(run_migrations, database_url)
-    await asyncio.to_thread(bootstrap_data, database_url)
-
-
 async def dispose_engine() -> None:
-    global _engine, _sessionmaker
+    global _engine, _sessionmaker, _engine_db_path
     if _engine is not None:
         await _engine.dispose()
     _engine = None
     _sessionmaker = None
+    _engine_db_path = None
 
 
 @asynccontextmanager

@@ -5,7 +5,6 @@ import {
   ChevronsLeft,
   Clock,
   FolderOpen,
-  LogOut,
   Menu,
   MessagesSquare,
   PanelLeft,
@@ -15,20 +14,13 @@ import {
   Sparkles,
   // Wrench,
 } from "lucide-react";
-import { BrandMark } from "@/app/Brand";
 import { DesktopWindowDragOverlay } from "@/app/DesktopTitlebarSpacer";
 import { desktopDragRegionProps } from "@/lib/desktop-app";
 import { cn } from "@/lib/utils";
-import {
-  floatingMenuDividerClass,
-  floatingMenuItemClass,
-  floatingPanelClass,
-} from "@/components/ui/surface-styles";
 import { ArtifactsNav } from "@/features/artifacts/ArtifactsNav";
 import { useAuth } from "./auth";
-import { ApiKeyFlashModal, SettingsModal } from "@/features/settings/SettingsModal";
 import { NotificationBell } from "@/features/notifications/NotificationBell";
-import { flashApiKey, listWorkspaces } from "@/api/endpoints";
+import { listWorkspaces } from "@/api/endpoints";
 import type { WorkspaceItem } from "@/api/types";
 import { isChatRoutePath, stripWorkspacePrefix, withWorkspacePrefix } from "./workspace-route";
 import {
@@ -44,7 +36,6 @@ import {
 } from "./sidebar-nav-styles";
 
 interface ShellApi {
-  openSettings: () => void;
   /** 路由可注入移动端顶栏右侧操作（如会话抽屉开关） */
   setMobileAction: (node: ReactNode) => void;
 }
@@ -83,13 +74,9 @@ export function AppShell() {
   const [expanded, setExpanded] = useState(
     () => localStorage.getItem(EXPAND_KEY) !== "0",
   );
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [flashKey, setFlashKey] = useState<string | null>(null);
   const [navOpen, setNavOpen] = useState(false);
   const [mobileAction, setMobileAction] = useState<ReactNode>(null);
   const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
-  const menuRootRef = useRef<HTMLDivElement>(null);
   const navListRef = useRef<HTMLElement>(null);
   const [menuScrollable, setMenuScrollable] = useState(false);
   const defaultWorkspaceId = workspaces.find((w) => w.is_default)?.id ?? "";
@@ -104,21 +91,12 @@ export function AppShell() {
     localStorage.setItem(EXPAND_KEY, expanded ? "1" : "0");
   }, [expanded]);
 
-  // 新用户登录后一次性展示外部 API Key
-  useEffect(() => {
-    void flashApiKey()
-      .then((r) => {
-        if (r.api_key) setFlashKey(r.api_key);
-      })
-      .catch(() => {});
-  }, []);
-
   useEffect(() => {
     if (!me) return;
     void listWorkspaces()
       .then((res) => setWorkspaces(res.items))
       .catch(() => setWorkspaces([]));
-  }, [me?.id, me?.current_workspace_id]);
+  }, [me, me?.current_workspace_id]);
 
   useEffect(() => {
     if (onChatRoute) return;
@@ -142,17 +120,6 @@ export function AppShell() {
   ]);
 
   useEffect(() => {
-    if (!menuOpen) return;
-    const onDocMouseDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (menuRootRef.current?.contains(target)) return;
-      setMenuOpen(false);
-    };
-    document.addEventListener("mousedown", onDocMouseDown);
-    return () => document.removeEventListener("mousedown", onDocMouseDown);
-  }, [menuOpen]);
-
-  useEffect(() => {
     const el = navListRef.current;
     if (!el) return;
     const updateScrollable = () => {
@@ -169,7 +136,7 @@ export function AppShell() {
   }, [expanded, location.pathname, workspaces.length]);
 
   return (
-    <ShellContext.Provider value={{ openSettings: () => setSettingsOpen(true), setMobileAction }}>
+    <ShellContext.Provider value={{ setMobileAction }}>
       <DesktopWindowDragOverlay
         mainOffsetClassName={
           expanded
@@ -193,33 +160,14 @@ export function AppShell() {
             expanded ? sidebarPrimaryWidthClass.expanded : sidebarPrimaryWidthClass.collapsed,
           )}
         >
-          {/* Header：布局与导航行一致，收起时仅隐藏标题 */}
+          {/* 桌面端顶栏留白（拖拽 / 红绿灯） */}
           <div
             {...desktopDragRegionProps("deep")}
-            className={cn(
-              "apod-sidebar-header flex h-[52px] shrink-0 items-center px-2",
-              !expanded && "md:justify-center md:px-0",
-            )}
-          >
-            <div
-              className={cn(
-                "flex min-w-0 items-center gap-2 px-2",
-                expanded ? "flex-1" : "md:justify-center md:px-0",
-              )}
-            >
-              <span className="flex w-6 shrink-0 items-center justify-center">
-                <BrandMark className="size-6 rounded-full" />
-              </span>
-              <span
-                className={cn(
-                  "min-w-0 text-[14px] font-bold leading-snug tracking-tight",
-                  !expanded && "md:hidden",
-                )}
-              >
-                AgentPod
-              </span>
-            </div>
-          </div>
+            className="apod-sidebar-header hidden shrink-0 md:block"
+          />
+
+          {/* 移动端顶栏占位，与主区顶栏对齐 */}
+          <div className="h-12 shrink-0 md:hidden" />
 
           {/* 导航列表 */}
           <nav ref={navListRef} className={sidebarNavContainerClass(expanded)}>
@@ -245,9 +193,8 @@ export function AppShell() {
             ))}
           </nav>
 
-          {/* 底部：用户入口 */}
+          {/* 底部：设置入口 */}
           <div
-            ref={menuRootRef}
             className={cn(
               "relative shrink-0 border-t border-sidebar-border/40 p-2.5",
               !expanded && "md:flex md:flex-col md:items-center md:p-2",
@@ -268,51 +215,22 @@ export function AppShell() {
                 {!expanded && <span className="hidden md:block text-[10px]">WS</span>}
               </div>
             )}
-            <button
-              type="button"
-              onClick={() => setMenuOpen((v) => !v)}
-              className={cn(
-                "flex w-full items-center gap-2.5 rounded-xl px-2 py-2 transition-colors hover:bg-sidebar-accent",
-                !expanded && "md:size-9 md:justify-center md:px-0 md:py-0",
-                menuOpen && "bg-sidebar-accent",
-              )}
-              title="账户"
+            <NavLink
+              to={`${workspacePrefix}/settings`}
+              title="设置"
+              onClick={() => setNavOpen(false)}
+              className={({ isActive }) =>
+                cn(
+                  sidebarNavRowClass(isActive, expanded),
+                  "w-full",
+                )
+              }
             >
-              <Avatar me={me} />
-              <span className={cn("min-w-0 flex-1 text-left", !expanded && "md:hidden")}>
-                <span className="block truncate text-[13px] font-semibold leading-tight">{me?.username ?? "—"}</span>
-                <span className="mt-0.5 block truncate text-[11px] leading-tight text-muted-foreground/60">
-                  {typeof me?.id === "number" ? `#${me.id}` : "—"}
-                </span>
+              <span className={sidebarNavIconSlotClass} aria-hidden>
+                <Settings className={sidebarNavIconClass} strokeWidth={1.75} />
               </span>
-            </button>
-
-            {menuOpen && (
-              <div className={cn("absolute bottom-[calc(100%+6px)] left-2.5 right-2.5 z-20 py-1.5", floatingPanelClass)}>
-                <button
-                  type="button"
-                  onClick={() => { setMenuOpen(false); setSettingsOpen(true); }}
-                  className={cn(floatingMenuItemClass, !expanded && "md:justify-center")}
-                >
-                  <Settings className="size-4 shrink-0 text-muted-foreground" />
-                  <span className={cn(!expanded && "md:hidden")}>设置</span>
-                </button>
-                <div className={floatingMenuDividerClass} />
-                <form action="/api/oauth/github/logout" method="post">
-                  <button
-                    type="submit"
-                    className={cn(
-                      floatingMenuItemClass,
-                      "text-destructive hover:bg-destructive/8",
-                      !expanded && "md:justify-center",
-                    )}
-                  >
-                    <LogOut className="size-4 shrink-0" />
-                    <span className={cn(!expanded && "md:hidden")}>退出</span>
-                  </button>
-                </form>
-              </div>
-            )}
+              <span className={sidebarNavLabelClass(expanded)}>设置</span>
+            </NavLink>
           </div>
 
           {/* 收起/展开：仅桌面，置于最底部 */}
@@ -364,13 +282,6 @@ export function AppShell() {
           </main>
         </div>
       </div>
-
-      <SettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        onLogout={() => navigate("/login")}
-      />
-      <ApiKeyFlashModal value={flashKey} onClose={() => setFlashKey(null)} />
     </ShellContext.Provider>
   );
 }
@@ -411,26 +322,5 @@ function RouteFallback() {
     <div className="flex h-full items-center justify-center">
       <span className="size-5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
     </div>
-  );
-}
-
-function Avatar({ me }: { me: { username: string; avatar_url: string | null } | null }) {
-  const [failed, setFailed] = useState(false);
-  const src = me?.avatar_url;
-  const showImg = src && src.startsWith("https:") && !failed;
-  if (showImg) {
-    return (
-      <img
-        src={src}
-        alt={me?.username}
-        onError={() => setFailed(true)}
-        className="size-8 shrink-0 rounded-full object-cover"
-      />
-    );
-  }
-  return (
-    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-sm font-semibold uppercase text-muted-foreground">
-      {me?.username?.[0] ?? "?"}
-    </span>
   );
 }

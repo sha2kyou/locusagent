@@ -1,4 +1,4 @@
-"""MCP OAuth 凭据持久化（Host Postgres + Fernet）。"""
+"""MCP OAuth 凭据持久化（Host SQLite + Fernet）。"""
 
 from __future__ import annotations
 
@@ -7,10 +7,13 @@ from datetime import UTC, datetime
 
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.sqlite import insert
 
 from ..db import McpOauthCredential, get_session
+from ..logging import get_logger
 from ..security import decrypt_str, encrypt_str
+
+log = get_logger("mcp_oauth_store")
 
 
 def _encrypt_json(payload: dict) -> bytes:
@@ -19,6 +22,36 @@ def _encrypt_json(payload: dict) -> bytes:
 
 def _decrypt_json(token: bytes) -> dict:
     return json.loads(decrypt_str(token))
+
+
+def _decrypt_json_safe(token: bytes) -> dict | None:
+    try:
+        return _decrypt_json(token)
+    except RuntimeError as exc:
+        log.warning("mcp_oauth_decrypt_failed", error=str(exc))
+        return None
+
+
+async def _delete_credential_row(row: McpOauthCredential) -> None:
+    async with get_session() as session:
+        db_row = await session.get(McpOauthCredential, row.id)
+        if db_row is not None:
+            await session.delete(db_row)
+
+
+async def _drop_corrupt_credential(
+    row: McpOauthCredential,
+    *,
+    workspace_id: str,
+    server_name: str,
+) -> None:
+    log.warning(
+        "mcp_oauth_credential_dropped",
+        workspace_id=workspace_id,
+        server=server_name,
+        reason="decrypt_failed",
+    )
+    await _delete_credential_row(row)
 
 
 def tokens_to_dict(tokens: OAuthToken) -> dict:
@@ -39,57 +72,67 @@ def client_info_from_dict(data: dict) -> OAuthClientInformationFull:
 
 async def get_credential(
     *,
-    user_id: int,
     workspace_id: str,
     server_name: str,
 ) -> McpOauthCredential | None:
     async with get_session() as session:
         stmt = select(McpOauthCredential).where(
-            McpOauthCredential.user_id == user_id,
             McpOauthCredential.workspace_id == workspace_id,
             McpOauthCredential.server_name == server_name,
         )
         return (await session.execute(stmt)).scalar_one_or_none()
 
 
-async def list_oauth_connected_servers(*, user_id: int, workspace_id: str) -> set[str]:
+async def list_oauth_connected_servers(*, workspace_id: str) -> set[str]:
     async with get_session() as session:
-        stmt = select(McpOauthCredential.server_name).where(
-            McpOauthCredential.user_id == user_id,
+        stmt = select(McpOauthCredential).where(
             McpOauthCredential.workspace_id == workspace_id,
             McpOauthCredential.tokens_enc.is_not(None),
         )
         rows = (await session.execute(stmt)).scalars().all()
-        return set(rows)
+    connected: set[str] = set()
+    for row in rows:
+        if row.tokens_enc is None:
+            continue
+        if _decrypt_json_safe(row.tokens_enc) is None:
+            await _drop_corrupt_credential(row, workspace_id=workspace_id, server_name=row.server_name)
+            continue
+        connected.add(row.server_name)
+    return connected
 
 
 async def load_tokens(
     *,
-    user_id: int,
     workspace_id: str,
     server_name: str,
 ) -> OAuthToken | None:
-    row = await get_credential(user_id=user_id, workspace_id=workspace_id, server_name=server_name)
+    row = await get_credential(workspace_id=workspace_id, server_name=server_name)
     if row is None or row.tokens_enc is None:
         return None
-    return tokens_from_dict(_decrypt_json(row.tokens_enc))
+    data = _decrypt_json_safe(row.tokens_enc)
+    if data is None:
+        await _drop_corrupt_credential(row, workspace_id=workspace_id, server_name=server_name)
+        return None
+    return tokens_from_dict(data)
 
 
 async def load_client_info(
     *,
-    user_id: int,
     workspace_id: str,
     server_name: str,
 ) -> OAuthClientInformationFull | None:
-    row = await get_credential(user_id=user_id, workspace_id=workspace_id, server_name=server_name)
+    row = await get_credential(workspace_id=workspace_id, server_name=server_name)
     if row is None:
         return None
-    return client_info_from_dict(_decrypt_json(row.client_info_enc))
+    data = _decrypt_json_safe(row.client_info_enc)
+    if data is None:
+        await _drop_corrupt_credential(row, workspace_id=workspace_id, server_name=server_name)
+        return None
+    return client_info_from_dict(data)
 
 
 async def save_client_info(
     *,
-    user_id: int,
     workspace_id: str,
     server_name: str,
     server_url: str,
@@ -101,7 +144,6 @@ async def save_client_info(
         stmt = (
             insert(McpOauthCredential)
             .values(
-                user_id=user_id,
                 workspace_id=workspace_id,
                 server_name=server_name,
                 server_url=server_url,
@@ -111,7 +153,7 @@ async def save_client_info(
                 updated_at=now,
             )
             .on_conflict_do_update(
-                index_elements=["user_id", "workspace_id", "server_name"],
+                index_elements=["workspace_id", "server_name"],
                 set_={
                     "server_url": server_url,
                     "client_info_enc": payload,
@@ -124,7 +166,6 @@ async def save_client_info(
 
 async def save_tokens(
     *,
-    user_id: int,
     workspace_id: str,
     server_name: str,
     server_url: str,
@@ -138,7 +179,6 @@ async def save_tokens(
         stmt = (
             insert(McpOauthCredential)
             .values(
-                user_id=user_id,
                 workspace_id=workspace_id,
                 server_name=server_name,
                 server_url=server_url,
@@ -148,7 +188,7 @@ async def save_tokens(
                 updated_at=now,
             )
             .on_conflict_do_update(
-                index_elements=["user_id", "workspace_id", "server_name"],
+                index_elements=["workspace_id", "server_name"],
                 set_={
                     "server_url": server_url,
                     "client_info_enc": client_payload,
@@ -162,12 +202,11 @@ async def save_tokens(
 
 async def update_tokens(
     *,
-    user_id: int,
     workspace_id: str,
     server_name: str,
     tokens: OAuthToken,
 ) -> bool:
-    row = await get_credential(user_id=user_id, workspace_id=workspace_id, server_name=server_name)
+    row = await get_credential(workspace_id=workspace_id, server_name=server_name)
     if row is None:
         return False
     token_payload = _encrypt_json(tokens_to_dict(tokens))
@@ -181,12 +220,9 @@ async def update_tokens(
     return True
 
 
-async def delete_credential(*, user_id: int, workspace_id: str, server_name: str) -> bool:
-    row = await get_credential(user_id=user_id, workspace_id=workspace_id, server_name=server_name)
+async def delete_credential(*, workspace_id: str, server_name: str) -> bool:
+    row = await get_credential(workspace_id=workspace_id, server_name=server_name)
     if row is None:
         return False
-    async with get_session() as session:
-        db_row = await session.get(McpOauthCredential, row.id)
-        if db_row is not None:
-            await session.delete(db_row)
+    await _delete_credential_row(row)
     return True

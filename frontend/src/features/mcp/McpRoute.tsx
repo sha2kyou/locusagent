@@ -9,13 +9,14 @@ import { Drawer } from "@/components/ui/drawer";
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
-import { useReloadOnAgentRecovery } from "@/hooks/useReloadOnAgentRecovery";
 import { SearchInput } from "@/components/ui/search-input";
 import { Empty, listItemBriefClass, listRowHoverActionsClass, Loading } from "@/components/ui/list-state";
 import { Tag } from "@/components/ui/tag";
 import { getWorkspaceId } from "@/api/client";
-import { createMcp, deleteMcp, disconnectMcpOAuth, listMcp, reconnectMcp, updateMcp } from "@/api/endpoints";
+import { createMcp, deleteMcp, disconnectMcpOAuth, getMcpOAuthAuthorizeUrl, listMcp, reconnectMcp, updateMcp } from "@/api/endpoints";
 import type { McpInput, McpServer, McpTool } from "@/api/types";
+import { openExternalUrl } from "@/lib/open-external";
+import { pollMcpOAuthConnected } from "@/lib/mcp-oauth";
 import { toastAction } from "@/lib/toast-copy";
 
 function parseKvJson(raw: string, label: string): Record<string, string> {
@@ -79,6 +80,7 @@ export function McpRoute() {
   const formRef = useRef<HTMLDivElement>(null);
   const [envError, setEnvError] = useState<string | null>(null);
   const [headersError, setHeadersError] = useState<string | null>(null);
+  const [oauthPending, setOauthPending] = useState<string | null>(null);
 
   const load = async (opts?: { sync?: boolean }) => {
     try {
@@ -89,28 +91,34 @@ export function McpRoute() {
       setItems([]);
     }
   };
-  useReloadOnAgentRecovery(load);
-
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const oauth = params.get("oauth");
-    const server = params.get("server");
-    if (oauth === "success") {
-      toast(server ? `「${server}」OAuth 授权成功` : "OAuth 授权成功", "success");
-      void load();
-      params.delete("oauth");
-      params.delete("server");
-      const next = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
-      window.history.replaceState(null, "", next);
-    } else if (oauth === "error") {
-      toast("OAuth 授权失败", "error");
-      params.delete("oauth");
-      params.delete("server");
-      const next = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
-      window.history.replaceState(null, "", next);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    void load();
   }, []);
+
+  const startOAuth = async (s: McpServer) => {
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) {
+      toast("请先选择工作区", "error");
+      return;
+    }
+    setOauthPending(s.name);
+    try {
+      const { authorize_url: authorizeUrl } = await getMcpOAuthAuthorizeUrl(s.name, workspaceId);
+      await openExternalUrl(authorizeUrl);
+      toast(`已在系统浏览器打开「${s.name}」授权页，完成后会自动刷新`, "info");
+      const ok = await pollMcpOAuthConnected(s.name);
+      if (ok) {
+        toast(`「${s.name}」OAuth 授权成功`, "success");
+        await load({ sync: true });
+      } else {
+        toast(`「${s.name}」授权未完成或超时，请重试`, "error");
+      }
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setOauthPending(null);
+    }
+  };
 
   useEffect(() => {
     if (transport !== "stdio") {
@@ -227,16 +235,6 @@ export function McpRoute() {
     }
   };
 
-  const startOAuth = (s: McpServer) => {
-    const workspaceId = getWorkspaceId();
-    if (!workspaceId) {
-      toast("请先选择工作区", "error");
-      return;
-    }
-    const params = new URLSearchParams({ server: s.name, workspace_id: workspaceId });
-    window.location.href = `/api/oauth/mcp/start?${params.toString()}`;
-  };
-
   const disconnectOAuth = async (s: McpServer) => {
     try {
       await disconnectMcpOAuth(s.name);
@@ -330,11 +328,16 @@ export function McpRoute() {
                           variant="ghost"
                           size="icon-sm"
                           className={listRowHoverActionsClass}
-                          onClick={() => startOAuth(s)}
+                          disabled={oauthPending === s.name}
+                          onClick={() => void startOAuth(s)}
                           aria-label="OAuth 授权"
                           title="OAuth 授权"
                         >
-                          <KeyRound />
+                          {oauthPending === s.name ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <KeyRound />
+                          )}
                         </Button>
                       ) : null}
                       {s.oauth_required && s.oauth_connected ? (

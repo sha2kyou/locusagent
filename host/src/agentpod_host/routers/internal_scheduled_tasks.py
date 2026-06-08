@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from ..auth.agent_internal import require_agent_internal
-from ..db import User, get_session
+from ..db import get_session
 from ..scheduled_tasks import create_task, delete_task, get_task, list_tasks, update_task
 from ..scheduled_tasks.executor import complete_task_run_from_agent
 from ..scheduled_tasks.service import mark_task_run_started
@@ -47,11 +47,10 @@ class ScheduledRunFinishedIn(BaseModel):
     error: str = Field(default="", max_length=2000)
 
 
-async def _workspace_for_request(request: Request, user_id: int) -> str:
+async def _workspace_for_request(request: Request) -> str:
     async with get_session() as session:
         ws = await resolve_workspace(
             session,
-            user_id=user_id,
             workspace_id=requested_workspace_id(request),
         )
         return ws.id
@@ -60,10 +59,10 @@ async def _workspace_for_request(request: Request, user_id: int) -> str:
 @router.get("")
 async def agent_list_scheduled_tasks(
     request: Request,
-    user: User = Depends(require_agent_internal),
+    _auth: None = Depends(require_agent_internal),
 ) -> dict:
-    workspace_id = await _workspace_for_request(request, user.id)
-    items = await list_tasks(user.id, workspace_id=workspace_id)
+    workspace_id = await _workspace_for_request(request)
+    items = await list_tasks(workspace_id=workspace_id)
     return {"items": items}
 
 
@@ -71,12 +70,11 @@ async def agent_list_scheduled_tasks(
 async def agent_create_scheduled_task(
     request: Request,
     payload: ScheduledTaskCreateIn,
-    user: User = Depends(require_agent_internal),
+    _auth: None = Depends(require_agent_internal),
 ) -> dict:
-    workspace_id = await _workspace_for_request(request, user.id)
+    workspace_id = await _workspace_for_request(request)
     try:
         item = await create_task(
-            user.id,
             workspace_id=workspace_id,
             title=payload.title,
             prompt=payload.prompt,
@@ -96,12 +94,11 @@ async def agent_update_scheduled_task(
     request: Request,
     task_id: int,
     payload: ScheduledTaskUpdateIn,
-    user: User = Depends(require_agent_internal),
+    _auth: None = Depends(require_agent_internal),
 ) -> dict:
-    workspace_id = await _workspace_for_request(request, user.id)
+    workspace_id = await _workspace_for_request(request)
     try:
         item = await update_task(
-            user.id,
             task_id,
             workspace_id=workspace_id,
             title=payload.title,
@@ -122,10 +119,10 @@ async def agent_update_scheduled_task(
 async def agent_delete_scheduled_task(
     request: Request,
     task_id: int,
-    user: User = Depends(require_agent_internal),
+    _auth: None = Depends(require_agent_internal),
 ) -> dict:
-    workspace_id = await _workspace_for_request(request, user.id)
-    ok = await delete_task(user.id, task_id, workspace_id=workspace_id)
+    workspace_id = await _workspace_for_request(request)
+    ok = await delete_task(task_id, workspace_id=workspace_id)
     if not ok:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="task not found")
     return {"deleted": True}
@@ -136,11 +133,10 @@ async def agent_scheduled_run_started(
     request: Request,
     task_id: int,
     payload: ScheduledRunStartedIn,
-    user: User = Depends(require_agent_internal),
+    _auth: None = Depends(require_agent_internal),
 ) -> dict:
-    workspace_id = await _workspace_for_request(request, user.id)
+    workspace_id = await _workspace_for_request(request)
     ok = await mark_task_run_started(
-        user.id,
         task_id,
         payload.session_id,
         workspace_id=workspace_id,
@@ -155,11 +151,10 @@ async def agent_scheduled_run_finished(
     request: Request,
     task_id: int,
     payload: ScheduledRunFinishedIn,
-    user: User = Depends(require_agent_internal),
+    _auth: None = Depends(require_agent_internal),
 ) -> dict:
-    workspace_id = await _workspace_for_request(request, user.id)
+    workspace_id = await _workspace_for_request(request)
     changed = await complete_task_run_from_agent(
-        user.id,
         task_id,
         workspace_id=workspace_id,
         ok=payload.ok,
@@ -174,10 +169,10 @@ async def agent_scheduled_run_finished(
 async def agent_read_scheduled_task(
     request: Request,
     task_id: int,
-    user: User = Depends(require_agent_internal),
+    _auth: None = Depends(require_agent_internal),
 ) -> dict:
-    workspace_id = await _workspace_for_request(request, user.id)
-    item = await get_task(user.id, task_id, workspace_id=workspace_id)
+    workspace_id = await _workspace_for_request(request)
+    item = await get_task(task_id, workspace_id=workspace_id)
     if item is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="task not found")
     return {"item": item}

@@ -64,25 +64,20 @@ export function UsageSummaryCard({ active }: { active?: boolean }) {
   })();
 
   return (
-    <section className="rounded-lg border border-border bg-surface/40 p-4">
-      <h3 className="mb-1 text-sm font-semibold">用量统计</h3>
-      <p className="mb-3 text-xs text-muted-foreground">
-        按使用场景汇总：对话 Token、搜索 / 嵌入等第三方调用次数。
-      </p>
-
+    <div className="overflow-x-auto rounded-lg border border-border bg-surface/40">
       {loading && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" />
           加载中…
         </div>
       )}
 
       {!loading && error && (
-        <p className="text-sm text-destructive">{error}</p>
+        <p className="p-4 text-sm text-destructive">{error}</p>
       )}
 
       {!loading && !error && aggregated.length === 0 && (
-        <p className="text-sm text-muted-foreground">暂无用量数据，完成一次对话后将开始累计。</p>
+        <p className="p-4 text-sm text-muted-foreground">暂无用量数据，完成一次对话后将开始累计。</p>
       )}
 
       {!loading && !error && aggregated.length > 0 && (
@@ -111,6 +106,6 @@ export function UsageSummaryCard({ active }: { active?: boolean }) {
           </table>
         </div>
       )}
-    </section>
+    </div>
   );
 }

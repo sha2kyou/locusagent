@@ -72,7 +72,7 @@ export function ArtifactCategorySidebar({
         {categories === null ? (
           <div className={secondarySidebarSkeletonWrapClass}>
             {Array.from({ length: 6 }).map((_, idx) => (
-              <Skeleton key={idx} className="h-8 w-full" />
+              <Skeleton key={idx} className="h-7 w-full" />
             ))}
           </div>
         ) : filtered.length === 0 ? (

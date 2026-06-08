@@ -25,7 +25,7 @@ import { formatStreamRetryToast, userMessageFromContainerError } from "@/lib/age
 import { sha256HexFile, sha256HexText } from "@/lib/file-digest";
 import { toastAction } from "@/lib/toast-copy";
 import { useToast } from "@/components/ui/toast";
-import { useAuth, type AgentReadiness } from "@/app/auth";
+import { useAuth } from "@/app/auth";
 import { withWorkspacePrefix } from "@/app/workspace-route";
 import {
   appendText,
@@ -68,7 +68,6 @@ interface ChatContextValue {
   currentId: string | null;
   query: string;
   setQuery: (q: string) => void;
-  readiness: AgentReadiness;
   isRunning: boolean;
   lastErrored: boolean;
   canRegenerate: boolean;
@@ -153,7 +152,7 @@ async function waitActiveRunSettled(sessionId: string): Promise<void> {
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const toast = useToast();
-  const { readiness, me, reload, agentRecoveryEpoch } = useAuth();
+  const { me } = useAuth();
   const navigate = useNavigate();
   const params = useParams();
   const urlSessionId = params.sessionId ?? null;
@@ -213,20 +212,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     pendingAttachmentsRef.current = pendingAttachments;
   }, [pendingAttachments]);
-
-  // 发送消息触发容器唤醒时，加快刷新就绪状态以便状态栏自动消失
-  useEffect(() => {
-    if (!isRunning) return;
-    const waking =
-      readiness.reason === "paused" ||
-      readiness.reason === "stopped" ||
-      readiness.reason === "creating";
-    if (!waking) return;
-
-    void reload();
-    const id = window.setInterval(() => void reload(), 1500);
-    return () => clearInterval(id);
-  }, [isRunning, readiness.reason, reload]);
 
   const setCurrent = (id: string | null) => {
     currentIdRef.current = id;
@@ -408,15 +393,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     })();
   };
 
-  // Agent 休眠恢复后刷新会话；发送消息唤醒时 isRunning 为 true，避免 abort 进行中的流
-  useEffect(() => {
-    if (agentRecoveryEpoch === 0 || isRunning) return;
-    void refreshSessions();
-    const sid = currentIdRef.current;
-    if (sid) loadSessionFromUrl(sid);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentRecoveryEpoch, isRunning]);
-
   // URL 为会话单一真相源：刷新 / 前进后退 / 侧边栏切换均由此恢复
   useEffect(() => {
     const prev = prevUrlSessionRef.current;
@@ -458,11 +434,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       attachmentIds?: string[];
     },
   ) => {
-    const wakingOnSend =
-      readiness.reason === "paused" || readiness.reason === "stopped";
-    if (wakingOnSend) {
-      void reload();
-    }
     abortChat();
     setLastErrored(false);
     if (opts.appendUser) {
@@ -615,7 +586,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             }
           },
           onRetry: (attempt, sec) => {
-            toast(formatStreamRetryToast(attempt, sec, wakingOnSend), "info");
+            toast(formatStreamRetryToast(attempt, sec), "info");
           },
         },
         { signal: ac.signal },
@@ -893,7 +864,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     isRunning,
     messages,
     convertMessage,
-    isSendDisabled: !readiness.ready,
+    isSendDisabled: false,
     onNew: async (m) => {
       const text = m.content
         .map((c) => (c.type === "text" ? c.text : ""))
@@ -924,7 +895,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         currentId,
         query,
         setQuery,
-        readiness,
         isRunning,
         lastErrored,
         canRegenerate: !isRunning && messages.some((m) => m.role === "user"),

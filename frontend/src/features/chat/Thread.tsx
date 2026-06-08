@@ -13,16 +13,8 @@ import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { useImeEnterGuard } from "@/lib/ime-enter";
 import { useCopy } from "@/lib/useCopy";
-import { ProvisionRetryButton } from "@/components/ProvisionRetry";
 import {
-  AGENT_COMPOSER_FAILED,
-  AGENT_COMPOSER_NOT_READY,
   AGENT_COMPOSER_PLACEHOLDER,
-  AGENT_PAUSED,
-  AGENT_STARTING,
-  AGENT_STOPPED,
-  PROVISION_FAILED_HINT,
-  PROVISION_FAILED_STATUS,
 } from "@/lib/agent-status-copy";
 import { Markdown, ProseMarkdown, ThinkingBlock } from "./Markdown";
 import type { ChatMessage } from "./model";
@@ -48,10 +40,6 @@ const UserText: TextMessagePartComponent = ({ text }) => (
 );
 
 export function Thread() {
-  const { readiness } = useChat();
-  const failed = readiness.reason === "failed";
-  const booting = readiness.reason === "creating" || readiness.reason === "absent";
-
   return (
     <ThreadPrimitive.Root className="flex h-full flex-col">
       <ThreadPrimitive.Viewport className="relative flex-1 overflow-y-auto">
@@ -73,10 +61,7 @@ export function Thread() {
               <p className="mt-2 text-sm text-muted-foreground">
                 AgentPod 可读写文件、调用工具、检索网页、记忆与回忆。
               </p>
-              {failed ? (
-                <FailedProvisionPanel className="mt-5" />
-              ) : booting ? null : (
-                <div className="mt-6 flex max-w-lg flex-wrap justify-center gap-2">
+              <div className="mt-6 flex max-w-lg flex-wrap justify-center gap-2">
                   {PROMPT_CHIPS.map((p) => (
                     <ThreadPrimitive.Suggestion
                       key={p}
@@ -90,7 +75,6 @@ export function Thread() {
                     </ThreadPrimitive.Suggestion>
                   ))}
                 </div>
-              )}
             </div>
           </ThreadPrimitive.Empty>
 
@@ -111,56 +95,8 @@ export function Thread() {
         </ThreadPrimitive.ScrollToBottom>
       </ThreadPrimitive.Viewport>
 
-      <AgentStatusBar />
       <Composer />
     </ThreadPrimitive.Root>
-  );
-}
-
-function FailedProvisionPanel({ className }: { className?: string }) {
-  return (
-    <div className={cn("flex max-w-md flex-col items-center gap-3 text-sm text-muted-foreground", className)}>
-      <p>{PROVISION_FAILED_HINT}</p>
-      <ProvisionRetryButton size="md" />
-    </div>
-  );
-}
-
-function AgentStatusBar() {
-  const { readiness } = useChat();
-  const r = readiness.reason;
-  if (r !== "creating" && r !== "paused" && r !== "stopped" && r !== "failed") return null;
-
-  if (r === "failed") {
-    return (
-      <div className="flex justify-center pt-2 pb-0.5">
-        <div className="inline-flex items-center gap-2.5 rounded-full border border-destructive/35 bg-destructive/8 px-3.5 py-1.5 text-[11.5px] font-medium text-destructive shadow-xs">
-          <span className="size-1.5 shrink-0 rounded-full bg-current" />
-          <span>{PROVISION_FAILED_STATUS}</span>
-          <ProvisionRetryButton />
-        </div>
-      </div>
-    );
-  }
-
-  const config = {
-    creating: { text: AGENT_STARTING, cls: "border-warning/30 bg-warning/8 text-warning", pulse: true },
-    paused: { text: AGENT_PAUSED, cls: "border-border bg-surface/70 text-muted-foreground", pulse: false },
-    stopped: { text: AGENT_STOPPED, cls: "border-border bg-surface/70 text-muted-foreground", pulse: false },
-  }[r];
-
-  return (
-    <div className="flex justify-center pt-2 pb-0.5">
-      <div
-        className={cn(
-          "inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[11.5px] font-medium shadow-xs",
-          config.cls,
-        )}
-      >
-        <span className={cn("size-1.5 shrink-0 rounded-full bg-current", config.pulse && "animate-pulse")} />
-        {config.text}
-      </div>
-    </div>
   );
 }
 
@@ -172,10 +108,8 @@ function Composer() {
   const { onCompositionStart, onCompositionEnd, shouldBlockEnter } = useImeEnterGuard();
   const runtime = useThreadRuntime();
   const toast = useToast();
-  const { readiness, addPendingFiles, isRunning, pendingAttachments, removePendingAttachment } =
+  const { addPendingFiles, isRunning, pendingAttachments, removePendingAttachment } =
     useChat();
-  const failed = readiness.reason === "failed";
-  const notReady = !readiness.ready;
 
   // 全局 "/" 聚焦输入（不在其它输入/可编辑元素中时）
   useGlobalFocusShortcut(inputRef);
@@ -266,13 +200,7 @@ function Composer() {
           onCompositionEnd={onCompositionEnd}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
-          placeholder={
-            failed
-              ? AGENT_COMPOSER_FAILED
-              : notReady
-                ? AGENT_COMPOSER_NOT_READY
-                : AGENT_COMPOSER_PLACEHOLDER
-          }
+          placeholder={AGENT_COMPOSER_PLACEHOLDER}
           className="max-h-48 flex-1 resize-none bg-transparent py-1 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/60"
         />
 

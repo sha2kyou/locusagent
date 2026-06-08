@@ -38,10 +38,10 @@ export default defineConfig({
           if (/\/routes\/ChatRoute\.(tsx|ts)$/.test(normalized)) return
 
           if (
-            normalized.includes('/web/src/app/') ||
-            normalized.includes('/web/src/api/') ||
-            normalized.includes('/web/src/components/') ||
-            normalized.includes('/web/src/lib/')
+            normalized.includes('/frontend/src/app/') ||
+            normalized.includes('/frontend/src/api/') ||
+            normalized.includes('/frontend/src/components/') ||
+            normalized.includes('/frontend/src/lib/')
           ) {
             return 'app-shared'
           }

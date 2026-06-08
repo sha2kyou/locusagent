@@ -40,18 +40,18 @@ def requested_workspace_id(request: Request) -> str | None:
     return value if is_valid_workspace_id(value) else None
 
 
-def _base_query(user_id: int) -> Select[tuple[Workspace]]:
-    return select(Workspace).where(Workspace.user_id == user_id)
+def _base_query() -> Select[tuple[Workspace]]:
+    return select(Workspace)
 
 
-async def ensure_default_workspace(session: AsyncSession, user_id: int) -> Workspace:
+async def ensure_default_workspace(session: AsyncSession) -> Workspace:
     default = (
-        await session.execute(_base_query(user_id).where(Workspace.is_default.is_(True)))
+        await session.execute(_base_query().where(Workspace.is_default.is_(True)))
     ).scalar_one_or_none()
     if default is not None:
         return default
     existing = (
-        await session.execute(_base_query(user_id).order_by(Workspace.created_at.asc(), Workspace.id.asc()))
+        await session.execute(_base_query().order_by(Workspace.created_at.asc(), Workspace.id.asc()))
     ).scalars().all()
     if existing:
         ws = existing[0]
@@ -59,7 +59,6 @@ async def ensure_default_workspace(session: AsyncSession, user_id: int) -> Works
         return ws
     ws = Workspace(
         id=generate_workspace_id(),
-        user_id=user_id,
         name="默认工作区",
         description="",
         is_default=True,
@@ -69,24 +68,22 @@ async def ensure_default_workspace(session: AsyncSession, user_id: int) -> Works
     return ws
 
 
-async def ensure_user_default_workspace(user_id: int) -> Workspace:
+async def ensure_default_workspace_row() -> Workspace:
     async with get_session() as session:
-        return await ensure_default_workspace(session, user_id)
+        return await ensure_default_workspace(session)
 
 
 async def resolve_workspace(
     session: AsyncSession,
     *,
-    user_id: int,
     workspace_id: str | None,
 ) -> Workspace:
-    default = await ensure_default_workspace(session, user_id)
+    default = await ensure_default_workspace(session)
     if not workspace_id:
         return default
     row = (
         await session.execute(
-            _base_query(user_id).where(Workspace.id == workspace_id).limit(1)
+            _base_query().where(Workspace.id == workspace_id).limit(1)
         )
     ).scalar_one_or_none()
     return row or default
-

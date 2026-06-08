@@ -115,7 +115,7 @@ export function SessionSidebar({
         {loadingSessions ? (
           <div className={secondarySidebarSkeletonWrapClass}>
             {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-8 w-full" />
+              <Skeleton key={i} className="h-7 w-full" />
             ))}
           </div>
         ) : groups.length === 0 ? (

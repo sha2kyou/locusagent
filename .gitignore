@@ -25,13 +25,13 @@ data/
 .cursor-cache/
 .cursor-tmp/
 .history/
-host/src/agentpod_host/web/spa/
 
-# Web build outputs
-web/dist-web/
-web/dist-desktop/
+# Frontend build outputs
+frontend/dist-desktop/
 
 # Desktop (Tauri)
 desktop/node_modules/
 desktop/src-tauri/target/
 desktop/src-tauri/gen/
+desktop/src-tauri/resources/sidecar-venv/
+sidecar/.venv/

@@ -1,17 +1,10 @@
-"""鉴权模块：session、bearer、依赖注入。"""
+"""鉴权模块：session、依赖注入。"""
 
-from .dependencies import (
-    AuthContext,
-    require_bearer,
-    require_session,
-    resolve_auth,
-)
+from .dependencies import AuthContext, require_session
 from .session import (
     SESSION_COOKIE_NAME,
     SESSION_MAX_AGE,
     clear_session,
-    consume_apikey_flash,
-    issue_apikey_flash,
     issue_session,
     read_session,
 )
@@ -21,11 +14,7 @@ __all__ = [
     "SESSION_COOKIE_NAME",
     "SESSION_MAX_AGE",
     "clear_session",
-    "consume_apikey_flash",
-    "issue_apikey_flash",
     "issue_session",
     "read_session",
-    "require_bearer",
     "require_session",
-    "resolve_auth",
 ]

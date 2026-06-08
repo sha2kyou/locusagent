@@ -45,10 +45,6 @@ def _new_run_id() -> str:
     return f"run_{secrets.token_urlsafe(10)}"
 
 
-def _new_response_id() -> str:
-    return f"resp_{secrets.token_urlsafe(12)}"
-
-
 def _new_attachment_id() -> str:
     return f"att_{secrets.token_urlsafe(12)}"
 
@@ -474,71 +470,6 @@ async def create_run(session_id: str) -> str:
 
     await run_in_thread(_do)
     return run_id
-
-
-async def create_response(
-    session_id: str,
-    *,
-    run_id: str | None = None,
-    previous_response_id: str | None = None,
-    assistant_message_id: int | None = None,
-    model: str | None = None,
-    input_text: str = "",
-    output_text: str = "",
-    status: str = "completed",
-) -> str:
-    response_id = _new_response_id()
-
-    def _do() -> None:
-        with conn_scope(load_vec=False) as c:
-            c.execute(
-                "INSERT INTO responses("
-                "id, session_id, run_id, previous_response_id, assistant_message_id, "
-                "model, input_text, output_text, status"
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    response_id,
-                    session_id,
-                    run_id,
-                    previous_response_id,
-                    assistant_message_id,
-                    model,
-                    input_text,
-                    output_text,
-                    status,
-                ),
-            )
-
-    await run_in_thread(_do)
-    return response_id
-
-
-async def get_response(response_id: str) -> dict[str, Any] | None:
-    def _do() -> dict[str, Any] | None:
-        with conn_scope(load_vec=False) as c:
-            row = c.execute(
-                "SELECT id, session_id, run_id, previous_response_id, assistant_message_id, "
-                "model, input_text, output_text, status, created_at, updated_at "
-                "FROM responses WHERE id = ?",
-                (response_id,),
-            ).fetchone()
-            if row is None:
-                return None
-            return dict(row)
-
-    return await run_in_thread(_do)
-
-
-async def get_response_session_id(response_id: str) -> str | None:
-    def _do() -> str | None:
-        with conn_scope(load_vec=False) as c:
-            row = c.execute(
-                "SELECT session_id FROM responses WHERE id = ?",
-                (response_id,),
-            ).fetchone()
-            return str(row["session_id"]) if row else None
-
-    return await run_in_thread(_do)
 
 
 async def update_run(
@@ -1462,7 +1393,6 @@ async def delete_session(session_id: str) -> bool:
                 )
             keys = [str(r["object_key"] or "") for r in attachment_rows]
             c.execute("DELETE FROM attachments WHERE session_id = ?", (session_id,))
-            c.execute("DELETE FROM responses WHERE session_id = ?", (session_id,))
             c.execute("DELETE FROM runs WHERE session_id = ?", (session_id,))
             c.execute("DELETE FROM session_todos WHERE session_id = ?", (session_id,))
             c.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))

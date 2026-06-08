@@ -1,4 +1,4 @@
-"""Agent 内部 API 仅允许来自私有网络（Docker/本机），公网经 Caddy 亦应被挡。"""
+"""Agent 内部 API 仅允许来自本机/私有网络，不得经公网暴露。"""
 
 from __future__ import annotations
 

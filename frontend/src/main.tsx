@@ -2,6 +2,7 @@ import { lazy, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, Navigate, RouterProvider, useLocation } from "react-router-dom";
 import { stripWorkspacePrefix, withWorkspacePrefix } from "@/app/workspace-route";
+import { installExternalLinkHandling } from "@/lib/open-external";
 import "./index.css";
 import { ToastProvider } from "@/components/ui/toast";
 import { DialogProvider } from "@/components/ui/dialogs";
@@ -9,7 +10,6 @@ import { AuthProvider } from "@/app/auth";
 import { NotificationProvider } from "@/features/notifications/NotificationProvider";
 import { ThemeProvider } from "@/app/theme";
 import { AppShell } from "@/app/AppShell";
-import { LoginRoute } from "@/routes/LoginRoute";
 import { ChatRoute } from "@/routes/ChatRoute";
 const SkillsRoute = lazy(() =>
   import("@/features/skills/SkillsRoute").then((m) => ({ default: m.SkillsRoute })),
@@ -32,6 +32,21 @@ const ScheduledTasksRoute = lazy(() =>
 );
 const ArtifactsRoute = lazy(() =>
   import("@/features/artifacts/ArtifactsRoute").then((m) => ({ default: m.ArtifactsRoute })),
+);
+const SettingsRoute = lazy(() =>
+  import("@/features/settings/SettingsRoute").then((m) => ({ default: m.SettingsRoute })),
+);
+const SettingsGeneralPage = lazy(() =>
+  import("@/features/settings/SettingsGeneralPage").then((m) => ({ default: m.SettingsGeneralPage })),
+);
+const SettingsModelsPage = lazy(() =>
+  import("@/features/settings/SettingsModelsPage").then((m) => ({ default: m.SettingsModelsPage })),
+);
+const SettingsUsagePage = lazy(() =>
+  import("@/features/settings/SettingsUsagePage").then((m) => ({ default: m.SettingsUsagePage })),
+);
+const SettingsIndexRedirect = lazy(() =>
+  import("@/features/settings/SettingsRoute").then((m) => ({ default: m.SettingsIndexRedirect })),
 );
 
 function ArtifactsManageRedirect() {
@@ -60,11 +75,20 @@ const shellChildren = [
   { path: "artifacts", element: <ArtifactsRoute /> },
   { path: "artifacts/manage", element: <ArtifactsManageRedirect /> },
   { path: "artifacts/c/:categoryId", element: <ArtifactsRoute /> },
+  {
+    path: "settings",
+    element: <SettingsRoute />,
+    children: [
+      { index: true, element: <SettingsIndexRedirect /> },
+      { path: "general", element: <SettingsGeneralPage /> },
+      { path: "models", element: <SettingsModelsPage /> },
+      { path: "usage", element: <SettingsUsagePage /> },
+    ],
+  },
   { path: "*", element: <ChatFallbackRedirect /> },
 ];
 
 const router = createBrowserRouter([
-  { path: "/login", element: <LoginRoute /> },
   {
     path: "/",
     element: (
@@ -88,6 +112,8 @@ const router = createBrowserRouter([
     children: shellChildren,
   },
 ]);
+
+installExternalLinkHandling();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

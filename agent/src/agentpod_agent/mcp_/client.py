@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
 import time
 from contextlib import AsyncExitStack
 from typing import Any
@@ -41,6 +42,14 @@ def _stdio_env(cfg: MCPServerConfig, workspace_id: str) -> dict[str, str]:
     }
     base.update(cfg.env or {})
     return base
+
+
+def _prepare_stdio_connect(cfg: MCPServerConfig, workspace_id: str) -> None:
+    command = cfg.command or []
+    if command and command[0] == "npx":
+        npx_cache = workspace_data_dir(workspace_id) / ".npm-cache" / "_npx"
+        if npx_cache.is_dir():
+            shutil.rmtree(npx_cache, ignore_errors=True)
 
 
 class MCPManager:
@@ -153,6 +162,7 @@ class MCPManager:
         stack = AsyncExitStack()
         try:
             if cfg.transport == "stdio":
+                _prepare_stdio_connect(cfg, self._workspace_id)
                 params = StdioServerParameters(
                     command=cfg.command[0] if cfg.command else "",
                     args=cfg.command[1:] + cfg.args if len(cfg.command) > 1 else cfg.args,
@@ -431,6 +441,8 @@ class MCPManager:
         lock = self._reconnect_locks.setdefault(server_name, asyncio.Lock())
         async with lock:
             await self.remove_server(server_name)
+            if cfg.transport == "stdio":
+                _prepare_stdio_connect(cfg, self._workspace_id)
             return await self.add_server(cfg)
 
     async def remove_server(self, server_name: str) -> bool:

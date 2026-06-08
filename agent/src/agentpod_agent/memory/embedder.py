@@ -1,4 +1,4 @@
-"""Embedding 服务调用：HTTP 调用 + 重试 + 自定义异常。"""
+"""Embedding：桌面内嵌 fastembed 或 HTTP 降级。"""
 
 from __future__ import annotations
 
@@ -37,7 +37,6 @@ async def _http_embed(text: str) -> list[float]:
     url = f"{settings.embedding_base_url.rstrip('/')}/v1/embeddings"
     headers = {
         "X-Internal-Token": settings.internal_token,
-        "X-User-Id": settings.user_id,
     }
     async with httpx.AsyncClient(timeout=httpx.Timeout(connect=2.0, read=15.0, write=5.0, pool=5.0)) as client:
         resp = await client.post(
@@ -63,13 +62,26 @@ async def _http_embed(text: str) -> list[float]:
         return [float(x) for x in emb]
 
 
+async def _local_embed(text: str) -> list[float]:
+    from agentpod_shared.local_embeddings import embed_vector
+
+    return await embed_vector(text)
+
+
 async def embed_text(text: str) -> bytes:
     """返回 packed float32 blob，可写入 sqlite-vec BLOB 列。"""
     if not text:
         raise ValueError("text is empty")
+    settings = get_settings()
     try:
-        vec = await _http_embed(text)
-    except httpx.HTTPError as exc:
+        if settings.embedding_base_url.strip().lower() == "local":
+            vec = await _local_embed(text)
+        else:
+            vec = await _http_embed(text)
+    except (httpx.HTTPError, EmbeddingUnavailable, RuntimeError, ValueError) as exc:
+        log.warning("embedding_unavailable", error=str(exc))
+        raise EmbeddingUnavailable(str(exc)) from exc
+    except Exception as exc:
         log.warning("embedding_unavailable", error=str(exc))
         raise EmbeddingUnavailable(str(exc)) from exc
     return _vec_to_blob(vec)

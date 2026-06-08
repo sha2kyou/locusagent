@@ -12,8 +12,8 @@ from sqlalchemy import select
 
 from ..auth.agent_internal import require_agent_internal
 from ..config import get_settings
-from ..db import User, Workspace, get_session
-from ..internal_proxy_limits import audit_internal_proxy, enforce_internal_rate_limit
+from ..db import Workspace, get_session
+from ..internal_proxy_limits import enforce_internal_rate_limit
 from ..logging import get_logger
 from ..workspaces import is_valid_workspace_id
 from ..storage import (
@@ -56,18 +56,18 @@ def _assert_body_matches_key_digest(*, data: bytes, expected_digest: str) -> Non
         )
 
 
-async def _assert_workspace_owned(*, user_id: int, workspace_id: str) -> None:
+async def _assert_workspace_exists(*, workspace_id: str) -> None:
     ws = workspace_id.strip()
     if not is_valid_workspace_id(ws):
         raise HTTPException(status_code=400, detail="invalid workspace id")
     async with get_session() as session:
         owned = (
             await session.execute(
-                select(Workspace.id).where(Workspace.user_id == user_id, Workspace.id == ws).limit(1)
+                select(Workspace.id).where(Workspace.id == ws).limit(1)
             )
         ).scalar_one_or_none()
     if owned is None:
-        raise HTTPException(status_code=403, detail="workspace not owned by user")
+        raise HTTPException(status_code=403, detail="workspace not found")
 
 
 def _validate_object_key(*, object_key: str, workspace_id: str) -> None:
@@ -80,18 +80,18 @@ def _validate_object_key(*, object_key: str, workspace_id: str) -> None:
         raise HTTPException(status_code=403, detail="object_key not allowed for workspace")
 
 
-async def _guard_attachment_access(*, user_id: int, workspace_id: str, object_key: str) -> None:
-    await _assert_workspace_owned(user_id=user_id, workspace_id=workspace_id)
+async def _guard_attachment_access(*, workspace_id: str, object_key: str) -> None:
+    await _assert_workspace_exists(workspace_id=workspace_id)
     _validate_object_key(object_key=object_key, workspace_id=workspace_id)
 
 
 @router.post("/ensure-bucket")
 async def attachments_ensure_bucket(
-    user: User = Depends(require_agent_internal),
+    _auth: None = Depends(require_agent_internal),
 ) -> dict:
-    await enforce_internal_rate_limit(user_id=user.id, bucket="attachments")
+    await enforce_internal_rate_limit(bucket="attachments")
     settings = get_settings()
-    if settings.attachment_storage != "minio":
+    if settings.attachment_storage != "local":
         raise HTTPException(status_code=503, detail="attachment storage not enabled")
     try:
         ensure_bucket()
@@ -106,14 +106,14 @@ async def attachments_put(
     x_object_key: str = Header(..., alias="X-Object-Key"),
     x_workspace_id: str = Header(..., alias="X-Workspace-Id"),
     content_type: str = Header(default="application/octet-stream", alias="Content-Type"),
-    user: User = Depends(require_agent_internal),
+    _auth: None = Depends(require_agent_internal),
 ) -> dict:
-    await enforce_internal_rate_limit(user_id=user.id, bucket="attachments")
+    ws = x_workspace_id.strip()
+    await enforce_internal_rate_limit(bucket="attachments", workspace_id=ws)
     settings = get_settings()
-    if settings.attachment_storage != "minio":
+    if settings.attachment_storage != "local":
         raise HTTPException(status_code=503, detail="attachment storage not enabled")
     await _guard_attachment_access(
-        user_id=user.id,
         workspace_id=x_workspace_id,
         object_key=x_object_key,
     )
@@ -129,12 +129,7 @@ async def attachments_put(
     try:
         existing = head_object(key)
         if existing is not None:
-            log.info("attachment_put_skipped", user_id=user.id, key=key, bytes=len(data))
-            await audit_internal_proxy(
-                "proxy.attachment.put",
-                user_id=user.id,
-                detail={"bytes": len(data), "skipped": True},
-            )
+            log.info("attachment_put_skipped", key=key, bytes=len(data))
             return {**existing, "skipped": True}
         meta = put_object_bytes(
             object_key=key,
@@ -143,12 +138,7 @@ async def attachments_put(
         )
     except AttachmentStorageError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    log.info("attachment_put", user_id=user.id, key=key, bytes=len(data))
-    await audit_internal_proxy(
-        "proxy.attachment.put",
-        user_id=user.id,
-        detail={"bytes": len(data), "skipped": False},
-    )
+    log.info("attachment_put", key=key, bytes=len(data))
     return {**meta, "skipped": False}
 
 
@@ -156,14 +146,14 @@ async def attachments_put(
 async def attachments_get(
     key: str,
     x_workspace_id: str = Header(..., alias="X-Workspace-Id"),
-    user: User = Depends(require_agent_internal),
+    _auth: None = Depends(require_agent_internal),
 ) -> Response:
-    await enforce_internal_rate_limit(user_id=user.id, bucket="attachments")
+    ws = x_workspace_id.strip()
+    await enforce_internal_rate_limit(bucket="attachments", workspace_id=ws)
     settings = get_settings()
-    if settings.attachment_storage != "minio":
+    if settings.attachment_storage != "local":
         raise HTTPException(status_code=503, detail="attachment storage not enabled")
     await _guard_attachment_access(
-        user_id=user.id,
         workspace_id=x_workspace_id,
         object_key=key,
     )
@@ -184,26 +174,22 @@ class AttachmentDeleteIn(BaseModel):
 async def attachments_delete(
     payload: AttachmentDeleteIn,
     x_workspace_id: str = Header(..., alias="X-Workspace-Id"),
-    user: User = Depends(require_agent_internal),
+    _auth: None = Depends(require_agent_internal),
 ) -> dict:
-    await enforce_internal_rate_limit(user_id=user.id, bucket="attachments")
+    ws = x_workspace_id.strip()
+    await enforce_internal_rate_limit(bucket="attachments", workspace_id=ws)
     settings = get_settings()
-    if settings.attachment_storage != "minio":
+    if settings.attachment_storage != "local":
         raise HTTPException(status_code=503, detail="attachment storage not enabled")
     max_keys = settings.attachment_delete_max_keys
     if len(payload.keys) > max_keys:
         raise HTTPException(status_code=400, detail=f"at most {max_keys} keys per delete")
-    await _assert_workspace_owned(user_id=user.id, workspace_id=x_workspace_id)
+    await _assert_workspace_exists(workspace_id=x_workspace_id)
     for k in payload.keys:
         _validate_object_key(object_key=k, workspace_id=x_workspace_id)
     try:
         delete_objects(payload.keys)
     except AttachmentStorageError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    log.info("attachment_delete", user_id=user.id, count=len(payload.keys))
-    await audit_internal_proxy(
-        "proxy.attachment.delete",
-        user_id=user.id,
-        detail={"count": len(payload.keys)},
-    )
+    log.info("attachment_delete", count=len(payload.keys))
     return {"ok": True}

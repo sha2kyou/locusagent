@@ -1,37 +1,11 @@
-"""Orchestrator：Docker 容器生命周期管理。"""
+"""Orchestrator：共享 skills 同步。"""
 
-from .cleanup import run_orphan_cleanup_once
-from .docker_client import get_docker_client
-from .jobs import lifecycle_loop
-from .lifecycle import (
-    ensure_container_ready,
-    ensure_user_container,
-    pause_container,
-    reattach_self_to_user_networks,
-    reconcile_container_state,
-    stop_container,
-    teardown_container,
-    touch_last_active,
-    user_lock,
-)
-from .naming import container_name_for, network_name_for, volume_name_for
+from ..agent_service import agent_base_url, agent_url, load_internal_token
 from .seed import sync_shared_skills
 
 __all__ = [
-    "container_name_for",
-    "ensure_container_ready",
-    "ensure_user_container",
-    "get_docker_client",
-    "lifecycle_loop",
-    "network_name_for",
-    "pause_container",
-    "reattach_self_to_user_networks",
-    "reconcile_container_state",
-    "run_orphan_cleanup_once",
-    "stop_container",
+    "agent_base_url",
+    "agent_url",
+    "load_internal_token",
     "sync_shared_skills",
-    "teardown_container",
-    "touch_last_active",
-    "user_lock",
-    "volume_name_for",
 ]

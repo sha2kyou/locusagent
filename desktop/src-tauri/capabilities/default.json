@@ -10,9 +10,7 @@
     "core:default",
     "core:window:allow-start-dragging",
     "opener:default",
-    "deep-link:default",
     "window-state:default",
-    "notification:default",
-    "allow-open-oauth-login"
+    "notification:default"
   ]
 }

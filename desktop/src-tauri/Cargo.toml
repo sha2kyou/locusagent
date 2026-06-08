@@ -1,6 +1,6 @@
 [package]
 name = "agentpod-desktop"
-version = "0.1.1"
+version = "0.1.2"
 description = "AgentPod macOS desktop shell"
 authors = ["AgentPod"]
 edition = "2021"
@@ -14,7 +14,6 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
-tauri-plugin-deep-link = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-notification = "2"

@@ -1,6 +1,8 @@
-import { ApiError, apiGet, apiSend, getWorkspaceId, redirectToLogin } from "./client";
+import { ApiError, apiGet, apiSend, getWorkspaceId } from "./client";
 import type {
   ActiveRunResponse,
+  AppConfig,
+  AppConfigUpdate,
   EnvVarEntry,
   ArtifactCategory,
   ArtifactEntry,
@@ -25,18 +27,6 @@ import type {
 export const getMe = (noAuthRedirect = false) =>
   apiGet<Me>("/api/me", { noAuthRedirect });
 
-export const flashApiKey = () =>
-  apiGet<{ api_key: string | null }>("/api/me/api-key/flash");
-
-export const rotateApiKey = () =>
-  apiSend<{ api_key: string }>("/api/me/api-key/rotate", "POST", {});
-
-export const deleteAccount = (confirm_username: string) =>
-  apiSend<{ ok: boolean }>("/api/me", "DELETE", { confirm_username });
-
-export const ensureContainer = () =>
-  apiSend<{ status: string; provision_status: string }>("/internal/containers/ensure", "POST", {});
-
 // ---- 工作区 ----
 export const listWorkspaces = () =>
   apiGet<{ default_workspace_id: string; items: WorkspaceItem[] }>("/api/workspaces");
@@ -57,6 +47,11 @@ export const getTimezoneConfig = () => apiGet<TimezoneConfig>("/api/settings/tim
 
 export const putTimezoneConfig = (body: { timezone: string }) =>
   apiSend<TimezoneConfig>("/api/settings/timezone", "PUT", body);
+
+export const getAppConfig = () => apiGet<AppConfig>("/api/settings/app-config");
+
+export const putAppConfig = (body: AppConfigUpdate) =>
+  apiSend<AppConfig>("/api/settings/app-config", "PUT", body);
 
 // ---- 定时任务 ----
 export const listScheduledTasks = () => apiGet<{ items: ScheduledTask[] }>("/api/scheduled-tasks");
@@ -139,7 +134,6 @@ export function attachmentDownloadUrl(id: string): string {
 export async function downloadAttachment(id: string, filename: string): Promise<void> {
   const res = await fetch(attachmentDownloadUrl(id), { credentials: "same-origin" });
   if (res.status === 401) {
-    redirectToLogin();
     throw new ApiError("未登录", { status: 401, code: "unauthenticated" });
   }
   if (!res.ok) {
@@ -188,6 +182,11 @@ export const deleteMcp = (name: string) =>
 
 export const disconnectMcpOAuth = (name: string) =>
   apiSend<{ deleted: boolean }>(`/api/oauth/mcp/${encodeURIComponent(name)}`, "DELETE");
+
+export const getMcpOAuthAuthorizeUrl = (server: string, workspaceId: string) => {
+  const params = new URLSearchParams({ server, workspace_id: workspaceId });
+  return apiGet<{ authorize_url: string }>(`/api/oauth/mcp/authorize-url?${params.toString()}`);
+};
 
 // ---- 工具开关 ----
 export const listToolToggles = () => apiGet<ToolToggleOverview>("/api/workspace/tools");

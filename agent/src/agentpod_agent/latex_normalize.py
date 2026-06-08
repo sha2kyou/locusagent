@@ -1,6 +1,6 @@
 """Repair LaTeX commands broken by JSON escape decoding (e.g. artifact tool args).
 
-Keep in sync with web/src/lib/latex-normalize.ts and tests/agent/test_latex_normalize.py.
+Keep in sync with frontend/src/lib/latex-normalize.ts and tests/agent/test_latex_normalize.py.
 """
 
 from __future__ import annotations

@@ -7,7 +7,9 @@ from typing import Any, Literal
 
 from sqlalchemy import or_, select
 
-from ..db import User, get_session
+from agentpod_shared.settings_store import get_app_timezone
+
+from ..db import get_session
 from ..db.models import ScheduledTask
 from .cron import format_in_timezone, next_cron_run_utc, parse_local_datetime, validate_cron
 
@@ -61,16 +63,14 @@ def _compute_next_run(
     return None
 
 
-async def _load_user_tz(user_id: int) -> str:
-    async with get_session() as session:
-        user = (await session.execute(select(User).where(User.id == user_id))).scalar_one()
-        return user.timezone or "UTC"
+def _app_timezone() -> str:
+    return get_app_timezone()
 
 
-async def list_tasks(user_id: int, *, workspace_id: str | None = None) -> list[dict[str, Any]]:
-    tz_name = await _load_user_tz(user_id)
+async def list_tasks(*, workspace_id: str | None = None) -> list[dict[str, Any]]:
+    tz_name = _app_timezone()
     async with get_session() as session:
-        stmt = select(ScheduledTask).where(ScheduledTask.user_id == user_id)
+        stmt = select(ScheduledTask)
         if workspace_id:
             stmt = stmt.where(ScheduledTask.workspace_id == workspace_id)
         rows = (
@@ -81,13 +81,10 @@ async def list_tasks(user_id: int, *, workspace_id: str | None = None) -> list[d
         return [_row_to_dict(r, tz_name=tz_name) for r in rows]
 
 
-async def get_task(user_id: int, task_id: int, *, workspace_id: str | None = None) -> dict[str, Any] | None:
-    tz_name = await _load_user_tz(user_id)
+async def get_task(task_id: int, *, workspace_id: str | None = None) -> dict[str, Any] | None:
+    tz_name = _app_timezone()
     async with get_session() as session:
-        stmt = select(ScheduledTask).where(
-            ScheduledTask.id == task_id,
-            ScheduledTask.user_id == user_id,
-        )
+        stmt = select(ScheduledTask).where(ScheduledTask.id == task_id)
         if workspace_id:
             stmt = stmt.where(ScheduledTask.workspace_id == workspace_id)
         row = (
@@ -97,7 +94,6 @@ async def get_task(user_id: int, task_id: int, *, workspace_id: str | None = Non
 
 
 async def create_task(
-    user_id: int,
     *,
     workspace_id: str,
     title: str,
@@ -117,7 +113,7 @@ async def create_task(
     if schedule_kind not in ("once", "cron"):
         raise ValueError("schedule_kind must be once or cron")
 
-    tz_name = await _load_user_tz(user_id)
+    tz_name = _app_timezone()
     run_at_utc: datetime | None = None
     cron_value: str | None = None
 
@@ -143,7 +139,6 @@ async def create_task(
 
     async with get_session() as session:
         row = ScheduledTask(
-            user_id=user_id,
             workspace_id=workspace_id,
             title=title,
             prompt=prompt,
@@ -161,7 +156,6 @@ async def create_task(
 
 
 async def update_task(
-    user_id: int,
     task_id: int,
     *,
     workspace_id: str | None = None,
@@ -172,12 +166,9 @@ async def update_task(
     cron_expr: str | None = None,
     run_at_local: str | None = None,
 ) -> dict[str, Any] | None:
-    tz_name = await _load_user_tz(user_id)
+    tz_name = _app_timezone()
     async with get_session() as session:
-        stmt = select(ScheduledTask).where(
-            ScheduledTask.id == task_id,
-            ScheduledTask.user_id == user_id,
-        )
+        stmt = select(ScheduledTask).where(ScheduledTask.id == task_id)
         if workspace_id:
             stmt = stmt.where(ScheduledTask.workspace_id == workspace_id)
         row = (
@@ -225,7 +216,6 @@ async def update_task(
 
 
 async def mark_task_run_started(
-    user_id: int,
     task_id: int,
     session_id: str,
     *,
@@ -235,10 +225,7 @@ async def mark_task_run_started(
     if not sid:
         return False
     async with get_session() as session:
-        stmt = select(ScheduledTask).where(
-            ScheduledTask.id == task_id,
-            ScheduledTask.user_id == user_id,
-        )
+        stmt = select(ScheduledTask).where(ScheduledTask.id == task_id)
         if workspace_id:
             stmt = stmt.where(ScheduledTask.workspace_id == workspace_id)
         row = (await session.execute(stmt)).scalar_one_or_none()
@@ -250,12 +237,9 @@ async def mark_task_run_started(
         return True
 
 
-async def delete_task(user_id: int, task_id: int, *, workspace_id: str | None = None) -> bool:
+async def delete_task(task_id: int, *, workspace_id: str | None = None) -> bool:
     async with get_session() as session:
-        stmt = select(ScheduledTask).where(
-            ScheduledTask.id == task_id,
-            ScheduledTask.user_id == user_id,
-        )
+        stmt = select(ScheduledTask).where(ScheduledTask.id == task_id)
         if workspace_id:
             stmt = stmt.where(ScheduledTask.workspace_id == workspace_id)
         row = (
@@ -268,15 +252,12 @@ async def delete_task(user_id: int, task_id: int, *, workspace_id: str | None = 
         return True
 
 
-async def recalc_user_task_schedules(user_id: int) -> None:
-    tz_name = await _load_user_tz(user_id)
+async def recalc_task_schedules() -> None:
+    tz_name = _app_timezone()
     async with get_session() as session:
         rows = (
             await session.execute(
-                select(ScheduledTask).where(
-                    ScheduledTask.user_id == user_id,
-                    ScheduledTask.completed_at.is_(None),
-                )
+                select(ScheduledTask).where(ScheduledTask.completed_at.is_(None))
             )
         ).scalars().all()
         for row in rows:

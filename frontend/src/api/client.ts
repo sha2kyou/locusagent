@@ -1,4 +1,4 @@
-// 统一 fetch 封装：错误解析、401 跳登录、JSON/文本自适应。
+// 统一 fetch 封装：错误解析、JSON/文本自适应。
 
 export class ApiError extends Error {
   status: number;
@@ -36,12 +36,6 @@ export function setWorkspaceId(id: string | null | undefined): void {
   window.localStorage.setItem(WORKSPACE_ID_KEY, value);
 }
 
-export function redirectToLogin() {
-  if (window.location.pathname !== "/login") {
-    window.location.href = "/login";
-  }
-}
-
 function parseApiError(status: number, data: unknown): ApiError {
   // 容器/代理错误：{ error: { code, message, detail } }
   if (data && typeof data === "object" && "error" in data) {
@@ -73,7 +67,7 @@ function parseApiError(status: number, data: unknown): ApiError {
 }
 
 export interface RequestOptions extends RequestInit {
-  /** 401 时不自动跳转（用于探测登录态） */
+  /** 401 时不抛未登录（用于探测） */
   noAuthRedirect?: boolean;
   /** 请求超时（毫秒），默认 30s */
   timeoutMs?: number;
@@ -90,7 +84,7 @@ function apiFetchSignal(opts: RequestOptions): AbortSignal | undefined {
 }
 
 export async function api<T = unknown>(url: string, opts: RequestOptions = {}): Promise<T> {
-  const { noAuthRedirect, headers, timeoutMs: _t, signal: _s, ...rest } = opts;
+  const { noAuthRedirect: _noAuthRedirect, headers, timeoutMs: _t, signal: _s, ...rest } = opts;
   const workspaceId = getWorkspaceId();
   let res: Response;
   try {
@@ -109,11 +103,6 @@ export async function api<T = unknown>(url: string, opts: RequestOptions = {}): 
       throw new ApiError("请求超时，请稍后重试", { status: 408, code: "timeout" });
     }
     throw e;
-  }
-
-  if (res.status === 401 && !noAuthRedirect) {
-    redirectToLogin();
-    throw new ApiError("未登录", { status: 401, code: "unauthenticated" });
   }
 
   const ct = res.headers.get("content-type") || "";

@@ -1,8 +1,7 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Eye, EyeOff, Loader2, Pencil, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { ReadyGate } from "@/components/ReadyGate";
-import { useReloadOnAgentRecovery } from "@/hooks/useReloadOnAgentRecovery";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
@@ -39,7 +38,9 @@ export function EnvVarsRoute() {
     }
   };
 
-  useReloadOnAgentRecovery(load);
+  useEffect(() => {
+    void load();
+  }, []);
 
   const reset = () => {
     setEditingId(null);

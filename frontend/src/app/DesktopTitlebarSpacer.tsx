@@ -16,7 +16,7 @@ export function DesktopWindowDragOverlay({ mainOffsetClassName }: DesktopWindowD
     <div
       {...desktopDragRegionProps()}
       className={cn(
-        "pointer-events-auto fixed top-0 right-0 z-[60] h-7",
+        "pointer-events-auto fixed top-0 right-0 z-[60] h-10",
         mainOffsetClassName ?? "left-0",
       )}
       aria-hidden

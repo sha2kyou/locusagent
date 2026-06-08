@@ -1,4 +1,4 @@
-"""容器内 Agent 配置。"""
+"""Agent 执行平面配置（settings.json 驱动）。"""
 
 from __future__ import annotations
 
@@ -10,24 +10,23 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
+    model_config = SettingsConfigDict(extra="ignore", case_sensitive=False)
 
     internal_token: str = Field(default="", alias="INTERNAL_TOKEN")
-    user_id: str = Field(default="", alias="USER_ID")
 
     llm_base_url: str = Field(
         default="http://127.0.0.1:8080/internal/llm/v1",
         alias="LLM_BASE_URL",
     )
 
-    embedding_base_url: str = Field(default="http://tei:80", alias="EMBEDDING_BASE_URL")
+    embedding_base_url: str = Field(default="local", alias="EMBEDDING_BASE_URL")
     embedding_model: str = Field(default="BAAI/bge-small-zh-v1.5", alias="EMBEDDING_MODEL")
 
-    host_internal_url: str = Field(default="", alias="HOST_INTERNAL_URL")
+    host_internal_url: str = Field(default="http://127.0.0.1:8080", alias="HOST_INTERNAL_URL")
 
-    data_dir: Path = Field(default=Path("/data"), alias="DATA_DIR")
-    shared_skills_dir: Path = Field(default=Path("/app/skills"), alias="SHARED_SKILLS_DIR")
-    attachment_storage: str = Field(default="minio", alias="ATTACHMENT_STORAGE")
+    data_dir: Path = Field(default=Path.home() / ".agentpod", alias="DATA_DIR")
+    shared_skills_dir: Path = Field(default=Path.home() / ".agentpod" / "skills", alias="SHARED_SKILLS_DIR")
+    attachment_storage: str = Field(default="local", alias="ATTACHMENT_STORAGE")
 
     max_loop_rounds: int = Field(default=100, alias="MAX_LOOP_ROUNDS")
     max_tool_rounds: int = Field(default=30, alias="MAX_TOOL_ROUNDS")
@@ -88,4 +87,7 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    from agentpod_shared.settings_store import document_to_agent_kwargs
+
+    kwargs = document_to_agent_kwargs()
+    return Settings.model_construct(**kwargs)

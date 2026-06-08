@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 
-from .config import get_settings
+from .host_internal import HostInternalError, error_detail, internal_base_and_headers
 from .workspace import get_workspace_id
 
 
@@ -15,28 +15,10 @@ class HostScheduledTasksError(RuntimeError):
 
 
 def _internal_base_and_headers() -> tuple[str, dict[str, str]]:
-    settings = get_settings()
-    base = (settings.host_internal_url or "").rstrip("/")
-    token = settings.internal_token
-    user_id = settings.user_id
-    if not base or not token or not user_id:
-        raise HostScheduledTasksError("host internal auth not configured")
-    return base, {
-        "X-Internal-Token": token,
-        "X-User-Id": user_id,
-        "X-Workspace-Id": get_workspace_id(),
-    }
-
-
-def _error_detail(resp: httpx.Response) -> str:
     try:
-        data = resp.json()
-    except Exception:
-        return (resp.text or "").strip() or f"http {resp.status_code}"
-    detail = data.get("detail")
-    if isinstance(detail, str) and detail.strip():
-        return detail.strip()
-    return str(data)
+        return internal_base_and_headers(workspace_id=get_workspace_id())
+    except HostInternalError as exc:
+        raise HostScheduledTasksError(str(exc)) from exc
 
 
 async def _request(method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -45,7 +27,7 @@ async def _request(method: str, path: str, payload: dict[str, Any] | None = None
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.request(method, url, json=payload, headers=headers)
     if resp.status_code >= 400:
-        raise HostScheduledTasksError(_error_detail(resp))
+        raise HostScheduledTasksError(error_detail(resp))
     data = resp.json()
     if not isinstance(data, dict):
         raise HostScheduledTasksError("invalid host response")

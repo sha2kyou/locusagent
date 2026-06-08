@@ -35,11 +35,10 @@ class ScheduledTaskUpdateIn(BaseModel):
     run_at: str | None = Field(default=None, max_length=32)
 
 
-async def _workspace_for_request(request: Request, user_id: int) -> str:
+async def _workspace_for_request(request: Request) -> str:
     async with get_session() as session:
         ws = await resolve_workspace(
             session,
-            user_id=user_id,
             workspace_id=requested_workspace_id(request),
         )
         return ws.id
@@ -47,8 +46,9 @@ async def _workspace_for_request(request: Request, user_id: int) -> str:
 
 @router.get("")
 async def list_scheduled_tasks(request: Request, ctx: AuthContext = Depends(require_session)) -> dict:
-    workspace_id = await _workspace_for_request(request, ctx.user.id)
-    items = await list_tasks(ctx.user.id, workspace_id=workspace_id)
+    _ = ctx
+    workspace_id = await _workspace_for_request(request)
+    items = await list_tasks(workspace_id=workspace_id)
     return {"items": items}
 
 
@@ -58,10 +58,10 @@ async def create_scheduled_task(
     payload: ScheduledTaskCreateIn,
     ctx: AuthContext = Depends(require_session),
 ) -> dict:
-    workspace_id = await _workspace_for_request(request, ctx.user.id)
+    _ = ctx
+    workspace_id = await _workspace_for_request(request)
     try:
         item = await create_task(
-            ctx.user.id,
             workspace_id=workspace_id,
             title=payload.title,
             prompt=payload.prompt,
@@ -83,10 +83,10 @@ async def update_scheduled_task(
     payload: ScheduledTaskUpdateIn,
     ctx: AuthContext = Depends(require_session),
 ) -> dict:
-    workspace_id = await _workspace_for_request(request, ctx.user.id)
+    _ = ctx
+    workspace_id = await _workspace_for_request(request)
     try:
         item = await update_task(
-            ctx.user.id,
             task_id,
             workspace_id=workspace_id,
             title=payload.title,
@@ -109,8 +109,9 @@ async def delete_scheduled_task(
     task_id: int,
     ctx: AuthContext = Depends(require_session),
 ) -> dict:
-    workspace_id = await _workspace_for_request(request, ctx.user.id)
-    ok = await delete_task(ctx.user.id, task_id, workspace_id=workspace_id)
+    _ = ctx
+    workspace_id = await _workspace_for_request(request)
+    ok = await delete_task(task_id, workspace_id=workspace_id)
     if not ok:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="task not found")
     return {"deleted": True}
@@ -122,9 +123,10 @@ async def run_scheduled_task_now(
     task_id: int,
     ctx: AuthContext = Depends(require_session),
 ) -> dict:
-    workspace_id = await _workspace_for_request(request, ctx.user.id)
+    _ = ctx
+    workspace_id = await _workspace_for_request(request)
     try:
-        item = await trigger_task_run(ctx.user.id, task_id, workspace_id=workspace_id)
+        item = await trigger_task_run(task_id, workspace_id=workspace_id)
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except RuntimeError as exc:
@@ -138,8 +140,9 @@ async def read_scheduled_task(
     task_id: int,
     ctx: AuthContext = Depends(require_session),
 ) -> dict:
-    workspace_id = await _workspace_for_request(request, ctx.user.id)
-    item = await get_task(ctx.user.id, task_id, workspace_id=workspace_id)
+    _ = ctx
+    workspace_id = await _workspace_for_request(request)
+    item = await get_task(task_id, workspace_id=workspace_id)
     if item is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="task not found")
     return {"item": item}

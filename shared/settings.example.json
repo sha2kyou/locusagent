@@ -1,0 +1,21 @@
+{
+  "llm": {
+    "base_url": "https://api.openai.com/v1",
+    "api_key": "",
+    "model": "gpt-4o"
+  },
+  "embedding": {
+    "model": "BAAI/bge-small-zh-v1.5"
+  },
+  "tools": {
+    "tavily_api_key": "",
+    "jina_api_key": ""
+  },
+  "paths": {
+    "data_dir": ""
+  },
+  "app": {
+    "timezone": "UTC",
+    "public_base_url": "http://127.0.0.1:1420"
+  }
+}

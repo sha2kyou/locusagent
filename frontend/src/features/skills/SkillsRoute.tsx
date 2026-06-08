@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,6 @@ import { Tag } from "@/components/ui/tag";
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
-import { useReloadOnAgentRecovery } from "@/hooks/useReloadOnAgentRecovery";
 import { createSkill, deleteSkill, listSkills, updateSkill } from "@/api/endpoints";
 import type { Skill } from "@/api/types";
 import { toastAction } from "@/lib/toast-copy";
@@ -40,7 +39,9 @@ export function SkillsRoute() {
       setItems([]);
     }
   };
-  useReloadOnAgentRecovery(load);
+  useEffect(() => {
+    void load();
+  }, []);
 
   const counts = useMemo(() => {
     const list = items ?? [];

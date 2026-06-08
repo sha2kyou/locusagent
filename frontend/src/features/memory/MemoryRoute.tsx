@@ -11,7 +11,6 @@ import { Empty, listItemDescriptionClass, listRowHoverActionsClass, Loading } fr
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
-import { useReloadOnAgentRecovery } from "@/hooks/useReloadOnAgentRecovery";
 import { createMemory, deleteMemory, listMemory, updateMemory } from "@/api/endpoints";
 import type { MemoryAnchor, MemoryEntry } from "@/api/types";
 import { EMBEDDING_LABEL } from "@/lib/embedding-labels";
@@ -38,7 +37,9 @@ export function MemoryRoute() {
       if (!silent) setItems([]);
     }
   };
-  useReloadOnAgentRecovery(load);
+  useEffect(() => {
+    void load();
+  }, []);
 
   useEffect(() => {
     const hasPending = (items ?? []).some((m) => m.embedding_state === "pending");

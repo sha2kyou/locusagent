@@ -8,7 +8,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request
 
 from ..auth import AuthContext, require_session
-from ..proxy import proxy_to_user_container
+from ..proxy import proxy_to_agent
 
 router = APIRouter(prefix="/api/workspace", tags=["workspace"])
 
@@ -23,7 +23,7 @@ async def proxy_skills(
     name: str | None = None,
 ):
     target = f"/workspace/skills/{name}" if name else "/workspace/skills"
-    return await proxy_to_user_container(request, ctx.user, target)
+    return await proxy_to_agent(request, target)
 
 
 @router.api_route("/mcp", methods=PROXY_METHODS)
@@ -34,7 +34,7 @@ async def proxy_mcp(
     name: str | None = None,
 ):
     target = f"/workspace/mcp/{name}" if name else "/workspace/mcp"
-    return await proxy_to_user_container(request, ctx.user, target)
+    return await proxy_to_agent(request, target)
 
 
 @router.api_route("/tools", methods=PROXY_METHODS)
@@ -45,7 +45,7 @@ async def proxy_tools(
     name: str | None = None,
 ):
     target = f"/workspace/tools/builtin/{name}" if name else "/workspace/tools"
-    return await proxy_to_user_container(request, ctx.user, target)
+    return await proxy_to_agent(request, target)
 
 
 @router.api_route("/memory", methods=PROXY_METHODS)
@@ -56,7 +56,7 @@ async def proxy_memory(
     entry_id: int | None = None,
 ):
     target = f"/workspace/memory/{entry_id}" if entry_id is not None else "/workspace/memory"
-    return await proxy_to_user_container(request, ctx.user, target)
+    return await proxy_to_agent(request, target)
 
 
 @router.api_route("/env-vars", methods=PROXY_METHODS)
@@ -74,7 +74,7 @@ async def proxy_env_vars(
         target = f"/workspace/env-vars/{entry_id}"
     else:
         target = "/workspace/env-vars"
-    return await proxy_to_user_container(request, ctx.user, target)
+    return await proxy_to_agent(request, target)
 
 
 @router.api_route("/sessions", methods=PROXY_METHODS)
@@ -92,7 +92,7 @@ async def proxy_sessions(
         target = f"/workspace/sessions/{session_id}"
     else:
         target = "/workspace/sessions"
-    return await proxy_to_user_container(request, ctx.user, target)
+    return await proxy_to_agent(request, target)
 
 
 @router.post("/sessions/{session_id}/cancel")
@@ -102,7 +102,7 @@ async def cancel_session_run(
     ctx: AuthContext = Depends(require_session),
 ):
     """按 session 粒度取消运行中的任务，避免容器级 stop 造成 run 状态残留。"""
-    return await proxy_to_user_container(request, ctx.user, f"/workspace/sessions/{session_id}/cancel")
+    return await proxy_to_agent(request, f"/workspace/sessions/{session_id}/cancel")
 
 
 @router.api_route("/artifact-categories", methods=PROXY_METHODS)
@@ -117,7 +117,7 @@ async def proxy_artifact_categories(
         if category_id
         else "/workspace/artifact-categories"
     )
-    return await proxy_to_user_container(request, ctx.user, target)
+    return await proxy_to_agent(request, target)
 
 
 @router.api_route("/artifacts", methods=PROXY_METHODS)
@@ -128,7 +128,7 @@ async def proxy_artifacts(
     artifact_id: str | None = None,
 ):
     target = f"/workspace/artifacts/{artifact_id}" if artifact_id else "/workspace/artifacts"
-    return await proxy_to_user_container(request, ctx.user, target)
+    return await proxy_to_agent(request, target)
 
 
 @router.get("/attachments/{attachment_id}/download")
@@ -137,9 +137,8 @@ async def proxy_attachment_download(
     attachment_id: str,
     ctx: AuthContext = Depends(require_session),
 ):
-    return await proxy_to_user_container(
+    return await proxy_to_agent(
         request,
-        ctx.user,
         f"/workspace/attachments/{attachment_id}/download",
     )
 
@@ -149,7 +148,7 @@ async def proxy_attachments(
     request: Request,
     ctx: AuthContext = Depends(require_session),
 ):
-    return await proxy_to_user_container(request, ctx.user, "/workspace/attachments")
+    return await proxy_to_agent(request, "/workspace/attachments")
 
 
 @router.post("/chat/completions")
@@ -161,4 +160,4 @@ async def proxy_chat_for_web(
 
     避免与对外 API 路径白名单冲突；同时保持 session 与 bearer 互斥。
     """
-    return await proxy_to_user_container(request, ctx.user, "/v1/chat/completions")
+    return await proxy_to_agent(request, "/v1/chat/completions")

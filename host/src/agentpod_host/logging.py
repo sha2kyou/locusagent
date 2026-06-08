@@ -13,7 +13,6 @@ SENSITIVE_KEYS = {
     "tavily_api_key",
     "s3_secret_key",
     "s3_access_key",
-    "agent_api_key",
     "internal_token",
     "access_token",
     "client_secret",

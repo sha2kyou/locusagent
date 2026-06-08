@@ -4,7 +4,6 @@ import { Cron, type Locale as CronLocale } from "react-js-cron";
 import "react-js-cron/styles.css";
 import { PageContainer } from "@/components/PageContainer";
 import { ReadyGate } from "@/components/ReadyGate";
-import { useReloadOnAgentRecovery } from "@/hooks/useReloadOnAgentRecovery";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/field";
@@ -338,7 +337,9 @@ export function ScheduledTasksRoute() {
     }
   };
 
-  useReloadOnAgentRecovery(() => load());
+  useEffect(() => {
+    void load();
+  }, []);
 
   useEffect(() => {
     const running = (items ?? []).some(

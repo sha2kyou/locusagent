@@ -18,9 +18,9 @@ class AttachmentStorageError(RuntimeError):
     pass
 
 
-def _require_minio_proxy() -> None:
-    if get_settings().attachment_storage != "minio":
-        raise AttachmentStorageError("attachment storage is not minio")
+def _require_attachment_storage() -> None:
+    if get_settings().attachment_storage != "local":
+        raise AttachmentStorageError("attachment storage is not enabled")
 
 
 def blob_object_key(content_sha256: str) -> str:
@@ -36,7 +36,7 @@ def upload_was_skipped(uploaded: dict[str, str | bool]) -> bool:
 
 
 async def _ensure_bucket() -> None:
-    _require_minio_proxy()
+    _require_attachment_storage()
     base, headers = internal_base_and_headers()
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
         resp = await client.post(f"{base}/internal/attachments/ensure-bucket", headers=headers)
@@ -120,7 +120,7 @@ async def delete_attachment_objects(object_keys: list[str]) -> None:
     keys = [k for k in object_keys if k]
     if not keys:
         return
-    _require_minio_proxy()
+    _require_attachment_storage()
     base, headers = internal_base_and_headers(workspace_id=get_workspace_id())
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
         resp = await client.post(

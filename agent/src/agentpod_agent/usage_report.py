@@ -95,7 +95,7 @@ def schedule_usage_event(
 
 async def _post_events(events: list[dict[str, Any]]) -> None:
     settings = get_settings()
-    if not settings.host_internal_url or not settings.internal_token or not settings.user_id:
+    if not settings.host_internal_url or not settings.internal_token:
         return
     try:
         base, headers = internal_base_and_headers(workspace_id=get_workspace_id())

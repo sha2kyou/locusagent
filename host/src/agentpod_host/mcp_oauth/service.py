@@ -46,7 +46,6 @@ PENDING_KEY_PREFIX = "mcp_oauth_pending:"
 
 @dataclass(slots=True)
 class PendingOAuthFlow:
-    user_id: int
     workspace_id: str
     server_name: str
     server_url: str
@@ -143,7 +142,6 @@ async def _register_client(
 
 async def _ensure_client_info(
     *,
-    user_id: int,
     workspace_id: str,
     server_name: str,
     server_url: str,
@@ -151,7 +149,6 @@ async def _ensure_client_info(
     redirect_uri: str,
 ) -> OAuthClientInformationFull:
     existing = await store.load_client_info(
-        user_id=user_id,
         workspace_id=workspace_id,
         server_name=server_name,
     )
@@ -163,7 +160,6 @@ async def _ensure_client_info(
         redirect_uri=redirect_uri,
     )
     await store.save_client_info(
-        user_id=user_id,
         workspace_id=workspace_id,
         server_name=server_name,
         server_url=server_url,
@@ -174,7 +170,6 @@ async def _ensure_client_info(
 
 async def build_authorization_url(
     *,
-    user_id: int,
     workspace_id: str,
     server_name: str,
     server_url: str,
@@ -185,7 +180,6 @@ async def build_authorization_url(
     prm, auth_server_url = await _discover_prm(server_url, www_auth_url)
     oauth_metadata = await _discover_oauth_metadata(auth_server_url, server_url)
     client_info = await _ensure_client_info(
-        user_id=user_id,
         workspace_id=workspace_id,
         server_name=server_name,
         server_url=server_url,
@@ -215,7 +209,6 @@ async def build_authorization_url(
         auth_params["scope"] = scope
 
     pending = PendingOAuthFlow(
-        user_id=user_id,
         workspace_id=workspace_id,
         server_name=server_name,
         server_url=server_url,
@@ -226,13 +219,12 @@ async def build_authorization_url(
     return f"{auth_endpoint}?{urlencode(auth_params)}", pending
 
 
-def pending_redis_key(oauth_state: str) -> str:
+def pending_cache_key(oauth_state: str) -> str:
     return f"{PENDING_KEY_PREFIX}{oauth_state}"
 
 
-async def store_pending(flow: PendingOAuthFlow, redis) -> None:
+async def store_pending(flow: PendingOAuthFlow, cache) -> None:
     payload = {
-        "user_id": flow.user_id,
         "workspace_id": flow.workspace_id,
         "server_name": flow.server_name,
         "server_url": flow.server_url,
@@ -240,11 +232,11 @@ async def store_pending(flow: PendingOAuthFlow, redis) -> None:
         "oauth_state": flow.oauth_state,
         "client_info": flow.client_info,
     }
-    await redis.set(pending_redis_key(flow.oauth_state), json.dumps(payload), ex=PENDING_TTL_SECONDS)
+    await cache.set(pending_cache_key(flow.oauth_state), json.dumps(payload), ex=PENDING_TTL_SECONDS)
 
 
-async def load_pending(oauth_state: str, redis) -> PendingOAuthFlow | None:
-    raw = await redis.get(pending_redis_key(oauth_state))
+async def load_pending(oauth_state: str, cache) -> PendingOAuthFlow | None:
+    raw = await cache.get(pending_cache_key(oauth_state))
     if not raw:
         return None
     try:
@@ -255,7 +247,6 @@ async def load_pending(oauth_state: str, redis) -> PendingOAuthFlow | None:
         return None
     try:
         return PendingOAuthFlow(
-            user_id=int(data["user_id"]),
             workspace_id=str(data["workspace_id"]),
             server_name=str(data["server_name"]),
             server_url=str(data["server_url"]),
@@ -267,8 +258,8 @@ async def load_pending(oauth_state: str, redis) -> PendingOAuthFlow | None:
         return None
 
 
-async def clear_pending(oauth_state: str, redis) -> None:
-    await redis.delete(pending_redis_key(oauth_state))
+async def clear_pending(oauth_state: str, cache) -> None:
+    await cache.delete(pending_cache_key(oauth_state))
 
 
 async def exchange_authorization_code(
@@ -308,7 +299,6 @@ async def exchange_authorization_code(
         raise OAuthTokenError(f"Token exchange failed ({resp.status_code}): {body}")
     tokens = await handle_token_response_scopes(resp)
     await store.save_tokens(
-        user_id=pending.user_id,
         workspace_id=pending.workspace_id,
         server_name=pending.server_name,
         server_url=pending.server_url,
@@ -320,19 +310,18 @@ async def exchange_authorization_code(
 
 async def refresh_oauth_tokens(
     *,
-    user_id: int,
     workspace_id: str,
     server_name: str,
 ) -> OAuthToken:
-    row = await store.get_credential(user_id=user_id, workspace_id=workspace_id, server_name=server_name)
+    row = await store.get_credential(workspace_id=workspace_id, server_name=server_name)
     if row is None:
         raise McpOAuthError("credential not found")
     server_url = (row.server_url or "").strip()
     if not server_url:
         raise McpOAuthError("server url missing")
 
-    tokens = await store.load_tokens(user_id=user_id, workspace_id=workspace_id, server_name=server_name)
-    client_info = await store.load_client_info(user_id=user_id, workspace_id=workspace_id, server_name=server_name)
+    tokens = await store.load_tokens(workspace_id=workspace_id, server_name=server_name)
+    client_info = await store.load_client_info(workspace_id=workspace_id, server_name=server_name)
     if tokens is None or not tokens.refresh_token:
         raise McpOAuthError("no refresh token")
     if client_info is None or not client_info.client_id:
@@ -366,7 +355,6 @@ async def refresh_oauth_tokens(
         raise OAuthTokenError(f"Token refresh failed ({resp.status_code}): {body}")
     new_tokens = await handle_token_response_scopes(resp)
     ok = await store.update_tokens(
-        user_id=user_id,
         workspace_id=workspace_id,
         server_name=server_name,
         tokens=new_tokens,

@@ -30,13 +30,12 @@ class WorkspaceUpdateIn(BaseModel):
 
 @router.get("")
 async def list_workspaces(ctx: AuthContext = Depends(require_session)) -> dict:
+    _ = ctx
     async with get_session() as session:
-        default = await ensure_default_workspace(session, ctx.user.id)
+        default = await ensure_default_workspace(session)
         rows = (
             await session.execute(
-                select(Workspace)
-                .where(Workspace.user_id == ctx.user.id)
-                .order_by(Workspace.created_at.asc(), Workspace.id.asc())
+                select(Workspace).order_by(Workspace.created_at.asc(), Workspace.id.asc())
             )
         ).scalars().all()
     return {
@@ -60,13 +59,13 @@ async def create_workspace(
     payload: WorkspaceCreateIn,
     ctx: AuthContext = Depends(require_session),
 ) -> dict:
+    _ = ctx
     name = normalize_workspace_name(payload.name)
     description = normalize_workspace_description(payload.description)
     async with get_session() as session:
-        await ensure_default_workspace(session, ctx.user.id)
+        await ensure_default_workspace(session)
         row = Workspace(
             id=generate_workspace_id(),
-            user_id=ctx.user.id,
             name=name,
             description=description,
         )
@@ -97,21 +96,19 @@ async def set_default_workspace(
     workspace_id: str,
     ctx: AuthContext = Depends(require_session),
 ) -> dict:
+    _ = ctx
     async with get_session() as session:
-        await ensure_default_workspace(session, ctx.user.id)
+        await ensure_default_workspace(session)
         row = (
             await session.execute(
-                select(Workspace).where(
-                    Workspace.user_id == ctx.user.id,
-                    Workspace.id == workspace_id,
-                )
+                select(Workspace).where(Workspace.id == workspace_id)
             )
         ).scalar_one_or_none()
         if row is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="workspace not found")
         await session.execute(
             Workspace.__table__.update()
-            .where(Workspace.user_id == ctx.user.id, Workspace.is_default.is_(True))
+            .where(Workspace.is_default.is_(True))
             .values(is_default=False)
         )
         row.is_default = True
@@ -125,14 +122,12 @@ async def update_workspace(
     payload: WorkspaceUpdateIn,
     ctx: AuthContext = Depends(require_session),
 ) -> dict:
+    _ = ctx
     async with get_session() as session:
-        await ensure_default_workspace(session, ctx.user.id)
+        await ensure_default_workspace(session)
         row = (
             await session.execute(
-                select(Workspace).where(
-                    Workspace.user_id == ctx.user.id,
-                    Workspace.id == workspace_id,
-                )
+                select(Workspace).where(Workspace.id == workspace_id)
             )
         ).scalar_one_or_none()
         if row is None:
@@ -162,13 +157,12 @@ async def delete_workspace(
     workspace_id: str,
     ctx: AuthContext = Depends(require_session),
 ) -> dict:
+    _ = ctx
     async with get_session() as session:
-        await ensure_default_workspace(session, ctx.user.id)
+        await ensure_default_workspace(session)
         rows = (
             await session.execute(
-                select(Workspace)
-                .where(Workspace.user_id == ctx.user.id)
-                .order_by(Workspace.created_at.asc(), Workspace.id.asc())
+                select(Workspace).order_by(Workspace.created_at.asc(), Workspace.id.asc())
             )
         ).scalars().all()
         target = next((r for r in rows if r.id == workspace_id), None)

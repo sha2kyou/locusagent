@@ -1,11 +1,10 @@
 {
-  "name": "web",
+  "name": "agentpod-frontend",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
     "build:desktop": "tsc -b && vite build --config vite.desktop.config.ts",
     "lint": "eslint .",
     "test:latex": "node --experimental-strip-types --test src/lib/latex-normalize.test.ts",
@@ -16,6 +15,7 @@
   "dependencies": {
     "@assistant-ui/react": "^0.14.11",
     "@assistant-ui/react-markdown": "^0.14.1",
+    "@tauri-apps/plugin-opener": "^2.5.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "highlight.js": "^11.11.1",

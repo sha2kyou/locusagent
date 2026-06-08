@@ -1,5 +1,5 @@
 import type { ChatChunk } from "./types";
-import { ApiError, getWorkspaceId, redirectToLogin } from "./client";
+import { ApiError, getWorkspaceId } from "./client";
 import {
   STREAM_MAX_RETRIES,
   userMessageFromContainerError,
@@ -78,7 +78,6 @@ export async function streamChatCompletion(
     });
 
     if (res.status === 401) {
-      redirectToLogin();
       throw new ApiError("未登录", { status: 401, code: "unauthenticated" });
     }
 

@@ -1,4 +1,4 @@
-"""OpenAI 兼容路由：/v1/chat/completions、/v1/responses、/v1/models。
+"""OpenAI 兼容路由：/v1/chat/completions、/v1/models。
 
 鉴权：X-Internal-Token（HMAC 比对）。
 有 session_id 时以 DB 为上下文单一真相源。
@@ -23,13 +23,10 @@ from ..core import (
     append_message,
     build_llm_messages,
     get_attachments_by_ids,
-    create_response,
     create_run,
     create_session,
     get_active_run,
     get_last_user_message,
-    get_response,
-    get_response_session_id,
     persist_openai_message,
     run_chat_loop,
     session_lock,
@@ -124,15 +121,6 @@ class ChatRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-class ResponsesRequest(BaseModel):
-    model: str | None = None
-    input: Any
-    stream: bool = False
-    instructions: str | None = None
-    previous_response_id: str | None = None
-    extra: dict[str, Any] | None = None
-
-
 def _tool_kind(name: str | None) -> str:
     n = (name or "").lower()
     if n.startswith("skill_") or "skill" in n:
@@ -182,39 +170,6 @@ def _has_image_content(content: Any) -> bool:
     return False
 
 
-def _extract_new_user_message_from_response_input(raw_input: Any) -> str | None:
-    if isinstance(raw_input, str):
-        text = raw_input.strip()
-        return text or None
-    if isinstance(raw_input, list):
-        for item in reversed(raw_input):
-            if not isinstance(item, dict):
-                continue
-            if item.get("type") == "message":
-                role = str(item.get("role") or "")
-                if role != "user":
-                    continue
-                content = _extract_text_content(item.get("content"))
-                if content:
-                    return content
-            role = str(item.get("role") or "")
-            if role == "user":
-                content = _extract_text_content(item.get("content"))
-                if content:
-                    return content
-    return None
-
-
-async def _resolve_response_session(req: ResponsesRequest) -> tuple[str, bool]:
-    if req.previous_response_id:
-        sid = await get_response_session_id(req.previous_response_id)
-        if sid:
-            return sid, False
-        raise ValueError("previous_response_id not found")
-    sid = await create_session(title="新对话")
-    return sid, True
-
-
 async def _extract_latest_user_payload(req: ChatRequest) -> tuple[Any, str, str, list[str]] | None:
     for m in reversed(req.messages):
         if m.role != "user":
@@ -242,15 +197,6 @@ async def _extract_latest_user_payload(req: ChatRequest) -> tuple[Any, str, str,
                 return m.content, persisted_text, user_query_text, []
             persisted_text = text or ""
             return persisted_text, persisted_text, text, []
-    return None
-
-
-def _last_user_content(messages: list[dict[str, Any]]) -> str | None:
-    for msg in reversed(messages):
-        if msg.get("role") == "user":
-            content = str(msg.get("content") or "").strip()
-            if content:
-                return content
     return None
 
 
@@ -504,181 +450,6 @@ async def chat_completions(req: ChatRequest):
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
-
-@router.post("/responses")
-async def responses(req: ResponsesRequest):
-    wid = get_workspace_id()
-    await ensure_workspace_context(wid)
-    schedule_mcp_runtime_warm(wid)
-    try:
-        public_model, internal_model = await _resolve_v1_model(req.model)
-    except ValueError as exc:
-        return JSONResponse(
-            {"error": {"code": "bad_request", "message": str(exc)}},
-            status_code=400,
-        )
-    if req.stream:
-        return JSONResponse(
-            {
-                "error": {
-                    "code": "unsupported_stream",
-                    "message": "stream=true is not implemented for /v1/responses yet",
-                }
-            },
-            status_code=400,
-        )
-    try:
-        sid, is_new_session = await _resolve_response_session(req)
-    except ValueError as exc:
-        return JSONResponse(
-            {"error": {"code": "bad_request", "message": str(exc)}},
-            status_code=400,
-        )
-
-    new_user = _extract_new_user_message_from_response_input(req.input)
-    if not new_user:
-        return JSONResponse(
-            {"error": {"code": "bad_request", "message": "missing user input"}},
-            status_code=400,
-        )
-
-    lock = await session_lock(sid)
-    async with lock:
-        await reconcile_session_active_handles(sid)
-        active = await get_active_run(sid)
-        if active is not None:
-            return JSONResponse(
-                {
-                    "error": {
-                        "code": "run_in_progress",
-                        "message": "session has an active run",
-                        "detail": {"run_id": active["id"]},
-                    }
-                },
-                status_code=409,
-            )
-
-        if is_new_session:
-            await append_message(sid, "user", new_user)
-            db_msgs: list[dict[str, Any]] = [{"role": "user", "content": new_user}]
-        else:
-            db_msgs = await build_llm_messages(sid)
-            if _last_user_content(db_msgs) != new_user:
-                await append_message(sid, "user", new_user)
-                db_msgs.append({"role": "user", "content": new_user})
-        user_query = new_user
-        schedule_session_title_generation(sid, user_query=user_query)
-
-        from ..core.session_review_state import begin_user_turn
-
-        await begin_user_turn(sid)
-
-        system_prompt = await _get_or_create_system_prompt(sid)
-        messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
-        await _insert_runtime_time_context(messages)
-        if req.instructions and req.instructions.strip():
-            messages.append(
-                {"role": "system", "content": "## Additional Instructions\n" + req.instructions.strip()}
-            )
-        messages.extend(db_msgs)
-
-        from ..tools import registry
-
-        run_id = await create_run(sid)
-        initial_len = len(messages)
-        try:
-            result, final_messages = await run_chat_loop(
-                messages,
-                registry=registry,
-                model=internal_model,
-                extra=_llm_extra(req.extra),
-                session_id=sid,
-                run_id=run_id,
-            )
-            last_assistant_id = await _persist_loop_messages(
-                sid, final_messages, initial_len, run_id=run_id
-            )
-            await update_run(
-                run_id,
-                status="completed",
-                assistant_message_id=last_assistant_id,
-            )
-            await upsert_session_meta(sid, tokens_delta=result.total_tokens)
-            _schedule_post_run(
-                sid,
-                loop_rounds=result.rounds,
-                model=internal_model,
-                messages=final_messages,
-            )
-            response_id = await create_response(
-                sid,
-                run_id=run_id,
-                previous_response_id=req.previous_response_id,
-                assistant_message_id=last_assistant_id,
-                model=public_model,
-                input_text=user_query,
-                output_text=result.final_text,
-                status="completed",
-            )
-            return JSONResponse(
-                {
-                    "id": response_id,
-                    "object": "response",
-                    "model": public_model,
-                    "status": "completed",
-                    "previous_response_id": req.previous_response_id,
-                    "output": [
-                        {
-                            "type": "message",
-                            "role": "assistant",
-                            "content": [
-                                {"type": "output_text", "text": result.final_text},
-                            ],
-                        }
-                    ],
-                    "output_text": result.final_text,
-                    "usage": {"total_tokens": result.total_tokens},
-                    "x_tool_calls_made": result.tool_calls_made,
-                    "session_id": sid,
-                    "run_id": run_id,
-                }
-            )
-        except Exception as exc:
-            await update_run(run_id, status="failed", error_message=str(exc))
-            raise
-
-
-@router.get("/responses/{response_id}")
-async def retrieve_response(response_id: str) -> JSONResponse:
-    item = await get_response(response_id)
-    if item is None:
-        return JSONResponse(
-            {"error": {"code": "not_found", "message": "response not found"}},
-            status_code=404,
-        )
-    return JSONResponse(
-        {
-            "id": item["id"],
-            "object": "response",
-            "model": PUBLIC_API_MODEL_ID,
-            "status": item.get("status") or "completed",
-            "previous_response_id": item.get("previous_response_id"),
-            "output": [
-                {
-                    "type": "message",
-                    "role": "assistant",
-                    "content": [
-                        {"type": "output_text", "text": item.get("output_text") or ""},
-                    ],
-                }
-            ],
-            "output_text": item.get("output_text") or "",
-            "session_id": item.get("session_id"),
-            "run_id": item.get("run_id"),
-            "created_at": item.get("created_at"),
-            "updated_at": item.get("updated_at"),
-        }
-    )
 
 @router.get("/models")
 async def list_models() -> dict:

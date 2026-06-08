@@ -1,13 +1,7 @@
 // 后端 /api/* 契约类型（依据 host + agent 容器实现整理）
 
 export interface Me {
-  id: number;
-  username: string;
-  avatar_url: string | null;
   current_workspace_id?: string;
-  container_status: string; // absent | creating | running | paused | stopped ...
-  provision_status: string; // pending | ready | failed
-  agent_api_key_configured: boolean;
   attachment_max_bytes: number;
 }
 
@@ -194,6 +188,48 @@ export interface EnvVarEntry {
 
 export interface TimezoneConfig {
   timezone: string;
+}
+
+export interface AppConfig {
+  llm: {
+    base_url: string;
+    model: string;
+    api_key_configured: boolean;
+    auxiliary_vision_model: string;
+    auxiliary_web_extract_model: string;
+    auxiliary_compression_model: string;
+    auxiliary_title_generation_model: string;
+    auxiliary_approval_model: string;
+    auxiliary_curator_model: string;
+    auxiliary_skill_reflect_model: string;
+  };
+  tools: {
+    tavily_api_key_configured: boolean;
+    jina_api_key_configured: boolean;
+  };
+  embedding: {
+    model: string;
+  };
+  app: {
+    timezone: string;
+  };
+}
+
+export interface AppConfigUpdate {
+  llm_base_url?: string;
+  llm_model?: string;
+  llm_api_key?: string;
+  auxiliary_vision_model?: string;
+  auxiliary_web_extract_model?: string;
+  auxiliary_compression_model?: string;
+  auxiliary_title_generation_model?: string;
+  auxiliary_approval_model?: string;
+  auxiliary_curator_model?: string;
+  auxiliary_skill_reflect_model?: string;
+  tavily_api_key?: string;
+  jina_api_key?: string;
+  embedding_model?: string;
+  timezone?: string;
 }
 
 export interface UsageSummaryRow {

@@ -105,21 +105,6 @@ CREATE TABLE IF NOT EXISTS runs (
 );
 CREATE INDEX IF NOT EXISTS idx_runs_session ON runs(session_id, updated_at DESC);
 
-CREATE TABLE IF NOT EXISTS responses (
-    id                   TEXT PRIMARY KEY,
-    session_id           TEXT NOT NULL,
-    run_id               TEXT,
-    previous_response_id TEXT,
-    assistant_message_id INTEGER,
-    model                TEXT,
-    input_text           TEXT NOT NULL DEFAULT '',
-    output_text          TEXT NOT NULL DEFAULT '',
-    status               TEXT NOT NULL DEFAULT 'completed',
-    created_at           TIMESTAMP NOT NULL DEFAULT (datetime('now')),
-    updated_at           TIMESTAMP NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_responses_session ON responses(session_id, created_at DESC);
-
 CREATE TABLE IF NOT EXISTS artifact_categories (
     id          TEXT PRIMARY KEY,
     name        TEXT NOT NULL UNIQUE,
@@ -446,6 +431,7 @@ def init_db() -> None:
         _init_env_vars_fts(c)
         _init_artifacts_fts(c)
         _restore_fts_triggers(c)
+        c.execute('DROP TABLE IF EXISTS "responses"')
         for stmt in (
             """
             CREATE TABLE IF NOT EXISTS runs (
@@ -459,22 +445,6 @@ def init_db() -> None:
             )
             """,
             "CREATE INDEX IF NOT EXISTS idx_runs_session ON runs(session_id, updated_at DESC)",
-            """
-            CREATE TABLE IF NOT EXISTS responses (
-                id                   TEXT PRIMARY KEY,
-                session_id           TEXT NOT NULL,
-                run_id               TEXT,
-                previous_response_id TEXT,
-                assistant_message_id INTEGER,
-                model                TEXT,
-                input_text           TEXT NOT NULL DEFAULT '',
-                output_text          TEXT NOT NULL DEFAULT '',
-                status               TEXT NOT NULL DEFAULT 'completed',
-                created_at           TIMESTAMP NOT NULL DEFAULT (datetime('now')),
-                updated_at           TIMESTAMP NOT NULL DEFAULT (datetime('now'))
-            )
-            """,
-            "CREATE INDEX IF NOT EXISTS idx_responses_session ON responses(session_id, created_at DESC)",
         ):
             c.execute(stmt)
     log.info("agent_db_ready", path=str(_db_path()))

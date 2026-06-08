@@ -1,11 +1,4 @@
-"""签名 Cookie session：仅承载 user_id + 签发时间。
-
-Cookie 属性：HttpOnly + Secure(生产) + SameSite=Lax + Max-Age 7d。
-SESSION_SECRET 与 ENCRYPTION_KEY 互斥。
-
-OAuth state 使用 SESSION_SECRET 签名的 URL token（5 分钟有效），
-不依赖 cookie——Safari 在 302 跳转 GitHub 时可能丢弃 Set-Cookie。
-"""
+"""签名 Cookie session：单用户打开即用。"""
 
 from __future__ import annotations
 
@@ -18,8 +11,10 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from ..config import get_settings
 
 SESSION_COOKIE_NAME = "apod_session"
-SESSION_MAX_AGE = 7 * 24 * 3600  # 7 天
+SESSION_MAX_AGE = 7 * 24 * 3600
 SESSION_SALT = "apod.session.v1"
+MCP_OAUTH_STATE_MAX_AGE = 600
+MCP_OAUTH_STATE_SALT = "apod.mcp.oauth.state.v1"
 
 
 @lru_cache
@@ -30,17 +25,26 @@ def _serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(settings.session_secret, salt=SESSION_SALT)
 
 
-def issue_session(response: Response, user_id: int) -> None:
-    serializer = _serializer()
-    token = serializer.dumps({"uid": user_id})
+@lru_cache
+def _mcp_oauth_state_serializer() -> URLSafeTimedSerializer:
     settings = get_settings()
-    secure = settings.public_base_url.startswith("https://")
+    if not settings.session_secret:
+        raise RuntimeError("SESSION_SECRET 未配置")
+    return URLSafeTimedSerializer(settings.session_secret, salt=MCP_OAUTH_STATE_SALT)
+
+
+def _cookie_secure() -> bool:
+    return get_settings().public_base_url.startswith("https://")
+
+
+def issue_session(response: Response) -> None:
+    token = _serializer().dumps({"auth": True})
     response.set_cookie(
         SESSION_COOKIE_NAME,
         token,
         max_age=SESSION_MAX_AGE,
         httponly=True,
-        secure=secure,
+        secure=_cookie_secure(),
         samesite="lax",
         path="/",
     )
@@ -50,178 +54,37 @@ def clear_session(response: Response) -> None:
     response.delete_cookie(SESSION_COOKIE_NAME, path="/")
 
 
-def parse_session_user_id(raw: str | None) -> int | None:
-    """从 session cookie 解出 user_id；签名失败/过期返回 None。"""
+def is_valid_session_token(raw: str | None) -> bool:
     if not raw:
-        return None
+        return False
     try:
         payload = _serializer().loads(raw, max_age=SESSION_MAX_AGE)
     except (BadSignature, SignatureExpired):
-        return None
-    if not isinstance(payload, dict):
-        return None
-    uid = payload.get("uid")
-    return int(uid) if isinstance(uid, int) else None
+        return False
+    return isinstance(payload, dict) and payload.get("auth") is True
 
 
-def read_session(request: Request) -> int | None:
-    """从 cookie 解出 user_id；签名失败/过期返回 None。"""
-    return parse_session_user_id(request.cookies.get(SESSION_COOKIE_NAME))
+def read_session(request: Request) -> bool:
+    return is_valid_session_token(request.cookies.get(SESSION_COOKIE_NAME))
 
 
-OAUTH_STATE_MAX_AGE = 300  # 5 分钟
-OAUTH_STATE_SALT = "apod.oauth.state.v1"
-
-
-@lru_cache
-def _oauth_state_serializer() -> URLSafeTimedSerializer:
-    settings = get_settings()
-    if not settings.session_secret:
-        raise RuntimeError("SESSION_SECRET 未配置")
-    return URLSafeTimedSerializer(settings.session_secret, salt=OAUTH_STATE_SALT)
-
-
-def issue_oauth_state(*, client: str = "web") -> str:
-    """签发 OAuth state（签名 token，经 GitHub 回调 URL 原样带回）。"""
-    nonce = secrets.token_urlsafe(32)
-    client_value = "desktop" if client == "desktop" else "web"
-    return _oauth_state_serializer().dumps({"n": nonce, "c": client_value})
-
-
-def parse_oauth_state(state: str) -> dict | None:
-    if not state:
-        return None
-    try:
-        payload = _oauth_state_serializer().loads(state, max_age=OAUTH_STATE_MAX_AGE)
-    except (BadSignature, SignatureExpired):
-        return None
-    if not isinstance(payload, dict) or not isinstance(payload.get("n"), str):
-        return None
-    client = payload.get("c")
-    if client not in ("web", "desktop"):
-        client = "web"
-    return {"client": client}
-
-
-def verify_oauth_state(state: str) -> bool:
-    return parse_oauth_state(state) is not None
-
-
-DESKTOP_EXCHANGE_MAX_AGE = 120
-DESKTOP_EXCHANGE_SALT = "apod.oauth.desktop.exchange.v1"
-
-
-@lru_cache
-def _desktop_exchange_serializer() -> URLSafeTimedSerializer:
-    settings = get_settings()
-    if not settings.session_secret:
-        raise RuntimeError("SESSION_SECRET 未配置")
-    return URLSafeTimedSerializer(settings.session_secret, salt=DESKTOP_EXCHANGE_SALT)
-
-
-def issue_desktop_exchange(user_id: int, *, api_key_flash: str | None = None) -> str:
-    payload: dict[str, object] = {"uid": user_id, "n": secrets.token_urlsafe(16)}
-    if api_key_flash:
-        payload["flash"] = api_key_flash
-    return _desktop_exchange_serializer().dumps(payload)
-
-
-def consume_desktop_exchange(token: str) -> tuple[int, str | None] | None:
-    if not token:
-        return None
-    try:
-        payload = _desktop_exchange_serializer().loads(token, max_age=DESKTOP_EXCHANGE_MAX_AGE)
-    except (BadSignature, SignatureExpired):
-        return None
-    if not isinstance(payload, dict):
-        return None
-    uid = payload.get("uid")
-    if not isinstance(uid, int):
-        return None
-    flash = payload.get("flash")
-    flash_value = flash if isinstance(flash, str) else None
-    return uid, flash_value
-
-
-MCP_OAUTH_STATE_MAX_AGE = 600  # 10 分钟
-MCP_OAUTH_STATE_SALT = "apod.oauth.mcp.state.v1"
-
-
-@lru_cache
-def _mcp_oauth_state_serializer() -> URLSafeTimedSerializer:
-    settings = get_settings()
-    if not settings.session_secret:
-        raise RuntimeError("SESSION_SECRET 未配置")
-    return URLSafeTimedSerializer(settings.session_secret, salt=MCP_OAUTH_STATE_SALT)
-
-
-def issue_mcp_oauth_state(*, user_id: int, workspace_id: str, server_name: str) -> str:
+def issue_mcp_oauth_state(*, workspace_id: str, server_name: str) -> str:
     return _mcp_oauth_state_serializer().dumps(
-        {"uid": user_id, "wid": workspace_id, "srv": server_name, "n": secrets.token_urlsafe(16)}
+        {"wid": workspace_id, "srv": server_name, "n": secrets.token_urlsafe(16)}
     )
 
 
-def verify_mcp_oauth_state(state: str) -> dict | None:
-    if not state:
-        return None
-    try:
-        payload = _mcp_oauth_state_serializer().loads(state, max_age=MCP_OAUTH_STATE_MAX_AGE)
-    except (BadSignature, SignatureExpired):
-        return None
-    if not isinstance(payload, dict):
-        return None
-    uid = payload.get("uid")
-    wid = payload.get("wid")
-    srv = payload.get("srv")
-    if not isinstance(uid, int) or not isinstance(wid, str) or not isinstance(srv, str):
-        return None
-    return {"user_id": uid, "workspace_id": wid, "server_name": srv}
-
-
-FLASH_COOKIE_NAME = "apod_apikey_flash"
-FLASH_MAX_AGE = 120  # 2 分钟内必须读取
-FLASH_SALT = "apod.apikey-flash.v1"
-
-
-@lru_cache
-def _flash_serializer() -> URLSafeTimedSerializer:
-    settings = get_settings()
-    if not settings.session_secret:
-        raise RuntimeError("SESSION_SECRET 未配置")
-    return URLSafeTimedSerializer(settings.session_secret, salt=FLASH_SALT)
-
-
-def issue_apikey_flash(response: Response, api_key_plain: str) -> None:
-    """一次性 flash cookie，承载新生成的 agent_api_key 明文。
-
-    HttpOnly：前端必须通过专用接口读取，避免 XSS 直接抓取。
-    """
-    settings = get_settings()
-    secure = settings.public_base_url.startswith("https://")
-    token = _flash_serializer().dumps({"k": api_key_plain})
-    response.set_cookie(
-        FLASH_COOKIE_NAME,
-        token,
-        max_age=FLASH_MAX_AGE,
-        httponly=True,
-        secure=secure,
-        samesite="lax",
-        path="/",
-    )
-
-
-def consume_apikey_flash(request: Request, response: Response) -> str | None:
-    """读取并立即清除 flash cookie。"""
-    raw = request.cookies.get(FLASH_COOKIE_NAME)
+def verify_mcp_oauth_state(raw: str) -> dict[str, str] | None:
     if not raw:
         return None
     try:
-        payload = _flash_serializer().loads(raw, max_age=FLASH_MAX_AGE)
+        payload = _mcp_oauth_state_serializer().loads(raw, max_age=MCP_OAUTH_STATE_MAX_AGE)
     except (BadSignature, SignatureExpired):
-        response.delete_cookie(FLASH_COOKIE_NAME, path="/")
         return None
-    response.delete_cookie(FLASH_COOKIE_NAME, path="/")
-    if isinstance(payload, dict):
-        value = payload.get("k")
-        return value if isinstance(value, str) else None
-    return None
+    if not isinstance(payload, dict):
+        return None
+    wid = str(payload.get("wid") or "").strip()
+    srv = str(payload.get("srv") or "").strip()
+    if not wid or not srv:
+        return None
+    return {"workspace_id": wid, "server_name": srv}

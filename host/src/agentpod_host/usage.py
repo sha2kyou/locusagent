@@ -59,7 +59,6 @@ class UsageSummaryOut(BaseModel):
 async def record_usage_events(
     session: AsyncSession,
     *,
-    user_id: int,
     workspace_id: str | None,
     events: list[UsageEventIn],
 ) -> int:
@@ -69,7 +68,6 @@ async def record_usage_events(
     for ev in events:
         session.add(
             UsageEvent(
-                user_id=user_id,
                 workspace_id=ws,
                 session_id=(ev.session_id or "").strip() or None,
                 scenario=ev.scenario.strip(),
@@ -85,7 +83,6 @@ async def record_usage_events(
 
 async def record_usage_event(
     *,
-    user_id: int,
     workspace_id: str | None,
     scenario: str,
     model: str | None = None,
@@ -98,7 +95,6 @@ async def record_usage_event(
     async with get_session() as session:
         await record_usage_events(
             session,
-            user_id=user_id,
             workspace_id=workspace_id,
             events=[
                 UsageEventIn(
@@ -114,7 +110,7 @@ async def record_usage_event(
         )
 
 
-async def usage_summary_for_user(user_id: int) -> UsageSummaryOut:
+async def usage_summary() -> UsageSummaryOut:
     async with get_session() as session:
         stmt = (
             select(
@@ -125,7 +121,6 @@ async def usage_summary_for_user(user_id: int) -> UsageSummaryOut:
                 func.coalesce(func.sum(UsageEvent.api_calls), 0),
                 func.count(UsageEvent.id),
             )
-            .where(UsageEvent.user_id == user_id)
             .group_by(UsageEvent.scenario)
             .order_by(func.sum(UsageEvent.total_tokens).desc(), UsageEvent.scenario)
         )

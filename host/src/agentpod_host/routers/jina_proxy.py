@@ -11,8 +11,7 @@ from pydantic import BaseModel, Field
 
 from ..auth.agent_internal import require_agent_internal
 from ..config import get_settings
-from ..db import User
-from ..internal_proxy_limits import audit_internal_proxy, enforce_internal_rate_limit
+from ..internal_proxy_limits import enforce_internal_rate_limit
 from ..logging import get_logger
 from ..url_guard import assert_extractable_http_url
 from ..usage import record_usage_event
@@ -89,10 +88,11 @@ async def _extract_one(
 @router.post("/extract")
 async def jina_extract(
     payload: JinaExtractIn,
-    user: User = Depends(require_agent_internal),
+    _auth: None = Depends(require_agent_internal),
     x_workspace_id: str = Header(default="", alias="X-Workspace-Id"),
 ) -> dict:
-    await enforce_internal_rate_limit(user_id=user.id, bucket="jina")
+    ws = (x_workspace_id or "").strip() or None
+    await enforce_internal_rate_limit(bucket="jina", workspace_id=ws)
     settings = get_settings()
     api_key = settings.jina_api_key.strip()
     if not api_key:
@@ -111,15 +111,8 @@ async def jina_extract(
         total_tokens += tokens
 
     ok = sum(1 for item in out if not item.get("error"))
-    log.info("jina_proxied", user_id=user.id, count=ok, total=len(out))
-    await audit_internal_proxy(
-        "proxy.jina",
-        user_id=user.id,
-        detail={"ok": ok, "total": len(out), "tokens": total_tokens},
-    )
-    ws = (x_workspace_id or "").strip() or None
+    log.info("jina_proxied", count=ok, total=len(out))
     await record_usage_event(
-        user_id=user.id,
         workspace_id=ws,
         scenario="jina",
         model="jina-reader",

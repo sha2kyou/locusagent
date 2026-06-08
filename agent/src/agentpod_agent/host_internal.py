@@ -18,10 +18,9 @@ def internal_base_and_headers(*, workspace_id: str | None = None) -> tuple[str, 
     settings = get_settings()
     base = (settings.host_internal_url or "").rstrip("/")
     token = settings.internal_token
-    user_id = settings.user_id
-    if not base or not token or not user_id:
+    if not base or not token:
         raise HostInternalError("host internal auth not configured")
-    headers = {"X-Internal-Token": token, "X-User-Id": user_id}
+    headers = {"X-Internal-Token": token}
     if workspace_id:
         headers["X-Workspace-Id"] = workspace_id
     return base, headers

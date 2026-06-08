@@ -102,6 +102,42 @@ def _str_dict(raw: object) -> dict[str, str]:
     return out
 
 
+def _normalize_desktop_url(url: str | None) -> str | None:
+    if not url:
+        return url
+    return url.replace("host.docker.internal", "127.0.0.1")
+
+
+def _normalize_desktop_headers(headers: dict[str, str]) -> dict[str, str]:
+    if not headers:
+        return {}
+    out: dict[str, str] = {}
+    for key, value in headers.items():
+        if key.lower() == "host":
+            out[key] = value.replace("host.docker.internal", "127.0.0.1")
+        else:
+            out[key] = value
+    return out
+
+
+def _normalize_server_item(item: dict) -> tuple[dict, bool]:
+    changed = False
+    normalized = dict(item)
+    url = normalized.get("url")
+    if isinstance(url, str):
+        fixed_url = _normalize_desktop_url(url)
+        if fixed_url != url:
+            normalized["url"] = fixed_url
+            changed = True
+    headers_raw = normalized.get("headers")
+    if isinstance(headers_raw, dict) and headers_raw:
+        fixed_headers = _normalize_desktop_headers(_str_dict(headers_raw))
+        if fixed_headers != _str_dict(headers_raw):
+            normalized["headers"] = fixed_headers
+            changed = True
+    return normalized, changed
+
+
 def load_mcp_config(workspace_id: str | None = None) -> list[MCPServerConfig]:
     path = _config_path(workspace_id)
     if not path.is_file():
@@ -110,10 +146,13 @@ def load_mcp_config(workspace_id: str | None = None) -> list[MCPServerConfig]:
     servers = raw.get("servers") or []
     out: list[MCPServerConfig] = []
     stale_empty = False
+    desktop_normalized = False
     for item in servers:
         if not isinstance(item, dict):
             continue
         try:
+            item, normalized = _normalize_server_item(item)
+            desktop_normalized = desktop_normalized or normalized
             env_raw = item.get("env")
             headers_raw = item.get("headers")
             if isinstance(env_raw, dict) and not env_raw:
@@ -134,7 +173,7 @@ def load_mcp_config(workspace_id: str | None = None) -> list[MCPServerConfig]:
             )
         except KeyError:
             continue
-    if stale_empty and out:
+    if (stale_empty or desktop_normalized) and out:
         _save_all(out, workspace_id=workspace_id)
     return out
 

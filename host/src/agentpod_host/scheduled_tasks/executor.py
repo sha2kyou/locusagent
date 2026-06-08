@@ -3,34 +3,27 @@
 from __future__ import annotations
 
 import asyncio
-from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import httpx
 from sqlalchemy import or_, select, update
 
+from agentpod_shared.settings_store import get_app_timezone
+
 from ..config import get_settings
-from ..db import ContainerStatus, User, get_session
+from ..db import get_session
 from ..db.models import ScheduledTask
 from ..logging import get_logger
 from ..notifications import create_notification
-from ..orchestrator import (
-    container_name_for,
-    ensure_container_ready,
-    touch_last_active,
-    user_lock,
-)
-from ..security import decrypt_str
-from ..workspaces import ensure_user_default_workspace
-from .queue import enqueue_scheduled_task
+from ..agent_service import agent_url, load_internal_token
+from ..workspaces import ensure_default_workspace_row
 from .cron import next_cron_run_utc
-from .service import list_due_tasks
+from .service import get_task, list_due_tasks
 
 log = get_logger("scheduled_executor")
 
 AGENT_RUN_TIMEOUT = 1800.0
-TOUCH_INTERVAL_SECONDS = 60.0
 STALE_RUNNING_SECONDS = AGENT_RUN_TIMEOUT + 120.0
 STALE_ERROR_MESSAGE = "执行中断（超时或服务重启）"
 
@@ -53,7 +46,6 @@ class AgentRunError(Exception):
 
 @dataclass(frozen=True)
 class _NotifyPayload:
-    user_id: int
     task_id: int
     workspace_id: str | None
     title: str
@@ -96,7 +88,7 @@ def _is_retryable_exception(exc: Exception) -> bool:
     msg = str(exc or "").strip().lower()
     if not msg:
         return False
-    if "用户已删除" in msg or "agent not provisioned" in msg:
+    if "internal token missing" in msg:
         return False
     transient_hints = (
         "timeout",
@@ -113,17 +105,8 @@ def _is_retryable_exception(exc: Exception) -> bool:
     return any(hint in msg for hint in transient_hints)
 
 
-async def _touch_while_running(user_id: int) -> None:
-    try:
-        while True:
-            await asyncio.sleep(TOUCH_INTERVAL_SECONDS)
-            await touch_last_active(user_id)
-    except asyncio.CancelledError:
-        return
-
 
 async def _notify_task_result(
-    user_id: int,
     *,
     task_id: int,
     workspace_id: str | None,
@@ -138,7 +121,6 @@ async def _notify_task_result(
     link = "/scheduled-tasks" if session_id else None
     try:
         await create_notification(
-            user_id,
             workspace_id=workspace_id,
             kind="success" if ok else "error",
             category="定时任务",
@@ -225,18 +207,12 @@ async def _mark_manual_task_queued(task_id: int) -> bool:
 
 
 async def trigger_task_run(
-    user_id: int,
     task_id: int,
     *,
     workspace_id: str | None = None,
 ) -> dict:
-    from .service import get_task
-
     async with get_session() as session:
-        stmt = select(ScheduledTask).where(
-            ScheduledTask.id == task_id,
-            ScheduledTask.user_id == user_id,
-        )
+        stmt = select(ScheduledTask).where(ScheduledTask.id == task_id)
         if workspace_id:
             stmt = stmt.where(ScheduledTask.workspace_id == workspace_id)
         row = (await session.execute(stmt)).scalar_one_or_none()
@@ -250,14 +226,9 @@ async def trigger_task_run(
     if not await _mark_manual_task_queued(task_id):
         raise ValueError("task already running")
 
-    try:
-        await enqueue_scheduled_task(task_id, manual=True)
-    except Exception as exc:
-        err = f"enqueue failed: {str(exc) or 'unknown error'}"
-        await _rollback_queued_state(task_id, err)
-        raise RuntimeError(err) from exc
+    asyncio.create_task(execute_task_by_id(task_id, manual=True), name=f"scheduled-manual-{task_id}")
 
-    item = await get_task(user_id, task_id, workspace_id=workspace_id)
+    item = await get_task(task_id, workspace_id=workspace_id)
     if item is None:
         raise ValueError("task not found")
     return item
@@ -281,49 +252,38 @@ async def _try_claim_task(task_id: int) -> bool:
 
 
 async def _call_agent_run(
-    user_id: int,
     *,
     workspace_id: str,
     title: str,
     prompt: str,
     task_id: int,
 ) -> dict:
-    async with get_session() as session:
-        user = (await session.execute(select(User).where(User.id == user_id))).scalar_one()
-        if user.internal_token_enc is None:
-            raise RuntimeError("agent not provisioned")
-        token = decrypt_str(user.internal_token_enc)
+    token = await load_internal_token()
+    if token is None:
+        raise RuntimeError("internal token missing")
 
-    status, _meta = await ensure_container_ready(user_id)
-    if status != ContainerStatus.RUNNING:
-        raise RuntimeError(f"container not running: {status.value}")
+    url = agent_url("/internal/scheduled-run")
+    async with httpx.AsyncClient(timeout=AGENT_RUN_TIMEOUT) as client:
+        resp = await client.post(
+            url,
+            json={"title": title, "prompt": prompt, "task_id": task_id},
+            headers={
+                "X-Internal-Token": token,
+                "X-Workspace-Id": workspace_id,
+            },
+        )
+        if resp.status_code >= 400:
+            raise _parse_agent_error(resp)
+        return resp.json()
 
-    await touch_last_active(user_id)
-    container_name = container_name_for(user_id)
-    url = f"http://{container_name}:8000/internal/scheduled-run"
-    touch_task = asyncio.create_task(_touch_while_running(user_id))
-    try:
-        async with httpx.AsyncClient(timeout=AGENT_RUN_TIMEOUT) as client:
-            resp = await client.post(
-                url,
-                json={"title": title, "prompt": prompt, "task_id": task_id},
-                headers={
-                    "X-Internal-Token": token,
-                    "X-Workspace-Id": workspace_id,
-                },
-            )
-            if resp.status_code >= 400:
-                raise _parse_agent_error(resp)
-            return resp.json()
-    finally:
-        touch_task.cancel()
-        await asyncio.gather(touch_task, return_exceptions=True)
+
+def _app_timezone() -> str:
+    return get_app_timezone()
 
 
 async def _finish_task(
     task_id: int,
     *,
-    user_id: int,
     ok: bool,
     session_id: str | None,
     error: str | None,
@@ -331,14 +291,13 @@ async def _finish_task(
     summary: str | None = None,
 ) -> ScheduledTask | None:
     now = datetime.now(timezone.utc)
+    tz_name = _app_timezone()
     async with get_session() as session:
         row = (
             await session.execute(select(ScheduledTask).where(ScheduledTask.id == task_id))
         ).scalar_one()
         if row.last_run_status in ("success", "failed"):
             return None
-        user = (await session.execute(select(User).where(User.id == user_id))).scalar_one()
-        tz_name = user.timezone or "UTC"
         manual = manual or bool(row.active_run_manual)
 
         row.last_run_at = now
@@ -371,23 +330,15 @@ async def _finish_task(
 
 
 async def _probe_agent_scheduled_session(
-    user_id: int,
     *,
     workspace_id: str,
     session_id: str,
 ) -> dict:
-    async with get_session() as session:
-        user = (await session.execute(select(User).where(User.id == user_id))).scalar_one()
-        if user.internal_token_enc is None:
-            raise RuntimeError("agent not provisioned")
-        token = decrypt_str(user.internal_token_enc)
+    token = await load_internal_token()
+    if token is None:
+        raise RuntimeError("internal token missing")
 
-    status, _meta = await ensure_container_ready(user_id)
-    if status != ContainerStatus.RUNNING:
-        raise RuntimeError(f"container not running: {status.value}")
-
-    container_name = container_name_for(user_id)
-    url = f"http://{container_name}:8000/internal/scheduled-run-status/{session_id}"
+    url = agent_url(f"/internal/scheduled-run-status/{session_id}")
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.get(
             url,
@@ -403,7 +354,6 @@ async def _probe_agent_scheduled_session(
 
 
 async def complete_task_run_from_agent(
-    user_id: int,
     task_id: int,
     *,
     workspace_id: str | None,
@@ -416,7 +366,6 @@ async def complete_task_run_from_agent(
     sid = str(session_id or "").strip()
     finished = await _finish_task(
         task_id,
-        user_id=user_id,
         ok=ok,
         session_id=sid or None,
         error=(error or None) if not ok else None,
@@ -425,7 +374,6 @@ async def complete_task_run_from_agent(
     if finished is None:
         return False
     await _notify_task_result(
-        user_id,
         task_id=task_id,
         workspace_id=str(finished.workspace_id or "").strip() or None,
         title=finished.title,
@@ -437,7 +385,6 @@ async def complete_task_run_from_agent(
     log.info(
         "scheduled_task_callback_done",
         task_id=task_id,
-        user_id=user_id,
         ok=ok,
         session_id=sid,
     )
@@ -458,25 +405,22 @@ async def reconcile_interrupted_scheduled_tasks() -> int:
         snapshots = [
             (
                 row.id,
-                row.user_id,
                 str(row.workspace_id or "").strip(),
                 str(row.active_run_session_id or "").strip() or None,
             )
             for row in rows
         ]
 
-    for task_id, user_id, workspace_id, active_session_id in snapshots:
+    for task_id, workspace_id, active_session_id in snapshots:
         if active_session_id and workspace_id:
             try:
                 probe = await _probe_agent_scheduled_session(
-                    user_id,
                     workspace_id=workspace_id,
                     session_id=active_session_id,
                 )
                 status = str(probe.get("status") or "").strip()
                 if status == "completed":
                     if await complete_task_run_from_agent(
-                        user_id,
                         task_id,
                         workspace_id=workspace_id,
                         ok=True,
@@ -487,7 +431,6 @@ async def reconcile_interrupted_scheduled_tasks() -> int:
                     continue
                 if status == "failed":
                     if await complete_task_run_from_agent(
-                        user_id,
                         task_id,
                         workspace_id=workspace_id,
                         ok=False,
@@ -502,18 +445,16 @@ async def reconcile_interrupted_scheduled_tasks() -> int:
                 log.warning(
                     "scheduled_task_reconcile_probe_failed",
                     task_id=task_id,
-                    user_id=user_id,
                     error=str(exc),
                 )
 
         await _fail_task(
             task_id,
-            user_id=user_id,
             session_id=active_session_id,
             err=STALE_ERROR_MESSAGE,
         )
         reconciled += 1
-        log.warning("scheduled_task_reconcile_interrupted", task_id=task_id, user_id=user_id)
+        log.warning("scheduled_task_reconcile_interrupted", task_id=task_id)
 
     return reconciled
 
@@ -522,6 +463,7 @@ async def recover_stale_running_tasks() -> int:
     """重置超时仍卡在 running 的任务，避免永久不再调度。"""
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(seconds=STALE_RUNNING_SECONDS)
+    tz_name = _app_timezone()
     recovered = 0
     notify_queue: list[_NotifyPayload] = []
     async with get_session() as session:
@@ -534,10 +476,6 @@ async def recover_stale_running_tasks() -> int:
             )
         ).scalars().all()
         for row in rows:
-            user = (
-                await session.execute(select(User).where(User.id == row.user_id))
-            ).scalar_one()
-            tz_name = user.timezone or "UTC"
             row.last_run_status = "failed"
             row.last_error = STALE_ERROR_MESSAGE
             row.last_run_at = now
@@ -555,7 +493,6 @@ async def recover_stale_running_tasks() -> int:
             if row.notify:
                 notify_queue.append(
                     _NotifyPayload(
-                        user_id=row.user_id,
                         task_id=row.id,
                         workspace_id=str(row.workspace_id or "").strip() or None,
                         title=row.title,
@@ -564,11 +501,10 @@ async def recover_stale_running_tasks() -> int:
                     )
                 )
             recovered += 1
-            log.warning("scheduled_task_stale_recovered", task_id=row.id, user_id=row.user_id)
+            log.warning("scheduled_task_stale_recovered", task_id=row.id)
 
     for item in notify_queue:
         await _notify_task_result(
-            item.user_id,
             task_id=item.task_id,
             workspace_id=item.workspace_id,
             title=item.title,
@@ -583,14 +519,12 @@ async def recover_stale_running_tasks() -> int:
 async def _fail_task(
     task_id: int,
     *,
-    user_id: int,
     session_id: str | None,
     err: str,
     manual: bool = False,
 ) -> None:
     finished = await _finish_task(
         task_id,
-        user_id=user_id,
         ok=False,
         session_id=session_id,
         error=err,
@@ -599,7 +533,6 @@ async def _fail_task(
     if finished is None:
         return
     await _notify_task_result(
-        user_id,
         task_id=task_id,
         workspace_id=str(finished.workspace_id or "").strip() or None,
         title=finished.title,
@@ -617,7 +550,6 @@ async def execute_task_by_id(task_id: int, *, manual: bool = False) -> None:
         ).scalar_one_or_none()
     if task is None:
         return
-    user_id = task.user_id
     if manual:
         if not await _try_claim_manual_task(task_id):
             return
@@ -626,7 +558,6 @@ async def execute_task_by_id(task_id: int, *, manual: bool = False) -> None:
     log.info(
         "scheduled_task_start",
         task_id=task_id,
-        user_id=user_id,
         title=task.title,
         manual=manual,
     )
@@ -641,16 +572,10 @@ async def execute_task_by_id(task_id: int, *, manual: bool = False) -> None:
     while True:
         attempt += 1
         try:
-            async with get_session() as session:
-                user = (await session.execute(select(User).where(User.id == user_id))).scalar_one()
-                if user.deleted_at is not None:
-                    raise RuntimeError("用户已删除")
-
             workspace_id = str(task.workspace_id or "").strip()
             if not workspace_id:
-                workspace_id = (await ensure_user_default_workspace(user_id)).id
+                workspace_id = (await ensure_default_workspace_row()).id
             result = await _call_agent_run(
-                user_id,
                 workspace_id=workspace_id,
                 title=task.title,
                 prompt=task.prompt,
@@ -660,7 +585,6 @@ async def execute_task_by_id(task_id: int, *, manual: bool = False) -> None:
             final_text = str(result.get("final_text") or "")
             finished = await _finish_task(
                 task_id,
-                user_id=user_id,
                 ok=True,
                 session_id=session_id,
                 error=None,
@@ -668,10 +592,9 @@ async def execute_task_by_id(task_id: int, *, manual: bool = False) -> None:
                 summary=final_text,
             )
             if finished is None:
-                log.info("scheduled_task_already_finished", task_id=task_id, user_id=user_id)
+                log.info("scheduled_task_already_finished", task_id=task_id)
                 return
             await _notify_task_result(
-                user_id,
                 task_id=task_id,
                 workspace_id=str(finished.workspace_id or "").strip() or None,
                 title=finished.title,
@@ -683,7 +606,6 @@ async def execute_task_by_id(task_id: int, *, manual: bool = False) -> None:
             log.info(
                 "scheduled_task_done",
                 task_id=task_id,
-                user_id=user_id,
                 session_id=session_id,
                 attempts=attempt,
             )
@@ -700,7 +622,6 @@ async def execute_task_by_id(task_id: int, *, manual: bool = False) -> None:
             log.warning(
                 "scheduled_task_retrying",
                 task_id=task_id,
-                user_id=user_id,
                 attempt=attempt,
                 max_attempts=max_attempts,
                 delay_seconds=delay_seconds,
@@ -713,18 +634,15 @@ async def execute_task_by_id(task_id: int, *, manual: bool = False) -> None:
         log.warning(
             "scheduled_task_failed",
             task_id=task_id,
-            user_id=user_id,
             attempts=attempt,
             retryable=retryable,
             error=err,
         )
-        await _fail_task(task_id, user_id=user_id, session_id=session_id, err=err, manual=manual)
+        await _fail_task(task_id, session_id=session_id, err=err, manual=manual)
         return
 
 
 async def scan_and_run_due_tasks() -> None:
-    # asyncio.wait_for(lock.acquire(), timeout=0) 会在可获取锁时也触发超时，
-    # 导致扫描被错误地长期跳过。这里改为显式检测并使用 async with 串行扫描。
     if _scan_lock.locked():
         log.debug("scheduled_task_scan_skipped", reason="already_running")
         return
@@ -733,22 +651,13 @@ async def scan_and_run_due_tasks() -> None:
         due = await list_due_tasks()
         if not due:
             return
-        # 只负责发现并入队；执行交给 Procrastinate worker。
-        by_user: dict[int, list[ScheduledTask]] = defaultdict(list)
         for task in due:
-            by_user[task.user_id].append(task)
-        for user_id, items in by_user.items():
-            lock = await user_lock(user_id)
-            async with lock:
-                for task in items:
-                    if not await _mark_task_queued(task.id):
-                        continue
-                    try:
-                        await enqueue_scheduled_task(task.id)
-                    except Exception as exc:
-                        err = f"enqueue failed: {str(exc) or 'unknown error'}"
-                        await _rollback_queued_state(task.id, err)
-                        log.warning("scheduled_task_enqueue_failed", task_id=task.id, user_id=user_id, error=err)
+            if not await _mark_task_queued(task.id):
+                continue
+            asyncio.create_task(
+                execute_task_by_id(task.id),
+                name=f"scheduled-due-{task.id}",
+            )
 
 
 def schedule_due_task_scan() -> None:

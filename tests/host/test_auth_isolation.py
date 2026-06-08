@@ -11,10 +11,6 @@ from agentpod_host.middleware.auth_isolation import install_auth_isolation
 def _client() -> TestClient:
     app = FastAPI()
 
-    @app.get("/api/v1/models")
-    async def v1_models():
-        return {"ok": True}
-
     @app.get("/api/workspace/ping")
     async def workspace_ping():
         return {"ok": True}
@@ -27,14 +23,12 @@ def _client() -> TestClient:
     async def scheduled_tasks_root():
         return {"ok": True}
 
+    @app.get("/api/other")
+    async def other():
+        return {"ok": True}
+
     install_auth_isolation(app)
     return TestClient(app)
-
-
-def test_bearer_allowed_on_v1_models():
-    client = _client()
-    response = client.get("/api/v1/models", headers={"Authorization": "Bearer apod_test"})
-    assert response.status_code == 200
 
 
 def test_bearer_blocked_on_workspace():
@@ -58,9 +52,8 @@ def test_bearer_blocked_on_scheduled_tasks_without_trailing_slash():
     assert response.json()["error"]["code"] == "bearer_on_session_path"
 
 
-def test_session_blocked_on_v1_without_bearer():
+def test_bearer_blocked_on_unsupported_paths():
     client = _client()
-    client.cookies.set("apod_session", "fake")
-    response = client.get("/api/v1/models")
+    response = client.get("/api/other", headers={"Authorization": "Bearer apod_test"})
     assert response.status_code == 403
-    assert response.json()["error"]["code"] == "session_on_bearer_path"
+    assert response.json()["error"]["code"] == "bearer_not_supported"

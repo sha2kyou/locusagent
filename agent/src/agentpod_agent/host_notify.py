@@ -7,9 +7,9 @@ from typing import Any
 
 import httpx
 
-from .config import get_settings
-from .logging import get_logger
 from .artifacts.store import get_category_name
+from .host_internal import HostInternalError, internal_base_and_headers
+from .logging import get_logger
 from .workspace import get_workspace_id
 
 log = get_logger("host_notify")
@@ -29,13 +29,6 @@ def _artifact_link(category_id: str) -> str:
 
 
 async def notify_artifact_saved(art: dict[str, Any]) -> None:
-    settings = get_settings()
-    base = (settings.host_internal_url or "").rstrip("/")
-    token = settings.internal_token
-    user_id = settings.user_id
-    if not base or not token or not user_id:
-        return
-
     title = str(art.get("title") or "").strip()
     if not title:
         return
@@ -53,11 +46,10 @@ async def notify_artifact_saved(art: dict[str, Any]) -> None:
         "body": body,
         "link": _artifact_link(category_id),
     }
-    headers = {
-        "X-Internal-Token": token,
-        "X-User-Id": user_id,
-        "X-Workspace-Id": get_workspace_id(),
-    }
+    try:
+        base, headers = internal_base_and_headers(workspace_id=get_workspace_id())
+    except HostInternalError:
+        return
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.post(
@@ -76,13 +68,6 @@ async def notify_artifact_saved(art: dict[str, Any]) -> None:
 
 
 async def notify_background_review(*, summary: str, session_id: str) -> None:
-    settings = get_settings()
-    base = (settings.host_internal_url or "").rstrip("/")
-    token = settings.internal_token
-    user_id = settings.user_id
-    if not base or not token or not user_id:
-        return
-
     text = (summary or "").strip()
     if not text:
         return
@@ -94,11 +79,10 @@ async def notify_background_review(*, summary: str, session_id: str) -> None:
         "body": text[:500],
         "link": "/memory",
     }
-    headers = {
-        "X-Internal-Token": token,
-        "X-User-Id": user_id,
-        "X-Workspace-Id": get_workspace_id(),
-    }
+    try:
+        base, headers = internal_base_and_headers(workspace_id=get_workspace_id())
+    except HostInternalError:
+        return
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.post(

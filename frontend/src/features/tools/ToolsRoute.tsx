@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageContainer } from "@/components/PageContainer";
 import { Badge } from "@/components/ui/badge";
 import { CollapsibleSection, ListCard } from "@/components/ui/panel";
 import { Empty, listItemBriefClass, Loading } from "@/components/ui/list-state";
 import { useToast } from "@/components/ui/toast";
 import { ReadyGate } from "@/components/ReadyGate";
-import { useReloadOnAgentRecovery } from "@/hooks/useReloadOnAgentRecovery";
 import { listToolToggles } from "@/api/endpoints";
 import type { ToolToggleOverview } from "@/api/types";
 
@@ -30,7 +29,9 @@ export function ToolsRoute() {
     }
   };
 
-  useReloadOnAgentRecovery(load);
+  useEffect(() => {
+    void load();
+  }, []);
 
   return (
     <PageContainer

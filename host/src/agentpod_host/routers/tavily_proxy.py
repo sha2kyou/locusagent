@@ -10,8 +10,7 @@ from pydantic import BaseModel, Field
 
 from ..auth.agent_internal import require_agent_internal
 from ..config import get_settings
-from ..db import User
-from ..internal_proxy_limits import audit_internal_proxy, enforce_internal_rate_limit
+from ..internal_proxy_limits import enforce_internal_rate_limit
 from ..usage import record_usage_event
 from ..logging import get_logger
 
@@ -31,10 +30,11 @@ class TavilySearchIn(BaseModel):
 @router.post("/search")
 async def tavily_search(
     payload: TavilySearchIn,
-    user: User = Depends(require_agent_internal),
+    _auth: None = Depends(require_agent_internal),
     x_workspace_id: str = Header(default="", alias="X-Workspace-Id"),
 ) -> dict:
-    await enforce_internal_rate_limit(user_id=user.id, bucket="tavily")
+    ws = (x_workspace_id or "").strip() or None
+    await enforce_internal_rate_limit(bucket="tavily", workspace_id=ws)
     settings = get_settings()
     api_key = settings.tavily_api_key.strip()
     if not api_key:
@@ -56,11 +56,11 @@ async def tavily_search(
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
             resp = await client.post(TAVILY_SEARCH_URL, json=body, headers=headers)
     except httpx.HTTPError as exc:
-        log.warning("tavily_upstream_failed", user_id=user.id, error=str(exc))
+        log.warning("tavily_upstream_failed", error=str(exc))
         raise HTTPException(status_code=502, detail="tavily upstream unreachable") from exc
 
     if resp.status_code != 200:
-        log.warning("tavily_upstream_error", user_id=user.id, status=resp.status_code)
+        log.warning("tavily_upstream_error", status=resp.status_code)
         raise HTTPException(status_code=502, detail=f"tavily http {resp.status_code}")
 
     data = resp.json()
@@ -80,15 +80,8 @@ async def tavily_search(
         if len(out) >= payload.limit:
             break
 
-    log.info("tavily_proxied", user_id=user.id, count=len(out))
-    await audit_internal_proxy(
-        "proxy.tavily",
-        user_id=user.id,
-        detail={"count": len(out), "limit": payload.limit},
-    )
-    ws = (x_workspace_id or "").strip() or None
+    log.info("tavily_proxied", count=len(out))
     await record_usage_event(
-        user_id=user.id,
         workspace_id=ws,
         scenario="tavily",
         model="tavily-search",

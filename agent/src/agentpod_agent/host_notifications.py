@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 
-from .config import get_settings
+from .host_internal import HostInternalError, error_detail, internal_base_and_headers
 from .workspace import get_workspace_id
 
 
@@ -15,28 +15,10 @@ class HostNotificationsError(RuntimeError):
 
 
 def _internal_base_and_headers() -> tuple[str, dict[str, str]]:
-    settings = get_settings()
-    base = (settings.host_internal_url or "").rstrip("/")
-    token = settings.internal_token
-    user_id = settings.user_id
-    if not base or not token or not user_id:
-        raise HostNotificationsError("host internal auth not configured")
-    return base, {
-        "X-Internal-Token": token,
-        "X-User-Id": user_id,
-        "X-Workspace-Id": get_workspace_id(),
-    }
-
-
-def _error_detail(resp: httpx.Response) -> str:
     try:
-        data = resp.json()
-    except Exception:
-        return (resp.text or "").strip() or f"http {resp.status_code}"
-    detail = data.get("detail")
-    if isinstance(detail, str) and detail.strip():
-        return detail.strip()
-    return str(data)
+        return internal_base_and_headers(workspace_id=get_workspace_id())
+    except HostInternalError as exc:
+        raise HostNotificationsError(str(exc)) from exc
 
 
 async def list_unread_notifications(limit: int = 20) -> tuple[list[dict[str, Any]], int]:
@@ -46,7 +28,7 @@ async def list_unread_notifications(limit: int = 20) -> tuple[list[dict[str, Any
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(url, headers=headers)
     if resp.status_code >= 400:
-        raise HostNotificationsError(_error_detail(resp))
+        raise HostNotificationsError(error_detail(resp))
     data = resp.json()
     if not isinstance(data, dict):
         raise HostNotificationsError("invalid host response")
@@ -62,7 +44,7 @@ async def mark_notification_read(notification_id: int) -> bool:
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.post(url, headers=headers)
     if resp.status_code >= 400:
-        raise HostNotificationsError(_error_detail(resp))
+        raise HostNotificationsError(error_detail(resp))
     data = resp.json()
     if not isinstance(data, dict):
         raise HostNotificationsError("invalid host response")

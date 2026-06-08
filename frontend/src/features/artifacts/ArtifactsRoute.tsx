@@ -13,7 +13,6 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
-import { useReloadOnAgentRecovery } from "@/hooks/useReloadOnAgentRecovery";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatFull, formatRelative } from "@/lib/format-time";
 import { toastAction } from "@/lib/toast-copy";
@@ -183,14 +182,14 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
     }
   };
 
-  useReloadOnAgentRecovery(() => {
+  useEffect(() => {
     void loadCategories();
     if (!categoryId) {
       setItems([]);
       return;
     }
     void loadArtifacts();
-  });
+  }, [categoryId]);
 
   useEffect(() => {
     if (!categoryId) {

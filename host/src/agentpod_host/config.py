@@ -1,22 +1,16 @@
-"""宿主全局配置（环境变量驱动）。"""
+"""宿主全局配置（settings.json 驱动）。"""
 
 from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import AliasChoices, Field
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
+    model_config = SettingsConfigDict(extra="ignore", case_sensitive=False)
 
-    github_client_id: str = Field(default="", alias="GITHUB_CLIENT_ID")
-    github_client_secret: str = Field(default="", alias="GITHUB_CLIENT_SECRET")
-    oauth_redirect_uri: str = Field(
-        default="http://localhost/api/oauth/github/callback",
-        alias="OAUTH_REDIRECT_URI",
-    )
     mcp_oauth_redirect_uri: str = Field(
         default="http://localhost/api/oauth/mcp/callback",
         alias="MCP_OAUTH_REDIRECT_URI",
@@ -25,17 +19,10 @@ class Settings(BaseSettings):
     encryption_key: str = Field(default="", alias="ENCRYPTION_KEY")
     session_secret: str = Field(default="", alias="SESSION_SECRET")
 
-    database_url: str = Field(
-        default="postgresql+asyncpg://agentpod:agentpod-dev-password@localhost:5432/agentpod",
-        alias="DATABASE_URL",
-    )
-    redis_url: str = Field(default="redis://redis:6379/0", alias="REDIS_URL")
+    host_sqlite_path: str = Field(default="/data/host.sqlite", alias="HOST_SQLITE_PATH")
 
-    docker_host: str = Field(
-        default="tcp://docker-proxy:2375",
-        validation_alias=AliasChoices("AGENTPOD_DOCKER_HOST", "DOCKER_HOST"),
-    )
-    agent_image: str = Field(default="agentpod-agent:latest", alias="AGENT_IMAGE")
+    agent_service_url: str = Field(default="http://127.0.0.1:8080", alias="AGENT_SERVICE_URL")
+    agent_internal_token: str = Field(default="", alias="AGENT_INTERNAL_TOKEN")
     enable_terminal: bool = Field(default=False, alias="ENABLE_TERMINAL")
     terminal_whitelist: str = Field(default="", alias="TERMINAL_WHITELIST")
     terminal_denylist: str = Field(default="sh,bash,zsh,dash,fish", alias="TERMINAL_DENYLIST")
@@ -62,17 +49,10 @@ class Settings(BaseSettings):
     tavily_api_key: str = Field(default="", alias="TAVILY_API_KEY")
     jina_api_key: str = Field(default="", alias="JINA_API_KEY")
 
-    embedding_base_url: str = Field(default="http://tei:80", alias="EMBEDDING_BASE_URL")
+    embedding_base_url: str = Field(default="local", alias="EMBEDDING_BASE_URL")
     embedding_model: str = Field(default="BAAI/bge-small-zh-v1.5", alias="EMBEDDING_MODEL")
-    # 聊天附件大小上限（字节），默认 1MB。
     attachment_max_bytes: int = Field(default=1_048_576, alias="ATTACHMENT_MAX_BYTES")
-    attachment_storage: str = Field(default="minio", alias="ATTACHMENT_STORAGE")
-    s3_endpoint: str = Field(default="minio:9000", alias="S3_ENDPOINT")
-    s3_access_key: str = Field(default="", alias="S3_ACCESS_KEY")
-    s3_secret_key: str = Field(default="", alias="S3_SECRET_KEY")
-    s3_bucket: str = Field(default="agentpod-attachments", alias="S3_BUCKET")
-    s3_region: str = Field(default="us-east-1", alias="S3_REGION")
-    s3_use_ssl: bool = Field(default=False, alias="S3_USE_SSL")
+    attachment_storage: str = Field(default="local", alias="ATTACHMENT_STORAGE")
 
     internal_network_guard_enabled: bool = Field(default=True, alias="INTERNAL_NETWORK_GUARD_ENABLED")
     internal_allowed_cidrs: str = Field(
@@ -82,15 +62,6 @@ class Settings(BaseSettings):
     internal_rate_limit_per_minute: int = Field(default=120, alias="INTERNAL_RATE_LIMIT_PER_MINUTE")
     attachment_delete_max_keys: int = Field(default=100, alias="ATTACHMENT_DELETE_MAX_KEYS")
 
-    agent_memory_limit: str = Field(default="512m", alias="AGENT_MEMORY_LIMIT")
-    agent_cpu_quota: int = Field(default=50000, alias="AGENT_CPU_QUOTA")
-    agent_pids_limit: int = Field(default=256, alias="AGENT_PIDS_LIMIT")
-    # 每用户 /data 卷磁盘配额（如 "2g"）。空=不限。
-    # 仅在宿主 docker 卷所在 FS 支持 project quota（XFS pquota / ext4 project）时可用。
-    agent_disk_limit: str = Field(default="", alias="AGENT_DISK_LIMIT")
-
-    idle_pause_seconds: int = Field(default=1800, alias="IDLE_PAUSE_SECONDS")
-    pause_to_stop_seconds: int = Field(default=10800, alias="PAUSE_TO_STOP_SECONDS")
     scheduled_task_retry_max_attempts: int = Field(default=3, alias="SCHEDULED_TASK_RETRY_MAX_ATTEMPTS")
     scheduled_task_retry_initial_delay_seconds: float = Field(
         default=2.0, alias="SCHEDULED_TASK_RETRY_INITIAL_DELAY_SECONDS"
@@ -115,9 +86,11 @@ class Settings(BaseSettings):
     mcp_reconnect_interval_seconds: float = Field(default=60.0, alias="MCP_RECONNECT_INTERVAL_SECONDS")
 
     public_base_url: str = Field(default="http://localhost", alias="PUBLIC_BASE_URL")
-    serve_spa: bool = Field(default=True, alias="SERVE_SPA")
 
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    from agentpod_shared.settings_store import document_to_host_kwargs
+
+    kwargs = document_to_host_kwargs()
+    return Settings.model_construct(**kwargs)
