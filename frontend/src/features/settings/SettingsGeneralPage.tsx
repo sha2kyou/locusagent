@@ -62,15 +62,7 @@ export function SettingsGeneralPage() {
         />
       </SettingsSection>
 
-      <SettingsSection
-        title="时区"
-        description={
-          <>
-            写入 <code className="rounded bg-secondary px-1">~/.agentpod/settings.json</code> 的{" "}
-            <code className="rounded bg-secondary px-1">app.timezone</code>。用于定时任务 Cron 与单次执行时间。
-          </>
-        }
-      >
+      <SettingsSection title="时区">
         <div className="grid max-w-md gap-3">
           <div className="grid gap-1.5">
             <Label>时区</Label>

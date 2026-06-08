@@ -178,18 +178,18 @@ function CodeBlock({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div ref={ref} className="group my-3 overflow-hidden rounded-xl border border-border shadow-xs">
-      <div className="flex items-center justify-between border-b border-border bg-surface-2/80 px-3.5 py-2">
-        <span className="rounded-md bg-surface px-1.5 py-0.5 font-mono text-[11px] lowercase tracking-wide text-muted-foreground">
+    <div ref={ref} className="apod-code-block group my-3 overflow-hidden rounded-xl">
+      <div className="apod-code-block-header flex items-center justify-between px-3.5 py-2">
+        <span className="apod-code-block-lang rounded-md px-1.5 py-0.5 font-mono text-[11px] lowercase tracking-wide">
           {lang || "code"}
         </span>
-        <div className="flex items-center gap-0.5">
+        <div className="apod-code-block-actions flex items-center gap-0.5">
           <button
             type="button"
             onClick={() => setWrap((v) => !v)}
             className={cn(
-              "inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface hover:text-foreground",
-              wrap && "bg-surface text-foreground",
+              "apod-code-block-action inline-flex size-6 items-center justify-center rounded-md",
+              wrap && "apod-code-block-action-active",
             )}
             aria-label="自动换行"
             title={wrap ? "取消换行" : "自动换行"}
@@ -199,17 +199,21 @@ function CodeBlock({ children }: { children: ReactNode }) {
           <button
             type="button"
             onClick={copy}
-            className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
+            className="apod-code-block-action inline-flex size-6 items-center justify-center rounded-md"
             aria-label="复制代码"
             title="复制"
           >
-            {copied ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5" />}
+            {copied ? (
+              <Check className="size-3.5 apod-code-block-action-success" />
+            ) : (
+              <Copy className="size-3.5" />
+            )}
           </button>
         </div>
       </div>
       <pre
         className={cn(
-          "overflow-x-auto bg-surface-2/50 p-4 text-[13px] leading-relaxed",
+          "apod-code-block-body overflow-x-auto p-4 text-[13px] leading-relaxed",
           wrap && "whitespace-pre-wrap wrap-break-word",
         )}
       >
