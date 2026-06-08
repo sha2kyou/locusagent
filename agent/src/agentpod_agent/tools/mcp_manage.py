@@ -1,4 +1,4 @@
-"""mcp_view / mcp_manage：MCP 服务查询与增删改。"""
+"""mcp_view / mcp_manage / mcp_refresh：MCP 服务查询、增删改与重连。"""
 
 from __future__ import annotations
 
@@ -172,6 +172,37 @@ async def _update_mcp(args: dict[str, Any]) -> ToolResult:
     )
 
 
+async def _refresh_mcp(args: dict[str, Any]) -> ToolResult:
+    name = pick_str(args, "name")
+    if not name:
+        raise ToolError("name is required")
+    existing = await run_in_thread(get_mcp_server, name)
+    if existing is None:
+        raise ToolError(f"mcp server not found: {name}")
+
+    from ..workspace import get_workspace_id, mcp_tool_category
+    from ..workspace_runtime import mark_mcp_runtime_ready, refresh_mcp_server
+    from .registry import registry
+
+    wid = get_workspace_id()
+    runtime = await refresh_mcp_server(wid, name)
+    mark_mcp_runtime_ready(wid)
+    enabled = is_mcp_server_enabled(name)
+    target = mcp_tool_category(name, wid)
+    for tool in registry.all():
+        if tool.category == target:
+            tool.enabled = enabled
+    if runtime.get("connected"):
+        return ToolResult(
+            content=f"mcp server '{name}' refreshed and connected, tools={len(runtime.get('tools', []))}",
+            metadata=runtime,
+        )
+    return ToolResult(
+        content=f"mcp server '{name}' refresh failed: {runtime.get('error', 'unknown')}",
+        metadata=runtime,
+    )
+
+
 async def _remove_mcp(args: dict[str, Any]) -> ToolResult:
     name = pick_str(args, "name")
     if not name:
@@ -213,10 +244,30 @@ register_builtin(
 
 register_builtin(
     Tool(
+        name="mcp_refresh",
+        description=(
+            "重连指定 MCP 服务并同步工具列表（OAuth 完成后、连接异常或工具变更后使用）。"
+            "查询状态用 mcp_view；增删改配置用 mcp_manage。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "MCP 服务名（必填）。"},
+            },
+            "required": ["name"],
+            "additionalProperties": False,
+        },
+        handler=_refresh_mcp,
+    )
+)
+
+
+register_builtin(
+    Tool(
         name="mcp_manage",
         description=(
             "管理 MCP 服务连接：add（新增）/ update（更新配置）/ remove（移除）。\n"
-            "查询用 mcp_view；不能创建/删除/切换 AgentPod 多工作区容器。"
+            "查询用 mcp_view；重连/刷新工具列表用 mcp_refresh；不能创建/删除/切换 AgentPod 多工作区容器。"
         ),
         parameters={
             "type": "object",

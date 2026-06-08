@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMessage, type ToolCallMessagePartComponent } from "@assistant-ui/react";
 import { Blocks, Brain, HelpCircle, Send, Sparkles, Wrench } from "lucide-react";
 import { CollapsibleMetaBlock } from "./CollapsibleMetaBlock";
@@ -6,27 +6,9 @@ import { useImeEnterGuard } from "@/lib/ime-enter";
 import { Button } from "@/components/ui/button";
 import type { ToolKind } from "@/api/types";
 import { useChat } from "./ChatProvider";
-import type { ChatMessage, ChatPart, ToolPart } from "./model";
+import type { ToolPart } from "./model";
 import { formatToolArgsPreview } from "./tool-args";
 import { isTodoTool, parseTodoPlan } from "./todo";
-
-function isRenderableGenericTool(part: ChatPart): part is ToolPart {
-  if (part.type !== "tool") return false;
-  if (isClarifyTool(part.toolName) && !part.running && parseClarify(part.preview)) return false;
-  if (isTodoTool(part.toolName) && !part.running && parseTodoPlan(part.preview)) return false;
-  return true;
-}
-
-function findLastGenericToolId(messages: ChatMessage[]): string | null {
-  let lastId: string | null = null;
-  for (const msg of messages) {
-    if (msg.role !== "assistant") continue;
-    for (const p of msg.parts) {
-      if (isRenderableGenericTool(p)) lastId = p.id;
-    }
-  }
-  return lastId;
-}
 
 const KIND_ICON = {
   skill: Sparkles,
@@ -248,8 +230,6 @@ function GenericToolBlock({
     }
   }, [running, elapsedMs, startedAt]);
 
-  const { messages } = useChat();
-  const lastGenericToolId = useMemo(() => findLastGenericToolId(messages), [messages]);
   const preview = typeof result === "string" ? result : result ? JSON.stringify(result) : "";
   const elapsed = resolveElapsedLabel({
     startedAt,
@@ -258,13 +238,12 @@ function GenericToolBlock({
     now,
   });
   const hasResult = preview.trim().length > 0;
-  const defaultExpanded = blockId === lastGenericToolId;
   const paramPreview = argsPreview ?? resolveArgsPreviewFromProps(args);
 
   return (
     <CollapsibleMetaBlock
       blockId={blockId}
-      defaultOpen={defaultExpanded}
+      active={running}
       title={toolName}
       running={running}
       showRunningBadge

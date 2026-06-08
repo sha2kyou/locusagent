@@ -266,6 +266,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  /** 流式 delta 单独刷帧，避免 React 18 在同一次 SSE read 内批量合并 setState */
+  const updateLastAssistantStream = (fn: (parts: ChatPart[]) => ChatPart[]) => {
+    queueMicrotask(() => {
+      if (!mountedRef.current) return;
+      updateLastAssistant(fn);
+    });
+  };
+
   const stopRunningTools = (reason: string) => {
     updateLastAssistant((parts) =>
       parts.map((p) =>
@@ -577,11 +585,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               const reasoning = delta?.reasoning_content;
               const content = delta?.content;
               if (reasoning) {
-                updateLastAssistant((parts) => appendThinking(parts, reasoning));
+                updateLastAssistantStream((parts) => appendThinking(parts, reasoning));
               }
               if (content) {
                 firstToken = false;
-                updateLastAssistant((parts) => appendText(parts, content));
+                updateLastAssistantStream((parts) => appendText(parts, content));
               }
             }
           },

@@ -231,7 +231,14 @@ async fn proxy_http(
     let mut response_headers = axum::http::HeaderMap::new();
     copy_response_headers(upstream.headers(), &mut response_headers);
 
-    if upstream.headers().contains_key(header::CONTENT_LENGTH) {
+    // SSE 使用 chunked 传输，无 Content-Length；若整包缓冲会导致聊天流式输出一次性到达。
+    let is_sse = upstream
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.starts_with("text/event-stream"));
+
+    if is_sse || !upstream.headers().contains_key(header::CONTENT_LENGTH) {
         let stream = upstream.bytes_stream();
         let body = Body::from_stream(stream);
         let mut response = Response::new(body);

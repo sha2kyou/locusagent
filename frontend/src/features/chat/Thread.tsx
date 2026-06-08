@@ -527,6 +527,10 @@ function AssistantPartList({
     (p) => p.type === "tool" && isTodoTool(p.toolName) && (p.running || Boolean(p.preview)),
   );
   const todoPlan = resolveTodoPlan(fromParts, sessionTodoPlan, isLastAssistant, hasTodoInMessage);
+  const todoActive =
+    Boolean(todoPlan) &&
+    ((streaming && isLastAssistant && hasTodoInMessage) ||
+      todoPlan!.steps.some((s) => s.status === "in_progress"));
   return (
     <>
       {chatMsg.parts.map((p, i) => {
@@ -552,7 +556,7 @@ function AssistantPartList({
         return <ToolPartView key={p.id} part={p} />;
       })}
       {chatMsg.error ? <Markdown text={`\n\n> ⚠ ${chatMsg.error}`} /> : null}
-      {todoPlan ? <TodoProgressPanel plan={todoPlan} /> : null}
+      {todoPlan ? <TodoProgressPanel plan={todoPlan} active={todoActive} /> : null}
     </>
   );
 }

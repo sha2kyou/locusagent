@@ -226,20 +226,18 @@ function CodeBlock({ children }: { children: ReactNode }) {
 export function ThinkingBlock({
   content,
   isActive = false,
-  defaultOpen = false,
   label = "thinking",
   blockId,
 }: {
   content: string;
   isActive?: boolean;
-  defaultOpen?: boolean;
   label?: string;
   blockId?: string;
 }) {
   return (
     <CollapsibleMetaBlock
       blockId={blockId ?? `think-${hashString(content)}`}
-      defaultOpen={defaultOpen || isActive}
+      active={isActive}
       title={label}
       activeTitle="thinking"
       running={isActive}

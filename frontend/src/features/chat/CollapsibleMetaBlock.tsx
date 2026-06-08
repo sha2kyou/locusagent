@@ -3,7 +3,7 @@ import { ChevronRight, Loader2 } from "lucide-react";
 import { ListCard } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
 import { findScrollParent } from "@/lib/scroll-parent";
-import { usePinnedCollapse } from "@/lib/use-pinned-collapse";
+import { useActiveCollapse } from "@/lib/use-pinned-collapse";
 
 export function toggleWithScrollPreservation(toggle: () => void, triggerEl: HTMLButtonElement) {
   const scroller = findScrollParent(triggerEl);
@@ -32,7 +32,7 @@ function BlockLeading({ running, icon }: { running: boolean; icon: ReactNode }) 
 
 export function CollapsibleMetaBlock({
   blockId,
-  defaultOpen,
+  active = false,
   title,
   activeTitle,
   running = false,
@@ -42,9 +42,11 @@ export function CollapsibleMetaBlock({
   hidePreviewWhenOpen = true,
   trailing,
   children,
+  className,
 }: {
   blockId: string;
-  defaultOpen: boolean;
+  /** 进行中：强制展开且不可折叠 */
+  active?: boolean;
   title: string;
   activeTitle?: string;
   running?: boolean;
@@ -55,15 +57,16 @@ export function CollapsibleMetaBlock({
   hidePreviewWhenOpen?: boolean;
   trailing?: ReactNode;
   children?: ReactNode;
+  className?: string;
 }) {
-  const [open, toggleOpen] = usePinnedCollapse(blockId, defaultOpen);
-  const expandable = Boolean(children);
+  const { isOpen, toggleOpen, expandable: canToggle } = useActiveCollapse(blockId, active);
+  const expandable = Boolean(children) && canToggle;
   const displayTitle = running && activeTitle ? activeTitle : title;
   const previewText = preview?.replace(/\s+/g, " ").trim();
-  const showPreview = Boolean(previewText) && (!open || !hidePreviewWhenOpen);
+  const showPreview = Boolean(previewText) && (!isOpen || !hidePreviewWhenOpen);
 
   return (
-    <ListCard className="my-1.5 overflow-hidden p-0">
+    <ListCard className={cn("my-1.5 overflow-hidden p-0", className)}>
       <button
         type="button"
         disabled={!expandable}
@@ -93,12 +96,12 @@ export function CollapsibleMetaBlock({
           <ChevronRight
             className={cn(
               "size-3.5 shrink-0 text-muted-foreground transition-transform duration-150",
-              open && "rotate-90",
+              isOpen && "rotate-90",
             )}
           />
         ) : null}
       </button>
-      {open && children ? (
+      {isOpen && children ? (
         <div className="border-t border-border bg-surface/30 px-3.5 py-3">{children}</div>
       ) : null}
     </ListCard>

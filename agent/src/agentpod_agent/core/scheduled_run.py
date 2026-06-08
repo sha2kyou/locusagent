@@ -49,6 +49,7 @@ _SCHEDULED_DISABLED_TOOLS = {
     "session_delete",
     "notification_mark_read",
     "mcp_manage",
+    "mcp_refresh",
     "todo",
 }
 _SCHEDULED_BLOCKED_TOOL_ACTIONS = {

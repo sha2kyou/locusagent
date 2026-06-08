@@ -1,8 +1,6 @@
-import { AlertCircle, Check, ChevronDown, Circle, ListTodo, Loader2, Minus } from "lucide-react";
-import { ListCard } from "@/components/ui/panel";
+import { AlertCircle, Check, ChevronRight, Circle, ListTodo, Loader2, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { findScrollParent } from "@/lib/scroll-parent";
-import { usePinnedCollapse } from "@/lib/use-pinned-collapse";
+import { CollapsibleMetaBlock } from "./CollapsibleMetaBlock";
 import type { TodoPlan, TodoStep, TodoStepStatus } from "./todo";
 
 function StepIcon({ status }: { status: TodoStepStatus }) {
@@ -30,7 +28,6 @@ function TodoStepRow({ step, index }: { step: TodoStep; index: number }) {
     <li className="relative flex gap-3 pb-3.5 last:pb-0">
       <div className="flex flex-col items-center">
         <StepIcon status={step.status} />
-        {/* 连接线：渐变淡出，最后一项隐藏 */}
         <span
           className="mt-1.5 w-px flex-1 last:hidden"
           style={{ background: "linear-gradient(to bottom, var(--color-border-strong) 0%, var(--color-border) 60%, transparent 100%)" }}
@@ -79,58 +76,28 @@ function planSummary(plan: TodoPlan): string {
   return text;
 }
 
-export function TodoProgressPanel({ plan }: { plan: TodoPlan }) {
-  const hasActive = plan.steps.some((s) => s.status === "in_progress");
-  const [open, toggleOpen] = usePinnedCollapse(plan.plan_id, true);
-
-  const toggle = (triggerEl: HTMLButtonElement) => {
-    const scroller = findScrollParent(triggerEl);
-    const prevTop = scroller?.scrollTop ?? 0;
-    toggleOpen();
-    requestAnimationFrame(() => {
-      if (scroller) scroller.scrollTop = prevTop;
-      setTimeout(() => {
-        if (scroller) scroller.scrollTop = prevTop;
-      }, 0);
-    });
-  };
+export function TodoProgressPanel({ plan, active = false }: { plan: TodoPlan; active?: boolean }) {
+  const hasActiveStep = plan.steps.some((s) => s.status === "in_progress");
+  const running = active || hasActiveStep;
 
   return (
-    <ListCard className="my-1.5 overflow-hidden border-brand/20 bg-brand/[0.035] p-0 ring-1 ring-inset ring-brand/10 shadow-sm">
-      <div className="flex items-start gap-3 border-b border-brand/10 px-4 py-3">
-        <ListTodo className="mt-0.5 size-4 shrink-0 text-brand" />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-medium tracking-wide text-brand/90">任务进度</span>
-            {hasActive ? (
-              <span className="rounded-full bg-brand/10 px-1.5 py-0.5 text-[10px] font-medium text-brand">
-                进行中
-              </span>
-            ) : null}
-          </div>
-          <p className="mt-0.5 truncate text-sm font-medium text-foreground">{plan.title}</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">{planSummary(plan)}</p>
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={(e) => toggle(e.currentTarget)}
-        className="flex w-full items-center justify-between px-4 py-2.5 text-left"
-      >
-        <span className="text-xs text-muted-foreground">步骤</span>
-        <ChevronDown
-          className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
-        />
-      </button>
-      {open ? (
-        <div className="border-t border-brand/10 px-4 py-3">
-          <ol className="pl-1">
-            {plan.steps.map((step, i) => (
-              <TodoStepRow key={step.id} step={step} index={i} />
-            ))}
-          </ol>
-        </div>
-      ) : null}
-    </ListCard>
+    <CollapsibleMetaBlock
+      blockId={plan.plan_id}
+      active={running}
+      title={plan.title}
+      activeTitle="任务进度"
+      running={running}
+      showRunningBadge
+      icon={<ListTodo className="size-3.5" />}
+      preview={planSummary(plan)}
+      hidePreviewWhenOpen={false}
+      className="border-brand/20 bg-brand/[0.035] ring-1 ring-inset ring-brand/10 shadow-sm"
+    >
+      <ol className="pl-1">
+        {plan.steps.map((step, i) => (
+          <TodoStepRow key={step.id} step={step} index={i} />
+        ))}
+      </ol>
+    </CollapsibleMetaBlock>
   );
 }

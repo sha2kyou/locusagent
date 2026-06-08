@@ -48,6 +48,7 @@ MUTATING_TOOL_NAMES = frozenset(
         "session_delete",
         "notification_mark_read",
         "mcp_manage",
+        "mcp_refresh",
         "scheduled_task_manage",
         "clarify",
         "todo",

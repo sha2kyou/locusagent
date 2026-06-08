@@ -282,6 +282,28 @@ async def _worker(
                     pass
 
     heartbeat_task = asyncio.create_task(_heartbeat(), name=f"run-heartbeat-{handle.run_id}")
+    persist_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+
+    async def _persist_drainer() -> None:
+        while True:
+            ev = await persist_queue.get()
+            if ev is None:
+                persist_queue.task_done()
+                break
+            try:
+                await _persist_event(handle.session_id, handle.run_id, ev, state)
+            except Exception as exc:
+                log.warning(
+                    "run_persist_event_failed",
+                    run_id=handle.run_id,
+                    session_id=handle.session_id,
+                    event_type=ev.get("type"),
+                    error=str(exc),
+                )
+            finally:
+                persist_queue.task_done()
+
+    persist_task = asyncio.create_task(_persist_drainer(), name=f"run-persist-{handle.run_id}")
     try:
         async for ev in run_chat_loop_stream(
             messages,
@@ -307,16 +329,7 @@ async def _worker(
                 tool_name = str(public.get("name") or "")
                 public["tool_kind"] = _tool_kind(tool_name)
             await handle.queue.put(public)
-            try:
-                await _persist_event(handle.session_id, handle.run_id, public, state)
-            except Exception as exc:
-                log.warning(
-                    "run_persist_event_failed",
-                    run_id=handle.run_id,
-                    session_id=handle.session_id,
-                    event_type=public.get("type"),
-                    error=str(exc),
-                )
+            await persist_queue.put(public)
     except asyncio.CancelledError:
         stream_error = CANCELLED_MARK
         log.info("run_worker_cancelled", run_id=handle.run_id, session_id=handle.session_id)
@@ -345,6 +358,8 @@ async def _worker(
         )
     stop_heartbeat.set()
     heartbeat_task.cancel()
+    await persist_queue.put(None)
+    await persist_task
     await _finalize_run(handle.session_id, handle.run_id, state, error=stream_error)
     _active.pop(handle.run_id, None)
 

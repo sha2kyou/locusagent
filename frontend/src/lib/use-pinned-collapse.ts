@@ -28,3 +28,10 @@ export function usePinnedCollapse(blockId: string, defaultOpen: boolean) {
 
   return [open, toggle] as const;
 }
+
+/** 进行中强制展开，结束后默认收起；结束后可手动切换。 */
+export function useActiveCollapse(blockId: string, active: boolean) {
+  const [open, toggleOpen] = usePinnedCollapse(blockId, false);
+  const isOpen = active ? true : open;
+  return { isOpen, toggleOpen, expandable: !active } as const;
+}
