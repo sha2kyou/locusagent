@@ -436,6 +436,12 @@ function AttachmentDrawer({
 const messageMetaRowClass =
   "flex items-center gap-2 opacity-100 transition md:opacity-0 md:group-hover:opacity-100";
 
+function MessageRoleLabel() {
+  return (
+    <span className="text-[11px] font-medium tracking-wide text-muted-foreground">你</span>
+  );
+}
+
 function MessageTimestamp({ iso }: { iso?: string }) {
   if (!iso) return null;
   return (
@@ -464,9 +470,11 @@ function UserMessage() {
     >
       {archived ? (
         <p className="text-[11px] text-muted-foreground">已压缩（不再带入上下文）</p>
-      ) : null}
+      ) : (
+        <MessageRoleLabel />
+      )}
       {hasText ? (
-        <div className="min-w-0 w-full">
+        <div className="min-w-0 max-w-[85%] rounded-xl border border-border bg-surface px-4 py-3 shadow-xs">
           <MessagePrimitive.Parts components={{ Text: UserText }} />
         </div>
       ) : null}
