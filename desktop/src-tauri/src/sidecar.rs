@@ -32,10 +32,18 @@ fn repo_root() -> PathBuf {
 }
 
 fn bundled_python(app: &AppHandle) -> Option<PathBuf> {
-    app.path()
-        .resolve("sidecar-venv/bin/python", BaseDirectory::Resource)
-        .ok()
-        .filter(|p| p.is_file())
+    for name in ["python3.11", "python3", "python"] {
+        let Ok(path) = app
+            .path()
+            .resolve(format!("sidecar-venv/bin/{name}"), BaseDirectory::Resource)
+        else {
+            continue;
+        };
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+    None
 }
 
 fn bundled_skills_dir(app: &AppHandle) -> Option<PathBuf> {

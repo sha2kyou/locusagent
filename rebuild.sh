@@ -63,6 +63,24 @@ setup_bundle_resources() {
   cp -R "$ROOT_DIR/shared-skills" "$bundle_root/shared-skills"
 }
 
+repackage_dmg() {
+  local app_src="$ROOT_DIR/desktop/src-tauri/target/release/bundle/macos/AgentPod.app"
+  local dmg_dir="$ROOT_DIR/desktop/src-tauri/target/release/bundle/dmg"
+  local version
+  version="$(tr -d '[:space:]' < "$ROOT_DIR/VERSION")"
+  local dmg_out="$dmg_dir/AgentPod_${version}_aarch64.dmg"
+
+  if [[ ! -d "$app_src" ]]; then
+    echo "error: missing $app_src" >&2
+    exit 1
+  fi
+
+  rm -f "$dmg_dir"/AgentPod_*.dmg
+  mkdir -p "$dmg_dir"
+  echo "==> repackage DMG from relocated AgentPod.app"
+  hdiutil create -volname "AgentPod" -srcfolder "$app_src" -ov -format UDZO "$dmg_out"
+}
+
 publish_desktop_artifacts() {
   local dist="$ROOT_DIR/dist"
   local app_src="$ROOT_DIR/desktop/src-tauri/target/release/bundle/macos/AgentPod.app"
@@ -132,6 +150,7 @@ rebuild_desktop() {
     echo "==> embed Python.framework into AgentPod.app"
     bash "$ROOT_DIR/scripts/relocate-bundle-python.sh" \
       "$ROOT_DIR/desktop/src-tauri/target/release/bundle/macos/AgentPod.app"
+    repackage_dmg
   fi
 
   publish_desktop_artifacts
