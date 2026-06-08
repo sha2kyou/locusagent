@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ClipboardEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ComposerPrimitive,
   MessagePrimitive,
@@ -16,7 +16,7 @@ import { useCopy } from "@/lib/useCopy";
 import {
   AGENT_COMPOSER_PLACEHOLDER,
 } from "@/lib/agent-status-copy";
-import { Markdown, ProseMarkdown, ThinkingBlock } from "./Markdown";
+import { Markdown, ThinkingBlock } from "./Markdown";
 import type { ChatMessage } from "./model";
 import { ToolPartView } from "./ToolEvent";
 import { extractLatestTodoPlan, applyHistoricalTodoInterrupt, isTodoTool, type TodoPlan } from "./todo";
@@ -35,9 +35,7 @@ const PROMPT_CHIPS = [
 ];
 const EMPTY_ATTACHMENTS: ChatAttachment[] = [];
 
-const UserText: TextMessagePartComponent = ({ text }) => (
-  <ProseMarkdown text={text} className="[&_p]:my-0" />
-);
+const UserText: TextMessagePartComponent = ({ text }) => <Markdown text={text} />;
 
 export function Thread() {
   return (
@@ -451,13 +449,6 @@ function MessageTimestamp({ iso }: { iso?: string }) {
   );
 }
 
-function copyUserBubbleAsPlainText(e: ClipboardEvent<HTMLDivElement>) {
-  const selection = window.getSelection()?.toString();
-  if (!selection) return;
-  e.preventDefault();
-  e.clipboardData.setData("text/plain", selection);
-}
-
 function UserMessage() {
   const { messageAttachments, messages } = useChat();
   const text = useMessageText();
@@ -468,18 +459,14 @@ function UserMessage() {
   const { selectedAttachment, setSelectedAttachment, selectAttachment } = useAttachmentSelect();
   const hasText = text.length > 0;
   return (
-    <MessagePrimitive.Root className="group mb-5 flex flex-col items-end apod-enter-up">
-      {hasText || archived ? (
-        <div
-          className={cn(
-            "apod-user-bubble max-w-[80%] rounded-2xl rounded-br-sm bg-brand px-4 py-2.5 text-sm text-brand-foreground shadow-sm",
-            archived && "opacity-55",
-          )}
-          onCopy={copyUserBubbleAsPlainText}
-        >
-          {archived ? (
-            <p className="mb-1 text-[11px] text-brand-foreground/50">已压缩（不再带入上下文）</p>
-          ) : null}
+    <MessagePrimitive.Root
+      className={cn("group mb-6 flex flex-col items-end gap-1 text-sm apod-enter-up", archived && "opacity-55")}
+    >
+      {archived ? (
+        <p className="text-[11px] text-muted-foreground">已压缩（不再带入上下文）</p>
+      ) : null}
+      {hasText ? (
+        <div className="min-w-0 w-full">
           <MessagePrimitive.Parts components={{ Text: UserText }} />
         </div>
       ) : null}
@@ -489,7 +476,7 @@ function UserMessage() {
         onSelect={selectAttachment}
       />
       <AttachmentDrawer file={selectedAttachment} onClose={() => setSelectedAttachment(null)} />
-      <div className={cn(messageMetaRowClass, "mt-0.5 justify-end")}>
+      <div className={cn(messageMetaRowClass, "justify-end")}>
         <MessageTimestamp iso={chatMsg?.createdAt} />
         <CopyButton text={text} />
       </div>
