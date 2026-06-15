@@ -40,7 +40,12 @@ from ..core.persistence import (
     _compose_user_content_with_attachments,
 )
 from ..core.post_run import schedule_post_run
-from ..core.run_manager import ERROR, FINISHED, reconcile_session_active_handles, start_stream_run
+from ..core.run_manager import (
+    detach_run_subscriber,
+    reconcile_session_active_handles,
+    start_stream_run,
+)
+from ..core.run_sse import iter_run_sse
 from ..core.session_title import schedule_session_title_generation
 from ..core.system_prompt import get_or_create_system_prompt as _get_or_create_system_prompt
 from ..logging import get_logger
@@ -116,16 +121,6 @@ class ChatRequest(BaseModel):
 
     model_config = {"populate_by_name": True}
 
-
-def _tool_kind(name: str | None) -> str:
-    n = (name or "").lower()
-    if n.startswith("skill_") or "skill" in n:
-        return "skill"
-    if n.startswith("mcp_") or "mcp" in n:
-        return "mcp"
-    if "memory" in n:
-        return "memory"
-    return "tool"
 
 
 async def _ensure_session(req: ChatRequest) -> tuple[str, bool]:
@@ -366,7 +361,7 @@ async def chat_completions(req: ChatRequest):
                 raise
         else:
             try:
-                handle = start_stream_run(
+                handle, subscriber = start_stream_run(
                     run_id=run_id,
                     session_id=sid,
                     messages=messages,
@@ -378,73 +373,19 @@ async def chat_completions(req: ChatRequest):
                 await update_run(run_id, status="failed", error_message=str(exc))
                 raise
 
-    def _chunk(delta: dict[str, Any], **extra_fields: Any) -> str:
-        body: dict[str, Any] = {
-            "id": chat_id,
-            "object": "chat.completion.chunk",
-            "created": created,
-            "model": public_model,
-            "choices": [{"index": 0, "delta": delta, "finish_reason": None}],
-        }
-        body.update(extra_fields)
-        return f"data: {json.dumps(body, ensure_ascii=False)}\n\n"
-
     async def _stream():
-        yield _chunk({"role": "assistant"}, session_id=sid, run_id=run_id)
         try:
-            while True:
-                ev = await handle.queue.get()
-                t = ev.get("type")
-                if t == FINISHED:
-                    break
-                if t == ERROR:
-                    yield _chunk({}, x_event="error", x_message=ev.get("message") or "unknown")
-                    break
-                if t == "reasoning_delta":
-                    yield _chunk({"reasoning_content": ev.get("content") or ""})
-                elif t == "delta":
-                    yield _chunk({"content": ev.get("content") or ""})
-                elif t == "tool_call":
-                    tool_name = str(ev.get("name") or "")
-                    kind = ev.get("tool_kind") or _tool_kind(tool_name)
-                    yield _chunk(
-                        {},
-                        x_event="tool_call",
-                        x_tool_name=tool_name,
-                        x_tool_kind=kind,
-                        x_tool_id=ev.get("id"),
-                        x_tool_args=ev.get("arguments"),
-                    )
-                elif t == "tool_result":
-                    yield _chunk(
-                        {},
-                        x_event="tool_result",
-                        x_tool_call_id=ev.get("tool_call_id"),
-                        x_tool_name=ev.get("name"),
-                        x_preview=ev.get("preview"),
-                        x_elapsed_ms=ev.get("elapsed_ms"),
-                    )
-                elif t == "attachment":
-                    yield _chunk(
-                        {},
-                        x_event="attachment",
-                        x_attachment_id=ev.get("id"),
-                        x_attachment_name=ev.get("name"),
-                    )
-        except asyncio.CancelledError:
-            log.info("sse_disconnected", run_id=run_id, session_id=sid)
-            raise
-
-        done = {
-            "id": chat_id,
-            "object": "chat.completion.chunk",
-            "created": created,
-            "model": public_model,
-            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
-            "run_id": run_id,
-        }
-        yield f"data: {json.dumps(done, ensure_ascii=False)}\n\n"
-        yield "data: [DONE]\n\n"
+            async for chunk in iter_run_sse(
+                subscriber,
+                chat_id=chat_id,
+                public_model=public_model,
+                created=created,
+                session_id=sid,
+                run_id=run_id,
+            ):
+                yield chunk
+        finally:
+            detach_run_subscriber(handle, subscriber)
 
     return StreamingResponse(
         _stream(),

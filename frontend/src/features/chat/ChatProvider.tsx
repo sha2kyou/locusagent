@@ -20,7 +20,8 @@ import {
 } from "@/api/endpoints";
 import type { SessionMeta } from "@/api/types";
 import { ApiError, getWorkspaceId, setWorkspaceId } from "@/api/client";
-import { streamChatCompletion } from "@/api/stream";
+import type { ChatChunk } from "@/api/types";
+import { streamChatCompletion, streamActiveRun } from "@/api/stream";
 import { formatStreamRetryToast, userMessageFromContainerError } from "@/lib/agent-status-copy";
 import { sha256HexFile, sha256HexText } from "@/lib/file-digest";
 import { toastAction } from "@/lib/toast-copy";
@@ -34,17 +35,15 @@ import {
   type ChatAttachment,
   type ChatMessage,
   type ChatPart,
+  type ToolPart,
   emptyAssistant,
   uid,
   userMessage,
 } from "./model";
 import { convertMessage } from "./convert";
-import { coalesceHistory, historyPollKey } from "./history";
+import { coalesceHistory } from "./history";
 import { isTodoTool, parseTodoPlan, type TodoPlan } from "./todo";
 import { formatToolArgsPreview } from "./tool-args";
-
-/** 切页回来后轮询恢复 active run 的间隔（毫秒） */
-const ACTIVE_RUN_POLL_MS = 500;
 
 export interface PendingAttachment {
   id: string;
@@ -129,6 +128,14 @@ function isImageInputUnsupportedError(err: unknown): boolean {
     (joined.includes("support image input") ||
       joined.includes("no endpoints found that support image input"))
   );
+}
+
+const ACTIVE_RUN_ATTACH_MAX_RETRIES = 2;
+const ACTIVE_RUN_ATTACH_RETRY_MS = 400;
+
+function ensureLiveAssistant(messages: ChatMessage[]): ChatMessage[] {
+  if (messages.some((m) => m.role === "assistant")) return messages;
+  return [...messages, emptyAssistant()];
 }
 
 function chatPath(sessionId: string | null, workspaceId?: string | null): string {
@@ -261,11 +268,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // ---- 流式辅助：更新最后一条 assistant ----
   const updateLastAssistant = (fn: (parts: ChatPart[]) => ChatPart[], error?: string) => {
     setMessages((prev) => {
-      const idx = lastAssistantIndex(prev);
-      if (idx < 0) return prev;
-      const m = prev[idx];
+      let base = prev;
+      let idx = lastAssistantIndex(base);
+      if (idx < 0) {
+        base = [...base, emptyAssistant()];
+        idx = base.length - 1;
+      }
+      const m = base[idx];
       const next = { ...m, parts: fn(m.parts), error: error ?? m.error };
-      return [...prev.slice(0, idx), next, ...prev.slice(idx + 1)];
+      return [...base.slice(0, idx), next, ...base.slice(idx + 1)];
     });
   };
 
@@ -325,42 +336,235 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     titlePollTimerRef.current = timer;
   };
 
-  // ---- active-run 轮询恢复 ----
-  const startActiveRunPoll = (sid: string) => {
-    const token = ++pollTokenRef.current;
-    setIsRunning(true);
-    let lastKey = "";
-    const tick = async () => {
-      if (token !== pollTokenRef.current) return;
-      try {
-        const { run } = await getActiveRun(sid);
-        const { items, todo_plan: todoPlan } = await getSessionMessages(sid);
-        const live = run?.status === "running";
-        const key = historyPollKey(items);
-        if (key !== lastKey) {
-          lastKey = key;
-          setMessages(coalesceHistory(items, { live }));
-          setSessionTodoPlan(parseTodoPlan(todoPlan));
-        }
-        if (live) {
-          if (token === pollTokenRef.current) window.setTimeout(tick, ACTIVE_RUN_POLL_MS);
-        } else {
-          setIsRunning(false);
-        }
-      } catch {
-        setIsRunning(false);
+  // ---- 流式事件处理（新请求与 active run 重连共用） ----
+  const applyStreamSync = (sync: NonNullable<ChatChunk["x_sync"]>) => {
+    const reasoning = (sync.reasoning_content || "").trim();
+    const content = (sync.content || "").trim();
+    const syncId = sync.assistant_message_id != null ? `a_${sync.assistant_message_id}` : undefined;
+    setMessages((prev) => {
+      const idx = lastAssistantIndex(prev);
+      const toolParts =
+        idx >= 0 ? prev[idx].parts.filter((p): p is ToolPart => p.type === "tool") : [];
+      const parts: ChatPart[] = [];
+      if (reasoning) parts.push({ type: "thinking", text: reasoning, completed: false });
+      if (content) parts.push({ type: "text", text: content });
+      const merged = [...parts, ...toolParts];
+      if (idx >= 0) {
+        const m = prev[idx];
+        const next = {
+          ...m,
+          id: syncId ?? m.id,
+          parts: merged.length ? merged : m.parts,
+        };
+        return [...prev.slice(0, idx), next, ...prev.slice(idx + 1)];
       }
-    };
-    void tick();
+      const assistant: ChatMessage = {
+        ...emptyAssistant(),
+        ...(syncId ? { id: syncId } : {}),
+        parts: merged,
+      };
+      return [...prev, assistant];
+    });
   };
 
-  const stopActiveRunPoll = () => {
+  const resyncLiveSession = async (sid: string) => {
+    const [{ items, todo_plan: todoPlan }, { run }] = await Promise.all([
+      getSessionMessages(sid),
+      getActiveRun(sid),
+    ]);
+    const live = run?.status === "running";
+    setMessages(ensureLiveAssistant(coalesceHistory(items, { live })));
+    setSessionTodoPlan(parseTodoPlan(todoPlan));
+    return run;
+  };
+
+  const applyStreamChunk = (chunk: ChatChunk, opts: { navigateSession?: boolean } = {}) => {
+    if (!mountedRef.current) return;
+    const navigateSession = opts.navigateSession ?? false;
+    if (chunk.session_id && navigateSession) {
+      if (!currentIdRef.current) setCurrent(chunk.session_id);
+      const path = chatPath(chunk.session_id, urlWorkspaceId);
+      if (window.location.pathname !== path) {
+        navigate(path, { replace: true });
+      }
+      void refreshSessions();
+      watchTitle(chunk.session_id);
+    }
+    const ev = chunk.x_event;
+    if (ev === "sync") {
+      if (chunk.x_sync) applyStreamSync(chunk.x_sync);
+      return;
+    }
+    if (ev === "tool_call") {
+      updateLastAssistant((parts) => [
+        ...completeThinkingParts(parts),
+        {
+          type: "tool",
+          id: chunk.x_tool_id || chunk.x_tool_call_id || uid("t"),
+          toolName: chunk.x_tool_name || "tool",
+          toolKind: chunk.x_tool_kind || "tool",
+          running: true,
+          startedAt: Date.now(),
+          argsPreview: formatToolArgsPreview(chunk.x_tool_args),
+        },
+      ]);
+    } else if (ev === "tool_result") {
+      const id = chunk.x_tool_call_id || chunk.x_tool_id;
+      const preview = chunk.x_preview;
+      const streamElapsedMs =
+        typeof chunk.x_elapsed_ms === "number" && chunk.x_elapsed_ms >= 0
+          ? chunk.x_elapsed_ms
+          : undefined;
+      updateLastAssistant((parts) => {
+        let done = false;
+        const mapped = parts.map((p) => {
+          if (!done && p.type === "tool" && p.running && (!id || p.id === id)) {
+            done = true;
+            return {
+              ...p,
+              running: false,
+              preview,
+              toolName: chunk.x_tool_name || p.toolName,
+              elapsedMs:
+                streamElapsedMs ?? (p.startedAt ? Date.now() - p.startedAt : undefined),
+            };
+          }
+          return p;
+        });
+        if (!done && preview) {
+          mapped.push({
+            type: "tool",
+            id: id || uid("t"),
+            toolName: chunk.x_tool_name || "tool",
+            toolKind: chunk.x_tool_kind || "tool",
+            running: false,
+            preview,
+            startedAt: 0,
+            ...(streamElapsedMs !== undefined ? { elapsedMs: streamElapsedMs } : {}),
+          });
+        }
+        return mapped;
+      });
+      if (isTodoTool(chunk.x_tool_name || "")) {
+        const plan = parseTodoPlan(preview);
+        if (plan) setSessionTodoPlan(plan);
+      }
+    } else if (ev === "attachment") {
+      const attId = chunk.x_attachment_id;
+      const attName = chunk.x_attachment_name || "file";
+      if (!attId) return;
+      setMessages((prev) => {
+        const next = [...prev];
+        for (let i = next.length - 1; i >= 0; i--) {
+          if (next[i].role !== "assistant") continue;
+          const existing = next[i].attachments ?? [];
+          if (existing.some((a) => a.id === attId)) return prev;
+          next[i] = {
+            ...next[i],
+            attachments: [
+              ...existing,
+              {
+                id: attId,
+                name: attName,
+                kind: "other",
+                processable: false,
+              },
+            ],
+          };
+          return next;
+        }
+        return prev;
+      });
+    } else if (ev === "error") {
+      updateLastAssistant((p) => p, chunk.x_message || "出错了");
+    } else {
+      const delta = chunk.choices?.[0]?.delta;
+      const reasoning = delta?.reasoning_content;
+      const content = delta?.content;
+      if (reasoning) {
+        updateLastAssistantStream((parts) => appendThinking(parts, reasoning));
+      }
+      if (content) {
+        updateLastAssistantStream((parts) => appendText(parts, content));
+      }
+    }
+  };
+
+  // ---- active-run SSE 重连（切页回来后恢复真实流式） ----
+  const attachActiveRunStream = (sid: string, runId: string, attempt = 0) => {
+    if (attempt > ACTIVE_RUN_ATTACH_MAX_RETRIES) {
+      setIsRunning(false);
+      return;
+    }
+    const token = ++pollTokenRef.current;
+    abortChat();
+    setIsRunning(true);
+    const ac = new AbortController();
+    abortRef.current = ac;
+
+    void (async () => {
+      try {
+        await resyncLiveSession(sid);
+        if (token !== pollTokenRef.current || !mountedRef.current) return;
+        await streamActiveRun(
+          sid,
+          runId,
+          { onMessage: (chunk) => applyStreamChunk(chunk) },
+          { signal: ac.signal },
+        );
+      } catch (e) {
+        if (!mountedRef.current || token !== pollTokenRef.current || ac.signal.aborted) return;
+        const status = e instanceof ApiError ? e.status : (e as { status?: number }).status;
+        if (status === 404 && attempt < ACTIVE_RUN_ATTACH_MAX_RETRIES) {
+          await new Promise<void>((resolve) => {
+            window.setTimeout(resolve, ACTIVE_RUN_ATTACH_RETRY_MS * (attempt + 1));
+          });
+          if (token !== pollTokenRef.current || !mountedRef.current) return;
+          try {
+            const { run } = await getActiveRun(sid);
+            if (token !== pollTokenRef.current || !mountedRef.current) return;
+            if (run?.status === "running" && run.id) {
+              attachActiveRunStream(sid, run.id, attempt + 1);
+              return;
+            }
+            await resyncLiveSession(sid);
+          } catch {
+            /* 回退加载失败 */
+          }
+        }
+        if (token === pollTokenRef.current) setIsRunning(false);
+        return;
+      } finally {
+        if (!mountedRef.current || token !== pollTokenRef.current) return;
+        if (abortRef.current === ac) abortRef.current = null;
+        if (!ac.signal.aborted) {
+          updateLastAssistant((parts) =>
+            completeThinkingParts(parts).map((p) =>
+              p.type === "tool" && p.running
+                ? {
+                    ...p,
+                    running: false,
+                    elapsedMs: p.elapsedMs ?? (p.startedAt ? Date.now() - p.startedAt : undefined),
+                  }
+                : p,
+            ),
+          );
+          setIsRunning(false);
+          void refreshSessions();
+          watchTitle(sid);
+        }
+      }
+    })();
+  };
+
+  const stopActiveRunAttach = () => {
     pollTokenRef.current++;
+    abortChat();
   };
 
   const resetToNewChat = () => {
     abortChat();
-    stopActiveRunPoll();
+    stopActiveRunAttach();
     stopTitlePoll();
     setCurrent(null);
     setMessages([]);
@@ -373,7 +577,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const loadSessionFromUrl = (id: string) => {
     const token = ++loadTokenRef.current;
     abortChat();
-    stopActiveRunPoll();
+    stopActiveRunAttach();
     stopTitlePoll();
     setCurrent(id);
     setIsRunning(false);
@@ -389,11 +593,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           return;
         }
         const live = run?.status === "running";
-        setMessages(coalesceHistory(items, { live }));
+        setMessages(ensureLiveAssistant(coalesceHistory(items, { live })));
         setSessionTodoPlan(parseTodoPlan(todoPlan));
-        if (live) {
+        if (live && run?.id) {
           setIsRunning(true);
-          startActiveRunPoll(id);
+          attachActiveRunStream(id, run.id);
         }
       } catch (e) {
         if (token !== loadTokenRef.current || !mountedRef.current) return;
@@ -481,7 +685,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
 
     let firstToken = true;
-    let handoffToPoll = false;
+    let handoffToAttach = false;
     let retriedAfterStaleRun = false;
     try {
       for (;;) {
@@ -490,112 +694,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             body,
             {
               onMessage: (chunk) => {
-            if (!mountedRef.current || ac.signal.aborted) return;
-            if (chunk.session_id) {
-              if (!currentIdRef.current) setCurrent(chunk.session_id);
-              const path = chatPath(chunk.session_id, urlWorkspaceId);
-              if (window.location.pathname !== path) {
-                navigate(path, { replace: true });
-              }
-              void refreshSessions();
-              watchTitle(chunk.session_id);
-            }
-            const ev = chunk.x_event;
-            if (ev === "tool_call") {
-              updateLastAssistant((parts) => [
-                ...completeThinkingParts(parts),
-                {
-                  type: "tool",
-                  id: chunk.x_tool_id || chunk.x_tool_call_id || uid("t"),
-                  toolName: chunk.x_tool_name || "tool",
-                  toolKind: chunk.x_tool_kind || "tool",
-                  running: true,
-                  startedAt: Date.now(),
-                  argsPreview: formatToolArgsPreview(chunk.x_tool_args),
-                },
-              ]);
-            } else if (ev === "tool_result") {
-              const id = chunk.x_tool_call_id || chunk.x_tool_id;
-              const preview = chunk.x_preview;
-              const streamElapsedMs =
-                typeof chunk.x_elapsed_ms === "number" && chunk.x_elapsed_ms >= 0
-                  ? chunk.x_elapsed_ms
-                  : undefined;
-              updateLastAssistant((parts) => {
-                let done = false;
-                const mapped = parts.map((p) => {
-                  if (!done && p.type === "tool" && p.running && (!id || p.id === id)) {
-                    done = true;
-                    return {
-                      ...p,
-                      running: false,
-                      preview,
-                      toolName: chunk.x_tool_name || p.toolName,
-                      elapsedMs:
-                        streamElapsedMs ?? (p.startedAt ? Date.now() - p.startedAt : undefined),
-                    };
-                  }
-                  return p;
-                });
-                if (!done && preview) {
-                  mapped.push({
-                    type: "tool",
-                    id: id || uid("t"),
-                    toolName: chunk.x_tool_name || "tool",
-                    toolKind: chunk.x_tool_kind || "tool",
-                    running: false,
-                    preview,
-                    startedAt: 0,
-                    ...(streamElapsedMs !== undefined ? { elapsedMs: streamElapsedMs } : {}),
-                  });
-                }
-                return mapped;
-              });
-              if (isTodoTool(chunk.x_tool_name || "")) {
-                const plan = parseTodoPlan(preview);
-                if (plan) setSessionTodoPlan(plan);
-              }
-            } else if (ev === "attachment") {
-              const attId = chunk.x_attachment_id;
-              const attName = chunk.x_attachment_name || "file";
-              if (!attId) return;
-              setMessages((prev) => {
-                const next = [...prev];
-                for (let i = next.length - 1; i >= 0; i--) {
-                  if (next[i].role !== "assistant") continue;
-                  const existing = next[i].attachments ?? [];
-                  if (existing.some((a) => a.id === attId)) return prev;
-                  next[i] = {
-                    ...next[i],
-                    attachments: [
-                      ...existing,
-                      {
-                        id: attId,
-                        name: attName,
-                        kind: "other",
-                        processable: false,
-                      },
-                    ],
-                  };
-                  return next;
-                }
-                return prev;
-              });
-            } else if (ev === "error") {
-              updateLastAssistant((p) => p, chunk.x_message || "出错了");
-            } else {
-              const delta = chunk.choices?.[0]?.delta;
-              const reasoning = delta?.reasoning_content;
-              const content = delta?.content;
-              if (reasoning) {
-                updateLastAssistantStream((parts) => appendThinking(parts, reasoning));
-              }
-              if (content) {
-                firstToken = false;
-                updateLastAssistantStream((parts) => appendText(parts, content));
-              }
-            }
-          },
+                if (chunk.choices?.[0]?.delta?.content) firstToken = false;
+                applyStreamChunk(chunk, { navigateSession: true });
+              },
           onRetry: (attempt, sec) => {
             toast(formatStreamRetryToast(attempt, sec), "info");
           },
@@ -625,9 +726,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         if (firstToken) updateLastAssistant((p) => appendText(p, "（已停止生成）"));
       } else if (err.code === "run_in_progress") {
         toast("该对话仍在生成中", "info");
+        const runId = e instanceof ApiError ? String((e.detail as { run_id?: string } | undefined)?.run_id || "") : "";
         if (mountedRef.current && currentIdRef.current) {
-          handoffToPoll = true;
-          startActiveRunPoll(currentIdRef.current);
+          handoffToAttach = true;
+          const sid = currentIdRef.current;
+          if (runId) {
+            attachActiveRunStream(sid, runId);
+          } else {
+            void getActiveRun(sid).then(({ run }) => {
+              if (run?.status === "running" && run.id) attachActiveRunStream(sid, run.id);
+            });
+          }
         }
         return;
       } else if (isImageInputUnsupportedError(err)) {
@@ -647,7 +756,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } finally {
       if (abortRef.current === ac) abortRef.current = null;
       if (!mountedRef.current) return;
-      if (!handoffToPoll) {
+      if (!handoffToAttach) {
         updateLastAssistant((parts) =>
           completeThinkingParts(parts).map((p) =>
             p.type === "tool" && p.running
@@ -667,7 +776,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             void getActiveRun(sidAfterRun)
               .then(({ run }) => {
                 if (!mountedRef.current || currentIdRef.current !== sidAfterRun) return;
-                if (run?.status === "running") startActiveRunPoll(sidAfterRun);
+                if (run?.status === "running" && run.id) attachActiveRunStream(sidAfterRun, run.id);
               })
               .catch(() => {});
           }
@@ -701,7 +810,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const cancel = async () => {
     abortChat();
-    stopActiveRunPoll();
+    stopActiveRunAttach();
     stopRunningTools("已停止");
     updateLastAssistant((parts) => completeThinkingParts(parts));
 
@@ -733,7 +842,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const wasCurrent = currentIdRef.current === id || urlSessionId === id;
     if (wasCurrent) {
       abortChat();
-      stopActiveRunPoll();
+      stopActiveRunAttach();
     }
     await apiDeleteSession(id);
     if (!options?.silent) {

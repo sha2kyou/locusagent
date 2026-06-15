@@ -127,10 +127,10 @@ export function coalesceHistory(items: Message[], opts: CoalesceHistoryOptions =
     return undefined;
   };
 
-  const startAssistant = (createdAt?: string) => {
+  const startAssistant = (createdAt?: string, messageId?: number) => {
     if (!cur) {
       cur = {
-        id: uid("a"),
+        id: messageId != null ? `a_${messageId}` : uid("a"),
         role: "assistant",
         parts: [],
         ...(createdAt ? { createdAt } : {}),
@@ -138,6 +138,9 @@ export function coalesceHistory(items: Message[], opts: CoalesceHistoryOptions =
       curArchived = false;
     } else if (!cur.createdAt && createdAt) {
       cur.createdAt = createdAt;
+    }
+    if (messageId != null) {
+      cur.id = `a_${messageId}`;
     }
   };
 
@@ -170,7 +173,7 @@ export function coalesceHistory(items: Message[], opts: CoalesceHistoryOptions =
       cur = null;
       curArchived = false;
       result.push({
-        id: uid("u"),
+        id: `u_${msg.id}`,
         role: "user",
         createdAt: msg.created_at,
         archived: isArchived(msg),
@@ -181,7 +184,7 @@ export function coalesceHistory(items: Message[], opts: CoalesceHistoryOptions =
     }
     if (msg.role === "system") continue;
 
-    startAssistant(msg.created_at);
+    startAssistant(msg.created_at, msg.role === "assistant" ? msg.id : undefined);
     if (isArchived(msg)) curArchived = true;
 
     if (msg.role === "assistant") {
@@ -236,9 +239,11 @@ export function coalesceHistory(items: Message[], opts: CoalesceHistoryOptions =
 
   flushAssistant(result, cur, curArchived);
 
-  for (const m of result) {
-    for (const p of m.parts) {
-      if (p.type === "tool" && p.running) p.running = false;
+  if (!opts.live) {
+    for (const m of result) {
+      for (const p of m.parts) {
+        if (p.type === "tool" && p.running) p.running = false;
+      }
     }
   }
   return opts.live ? applyLiveThinkingState(result) : result;

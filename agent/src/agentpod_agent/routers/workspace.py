@@ -6,11 +6,13 @@
 from __future__ import annotations
 
 import asyncio
+import time
+import uuid
 from typing import Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..auth import verify_internal_token
@@ -34,6 +36,17 @@ from ..core import (
     list_messages,
     list_sessions,
     session_lock,
+)
+from ..core.run_manager import (
+    attach_run_subscriber,
+    detach_run_subscriber,
+    get_run_handle,
+    reconcile_session_active_handles,
+)
+from ..core.run_sse import (
+    build_resume_sync_payload,
+    drain_subscriber_queue_nowait,
+    iter_run_sse,
 )
 from ..core.persistence import get_attachment_download
 from ..db import run_in_thread
@@ -617,6 +630,48 @@ async def workspace_session_active_run(session_id: str) -> dict:
     await reconcile_session_active_handles(session_id)
     run = await get_active_run(session_id)
     return {"run": run}
+
+
+@router.get("/sessions/{session_id}/runs/{run_id}/stream")
+async def workspace_session_run_stream(session_id: str, run_id: str) -> StreamingResponse:
+    await reconcile_session_active_handles(session_id)
+    run = await get_active_run(session_id)
+    if not run or str(run.get("id") or "") != run_id:
+        raise WsError("run_not_found", "active run not found", status_code=404)
+    handle = get_run_handle(run_id)
+    if handle is None or handle.task.done():
+        raise WsError("run_not_streaming", "run is not streaming in memory", status_code=404)
+    if handle.session_id != session_id:
+        raise WsError("run_mismatch", "run session mismatch", status_code=404)
+
+    public_model = "agentpod-v1"
+    chat_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
+    created = int(time.time())
+    subscriber = attach_run_subscriber(handle)
+    pending = drain_subscriber_queue_nowait(subscriber)
+    run = await get_active_run(session_id)
+    resume_sync = build_resume_sync_payload(run, pending)
+
+    async def _stream():
+        try:
+            async for chunk in iter_run_sse(
+                subscriber,
+                chat_id=chat_id,
+                public_model=public_model,
+                created=created,
+                session_id=session_id,
+                run_id=run_id,
+                resume_sync=resume_sync,
+            ):
+                yield chunk
+        finally:
+            detach_run_subscriber(handle, subscriber)
+
+    return StreamingResponse(
+        _stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/sessions/{session_id}/cancel")

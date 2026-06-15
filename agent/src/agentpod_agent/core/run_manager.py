@@ -33,16 +33,17 @@ _active: dict[str, StreamRunHandle] = {}
 
 
 def _try_enqueue_sse(handle: StreamRunHandle, ev: dict[str, Any]) -> None:
-    """SSE 队列满时丢弃事件，避免 worker 被慢客户端/断连拖死。"""
-    try:
-        handle.queue.put_nowait(ev)
-    except asyncio.QueueFull:
-        log.warning(
-            "sse_queue_full",
-            run_id=handle.run_id,
-            session_id=handle.session_id,
-            event_type=ev.get("type"),
-        )
+    """向所有 SSE 订阅者投递事件；队列满时丢弃，避免 worker 被慢客户端拖死。"""
+    for queue in list(handle.subscribers):
+        try:
+            queue.put_nowait(ev)
+        except asyncio.QueueFull:
+            log.warning(
+                "sse_queue_full",
+                run_id=handle.run_id,
+                session_id=handle.session_id,
+                event_type=ev.get("type"),
+            )
 
 
 async def _emit_loop_event(
@@ -58,8 +59,22 @@ async def _emit_loop_event(
 class StreamRunHandle:
     run_id: str
     session_id: str
-    queue: asyncio.Queue[dict[str, Any]]
+    subscribers: list[asyncio.Queue[dict[str, Any]]] = field(default_factory=list)
     task: asyncio.Task[None] = field(init=False, repr=False)
+
+
+def attach_run_subscriber(handle: StreamRunHandle) -> asyncio.Queue[dict[str, Any]]:
+    """为 SSE 客户端注册独立队列，仅接收订阅后的新事件。"""
+    queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=512)
+    handle.subscribers.append(queue)
+    return queue
+
+
+def detach_run_subscriber(handle: StreamRunHandle, queue: asyncio.Queue[dict[str, Any]]) -> None:
+    try:
+        handle.subscribers.remove(queue)
+    except ValueError:
+        pass
 
 
 def _tool_kind(name: str | None) -> str:
@@ -403,9 +418,9 @@ def start_stream_run(
     registry: ToolRegistry,
     model: str,
     extra: dict[str, Any] | None,
-) -> StreamRunHandle:
-    queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=512)
-    handle = StreamRunHandle(run_id=run_id, session_id=session_id, queue=queue)
+) -> tuple[StreamRunHandle, asyncio.Queue[dict[str, Any]]]:
+    handle = StreamRunHandle(run_id=run_id, session_id=session_id)
+    queue = attach_run_subscriber(handle)
     handle.task = asyncio.create_task(
         _worker(
             handle,
@@ -417,7 +432,7 @@ def start_stream_run(
         name=f"chat-run-{run_id}",
     )
     _active[run_id] = handle
-    return handle
+    return handle, queue
 
 
 def get_run_handle(run_id: str) -> StreamRunHandle | None:

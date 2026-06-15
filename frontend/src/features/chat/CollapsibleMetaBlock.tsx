@@ -3,7 +3,7 @@ import { ChevronRight, Loader2 } from "lucide-react";
 import { ListCard } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
 import { findScrollParent } from "@/lib/scroll-parent";
-import { useActiveCollapse } from "@/lib/use-pinned-collapse";
+import { usePinnedCollapse } from "@/lib/use-pinned-collapse";
 
 export function toggleWithScrollPreservation(toggle: () => void, triggerEl: HTMLButtonElement) {
   const scroller = findScrollParent(triggerEl);
@@ -33,6 +33,7 @@ function BlockLeading({ running, icon }: { running: boolean; icon: ReactNode }) 
 export function CollapsibleMetaBlock({
   blockId,
   active = false,
+  lockWhenActive = true,
   title,
   activeTitle,
   running = false,
@@ -45,8 +46,10 @@ export function CollapsibleMetaBlock({
   className,
 }: {
   blockId: string;
-  /** 进行中：强制展开且不可折叠 */
+  /** 进行中：默认展开；lockWhenActive 为 true 时强制展开且不可折叠 */
   active?: boolean;
+  /** 进行中是否锁定为展开；工具块为 true，todo 卡片为 false */
+  lockWhenActive?: boolean;
   title: string;
   activeTitle?: string;
   running?: boolean;
@@ -59,8 +62,9 @@ export function CollapsibleMetaBlock({
   children?: ReactNode;
   className?: string;
 }) {
-  const { isOpen, toggleOpen, expandable: canToggle } = useActiveCollapse(blockId, active);
-  const expandable = Boolean(children) && canToggle;
+  const [open, toggleOpen] = usePinnedCollapse(blockId, false);
+  const isOpen = lockWhenActive && active ? true : open;
+  const expandable = Boolean(children) && (!lockWhenActive || !active);
   const displayTitle = running && activeTitle ? activeTitle : title;
   const previewText = preview?.replace(/\s+/g, " ").trim();
   const showPreview = Boolean(previewText) && (!isOpen || !hidePreviewWhenOpen);

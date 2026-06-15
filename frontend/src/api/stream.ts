@@ -51,6 +51,47 @@ async function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+async function consumeSseResponse(
+  res: Response,
+  handlers: StreamHandlers,
+): Promise<void> {
+  if (!res.body) throw new ApiError("empty stream body", { status: res.status });
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let sep: number;
+    while ((sep = buffer.indexOf("\n\n")) !== -1) {
+      const rawEvent = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+
+      const dataLines = rawEvent
+        .split("\n")
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trimStart());
+      if (dataLines.length === 0) continue;
+
+      const raw = dataLines.join("");
+      if (raw === "[DONE]") {
+        handlers.onDone?.();
+        return;
+      }
+      try {
+        handlers.onMessage(JSON.parse(raw) as ChatChunk);
+      } catch {
+        // 忽略无法解析的分片
+      }
+    }
+  }
+
+  handlers.onDone?.();
+}
+
 /**
  * 调用 POST /api/workspace/chat/completions 并解析 SSE 流。
  * 移植自老前端 streamChatCompletion：fetch + ReadableStream，按 \n\n 切事件，
@@ -103,40 +144,50 @@ export async function streamChatCompletion(
       });
     }
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      let sep: number;
-      while ((sep = buffer.indexOf("\n\n")) !== -1) {
-        const rawEvent = buffer.slice(0, sep);
-        buffer = buffer.slice(sep + 2);
-
-        const dataLines = rawEvent
-          .split("\n")
-          .filter((line) => line.startsWith("data:"))
-          .map((line) => line.slice(5).trimStart());
-        if (dataLines.length === 0) continue;
-
-        const raw = dataLines.join("");
-        if (raw === "[DONE]") {
-          handlers.onDone?.();
-          return;
-        }
-        try {
-          handlers.onMessage(JSON.parse(raw) as ChatChunk);
-        } catch {
-          // 忽略无法解析的分片
-        }
-      }
-    }
-
-    handlers.onDone?.();
+    await consumeSseResponse(res, handlers);
     return;
   }
+}
+
+/**
+ * 订阅会话中正在运行的 run SSE（切页回来后恢复真实流式输出）。
+ */
+export async function streamActiveRun(
+  sessionId: string,
+  runId: string,
+  handlers: StreamHandlers,
+  opts: { signal?: AbortSignal } = {},
+): Promise<void> {
+  const workspaceId = getWorkspaceId();
+  const res = await fetch(
+    `/api/workspace/sessions/${encodeURIComponent(sessionId)}/runs/${encodeURIComponent(runId)}/stream`,
+    {
+      method: "GET",
+      credentials: "same-origin",
+      headers: {
+        Accept: "text/event-stream",
+        ...(workspaceId ? { "X-Workspace-Id": workspaceId } : {}),
+      },
+      signal: opts.signal,
+    },
+  );
+
+  if (res.status === 401) {
+    throw new ApiError("未登录", { status: 401, code: "unauthenticated" });
+  }
+
+  if (!res.ok || !res.body) {
+    const data = await res.json().catch(() => null);
+    const err = (data as { error?: { code?: string; message?: string; detail?: unknown } })?.error;
+    const code = err?.code;
+    const friendly = userMessageFromContainerError(code, res.status);
+    throw new ApiError(friendly || err?.message || `请求失败 (${res.status})`, {
+      status: res.status,
+      code,
+      detail: err?.detail,
+      data,
+    });
+  }
+
+  await consumeSseResponse(res, handlers);
 }

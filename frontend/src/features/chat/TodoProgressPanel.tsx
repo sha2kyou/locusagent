@@ -77,16 +77,14 @@ function planSummary(plan: TodoPlan): string {
 }
 
 export function TodoProgressPanel({ plan, active = false }: { plan: TodoPlan; active?: boolean }) {
-  const hasActiveStep = plan.steps.some((s) => s.status === "in_progress");
-  const running = active || hasActiveStep;
-
   return (
     <CollapsibleMetaBlock
       blockId={plan.plan_id}
-      active={running}
+      active={active}
+      lockWhenActive={false}
       title={plan.title}
       activeTitle="任务进度"
-      running={running}
+      running={active}
       showRunningBadge
       icon={<ListTodo className="size-3.5" />}
       preview={planSummary(plan)}

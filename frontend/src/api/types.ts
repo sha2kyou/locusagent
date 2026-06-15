@@ -94,7 +94,12 @@ export interface ChatChunk {
   }[];
   session_id?: string;
   run_id?: string;
-  x_event?: "tool_call" | "tool_result" | "attachment" | "error";
+  x_event?: "tool_call" | "tool_result" | "attachment" | "error" | "sync";
+  x_sync?: {
+    assistant_message_id?: number | null;
+    content?: string;
+    reasoning_content?: string;
+  };
   x_tool_name?: string;
   x_tool_kind?: ToolKind;
   x_tool_id?: string;

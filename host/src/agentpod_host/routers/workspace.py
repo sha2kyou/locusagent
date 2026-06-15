@@ -79,15 +79,19 @@ async def proxy_env_vars(
 
 @router.api_route("/sessions", methods=PROXY_METHODS)
 @router.get("/sessions/{session_id}/active-run")
+@router.get("/sessions/{session_id}/runs/{run_id}/stream")
 @router.api_route("/sessions/{session_id}", methods=PROXY_METHODS)
 async def proxy_sessions(
     request: Request,
     ctx: AuthContext = Depends(require_session),
     session_id: str | None = None,
+    run_id: str | None = None,
 ):
     path = request.url.path.rstrip("/")
     if path.endswith("/active-run") and session_id:
         target = f"/workspace/sessions/{session_id}/active-run"
+    elif run_id and session_id and "/runs/" in path and path.endswith("/stream"):
+        target = f"/workspace/sessions/{session_id}/runs/{run_id}/stream"
     elif session_id is not None:
         target = f"/workspace/sessions/{session_id}"
     else:

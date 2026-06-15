@@ -527,10 +527,12 @@ function AssistantPartList({
     (p) => p.type === "tool" && isTodoTool(p.toolName) && (p.running || Boolean(p.preview)),
   );
   const todoPlan = resolveTodoPlan(fromParts, sessionTodoPlan, isLastAssistant, hasTodoInMessage);
+  const todoToolRunning = chatMsg.parts.some(
+    (p) => p.type === "tool" && isTodoTool(p.toolName) && p.running,
+  );
   const todoActive =
     Boolean(todoPlan) &&
-    ((streaming && isLastAssistant && hasTodoInMessage) ||
-      todoPlan!.steps.some((s) => s.status === "in_progress"));
+    (todoPlan!.steps.some((s) => s.status === "in_progress") || todoToolRunning);
   return (
     <>
       {chatMsg.parts.map((p, i) => {
