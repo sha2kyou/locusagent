@@ -3,6 +3,7 @@ name = "agentpod-desktop"
 version = "0.1.18"
 description = "AgentPod macOS desktop shell"
 authors = ["AgentPod"]
+license = "Apache-2.0"
 edition = "2021"
 
 [lib]

@@ -2,6 +2,7 @@
   "name": "agentpod-desktop",
   "private": true,
   "version": "0.1.18",
+  "license": "Apache-2.0",
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
