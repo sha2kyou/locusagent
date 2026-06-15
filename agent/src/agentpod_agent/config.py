@@ -49,8 +49,8 @@ class Settings(BaseSettings):
     memory_max_items: int = Field(default=200, alias="MEMORY_MAX_ITEMS")
     memory_curate_batch: int = Field(default=60, alias="MEMORY_CURATE_BATCH")
 
-    # 写入安全门：是否启用（LLM 语义审查为主）
-    write_guard_enabled: bool = Field(default=True, alias="WRITE_GUARD_ENABLED")
+    # 写入安全门：是否启用（LLM 语义审查为主；默认关闭，可通过 WRITE_GUARD_ENABLED=true 开启）
+    write_guard_enabled: bool = Field(default=False, alias="WRITE_GUARD_ENABLED")
 
     # 向量召回：余弦距离上限（距离越小越相关），超过则视为不相关丢弃
     recall_max_distance: float = Field(default=0.6, alias="RECALL_MAX_DISTANCE")
