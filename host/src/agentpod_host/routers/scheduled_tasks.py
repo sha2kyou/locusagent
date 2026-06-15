@@ -7,6 +7,8 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
+from agentpod_shared.activity_log import record_activity
+
 from ..auth import AuthContext, require_session
 from ..scheduled_tasks import create_task, delete_task, get_task, list_tasks, update_task
 from ..scheduled_tasks.executor import trigger_task_run
@@ -73,6 +75,13 @@ async def create_scheduled_task(
         )
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    record_activity(
+        "scheduled",
+        "create",
+        f"已创建定时任务「{item['title']}」",
+        workspace_id=workspace_id,
+        detail={"task_id": item["id"], "schedule_kind": payload.schedule_kind},
+    )
     return {"item": item}
 
 
@@ -100,6 +109,13 @@ async def update_scheduled_task(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     if item is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="task not found")
+    record_activity(
+        "scheduled",
+        "update",
+        f"已更新定时任务「{item['title']}」",
+        workspace_id=workspace_id,
+        detail={"task_id": task_id},
+    )
     return {"item": item}
 
 
@@ -114,6 +130,7 @@ async def delete_scheduled_task(
     ok = await delete_task(task_id, workspace_id=workspace_id)
     if not ok:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="task not found")
+    record_activity("scheduled", "delete", f"已删除定时任务 #{task_id}", workspace_id=workspace_id)
     return {"deleted": True}
 
 
@@ -131,6 +148,13 @@ async def run_scheduled_task_now(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    record_activity(
+        "scheduled",
+        "run",
+        f"已手动运行定时任务「{item['title']}」",
+        workspace_id=workspace_id,
+        detail={"task_id": task_id},
+    )
     return {"item": item}
 
 

@@ -116,6 +116,8 @@ async def build_http_mcp_config(
     auth: str
     if url_unchanged:
         auth = existing.auth
+    elif any(k.lower() == "authorization" for k in incoming_headers):
+        auth = "none"
     else:
         oauth_supported = await probe_http_oauth_supported(normalized_url)
         auth = "oauth" if oauth_supported else "none"

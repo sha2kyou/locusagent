@@ -38,12 +38,12 @@ def _artifact_notify_category(label: str) -> str:
 
 
 def _notify_workspace_id() -> str | None:
-    from .workspace import get_workspace_id, normalize_workspace_id
+    from agentpod_shared.workspace_ids import is_valid_workspace_id
 
-    wid = normalize_workspace_id(get_workspace_id())
-    if wid == "ws_default":
-        return None
-    return wid
+    from .workspace import get_workspace_id
+
+    wid = get_workspace_id().strip().lower()
+    return wid if is_valid_workspace_id(wid) else None
 
 
 async def notify_artifact_saved(art: dict[str, Any]) -> None:

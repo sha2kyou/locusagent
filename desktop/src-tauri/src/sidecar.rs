@@ -1,7 +1,8 @@
 //! 桌面单体 Python 后端 sidecar（uvicorn :21223）
 
 use std::{
-    io::{BufRead, BufReader},
+    fs::OpenOptions,
+    io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     thread,
@@ -16,6 +17,55 @@ pub const BACKEND_PORT: u16 = 21223;
 
 pub fn backend_url() -> String {
     format!("http://127.0.0.1:{BACKEND_PORT}")
+}
+
+fn agentpod_home() -> PathBuf {
+    std::env::var("AGENTPOD_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            std::env::var("HOME")
+                .map(PathBuf::from)
+                .unwrap_or_default()
+                .join(".agentpod")
+        })
+}
+
+fn backend_log_path() -> PathBuf {
+    agentpod_home().join("desktop-backend.log")
+}
+
+/// 持续读取子进程 stderr，避免管道写满导致 Python 事件循环在 flush 上卡死。
+fn spawn_stderr_drainer(stderr: impl std::io::Read + Send + 'static) {
+    thread::spawn(move || {
+        let home = agentpod_home();
+        let _ = std::fs::create_dir_all(&home);
+        let mut log_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(backend_log_path())
+            .ok();
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            match line {
+                Ok(text) if !text.is_empty() => {
+                    if let Some(file) = log_file.as_mut() {
+                        let _ = writeln!(file, "{text}");
+                        let _ = file.flush();
+                    }
+                }
+                Ok(_) => {}
+                Err(_) => break,
+            }
+        }
+    });
+}
+
+/// 丢弃未读取的 stdout，避免管道缓冲区满导致子进程阻塞。
+fn spawn_stdout_drainer(stdout: impl std::io::Read + Send + 'static) {
+    thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for _ in reader.lines() {}
+    });
 }
 
 fn repo_root() -> PathBuf {
@@ -108,15 +158,16 @@ pub fn spawn_backend(app: &AppHandle) -> std::io::Result<Child> {
         command.env("AGENTPOD_STATIC_DIR", static_dir);
     }
 
-    let mut child = command.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
+    let mut child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
 
+    if let Some(stdout) = child.stdout.take() {
+        spawn_stdout_drainer(stdout);
+    }
     if let Some(stderr) = child.stderr.take() {
-        thread::spawn(move || {
-            let reader = BufReader::new(stderr);
-            for line in reader.lines().map_while(Result::ok) {
-                eprintln!("[backend] {line}");
-            }
-        });
+        spawn_stderr_drainer(stderr);
     }
 
     Ok(child)

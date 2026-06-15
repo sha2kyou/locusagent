@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import sqlite3
 from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -454,10 +455,16 @@ def init_db() -> None:
 
 
 async def run_in_thread(func: Callable[..., T], /, *args: Any, **kwargs: Any) -> T:
+    """Run sync work in the DB thread pool, preserving caller contextvars (e.g. workspace_id)."""
     loop = asyncio.get_running_loop()
-    if kwargs:
-        return await loop.run_in_executor(_DB_THREAD_POOL, partial(func, *args, **kwargs))
-    return await loop.run_in_executor(_DB_THREAD_POOL, func, *args)
+    ctx = contextvars.copy_context()
+
+    def _run() -> T:
+        if kwargs:
+            return ctx.run(partial(func, *args, **kwargs))
+        return ctx.run(func, *args)
+
+    return await loop.run_in_executor(_DB_THREAD_POOL, _run)
 
 
 def shutdown_db_thread_pool() -> None:

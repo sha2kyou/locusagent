@@ -21,6 +21,7 @@ from openai.types.chat import ChatCompletion
 from ..config import get_settings
 from ..logging import get_logger
 from ..tools import ToolError, ToolRegistry
+from ..workspace import get_workspace_id
 from .context import compress_with_report
 from .models import messages_include_images, resolve_model
 from .llm import get_llm_client
@@ -612,7 +613,7 @@ async def run_chat_loop(
     effective_max_rounds = max(1, max_rounds if max_rounds is not None else settings.max_loop_rounds)
     token_limit = int(_model_limit(_round_model(messages)) * settings.context_compress_ratio)
     client = get_llm_client()
-    tools_schema = registry.schemas() or None
+    tools_schema = registry.schemas(workspace_id=get_workspace_id()) or None
     disabled = _normalize_disabled_tools(disabled_tools)
     blocked_actions = _normalize_blocked_actions(blocked_tool_actions)
     if tools_schema and disabled:
@@ -875,7 +876,7 @@ async def run_chat_loop_stream(
     max_rounds = settings.max_loop_rounds
     token_limit = int(_model_limit(_round_model(messages)) * settings.context_compress_ratio)
     client = get_llm_client()
-    tools_schema = registry.schemas() or None
+    tools_schema = registry.schemas(workspace_id=get_workspace_id()) or None
     disabled = _normalize_disabled_tools(disabled_tools)
     blocked_actions = _normalize_blocked_actions(blocked_tool_actions)
     if tools_schema and disabled:

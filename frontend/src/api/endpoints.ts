@@ -18,6 +18,7 @@ import type {
   ScheduledTask,
   ScheduleKind,
   TimezoneConfig,
+  ActivityLogEntry,
   UsageSummary,
   ToolToggleOverview,
   WorkspaceItem,
@@ -52,6 +53,14 @@ export const getAppConfig = () => apiGet<AppConfig>("/api/settings/app-config");
 
 export const putAppConfig = (body: AppConfigUpdate) =>
   apiSend<AppConfig>("/api/settings/app-config", "PUT", body);
+
+export const getActivityLogs = (opts?: { limit?: number; after_id?: number }) => {
+  const params = new URLSearchParams();
+  if (opts?.limit != null) params.set("limit", String(opts.limit));
+  if (opts?.after_id != null) params.set("after_id", String(opts.after_id));
+  const q = params.toString();
+  return apiGet<{ items: ActivityLogEntry[] }>(`/api/settings/activity-logs${q ? `?${q}` : ""}`);
+};
 
 // ---- 定时任务 ----
 export const listScheduledTasks = () => apiGet<{ items: ScheduledTask[] }>("/api/scheduled-tasks");

@@ -22,8 +22,8 @@ def _mcp_tool(name: str, workspace_id: str) -> Tool:
 
 def test_unregister_mcp_tools_outside_workspace():
     registry = ToolRegistry()
-    ws_a = "ws_abc12345"
-    ws_b = "ws_def67890"
+    ws_a = "ws_0123456789abcdef0123"
+    ws_b = "ws_0123456789abcdef0124"
     registry.register(_mcp_tool("mcp__ws_a__s__t", ws_a))
     registry.register(_mcp_tool("mcp__ws_b__s__t", ws_b))
     removed = registry.unregister_mcp_tools_outside_workspace(ws_a)

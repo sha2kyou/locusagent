@@ -14,6 +14,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from ..auth import verify_internal_token
+from ..activity import record_activity
 from ..artifacts import (
     create_artifact,
     create_category,
@@ -56,8 +57,9 @@ from ..mcp_ import (
     update_mcp_server,
 )
 from ..mcp_.client import (
-    connect_mcp_server,
     list_mcp_runtime,
+    schedule_mcp_server_connect,
+    schedule_mcp_server_refresh,
 )
 from ..core.write_origin import ORIGIN_MANUAL
 from ..memory import (
@@ -87,8 +89,6 @@ from ..workspace_runtime import (
     ensure_mcp_runtime,
     ensure_workspace_context,
     invalidate_mcp_runtime,
-    mark_mcp_runtime_ready,
-    refresh_mcp_server,
     schedule_mcp_runtime_warm,
 )
 
@@ -161,6 +161,7 @@ async def workspace_create_skill(payload: SkillIn) -> dict:
         created = await run_in_thread(create_skill, skill)
     except FileExistsError as exc:
         raise WsError("skill_exists", str(exc), status_code=409) from exc
+    record_activity("skill", "create", f"已创建技能「{created.name}」")
     return created.to_dict()
 
 
@@ -184,6 +185,7 @@ async def workspace_update_skill(name: str, payload: SkillUpdateIn) -> dict:
         raise WsError("skill_invalid", str(exc), status_code=400) from exc
     except FileNotFoundError as exc:
         raise WsError("skill_not_found", str(exc), status_code=404) from exc
+    record_activity("skill", "update", f"已更新技能「{updated.name}」")
     return updated.to_dict()
 
 
@@ -200,6 +202,7 @@ async def workspace_delete_skill(name: str) -> dict:
         raise WsError("skill_invalid", str(exc), status_code=400) from exc
     if not ok:
         raise WsError("skill_not_found", "private skill not found", status_code=404)
+    record_activity("skill", "delete", f"已删除技能「{name}」")
     return {"deleted": True}
 
 
@@ -239,6 +242,11 @@ async def workspace_toggle_builtin_tool(name: str, payload: ToolToggleIn) -> dic
         raise WsError("tool_not_found", "builtin tool not found", status_code=404)
     tool.enabled = payload.enabled
     await run_in_thread(set_builtin_tool_enabled, name, payload.enabled)
+    record_activity(
+        "tool",
+        "toggle",
+        f"内置工具「{name}」已{'启用' if payload.enabled else '禁用'}",
+    )
     return {"name": name, "enabled": payload.enabled}
 
 
@@ -257,6 +265,8 @@ def _mcp_item_with_runtime(cfg: MCPServerConfig, runtime: dict[str, dict], *, oa
         d["oauth_connected"] = None
     if r.get("error"):
         d["runtime_error"] = r["error"]
+    if r.get("pending"):
+        d["pending"] = True
     return d
 
 
@@ -274,6 +284,8 @@ def _mcp_response(cfg: MCPServerConfig, runtime: dict[str, object], *, oauth_con
         d["oauth_connected"] = None
     if runtime.get("error"):
         d["runtime_error"] = runtime["error"]
+    if runtime.get("pending"):
+        d["pending"] = True
     return d
 
 
@@ -329,16 +341,24 @@ async def workspace_list_mcp(sync: bool = Query(False, description="为 true 时
         _oauth_connected_map(),
     )
     runtime = list_mcp_runtime()
-    return {
-        "items": [
-            _mcp_item_with_runtime(
-                s,
-                runtime,
-                oauth_connected=s.name in oauth_connected if s.transport == "http" and s.auth == "oauth" else None,
-            )
-            for s in servers
-        ]
-    }
+    items = [
+        _mcp_item_with_runtime(
+            s,
+            runtime,
+            oauth_connected=s.name in oauth_connected if s.transport == "http" and s.auth == "oauth" else None,
+        )
+        for s in servers
+    ]
+    if sync:
+        total_tools = sum(len(item.get("tools") or []) for item in items)
+        connected = sum(1 for item in items if item.get("connected"))
+        record_activity(
+            "mcp",
+            "tools_sync",
+            f"同步 MCP：{len(items)} 个服务，{connected} 在线，共 {total_tools} 个工具",
+            detail={"servers": [s.name for s in servers], "total_tools": total_tools},
+        )
+    return {"items": items}
 
 
 @router.post("/mcp", status_code=201)
@@ -350,10 +370,16 @@ async def workspace_add_mcp(payload: MCPIn) -> dict:
     except (ValueError, FileExistsError) as exc:
         raise WsError("mcp_invalid", str(exc), status_code=400) from exc
     invalidate_mcp_runtime(wid)
-    runtime = await connect_mcp_server(added)
-    mark_mcp_runtime_ready(wid)
+    runtime = schedule_mcp_server_connect(wid, added)
     oauth_connected = added.name in await _oauth_connected_map() if added.auth == "oauth" else None
-    return _mcp_response(added, runtime, oauth_connected=oauth_connected)
+    resp = _mcp_response(added, runtime, oauth_connected=oauth_connected)
+    record_activity(
+        "mcp",
+        "add",
+        f"已添加 MCP「{added.name}」" + ("，后台连接中" if resp.get("pending") else ""),
+        detail={"transport": added.transport, "pending": bool(resp.get("pending"))},
+    )
+    return resp
 
 
 @router.put("/mcp/{name}")
@@ -368,11 +394,13 @@ async def workspace_update_mcp(name: str, payload: MCPIn) -> dict:
         raise WsError("mcp_not_found", str(exc), status_code=404) from exc
     except (ValueError, FileExistsError) as exc:
         raise WsError("mcp_invalid", str(exc), status_code=400) from exc
-    runtime = await refresh_mcp_server(get_workspace_id(), updated.name)
+    runtime = schedule_mcp_server_refresh(get_workspace_id(), updated.name)
     enabled = is_mcp_server_enabled(updated.name)
     _set_mcp_tools_enabled(updated.name, enabled)
     oauth_connected = updated.name in await _oauth_connected_map() if updated.auth == "oauth" else None
-    return _mcp_response(updated, runtime, oauth_connected=oauth_connected)
+    resp = _mcp_response(updated, runtime, oauth_connected=oauth_connected)
+    record_activity("mcp", "update", f"已更新 MCP「{updated.name}」", detail={"pending": bool(resp.get("pending"))})
+    return resp
 
 
 @router.post("/mcp/{name}")
@@ -380,11 +408,13 @@ async def workspace_reconnect_mcp(name: str) -> dict:
     cfg = await run_in_thread(get_mcp_server, name)
     if cfg is None:
         raise WsError("mcp_not_found", "mcp server not found", status_code=404)
-    runtime = await refresh_mcp_server(get_workspace_id(), name)
+    runtime = schedule_mcp_server_refresh(get_workspace_id(), name)
     enabled = is_mcp_server_enabled(name)
     _set_mcp_tools_enabled(name, enabled)
     oauth_connected = cfg.name in await _oauth_connected_map() if cfg.auth == "oauth" else None
-    return _mcp_response(cfg, runtime, oauth_connected=oauth_connected)
+    resp = _mcp_response(cfg, runtime, oauth_connected=oauth_connected)
+    record_activity("mcp", "reconnect", f"已触发 MCP 重连「{name}」", detail={"pending": bool(resp.get("pending"))})
+    return resp
 
 
 @router.delete("/mcp/{name}")
@@ -393,6 +423,7 @@ async def workspace_remove_mcp(name: str) -> dict:
     if not ok:
         raise WsError("mcp_not_found", "mcp server not found", status_code=404)
     await disconnect_mcp_server_runtime(get_workspace_id(), name)
+    record_activity("mcp", "delete", f"已删除 MCP「{name}」")
     return {"deleted": True}
 
 
@@ -435,6 +466,7 @@ async def workspace_add_memory(payload: MemoryIn) -> dict:
         raise WsError("memory_empty", "content is empty", status_code=400)
     mid = await add_memory(payload.content, anchor=payload.anchor)
     await enqueue_embedding(mid)
+    record_activity("memory", "create", f"已添加记忆 #{mid}", detail={"anchor": payload.anchor})
     return {"id": mid}
 
 
@@ -452,6 +484,7 @@ async def workspace_update_memory(entry_id: int, payload: MemoryUpdateIn) -> dic
         raise WsError("memory_not_found", "memory not found", status_code=404)
     if payload.content is not None:
         await enqueue_embedding(entry_id, bump=True)
+    record_activity("memory", "update", f"已更新记忆 #{entry_id}")
     return {"updated": True}
 
 
@@ -460,6 +493,7 @@ async def workspace_delete_memory(entry_id: int) -> dict:
     ok = await delete_memory(entry_id)
     if not ok:
         raise WsError("memory_not_found", "memory not found", status_code=404)
+    record_activity("memory", "delete", f"已删除记忆 #{entry_id}")
     return {"deleted": True}
 
 
@@ -481,6 +515,7 @@ async def workspace_add_env_var(payload: EnvVarIn) -> dict:
         raise WsError("env_var_exists", str(exc), status_code=409) from exc
     except ValueError as exc:
         raise WsError("env_var_invalid", str(exc), status_code=400) from exc
+    record_activity("env", "create", f"已添加环境变量「{payload.name.strip()}」")
     return {"id": env_id}
 
 
@@ -510,6 +545,7 @@ async def workspace_update_env_var(entry_id: int, payload: EnvVarUpdateIn) -> di
         raise WsError("env_var_invalid", str(exc), status_code=400) from exc
     if not ok:
         raise WsError("env_var_not_found", "env var not found", status_code=404)
+    record_activity("env", "update", f"已更新环境变量 #{entry_id}")
     return {"updated": True}
 
 
@@ -518,6 +554,7 @@ async def workspace_delete_env_var(entry_id: int) -> dict:
     ok = await delete_env_var(entry_id)
     if not ok:
         raise WsError("env_var_not_found", "env var not found", status_code=404)
+    record_activity("env", "delete", f"已删除环境变量 #{entry_id}")
     return {"deleted": True}
 
 

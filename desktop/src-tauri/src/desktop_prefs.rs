@@ -56,11 +56,28 @@ pub fn run_in_background(app: &AppHandle) -> bool {
 fn apply_autostart(app: &AppHandle, enabled: bool) -> Result<(), String> {
     use tauri_plugin_autostart::ManagerExt;
 
+    #[cfg(target_os = "macos")]
+    remove_legacy_launch_agent_plists();
+
     let autolaunch = app.autolaunch();
     if enabled {
-        autolaunch.enable().map_err(|e| e.to_string())
-    } else {
-        autolaunch.disable().map_err(|e| e.to_string())
+        return autolaunch.enable().map_err(|e| e.to_string());
+    }
+    match autolaunch.is_enabled() {
+        Ok(true) => autolaunch.disable().map_err(|e| e.to_string()),
+        Ok(false) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn remove_legacy_launch_agent_plists() {
+    let Ok(home) = std::env::var("HOME") else {
+        return;
+    };
+    let dir = PathBuf::from(home).join("Library/LaunchAgents");
+    for name in ["AgentPod.plist", "agentpod-desktop.plist", "agentpod.plist"] {
+        let _ = std::fs::remove_file(dir.join(name));
     }
 }
 
@@ -93,9 +110,11 @@ pub fn desktop_set_prefs(
     state: State<PrefsState>,
     prefs: DesktopPrefs,
 ) -> Result<DesktopPrefs, String> {
-    apply_autostart(&app, prefs.launch_at_login)?;
     *state.0.lock().expect("prefs lock poisoned") = prefs.clone();
     save_prefs(&prefs)?;
+    if let Err(err) = apply_autostart(&app, prefs.launch_at_login) {
+        return Err(format!("偏好已保存，但开机自启设置失败: {err}"));
+    }
     Ok(prefs)
 }
 

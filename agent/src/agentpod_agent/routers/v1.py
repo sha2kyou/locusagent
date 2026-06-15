@@ -44,8 +44,9 @@ from ..core.run_manager import ERROR, FINISHED, reconcile_session_active_handles
 from ..core.session_title import schedule_session_title_generation
 from ..core.system_prompt import get_or_create_system_prompt as _get_or_create_system_prompt
 from ..logging import get_logger
+from ..activity import record_activity
 from ..workspace import get_workspace_id
-from ..workspace_runtime import ensure_workspace_context, schedule_mcp_runtime_warm
+from ..workspace_runtime import ensure_mcp_tools_for_chat, ensure_workspace_context
 from .v1_sessions import router as sessions_router
 
 router = APIRouter(prefix="/v1", tags=["v1"], dependencies=[Depends(verify_internal_token)])
@@ -263,8 +264,7 @@ async def _persist_loop_messages(
 @router.post("/chat/completions")
 async def chat_completions(req: ChatRequest):
     wid = get_workspace_id()
-    await ensure_workspace_context(wid)
-    schedule_mcp_runtime_warm(wid)
+    await ensure_mcp_tools_for_chat(wid)
     try:
         public_model, internal_model = await _resolve_v1_model(req.model)
     except ValueError as exc:
@@ -305,6 +305,13 @@ async def chat_completions(req: ChatRequest):
         chat_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
         created = int(time.time())
         initial_len = len(messages)
+        record_activity(
+            "chat",
+            "start",
+            f"开始对话（{'流式' if req.stream else '同步'}）",
+            workspace_id=wid,
+            detail={"session_id": sid, "run_id": run_id, "model": public_model},
+        )
 
         if not req.stream:
             try:

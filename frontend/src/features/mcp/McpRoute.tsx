@@ -61,6 +61,20 @@ function normalizeText(value: unknown, fallback: string): string {
   }
 }
 
+function mcpConnectionStatus(s: McpServer): {
+  label: string;
+  variant: "success" | "warning" | "danger";
+  dotClass: string;
+} {
+  if (s.pending) {
+    return { label: "连接中", variant: "warning", dotClass: "bg-warning" };
+  }
+  if (s.connected) {
+    return { label: "在线", variant: "success", dotClass: "bg-success" };
+  }
+  return { label: "离线", variant: "danger", dotClass: "bg-destructive" };
+}
+
 export function McpRoute() {
   const toast = useToast();
   const { confirm } = useDialogs();
@@ -81,19 +95,37 @@ export function McpRoute() {
   const [envError, setEnvError] = useState<string | null>(null);
   const [headersError, setHeadersError] = useState<string | null>(null);
   const [oauthPending, setOauthPending] = useState<string | null>(null);
+  const [reconnecting, setReconnecting] = useState<string | null>(null);
+  const pollRef = useRef<number | null>(null);
 
-  const load = async (opts?: { sync?: boolean }) => {
+  const load = async (opts?: { sync?: boolean; silent?: boolean }) => {
     try {
       const { items } = await listMcp(opts);
       setItems(items);
     } catch (e) {
-      toast((e as Error).message, "error");
-      setItems([]);
+      if (!opts?.silent) toast((e as Error).message, "error");
+      if (!opts?.silent) setItems([]);
     }
   };
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    const hasPending = (items ?? []).some((s) => s.pending);
+    if (hasPending && !pollRef.current) {
+      pollRef.current = window.setInterval(() => void load({ sync: true, silent: true }), 2000);
+    } else if (!hasPending && pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [items]);
 
   const startOAuth = async (s: McpServer) => {
     const workspaceId = getWorkspaceId();
@@ -209,12 +241,14 @@ export function McpRoute() {
   const submit = async () => {
     setSaving(true);
     try {
-      if (editing) {
-        await updateMcp(editing, buildPayload());
-        toast(toastAction("已更新", editing, "MCP 服务"), "success");
+      const label = name.trim();
+      const saved = editing
+        ? await updateMcp(editing, buildPayload())
+        : await createMcp(buildPayload());
+      if (saved.pending) {
+        toast(`「${saved.name}」正在后台连接…`, "info");
       } else {
-        await createMcp(buildPayload());
-        toast(toastAction("已添加", name.trim(), "MCP 服务"), "success");
+        toast(toastAction(editing ? "已更新" : "已添加", label, "MCP 服务"), "success");
       }
       reset();
       await load();
@@ -226,12 +260,19 @@ export function McpRoute() {
   };
 
   const reconnect = async (s: McpServer) => {
+    setReconnecting(s.name);
     try {
-      await reconnectMcp(s.name);
-      toast(toastAction("已重连", s.name, "MCP 服务"), "success");
-      await load({ sync: true });
+      const saved = await reconnectMcp(s.name);
+      if (saved.pending) {
+        toast(`「${s.name}」正在后台重连…`, "info");
+      } else {
+        toast(toastAction("已重连", s.name, "MCP 服务"), "success");
+      }
+      await load();
     } catch (e) {
       toast((e as Error).message, "error");
+    } finally {
+      setReconnecting(null);
     }
   };
 
@@ -296,15 +337,17 @@ export function McpRoute() {
             <Empty text={query ? "无匹配 MCP 服务" : "暂无 MCP 服务"} />
           ) : (
             <div className="space-y-2">
-              {filtered.map((s) => (
+              {filtered.map((s) => {
+                const status = mcpConnectionStatus(s);
+                return (
                 <ListCard key={s.name} className="group p-0 overflow-hidden">
                   <div className="flex items-start justify-between gap-3 px-4 py-3">
                     <div className="min-w-0">
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <span className="min-w-0 font-medium">{s.name}</span>
-                        <Badge variant={s.connected ? "success" : "danger"}>
-                          <Dot className={s.connected ? "bg-success" : "bg-destructive"} />
-                          {s.connected ? "在线" : "离线"}
+                        <Badge variant={status.variant}>
+                          <Dot className={status.dotClass} />
+                          {status.label}
                         </Badge>
                         <Badge>{s.transport}</Badge>
                         {s.oauth_required ? (
@@ -352,7 +395,20 @@ export function McpRoute() {
                           <ShieldOff />
                         </Button>
                       ) : null}
-                      <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => reconnect(s)} aria-label="重连"><RefreshCw /></Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className={listRowHoverActionsClass}
+                        disabled={reconnecting === s.name || s.pending}
+                        onClick={() => void reconnect(s)}
+                        aria-label="重连"
+                      >
+                        {reconnecting === s.name || s.pending ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <RefreshCw />
+                        )}
+                      </Button>
                       <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => startEdit(s)} aria-label="编辑"><Pencil /></Button>
                       <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => remove(s)} aria-label="删除"><Trash2 /></Button>
                     </div>
@@ -388,7 +444,8 @@ export function McpRoute() {
                     </div>
                   </CollapsibleSection>
                 </ListCard>
-              ))}
+                );
+              })}
             </div>
           )}
 

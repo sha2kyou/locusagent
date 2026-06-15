@@ -21,10 +21,10 @@ def test_blob_object_key():
 def test_blob_object_key_format(monkeypatch):
     monkeypatch.setattr(
         "agentpod_agent.storage.attachments.get_workspace_id",
-        lambda: "ws_abc123",
+        lambda: "ws_0123456789abcdef0123",
     )
     digest = "b" * 64
-    assert blob_object_key(digest) == f"attachments/ws_abc123/blobs/{digest}"
+    assert blob_object_key(digest) == f"attachments/ws_0123456789abcdef0123/blobs/{digest}"
 
 
 def test_upload_was_skipped():

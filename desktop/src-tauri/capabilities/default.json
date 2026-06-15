@@ -12,6 +12,8 @@
     "opener:default",
     "window-state:default",
     "notification:default",
-    "autostart:default"
+    "autostart:default",
+    "allow-desktop-get-prefs",
+    "allow-desktop-set-prefs"
   ]
 }

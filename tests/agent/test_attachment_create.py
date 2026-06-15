@@ -10,10 +10,14 @@ from openpyxl import Workbook
 
 from agentpod_agent.core.persistence import create_attachment
 from agentpod_agent.db import init_db
+from agentpod_agent.workspace import set_workspace_id
+
+WS_TEST = "ws_0123456789abcdef0123"
 
 
 @pytest.fixture(autouse=True)
 def _init_test_db() -> None:
+    set_workspace_id(WS_TEST)
     init_db()
 
 

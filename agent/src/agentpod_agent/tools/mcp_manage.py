@@ -86,21 +86,18 @@ async def _add_mcp(args: dict[str, Any]) -> ToolResult:
     except (ValueError, FileExistsError) as exc:
         raise ToolError(str(exc)) from exc
 
-    from ..mcp_.client import connect_mcp_server
+    from ..mcp_.client import schedule_mcp_server_connect
     from ..workspace import get_workspace_id
-    from ..workspace_runtime import invalidate_mcp_runtime, mark_mcp_runtime_ready
+    from ..workspace_runtime import invalidate_mcp_runtime
 
     wid = get_workspace_id()
     invalidate_mcp_runtime(wid)
-    runtime = await connect_mcp_server(cfg)
-    mark_mcp_runtime_ready(wid)
-    if runtime.get("connected"):
-        return ToolResult(
-            content=f"mcp server '{cfg.name}' added and connected, tools={len(runtime.get('tools', []))}",
-            metadata=runtime,
-        )
+    runtime = schedule_mcp_server_connect(wid, cfg)
     return ToolResult(
-        content=f"mcp server '{cfg.name}' added but connect failed: {runtime.get('error', 'unknown')}",
+        content=(
+            f"mcp server '{cfg.name}' saved; connecting in background "
+            f"(use mcp_view to check status)"
+        ),
         metadata=runtime,
     )
 
@@ -147,25 +144,24 @@ async def _update_mcp(args: dict[str, Any]) -> ToolResult:
     except (ValueError, FileExistsError) as exc:
         raise ToolError(str(exc)) from exc
 
+    from ..mcp_.client import schedule_mcp_server_refresh
     from ..workspace import get_workspace_id, mcp_tool_category
-    from ..workspace_runtime import mark_mcp_runtime_ready, refresh_mcp_server
+    from ..workspace_runtime import invalidate_mcp_runtime
     from .registry import registry
 
     wid = get_workspace_id()
-    runtime = await refresh_mcp_server(wid, updated.name)
-    mark_mcp_runtime_ready(wid)
+    invalidate_mcp_runtime(wid)
+    runtime = schedule_mcp_server_refresh(wid, updated.name)
     enabled = is_mcp_server_enabled(updated.name)
     target = mcp_tool_category(updated.name, wid)
     for tool in registry.all():
         if tool.category == target:
             tool.enabled = enabled
-    if runtime.get("connected"):
-        return ToolResult(
-            content=f"mcp server '{updated.name}' updated and connected, tools={len(runtime.get('tools', []))}",
-            metadata=runtime,
-        )
     return ToolResult(
-        content=f"mcp server '{updated.name}' updated but connect failed: {runtime.get('error', 'unknown')}",
+        content=(
+            f"mcp server '{updated.name}' updated; reconnecting in background "
+            f"(use mcp_view to check status)"
+        ),
         metadata=runtime,
     )
 
@@ -178,25 +174,24 @@ async def _refresh_mcp(args: dict[str, Any]) -> ToolResult:
     if existing is None:
         raise ToolError(f"mcp server not found: {name}")
 
+    from ..mcp_.client import schedule_mcp_server_refresh
     from ..workspace import get_workspace_id, mcp_tool_category
-    from ..workspace_runtime import mark_mcp_runtime_ready, refresh_mcp_server
+    from ..workspace_runtime import invalidate_mcp_runtime
     from .registry import registry
 
     wid = get_workspace_id()
-    runtime = await refresh_mcp_server(wid, name)
-    mark_mcp_runtime_ready(wid)
+    invalidate_mcp_runtime(wid)
+    runtime = schedule_mcp_server_refresh(wid, name)
     enabled = is_mcp_server_enabled(name)
     target = mcp_tool_category(name, wid)
     for tool in registry.all():
         if tool.category == target:
             tool.enabled = enabled
-    if runtime.get("connected"):
-        return ToolResult(
-            content=f"mcp server '{name}' refreshed and connected, tools={len(runtime.get('tools', []))}",
-            metadata=runtime,
-        )
     return ToolResult(
-        content=f"mcp server '{name}' refresh failed: {runtime.get('error', 'unknown')}",
+        content=(
+            f"mcp server '{name}' reconnect scheduled in background "
+            f"(use mcp_view to check status)"
+        ),
         metadata=runtime,
     )
 

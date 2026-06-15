@@ -4,12 +4,15 @@ mod gateway;
 mod sidecar;
 mod tray;
 
+#[cfg(target_os = "macos")]
+mod menu_bar_icon;
+
 use std::sync::Mutex;
 use std::time::Duration;
 
 use desktop_prefs::{
-    desktop_get_prefs, desktop_set_prefs, load_prefs, install_window_close_handler, sync_autostart,
-    PrefsState,
+    desktop_get_prefs, desktop_set_prefs, load_prefs, install_window_close_handler, show_main_window,
+    sync_autostart, PrefsState,
 };
 use tauri::{Manager, RunEvent};
 
@@ -17,10 +20,12 @@ static BACKEND_CHILD: Mutex<Option<std::process::Child>> = Mutex::new(None);
 
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            Some(vec![] as Vec<&str>),
-        ))
+        .plugin(
+            tauri_plugin_autostart::Builder::new()
+                .app_name("AgentPod")
+                .macos_launcher(tauri_plugin_autostart::MacosLauncher::AppleScript)
+                .build(),
+        )
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
@@ -55,7 +60,11 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|_app, event| {
+        .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            if matches!(event, RunEvent::Reopen { .. }) {
+                show_main_window(app);
+            }
             if matches!(event, RunEvent::Exit) {
                 if let Some(child) = BACKEND_CHILD.lock().expect("backend child lock").take() {
                     sidecar::stop_backend(child);

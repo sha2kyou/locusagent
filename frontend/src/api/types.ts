@@ -135,6 +135,7 @@ export interface McpServer {
   url?: string;
   auth?: "none" | "oauth";
   connected: boolean;
+  pending?: boolean;
   tools: McpTool[];
   tool_count: number;
   runtime_error?: string;
@@ -260,6 +261,17 @@ export interface UsageSummary {
     api_calls: number;
     event_count: number;
   };
+}
+
+export interface ActivityLogEntry {
+  id: number;
+  ts: string;
+  category: string;
+  action: string;
+  message: string;
+  workspace_id?: string | null;
+  level: "info" | "warn" | "error" | string;
+  detail?: Record<string, unknown> | null;
 }
 
 export type ScheduleKind = "once" | "cron";

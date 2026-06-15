@@ -30,6 +30,9 @@ def _reset_host_db_engine():
     _reset_engine_sync()
 
 
+WS_TEST = "ws_0123456789abcdef0123"
+
+
 @pytest.fixture
 async def oauth_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     key = Fernet.generate_key()
@@ -41,8 +44,8 @@ async def oauth_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     _fernet.cache_clear()
     await init_engine()
     async with get_session() as session:
-        if await session.get(Workspace, "ws_test000000000000000001") is None:
-            session.add(Workspace(id="ws_test000000000000000001", name="test", is_default=True))
+        if await session.get(Workspace, WS_TEST) is None:
+            session.add(Workspace(id=WS_TEST, name="test", is_default=True))
     yield
 
 
@@ -51,7 +54,7 @@ async def test_load_tokens_drops_corrupt_credential(oauth_db) -> None:
     async with get_session() as session:
         session.add(
             McpOauthCredential(
-                workspace_id="ws_test000000000000000001",
+                workspace_id=WS_TEST,
                 server_name="notion",
                 server_url="https://mcp.notion.com/mcp",
                 client_info_enc=b"invalid-client-info",
@@ -62,7 +65,7 @@ async def test_load_tokens_drops_corrupt_credential(oauth_db) -> None:
         )
 
     tokens = await store.load_tokens(
-        workspace_id="ws_test000000000000000001",
+        workspace_id=WS_TEST,
         server_name="notion",
     )
     assert tokens is None
@@ -71,7 +74,7 @@ async def test_load_tokens_drops_corrupt_credential(oauth_db) -> None:
         row = (
             await session.execute(
                 select(McpOauthCredential).where(
-                    McpOauthCredential.workspace_id == "ws_test000000000000000001",
+                    McpOauthCredential.workspace_id == WS_TEST,
                     McpOauthCredential.server_name == "notion",
                 )
             )
@@ -86,7 +89,7 @@ async def test_list_oauth_connected_skips_corrupt_rows(oauth_db) -> None:
     async with get_session() as session:
         session.add(
             McpOauthCredential(
-                workspace_id="ws_test000000000000000001",
+                workspace_id=WS_TEST,
                 server_name="good",
                 server_url="https://example.com/mcp",
                 client_info_enc=valid_payload,
@@ -97,7 +100,7 @@ async def test_list_oauth_connected_skips_corrupt_rows(oauth_db) -> None:
         )
         session.add(
             McpOauthCredential(
-                workspace_id="ws_test000000000000000001",
+                workspace_id=WS_TEST,
                 server_name="bad",
                 server_url="https://example.com/mcp",
                 client_info_enc=b"bad",
@@ -107,7 +110,7 @@ async def test_list_oauth_connected_skips_corrupt_rows(oauth_db) -> None:
             )
         )
 
-    connected = await store.list_oauth_connected_servers(workspace_id="ws_test000000000000000001")
+    connected = await store.list_oauth_connected_servers(workspace_id=WS_TEST)
     assert connected == {"good"}
 
     async with get_session() as session:

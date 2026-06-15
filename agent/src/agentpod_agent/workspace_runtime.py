@@ -64,6 +64,21 @@ async def ensure_workspace_context(workspace_id: str) -> None:
         _active_workspace_id = workspace_id
 
 
+async def ensure_mcp_tools_for_chat(workspace_id: str) -> None:
+    """对话前将 MCP 工具注入 registry，避免 UI 已连但 LLM 无 schema。"""
+    wid = normalize_workspace_id(workspace_id)
+    await ensure_workspace_context(wid)
+    from .mcp_.client import ensure_mcp_manager, sync_mcp_tools_for_workspace
+
+    mgr = await ensure_mcp_manager(wid)
+    if mgr._sessions:
+        await mgr.publish_tools_to_registry()
+        mark_mcp_runtime_ready(wid)
+        return
+    await sync_mcp_tools_for_workspace(wid)
+    mark_mcp_runtime_ready(wid)
+
+
 async def _ensure_mcp_runtime_inner(workspace_id: str) -> None:
     global _mcp_ready_workspace
     await ensure_workspace_context(workspace_id)
@@ -119,18 +134,27 @@ async def refresh_mcp_server(workspace_id: str, server_name: str) -> dict[str, A
         log.warning("mcp_refresh_failed", server=server_name, workspace_id=wid, error=str(exc))
         runtime = {"name": server_name, "connected": False, "tools": [], "error": str(exc)}
     if runtime.get("connected"):
+        from .mcp_.client import ensure_mcp_manager
+
+        mgr = await ensure_mcp_manager(wid)
+        await mgr.publish_tools_to_registry()
         mark_mcp_runtime_ready(wid)
     return runtime
 
 
 async def disconnect_mcp_server_runtime(workspace_id: str, server_name: str) -> bool:
-    from .mcp_.client import disconnect_mcp_server
+    from .mcp_.client import disconnect_mcp_server, ensure_mcp_manager
 
     wid = set_workspace_id(workspace_id)
     invalidate_mcp_runtime(wid)
     await ensure_workspace_context(wid)
     ok = await disconnect_mcp_server(server_name)
-    mark_mcp_runtime_ready(wid)
+    mgr = await ensure_mcp_manager(wid)
+    if mgr._sessions:
+        await mgr.publish_tools_to_registry()
+        mark_mcp_runtime_ready(wid)
+    else:
+        invalidate_mcp_runtime(wid)
     return ok
 
 

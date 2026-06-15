@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "allow-desktop-get-prefs"
+description = "Read menu bar and autostart desktop preferences."
+commands.allow = ["desktop_get_prefs"]
+
+[[permission]]
+identifier = "allow-desktop-set-prefs"
+description = "Write menu bar and autostart desktop preferences."
+commands.allow = ["desktop_set_prefs"]

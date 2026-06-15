@@ -74,7 +74,19 @@ export function SettingsGeneralPage() {
       setLaunchAtLogin(next.launch_at_login);
       toast("桌面偏好已保存", "success");
     } catch (e) {
-      toast((e as Error).message, "error");
+      const message = e instanceof Error ? e.message : String(e);
+      if (message.includes("偏好已保存")) {
+        try {
+          const next = await getDesktopPrefs();
+          setRunInBackground(next.run_in_background);
+          setLaunchAtLogin(next.launch_at_login);
+        } catch {
+          // 忽略回读失败
+        }
+        toast(message, "info");
+      } else {
+        toast(message, "error");
+      }
     } finally {
       setDesktopPrefsSaving(false);
     }

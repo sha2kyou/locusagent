@@ -8,9 +8,10 @@ from sqlalchemy import select
 
 from ..auth import AuthContext, require_session
 from ..db import Workspace, get_session
+from agentpod_shared.workspace_ids import generate_workspace_id
+from agentpod_shared.activity_log import record_activity
 from ..workspaces import (
     ensure_default_workspace,
-    generate_workspace_id,
     normalize_workspace_description,
     normalize_workspace_name,
 )
@@ -79,6 +80,7 @@ async def create_workspace(
         session.add(row)
         await session.flush()
         await session.refresh(row)
+    record_activity("workspace", "create", f"已创建工作区「{row.name}」", workspace_id=row.id)
     return {
         "item": {
             "id": row.id,
@@ -113,6 +115,7 @@ async def set_default_workspace(
         )
         row.is_default = True
         await session.flush()
+    record_activity("workspace", "default", f"已切换默认工作区", workspace_id=workspace_id)
     return {"default_workspace_id": workspace_id}
 
 
@@ -140,6 +143,7 @@ async def update_workspace(
             row.description = normalize_workspace_description(payload.description)
         await session.flush()
         await session.refresh(row)
+        record_activity("workspace", "update", f"已更新工作区「{row.name}」", workspace_id=row.id)
         return {
             "item": {
                 "id": row.id,
@@ -173,4 +177,5 @@ async def delete_workspace(
         if len(rows) <= 1:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="at least one workspace required")
         await session.delete(target)
+    record_activity("workspace", "delete", f"已删除工作区", workspace_id=workspace_id)
     return {"deleted": True}

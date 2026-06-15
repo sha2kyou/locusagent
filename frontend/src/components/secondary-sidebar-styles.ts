@@ -21,7 +21,7 @@ export const secondarySidebarGroupLabelClass =
 
 export function secondarySidebarRowClass(isActive: boolean) {
   return cn(
-    "group flex h-8 items-center gap-1.5 rounded-md px-2 text-[13px] leading-none transition-colors",
+    "group flex h-8 cursor-pointer select-none items-center gap-1.5 rounded-md px-2 text-[13px] leading-none transition-colors",
     isActive
       ? "bg-sidebar-sub-accent font-medium text-foreground shadow-xs"
       : "text-muted-foreground hover:bg-sidebar-sub-accent/70 hover:text-foreground/90",

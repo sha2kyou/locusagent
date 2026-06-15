@@ -39,10 +39,10 @@ async def test_build_context_prompt_includes_workspace_summary(monkeypatch):
         "agentpod_agent.workspace_summary.build_workspace_summary",
         _fake_summary,
     )
-    monkeypatch.setattr("agentpod_agent.workspace.get_workspace_id", lambda: "ws_test1234")
+    monkeypatch.setattr("agentpod_agent.workspace.get_workspace_id", lambda: "ws_0123456789abcdef0123")
 
     text = await build_context_prompt(session_id="sess_1")
-    assert "## 工作区上下文（ws_test1234）" in text
+    assert "## 工作区上下文（ws_0123456789abcdef0123）" in text
     assert "环境变量仅列名称" in text
     assert "## 技能 (1)" in text
 

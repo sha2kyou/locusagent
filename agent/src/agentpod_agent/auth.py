@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hmac
 
+from agentpod_shared.workspace_ids import is_valid_workspace_id
 from fastapi import Header, HTTPException, status
 
 from .config import get_settings
@@ -24,5 +25,7 @@ async def verify_internal_token(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing token")
     if not hmac.compare_digest(x_internal_token, expected):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
+    if not is_valid_workspace_id(x_workspace_id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="invalid workspace id")
     workspace_id = set_workspace_id(x_workspace_id)
     await ensure_workspace_context(workspace_id)

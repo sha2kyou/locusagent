@@ -12,6 +12,7 @@ from agentpod_shared.settings_store import (
     reload_runtime_config,
     set_app_timezone,
 )
+from agentpod_shared.activity_log import list_activity_logs, record_activity
 
 from ..auth import AuthContext, require_session
 from ..scheduled_tasks import recalc_task_schedules, validate_timezone
@@ -68,6 +69,21 @@ class AppConfigOut(BaseModel):
     app: AppSectionOut
 
 
+class ActivityLogEntryOut(BaseModel):
+    id: int
+    ts: str
+    category: str
+    action: str
+    message: str
+    workspace_id: str | None = None
+    level: str = "info"
+    detail: dict | None = None
+
+
+class ActivityLogsOut(BaseModel):
+    items: list[ActivityLogEntryOut]
+
+
 class AppConfigIn(BaseModel):
     llm_base_url: str | None = Field(default=None, max_length=512)
     llm_model: str | None = Field(default=None, max_length=128)
@@ -94,6 +110,17 @@ async def read_usage_summary(ctx: AuthContext = Depends(require_session)) -> Usa
     return await usage_summary()
 
 
+@router.get("/activity-logs", response_model=ActivityLogsOut)
+async def read_activity_logs(
+    limit: int = 200,
+    after_id: int | None = None,
+    ctx: AuthContext = Depends(require_session),
+) -> ActivityLogsOut:
+    _ = ctx
+    rows = list_activity_logs(limit=limit, after_id=after_id)
+    return ActivityLogsOut(items=[ActivityLogEntryOut.model_validate(r) for r in rows])
+
+
 @router.get("/timezone", response_model=TimezoneConfigOut)
 async def read_timezone(ctx: AuthContext = Depends(require_session)) -> TimezoneConfigOut:
     _ = ctx
@@ -113,6 +140,7 @@ async def save_timezone(
 
     set_app_timezone(tz)
     await recalc_task_schedules()
+    record_activity("settings", "timezone_save", f"时区已保存：{tz}")
     return TimezoneConfigOut(timezone=tz)
 
 
@@ -166,4 +194,5 @@ async def save_app_config(
     if payload.timezone is not None:
         await recalc_task_schedules()
 
+    record_activity("settings", "app_config_save", "应用配置已保存")
     return AppConfigOut.model_validate(app_config_for_api(doc))
