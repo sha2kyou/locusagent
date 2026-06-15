@@ -10,7 +10,9 @@ from ..memory import (
     delete_memory,
     enqueue_embedding,
     list_memories,
+    memory_term_label,
     recall_items,
+    resolve_memory_anchor_input,
     update_memory,
 )
 from ..security import review_write
@@ -22,10 +24,12 @@ async def _memory_tool(args: dict[str, Any]) -> ToolResult:
     action = pick_action(args)
     if action == "delete":
         action = "remove"
-    target = pick_str(args, "target") or "memory"
-    if target not in {"memory", "user"}:
-        raise ToolError("target must be one of: memory, user")
-    anchor = "identity" if target == "user" else "experience"
+    raw_anchor = pick_str(args, "term", "target", "anchor") or "short_term"
+    try:
+        anchor = resolve_memory_anchor_input(raw_anchor)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+    term_label = memory_term_label(anchor)
 
     async def _select_by_old_text(old_text: str) -> int:
         rows = await list_memories(limit=500)
@@ -72,7 +76,7 @@ async def _memory_tool(args: dict[str, Any]) -> ToolResult:
         await enqueue_embedding(mid)
         saved_origin = ORIGIN_AUTO_EXTRACT if is_auto_extract_write() else ORIGIN_MANUAL
         origin_label = " [auto_extract]" if saved_origin == ORIGIN_AUTO_EXTRACT else ""
-        return ToolResult(content=f"memory#{mid} saved{origin_label}")
+        return ToolResult(content=f"memory#{mid} saved ({term_label}){origin_label}")
 
     if action in {"replace", "update"}:
         content = pick_str(args, "content", "new_string", "new_content", "text")
@@ -94,7 +98,7 @@ async def _memory_tool(args: dict[str, Any]) -> ToolResult:
             raise ToolError(f"memory#{mid} not found")
         await enqueue_embedding(mid, bump=True)
         origin_label = " [auto_extract]" if write_origin == ORIGIN_AUTO_EXTRACT else ""
-        return ToolResult(content=f"memory#{mid} replaced{origin_label}")
+        return ToolResult(content=f"memory#{mid} replaced ({term_label}){origin_label}")
 
     if action == "remove":
         mid = await _resolve_entry_id(for_remove=True)
@@ -109,7 +113,9 @@ async def _memory_tool(args: dict[str, Any]) -> ToolResult:
         if not scoped:
             return ToolResult(content="(empty)")
         return ToolResult(
-            content="\n".join(f"- #{r['id']} {r['content']}" for r in scoped),
+            content="\n".join(
+                f"- #{r['id']} [{memory_term_label(r.get('anchor'))}] {r['content']}" for r in scoped
+            ),
             metadata={"items": scoped},
         )
 
@@ -118,7 +124,10 @@ async def _memory_tool(args: dict[str, Any]) -> ToolResult:
         if not rows:
             return ToolResult(content="(empty)")
         return ToolResult(
-            content="\n".join(f"#{r['id']}[{r['embedding_state']}] {r['content']}" for r in rows),
+            content="\n".join(
+                f"#{r['id']}[{memory_term_label(r.get('anchor'))}][{r['embedding_state']}] {r['content']}"
+                for r in rows
+            ),
             metadata={"items": rows},
         )
 
@@ -133,7 +142,7 @@ async def _memory_tool(args: dict[str, Any]) -> ToolResult:
             return ToolResult(content="(no recall hits)")
         return ToolResult(
             content="\n".join(
-                f"- #{h['id']} [{h.get('anchor', 'experience')}] {h['content']}" for h in scoped
+                f"- #{h['id']} [{memory_term_label(h.get('anchor'))}] {h['content']}" for h in scoped
             ),
             metadata={"items": scoped},
         )
@@ -154,7 +163,8 @@ register_builtin(
             "优先级：用户偏好与纠正 > 环境事实 > 流程性知识。\n\n"
             "不要保存：单次问答摘要、任务进度、会话结果、已完成工作日志、临时 TODO；"
             "这些用 session_recall。可复用的做法应沉淀为 skill。\n\n"
-            "target：user=用户画像，memory=经验笔记。\n"
+            "term（与记忆页面一致）：long_term=长期记忆，short_term=短期记忆。"
+            "兼容 target：user/long_term→长期，memory/short_term→短期。\n"
             "动作：add / replace / remove / read / list / recall；update、delete 为兼容别名。\n"
             "replace/remove/update/delete：优先传 snapshot/read/list/recall 中的 id；"
             "否则 old_text（或 remove 时可用 content）为唯一匹配子串。\n"
@@ -176,7 +186,17 @@ register_builtin(
                         "recall",
                     ],
                 },
-                "target": {"type": "string", "enum": ["memory", "user"], "default": "memory"},
+                "term": {
+                    "type": "string",
+                    "enum": ["long_term", "short_term"],
+                    "default": "short_term",
+                    "description": "长期记忆或短期记忆，与记忆页面一致。",
+                },
+                "target": {
+                    "type": "string",
+                    "enum": ["memory", "user"],
+                    "description": "兼容别名：user→长期，memory→短期。优先使用 term。",
+                },
                 "id": {
                     "type": "integer",
                     "description": "Entry id from snapshot, read, list, or recall.",

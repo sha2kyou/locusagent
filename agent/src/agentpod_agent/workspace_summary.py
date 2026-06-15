@@ -6,7 +6,7 @@ from typing import Any
 
 from .db import conn_scope, run_in_thread
 from .env_vars import list_env_vars
-from .memory import count_memories, list_memories
+from .memory import count_memories, list_memories, memory_term_label
 from .mcp_.config import list_mcp_servers
 from .skills import list_skills
 from .tool_settings import is_mcp_server_enabled, is_skill_enabled
@@ -95,8 +95,8 @@ async def build_workspace_summary(*, recent_limit: int = 5) -> tuple[str, dict[s
     lines.append(f"\n## 记忆 ({mem_count})")
     for m in recent_mem:
         snippet = str(m.get("content") or "")[:60]
-        anchor = str(m.get("anchor") or "experience")
-        lines.append(f"- #{m['id']} [{anchor}]: {snippet}")
+        term = memory_term_label(m.get("anchor"))
+        lines.append(f"- #{m['id']} [{term}]: {snippet}")
     if not recent_mem:
         lines.append("- (空)")
     meta["memory"] = {"count": mem_count, "items": recent_mem}

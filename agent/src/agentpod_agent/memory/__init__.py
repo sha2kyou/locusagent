@@ -12,17 +12,23 @@ from .queue import (
     stop_embedding_worker,
 )
 from .store import (
+    MEMORY_ANCHOR_LONG,
+    MEMORY_ANCHOR_SHORT,
     add_memory,
     count_memories,
     delete_memory,
     list_memories,
+    memory_term_label,
     recall,
     recall_items,
+    resolve_memory_anchor_input,
     update_memory,
 )
 
 __all__ = [
     "EmbeddingUnavailable",
+    "MEMORY_ANCHOR_LONG",
+    "MEMORY_ANCHOR_SHORT",
     "add_memory",
     "count_memories",
     "delete_memory",
@@ -34,8 +40,10 @@ __all__ = [
     "enqueue_message_embedding",
     "list_memories",
     "maybe_curate_memories",
+    "memory_term_label",
     "recall",
     "recall_items",
+    "resolve_memory_anchor_input",
     "start_embedding_worker",
     "stop_embedding_worker",
     "update_memory",

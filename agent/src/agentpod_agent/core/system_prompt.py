@@ -15,7 +15,7 @@ from typing import TypedDict
 from ..artifacts import list_categories
 from ..config import get_settings
 from ..host_settings import get_timezone
-from ..memory import list_memories
+from ..memory import list_memories, memory_term_label
 from ..skills import list_skills
 from ..logging import get_logger
 from ..tool_settings import is_skill_enabled, load_tool_settings
@@ -28,7 +28,7 @@ log = get_logger("system_prompt")
 _SNAPSHOT_MEMORY_LIMIT = 30
 _CTX_DELIMITER = "\n<<AGENTPOD_CTX>>\n"
 # 变更 stable 模板时递增，使旧 session 缓存自动失效。
-FROZEN_SYSTEM_PROMPT_VERSION = 25
+FROZEN_SYSTEM_PROMPT_VERSION = 26
 _CACHE_PREFIX = f"agentpod:sp:v{FROZEN_SYSTEM_PROMPT_VERSION}:"
 
 MEMORY_GUIDANCE = (
@@ -37,7 +37,8 @@ MEMORY_GUIDANCE = (
     "不要将任务进度、会话结果、完工日志或临时状态写入记忆；回顾历史对话用 session_recall 或 session_search。"
     "不要记录合并请求编号、议题编号、提交哈希，或一周内会过时的信息。"
     "若发现可复用的技巧或工作流，应写入私有技能而非记忆。\n"
-    "以陈述性事实书写记忆。target=user 存稳定用户事实与偏好；target=memory 存持久操作笔记。"
+    "以陈述性事实书写记忆。term=long_term 存稳定用户事实与偏好（长期记忆）；"
+    "term=short_term 存持久操作笔记（短期记忆）。兼容 target=user/memory。"
 )
 
 SKILLS_GUIDANCE = (
@@ -125,7 +126,7 @@ async def _build_memory_snapshot() -> list[str]:
         mid = int(r.get("id") or 0)
         if text and text not in seen:
             seen.add(text)
-            label = "用户" if str(r.get("anchor")) == "identity" else "记忆"
+            label = memory_term_label(r.get("anchor"))
             out.append(f"#{mid} [{label}] {text}")
     return out
 
