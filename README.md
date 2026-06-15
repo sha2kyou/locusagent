@@ -1,10 +1,10 @@
 # AgentPod
 
-macOS 桌面 AI Agent：对话、Skills、MCP、Memory、定时任务与多工作区。
+macOS desktop AI agent: chat, Skills, MCP, Memory, scheduled tasks, and multi-workspace support.
 
-配置与数据在 `~/.agentpod/`（`settings.json` + 本地 SQLite）。
+Configuration and data live in `~/.agentpod/` (`settings.json` + local SQLite).
 
-## 安装
+## Install
 
 ```bash
 brew tap sha2kyou/tap
@@ -12,17 +12,17 @@ brew trust --cask sha2kyou/tap/agentpod
 brew install --cask agentpod
 ```
 
-首次启动在 **设置 → 模型** 填写 LLM API Key。
+On first launch, add your LLM API key under **Settings → Models**.
 
-## 构建
+## Build
 
-依赖 Python 3.11+、Node.js、Rust。
+Requires Python 3.11+, Node.js, and Rust.
 
 ```bash
 ./rebuild.sh
 open dist/AgentPod.app
 ```
 
-## 文档
+## Docs
 
-- [AGENT.md](./AGENT.md) — 供应用内 Agent 阅读的平台能力说明（`agentpod` 工具加载此文件）
+- [AGENT.md](./AGENT.md) — Platform capability guide for the in-app agent (loaded by the `agentpod` tool)
