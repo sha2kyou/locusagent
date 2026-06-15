@@ -2,12 +2,6 @@
 
 [![CI](https://github.com/sha2kyou/agentpod/actions/workflows/ci.yml/badge.svg)](https://github.com/sha2kyou/agentpod/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/sha2kyou/agentpod?label=release&sort=semver)](https://github.com/sha2kyou/agentpod/releases)
-[![Downloads](https://img.shields.io/github/downloads/sha2kyou/agentpod/total)](https://github.com/sha2kyou/agentpod/releases)
-[![macOS](https://img.shields.io/badge/platform-macOS%20(arm64)-000000?logo=apple&logoColor=white)](#install)
-[![Python](https://img.shields.io/badge/python-3.11+-3776AB?logo=python&logoColor=white)](#build-from-source)
-[![Node.js](https://img.shields.io/badge/node.js-22+-339933?logo=nodedotjs&logoColor=white)](#development)
-[![Rust](https://img.shields.io/badge/rust-stable-000000?logo=rust&logoColor=white)](#build-from-source)
-[![Homebrew](https://img.shields.io/badge/Homebrew-agentpod-FCBB00?logo=homebrew&logoColor=white)](https://github.com/sha2kyou/homebrew-tap)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 **AgentPod** is a local-first macOS desktop AI agent. Chat with an LLM that can read and write files in your workspace, run code, search the web, connect MCP servers, remember context across sessions, and automate recurring work — all with data stored on your machine.
@@ -137,5 +131,4 @@ Copyright © 2026 AgentPod Team
 
 ---
 
-[![GitHub stars](https://img.shields.io/github/stars/sha2kyou/agentpod?style=social)](https://github.com/sha2kyou/agentpod/stargazers)
 **Version:** [latest release](https://github.com/sha2kyou/agentpod/releases) · **Platform:** macOS (arm64)
