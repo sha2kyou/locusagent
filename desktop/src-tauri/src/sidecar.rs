@@ -157,6 +157,10 @@ pub fn spawn_backend(app: &AppHandle) -> std::io::Result<Child> {
     if static_dir.join("index.html").is_file() {
         command.env("AGENTPOD_STATIC_DIR", static_dir);
     }
+    command.env(
+        "MCP_OAUTH_REDIRECT_URI",
+        format!("http://127.0.0.1:{BACKEND_PORT}/api/oauth/mcp/callback"),
+    );
 
     let mut child = command
         .stdout(Stdio::piped())

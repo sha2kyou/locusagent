@@ -263,6 +263,11 @@ export interface UsageSummary {
   };
 }
 
+export interface BackendLogs {
+  lines: string[];
+  path: string;
+}
+
 export interface ActivityLogEntry {
   id: number;
   ts: string;

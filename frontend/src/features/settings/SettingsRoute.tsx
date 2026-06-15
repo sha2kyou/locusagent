@@ -17,7 +17,7 @@ const PAGE_META: Record<string, { title: string; subtitle: string }> = {
   models: { title: "模型与服务", subtitle: "LLM、向量嵌入与第三方工具" },
   tools: { title: "工具", subtitle: "Terminal 开关、白名单与禁止项" },
   usage: { title: "用量统计", subtitle: "按场景汇总 Token 与 API 调用" },
-  logs: { title: "日志", subtitle: "MCP、技能、对话等主要操作记录" },
+  logs: { title: "日志", subtitle: "后端进程运行输出" },
 };
 
 export function SettingsRoute() {

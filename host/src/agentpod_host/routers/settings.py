@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import os
+from collections import deque
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
@@ -84,6 +88,11 @@ class ActivityLogsOut(BaseModel):
     items: list[ActivityLogEntryOut]
 
 
+class BackendLogsOut(BaseModel):
+    lines: list[str]
+    path: str
+
+
 class AppConfigIn(BaseModel):
     llm_base_url: str | None = Field(default=None, max_length=512)
     llm_model: str | None = Field(default=None, max_length=128)
@@ -119,6 +128,23 @@ async def read_activity_logs(
     _ = ctx
     rows = list_activity_logs(limit=limit, after_id=after_id)
     return ActivityLogsOut(items=[ActivityLogEntryOut.model_validate(r) for r in rows])
+
+
+@router.get("/backend-logs", response_model=BackendLogsOut)
+async def read_backend_logs(
+    lines: int = 500,
+    ctx: AuthContext = Depends(require_session),
+) -> BackendLogsOut:
+    _ = ctx
+    home = Path(os.environ.get("AGENTPOD_HOME", Path.home() / ".agentpod"))
+    log_path = home / "desktop-backend.log"
+    if not log_path.is_file():
+        return BackendLogsOut(lines=[], path=str(log_path))
+    buf: deque[str] = deque(maxlen=lines)
+    with log_path.open(errors="replace") as f:
+        for line in f:
+            buf.append(line.rstrip("\n"))
+    return BackendLogsOut(lines=list(buf), path=str(log_path))
 
 
 @router.get("/timezone", response_model=TimezoneConfigOut)

@@ -19,6 +19,7 @@ import type {
   ScheduleKind,
   TimezoneConfig,
   ActivityLogEntry,
+  BackendLogs,
   UsageSummary,
   ToolToggleOverview,
   WorkspaceItem,
@@ -53,6 +54,13 @@ export const getAppConfig = () => apiGet<AppConfig>("/api/settings/app-config");
 
 export const putAppConfig = (body: AppConfigUpdate) =>
   apiSend<AppConfig>("/api/settings/app-config", "PUT", body);
+
+export const getBackendLogs = (opts?: { lines?: number }, signal?: AbortSignal) => {
+  const params = new URLSearchParams();
+  if (opts?.lines != null) params.set("lines", String(opts.lines));
+  const q = params.toString();
+  return apiGet<BackendLogs>(`/api/settings/backend-logs${q ? `?${q}` : ""}`, { signal });
+};
 
 export const getActivityLogs = (opts?: { limit?: number; after_id?: number }) => {
   const params = new URLSearchParams();

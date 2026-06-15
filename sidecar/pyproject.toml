@@ -1,6 +1,6 @@
 [project]
 name = "agentpod-sidecar"
-version = "0.1.14"
+version = "0.1.15"
 description = "AgentPod desktop sidecar entry (host + agent monolith)"
 requires-python = ">=3.11"
 dependencies = [
