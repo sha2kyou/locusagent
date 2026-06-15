@@ -31,7 +31,7 @@ use tower_http::{
 use tracing::{error, info};
 
 pub const GATEWAY_HOST: &str = "127.0.0.1";
-pub const GATEWAY_PORT: u16 = 1420;
+pub const GATEWAY_PORT: u16 = 21223;
 
 const HOP_BY_HOP: &[&str] = &[
     "connection",

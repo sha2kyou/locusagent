@@ -10,8 +10,9 @@ def main() -> None:
     import uvicorn
 
     from agentpod.main import app
+    from agentpod_shared.ports import AGENTPOD_HOST, AGENTPOD_PORT
 
-    uvicorn.run(app, host="127.0.0.1", port=8080, log_level="info")
+    uvicorn.run(app, host=AGENTPOD_HOST, port=AGENTPOD_PORT, log_level="info")
 
 
 if __name__ == "__main__":

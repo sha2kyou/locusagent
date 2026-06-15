@@ -58,8 +58,8 @@ class SecretsSection(BaseModel):
 
 class AppSection(BaseModel):
     timezone: str = "UTC"
-    public_base_url: str = "http://127.0.0.1:1420"
-    mcp_oauth_redirect_uri: str = "http://127.0.0.1:1420/api/oauth/mcp/callback"
+    public_base_url: str = "http://127.0.0.1:21223"
+    mcp_oauth_redirect_uri: str = "http://127.0.0.1:21223/api/oauth/mcp/callback"
 
 
 class TerminalSection(BaseModel):
@@ -298,6 +298,8 @@ def app_config_for_api(doc: SettingsDocument | None = None) -> dict[str, Any]:
 
 
 def document_to_host_kwargs(doc: SettingsDocument | None = None) -> dict[str, Any]:
+    from .ports import agentpod_base_url
+
     d = doc or get_settings_document()
     home = data_dir(d)
     skills = shared_skills_dir()
@@ -306,7 +308,7 @@ def document_to_host_kwargs(doc: SettingsDocument | None = None) -> dict[str, An
         "encryption_key": d.secrets.encryption_key,
         "session_secret": d.secrets.session_secret,
         "host_sqlite_path": str(host_sqlite_path(d)),
-        "agent_service_url": "http://127.0.0.1:8080",
+        "agent_service_url": agentpod_base_url(),
         "agent_internal_token": d.secrets.internal_token,
         "llm_base_url": d.llm.base_url,
         "llm_api_key": d.llm.api_key,
@@ -323,7 +325,7 @@ def document_to_host_kwargs(doc: SettingsDocument | None = None) -> dict[str, An
         "embedding_base_url": "local",
         "embedding_model": d.embedding.model,
         "attachment_storage": "local",
-        "attachment_max_bytes": 1_048_576,
+        "attachment_max_bytes": 25 * 1024 * 1024,
         "public_base_url": d.app.public_base_url,
         "enable_terminal": d.terminal.enable_terminal,
         "terminal_whitelist": d.terminal.whitelist,
@@ -334,20 +336,22 @@ def document_to_host_kwargs(doc: SettingsDocument | None = None) -> dict[str, An
 
 
 def document_to_agent_kwargs(doc: SettingsDocument | None = None) -> dict[str, Any]:
+    from .ports import agentpod_base_url, agentpod_llm_internal_url
+
     d = doc or get_settings_document()
     home = data_dir(d)
     skills = shared_skills_dir()
     token = d.secrets.internal_token
     return {
         "internal_token": token,
-        "llm_base_url": "http://127.0.0.1:8080/internal/llm/v1",
+        "llm_base_url": agentpod_llm_internal_url(),
         "embedding_base_url": "local",
         "embedding_model": d.embedding.model,
-        "host_internal_url": "http://127.0.0.1:8080",
+        "host_internal_url": agentpod_base_url(),
         "data_dir": home,
         "shared_skills_dir": skills or (home / "skills"),
         "attachment_storage": "local",
-        "attachment_max_bytes": 1_048_576,
+        "attachment_max_bytes": 25 * 1024 * 1024,
         "enable_terminal": d.terminal.enable_terminal,
         "terminal_whitelist": d.terminal.whitelist,
         "terminal_denylist": d.terminal.denylist,

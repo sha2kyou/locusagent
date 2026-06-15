@@ -90,33 +90,45 @@ async def ensure_mcp_runtime(workspace_id: str) -> None:
 
 
 async def refresh_mcp_server(workspace_id: str, server_name: str) -> dict[str, Any]:
-    """单服重连并同步工具（OAuth 完成 / 手动重连）。"""
-    from .mcp_.client import ensure_mcp_started, reconnect_mcp_server, sync_mcp_tools_for_workspace
+    """单服重连（OAuth 完成 / 手动重连 / 保存配置后）。"""
+    from .config import get_settings
+    from .mcp_.client import reconnect_mcp_server
 
     wid = set_workspace_id(workspace_id)
     invalidate_mcp_runtime(wid)
     await ensure_workspace_context(wid)
-    await ensure_mcp_started(wid)
+    timeout = max(30.0, float(get_settings().mcp_connect_timeout_seconds) * 2.0)
     try:
-        runtime = await reconnect_mcp_server(server_name)
+        runtime = await asyncio.wait_for(reconnect_mcp_server(server_name), timeout=timeout)
     except asyncio.CancelledError:
         raise
+    except TimeoutError:
+        log.warning(
+            "mcp_refresh_timeout",
+            server=server_name,
+            workspace_id=wid,
+            timeout_seconds=timeout,
+        )
+        runtime = {
+            "name": server_name,
+            "connected": False,
+            "tools": [],
+            "error": f"reconnect timeout after {timeout:.0f}s",
+        }
     except Exception as exc:
         log.warning("mcp_refresh_failed", server=server_name, workspace_id=wid, error=str(exc))
         runtime = {"name": server_name, "connected": False, "tools": [], "error": str(exc)}
     if runtime.get("connected"):
-        await sync_mcp_tools_for_workspace(wid)
         mark_mcp_runtime_ready(wid)
     return runtime
 
 
 async def disconnect_mcp_server_runtime(workspace_id: str, server_name: str) -> bool:
-    from .mcp_.client import disconnect_mcp_server, ensure_mcp_started
+    from .mcp_.client import disconnect_mcp_server
 
     wid = set_workspace_id(workspace_id)
     invalidate_mcp_runtime(wid)
     await ensure_workspace_context(wid)
-    await ensure_mcp_started(wid)
     ok = await disconnect_mcp_server(server_name)
     mark_mcp_runtime_ready(wid)
     return ok

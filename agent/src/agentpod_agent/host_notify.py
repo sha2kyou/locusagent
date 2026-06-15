@@ -10,7 +10,6 @@ import httpx
 from .artifacts.store import get_category_name
 from .host_internal import HostInternalError, internal_base_and_headers
 from .logging import get_logger
-from .workspace import get_workspace_id
 
 log = get_logger("host_notify")
 
@@ -28,6 +27,25 @@ def _artifact_link(category_id: str) -> str:
     return f"/artifacts/c/{category_id}"
 
 
+def _artifact_notify_category(label: str) -> str:
+    prefix = "保存产物（"
+    suffix = "）"
+    max_label_len = max(1, 64 - len(prefix) - len(suffix))
+    clean = (label or "产物").strip() or "产物"
+    if len(clean) > max_label_len:
+        clean = f"{clean[: max_label_len - 1].rstrip()}…"
+    return f"{prefix}{clean}{suffix}"
+
+
+def _notify_workspace_id() -> str | None:
+    from .workspace import get_workspace_id, normalize_workspace_id
+
+    wid = normalize_workspace_id(get_workspace_id())
+    if wid == "ws_default":
+        return None
+    return wid
+
+
 async def notify_artifact_saved(art: dict[str, Any]) -> None:
     title = str(art.get("title") or "").strip()
     if not title:
@@ -41,14 +59,15 @@ async def notify_artifact_saved(art: dict[str, Any]) -> None:
     body = _excerpt(str(art.get("content") or ""))
     payload = {
         "kind": "success",
-        "category": f"保存产物（{label}）",
-        "title": title,
-        "body": body,
+        "category": _artifact_notify_category(label),
+        "title": title[:200],
+        "body": body[:4000],
         "link": _artifact_link(category_id),
     }
     try:
-        base, headers = internal_base_and_headers(workspace_id=get_workspace_id())
-    except HostInternalError:
+        base, headers = internal_base_and_headers(workspace_id=_notify_workspace_id())
+    except HostInternalError as exc:
+        log.warning("artifact_notify_skipped", reason=str(exc))
         return
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -80,8 +99,9 @@ async def notify_background_review(*, summary: str, session_id: str) -> None:
         "link": "/memory",
     }
     try:
-        base, headers = internal_base_and_headers(workspace_id=get_workspace_id())
-    except HostInternalError:
+        base, headers = internal_base_and_headers(workspace_id=_notify_workspace_id())
+    except HostInternalError as exc:
+        log.warning("background_review_notify_skipped", session_id=session_id, reason=str(exc))
         return
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:

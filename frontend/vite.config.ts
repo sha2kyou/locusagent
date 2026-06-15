@@ -3,7 +3,7 @@ import { fileURLToPath, URL } from 'node:url'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-const API_TARGET = process.env.API_TARGET ?? 'http://127.0.0.1:8080'
+const API_TARGET = process.env.API_TARGET ?? 'http://127.0.0.1:21223'
 
 /** 本地开发：热更新 + 代理 sidecar API */
 export default defineConfig({

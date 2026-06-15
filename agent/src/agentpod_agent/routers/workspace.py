@@ -57,9 +57,7 @@ from ..mcp_ import (
 )
 from ..mcp_.client import (
     connect_mcp_server,
-    ensure_mcp_started,
     list_mcp_runtime,
-    sync_mcp_tools_for_workspace,
 )
 from ..core.write_origin import ORIGIN_MANUAL
 from ..memory import (
@@ -116,6 +114,7 @@ class AttachmentCreateIn(BaseModel):
     mime_type: str | None = None
     text_content: str | None = None
     image_data_url: str | None = None
+    file_data_base64: str | None = None
     processable: bool = True
     unsupported_reason: str | None = None
     truncated: bool = False
@@ -345,15 +344,13 @@ async def workspace_list_mcp(sync: bool = Query(False, description="为 true 时
 @router.post("/mcp", status_code=201)
 async def workspace_add_mcp(payload: MCPIn) -> dict:
     wid = get_workspace_id()
-    invalidate_mcp_runtime(wid)
-    await ensure_mcp_started(wid)
     cfg = await _build_mcp_cfg(payload)
     try:
         added = await run_in_thread(add_mcp_server, cfg)
     except (ValueError, FileExistsError) as exc:
         raise WsError("mcp_invalid", str(exc), status_code=400) from exc
+    invalidate_mcp_runtime(wid)
     runtime = await connect_mcp_server(added)
-    await sync_mcp_tools_for_workspace(wid)
     mark_mcp_runtime_ready(wid)
     oauth_connected = added.name in await _oauth_connected_map() if added.auth == "oauth" else None
     return _mcp_response(added, runtime, oauth_connected=oauth_connected)
@@ -532,18 +529,22 @@ async def workspace_list_sessions(limit: int = 50) -> dict:
 
 @router.post("/attachments", status_code=201)
 async def workspace_create_attachment(payload: AttachmentCreateIn) -> dict:
-    item = await create_attachment(
-        session_id=payload.session_id,
-        kind=payload.kind,
-        name=payload.name.strip() or "附件",
-        mime_type=payload.mime_type,
-        size_bytes=max(0, int(payload.size_bytes or 0)),
-        text_content=payload.text_content,
-        image_data_url=payload.image_data_url,
-        processable=bool(payload.processable),
-        unsupported_reason=payload.unsupported_reason,
-        truncated=bool(payload.truncated),
-    )
+    try:
+        item = await create_attachment(
+            session_id=payload.session_id,
+            kind=payload.kind,
+            name=payload.name.strip() or "附件",
+            mime_type=payload.mime_type,
+            size_bytes=max(0, int(payload.size_bytes or 0)),
+            text_content=payload.text_content,
+            image_data_url=payload.image_data_url,
+            file_data_base64=payload.file_data_base64,
+            processable=bool(payload.processable),
+            unsupported_reason=payload.unsupported_reason,
+            truncated=bool(payload.truncated),
+        )
+    except ValueError as exc:
+        raise WsError("attachment_invalid", str(exc), status_code=400) from exc
     return item
 
 

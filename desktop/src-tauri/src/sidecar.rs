@@ -1,4 +1,4 @@
-//! 桌面单体 Python 后端 sidecar（uvicorn :8080）
+//! 桌面单体 Python 后端 sidecar（uvicorn :21223）
 
 use std::{
     io::{BufRead, BufReader},
@@ -12,7 +12,7 @@ use tauri::{AppHandle, Manager};
 use tauri::path::BaseDirectory;
 use tracing::{error, info, warn};
 
-const BACKEND_PORT: u16 = 8080;
+pub const BACKEND_PORT: u16 = 21223;
 
 pub fn backend_url() -> String {
     format!("http://127.0.0.1:{BACKEND_PORT}")
@@ -102,6 +102,10 @@ pub fn spawn_backend(app: &AppHandle) -> std::io::Result<Child> {
     }
     if let Some(readme) = bundled_readme(app) {
         command.env("AGENTPOD_README_PATH", readme);
+    }
+    let static_dir = crate::gateway::resolve_static_dir(app);
+    if static_dir.join("index.html").is_file() {
+        command.env("AGENTPOD_STATIC_DIR", static_dir);
     }
 
     let mut child = command.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;

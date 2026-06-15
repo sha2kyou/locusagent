@@ -12,6 +12,14 @@ from typing import Any
 
 from ..db import conn_scope, run_in_thread
 from ..logging import get_logger
+from .attachment_documents import (
+    OFFICE_EXTRACTED_MIME,
+    extract_document_text,
+    is_office_attachment,
+    is_office_binary_payload,
+    is_office_extracted_blob,
+    has_office_filename,
+)
 from .attachment_images import validate_processable_image
 from ..storage import (
     AttachmentStorageError,
@@ -154,7 +162,26 @@ async def _hydrate_attachment(meta: dict[str, Any]) -> dict[str, Any]:
         out["unsupportedReason"] = "附件对象不存在"
         return out
     if out["kind"] == "text":
-        out["text"] = data.decode("utf-8", errors="replace")
+        attachment_name = str(meta.get("name") or "")
+        attachment_mime = str(out["mimeType"])
+        if is_office_extracted_blob(name=attachment_name, mime_type=attachment_mime):
+            out["text"] = data.decode("utf-8", errors="replace")
+        elif is_office_attachment(name=attachment_name, mime_type=attachment_mime) or (
+            is_office_binary_payload(data) and has_office_filename(attachment_name)
+        ):
+            text, _trunc, err = await run_in_thread(
+                extract_document_text,
+                data,
+                name=attachment_name,
+                mime_type=attachment_mime,
+            )
+            if err:
+                out["processable"] = False
+                out["unsupportedReason"] = err
+            else:
+                out["text"] = text
+        else:
+            out["text"] = data.decode("utf-8", errors="replace")
     elif out["kind"] == "image":
         out["imageDataUrl"] = _encode_data_url(str(out["mimeType"]), data)
     return out
@@ -573,14 +600,50 @@ async def create_attachment(
     size_bytes: int,
     text_content: str | None,
     image_data_url: str | None,
+    file_data_base64: str | None = None,
     processable: bool,
     unsupported_reason: str | None,
     truncated: bool,
 ) -> dict[str, Any]:
     attachment_id = _new_attachment_id()
+    clean_name = (name or "附件").strip() or "附件"
+    name = clean_name
     clean_mime = str(mime_type or "").strip() or "application/octet-stream"
     payload: bytes | None = None
-    if kind == "text":
+
+    if file_data_base64:
+        import base64
+
+        from ..config import get_settings
+
+        try:
+            raw = base64.b64decode(str(file_data_base64).strip(), validate=True)
+        except Exception as exc:
+            raise ValueError(f"invalid file_data_base64: {exc}") from exc
+        max_bytes = max(1, int(get_settings().attachment_max_bytes))
+        if len(raw) > max_bytes:
+            raise ValueError(f"file exceeds attachment limit ({max_bytes} bytes)")
+        extracted, doc_trunc, err = await run_in_thread(
+            extract_document_text,
+            raw,
+            name=clean_name,
+            mime_type=clean_mime,
+        )
+        if err:
+            kind = "other"
+            processable = False
+            unsupported_reason = err
+            truncated = False
+            payload = None
+        else:
+            kind = "text"
+            processable = True
+            unsupported_reason = None
+            truncated = bool(truncated or doc_trunc)
+            text_content = extracted
+            payload = extracted.encode("utf-8")
+            clean_mime = OFFICE_EXTRACTED_MIME
+    elif kind == "text":
         payload = (text_content or "").encode("utf-8")
         if not mime_type:
             clean_mime = "text/plain;charset=utf-8"

@@ -21,7 +21,7 @@ class Settings(BaseSettings):
 
     host_sqlite_path: str = Field(default="", alias="HOST_SQLITE_PATH")
 
-    agent_service_url: str = Field(default="http://127.0.0.1:8080", alias="AGENT_SERVICE_URL")
+    agent_service_url: str = Field(default="http://127.0.0.1:21223", alias="AGENT_SERVICE_URL")
     agent_internal_token: str = Field(default="", alias="AGENT_INTERNAL_TOKEN")
     enable_terminal: bool = Field(default=True, alias="ENABLE_TERMINAL")
     terminal_whitelist: str = Field(default="git,npm,node,python3,make", alias="TERMINAL_WHITELIST")
@@ -51,7 +51,7 @@ class Settings(BaseSettings):
 
     embedding_base_url: str = Field(default="local", alias="EMBEDDING_BASE_URL")
     embedding_model: str = Field(default="BAAI/bge-small-zh-v1.5", alias="EMBEDDING_MODEL")
-    attachment_max_bytes: int = Field(default=1_048_576, alias="ATTACHMENT_MAX_BYTES")
+    attachment_max_bytes: int = Field(default=25 * 1024 * 1024, alias="ATTACHMENT_MAX_BYTES")
     attachment_storage: str = Field(default="local", alias="ATTACHMENT_STORAGE")
 
     internal_network_guard_enabled: bool = Field(default=True, alias="INTERNAL_NETWORK_GUARD_ENABLED")
@@ -74,11 +74,11 @@ class Settings(BaseSettings):
     )
 
     background_review_enabled: bool = Field(default=True, alias="BACKGROUND_REVIEW_ENABLED")
-    background_review_memory_nudge_turns: int = Field(default=10, alias="BACKGROUND_REVIEW_MEMORY_NUDGE_TURNS")
+    background_review_memory_nudge_turns: int = Field(default=20, alias="BACKGROUND_REVIEW_MEMORY_NUDGE_TURNS")
     background_review_skill_nudge_loop_rounds: int = Field(
-        default=10, alias="BACKGROUND_REVIEW_SKILL_NUDGE_LOOP_ROUNDS"
+        default=24, alias="BACKGROUND_REVIEW_SKILL_NUDGE_LOOP_ROUNDS"
     )
-    background_review_max_rounds: int = Field(default=8, alias="BACKGROUND_REVIEW_MAX_ROUNDS")
+    background_review_max_rounds: int = Field(default=4, alias="BACKGROUND_REVIEW_MAX_ROUNDS")
 
     mcp_call_timeout_seconds: float = Field(default=45.0, alias="MCP_CALL_TIMEOUT_SECONDS")
     mcp_connect_timeout_seconds: float = Field(default=30.0, alias="MCP_CONNECT_TIMEOUT_SECONDS")

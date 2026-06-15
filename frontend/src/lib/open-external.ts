@@ -32,7 +32,7 @@ export function isExternalNavigationUrl(raw: string | null | undefined): boolean
 
   if (isDesktopApp()) {
     const host = url.hostname;
-    if ((host === "127.0.0.1" || host === "localhost") && (url.port === "1420" || url.port === "")) {
+    if ((host === "127.0.0.1" || host === "localhost") && (url.port === "21223" || url.port === "")) {
       return false;
     }
   }

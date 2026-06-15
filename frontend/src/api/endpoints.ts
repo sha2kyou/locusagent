@@ -108,6 +108,7 @@ export const createAttachment = (body: {
   mime_type?: string;
   text_content?: string;
   image_data_url?: string;
+  file_data_base64?: string;
   processable: boolean;
   unsupported_reason?: string;
   truncated: boolean;

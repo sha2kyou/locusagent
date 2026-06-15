@@ -15,14 +15,14 @@ class Settings(BaseSettings):
     internal_token: str = Field(default="", alias="INTERNAL_TOKEN")
 
     llm_base_url: str = Field(
-        default="http://127.0.0.1:8080/internal/llm/v1",
+        default="http://127.0.0.1:21223/internal/llm/v1",
         alias="LLM_BASE_URL",
     )
 
     embedding_base_url: str = Field(default="local", alias="EMBEDDING_BASE_URL")
     embedding_model: str = Field(default="BAAI/bge-small-zh-v1.5", alias="EMBEDDING_MODEL")
 
-    host_internal_url: str = Field(default="http://127.0.0.1:8080", alias="HOST_INTERNAL_URL")
+    host_internal_url: str = Field(default="http://127.0.0.1:21223", alias="HOST_INTERNAL_URL")
 
     data_dir: Path = Field(default=Path.home() / ".agentpod", alias="DATA_DIR")
     shared_skills_dir: Path = Field(default=Path.home() / ".agentpod" / "skills", alias="SHARED_SKILLS_DIR")
@@ -37,13 +37,13 @@ class Settings(BaseSettings):
     context_keep_last: int = Field(default=8, alias="CONTEXT_KEEP_LAST")
     context_distill_min_middle: int = Field(default=4, alias="CONTEXT_DISTILL_MIN_MIDDLE")
 
-    # Background Self-Improvement Review（Hermes 对齐）
+    # Background Self-Improvement Review（保守触发，降低噪音）
     background_review_enabled: bool = Field(default=True, alias="BACKGROUND_REVIEW_ENABLED")
-    background_review_memory_nudge_turns: int = Field(default=10, alias="BACKGROUND_REVIEW_MEMORY_NUDGE_TURNS")
+    background_review_memory_nudge_turns: int = Field(default=20, alias="BACKGROUND_REVIEW_MEMORY_NUDGE_TURNS")
     background_review_skill_nudge_loop_rounds: int = Field(
-        default=10, alias="BACKGROUND_REVIEW_SKILL_NUDGE_LOOP_ROUNDS"
+        default=24, alias="BACKGROUND_REVIEW_SKILL_NUDGE_LOOP_ROUNDS"
     )
-    background_review_max_rounds: int = Field(default=8, alias="BACKGROUND_REVIEW_MAX_ROUNDS")
+    background_review_max_rounds: int = Field(default=4, alias="BACKGROUND_REVIEW_MAX_ROUNDS")
 
     # 记忆策展：总条数超过上限触发一次 LLM 去重/合并/淘汰
     memory_max_items: int = Field(default=200, alias="MEMORY_MAX_ITEMS")
@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     tool_guardrail_no_progress_warn_after: int = Field(default=2, alias="TOOL_GUARDRAIL_NO_PROGRESS_WARN_AFTER")
     tool_guardrail_no_progress_block_after: int = Field(default=5, alias="TOOL_GUARDRAIL_NO_PROGRESS_BLOCK_AFTER")
 
-    attachment_max_bytes: int = Field(default=1_048_576, alias="ATTACHMENT_MAX_BYTES")
+    attachment_max_bytes: int = Field(default=25 * 1024 * 1024, alias="ATTACHMENT_MAX_BYTES")
 
     enable_terminal: bool = Field(default=True, alias="ENABLE_TERMINAL")
     terminal_whitelist: str = Field(default="git,npm,node,python3,make", alias="TERMINAL_WHITELIST")

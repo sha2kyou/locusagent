@@ -18,8 +18,7 @@ brew install --cask agentpod
 
 ```
 AgentPod.app
-  ├─ Gateway :1420   内嵌 React UI
-  └─ Sidecar :8080   Python FastAPI（host + agent）
+  └─ Sidecar :21223   Python FastAPI（host + agent + 内嵌 React UI）
         └─ ~/.agentpod/
              ├── settings.json
              ├── host.sqlite

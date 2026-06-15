@@ -4,13 +4,14 @@
   "description": "Default AgentPod desktop capability",
   "windows": ["main"],
   "remote": {
-    "urls": ["http://127.0.0.1:1420", "http://127.0.0.1:1420/*"]
+    "urls": ["http://127.0.0.1:21223", "http://127.0.0.1:21223/*"]
   },
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
     "opener:default",
     "window-state:default",
-    "notification:default"
+    "notification:default",
+    "autostart:default"
   ]
 }

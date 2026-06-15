@@ -6,16 +6,16 @@ use tauri::{
 };
 use tauri_plugin_opener::OpenerExt;
 
-use crate::gateway::{GATEWAY_HOST, GATEWAY_PORT};
+use crate::sidecar;
 
-fn gateway_origin() -> String {
-    format!("http://{GATEWAY_HOST}:{GATEWAY_PORT}")
+fn app_origin() -> String {
+    sidecar::backend_url()
 }
 
 fn is_app_url(url: &url::Url) -> bool {
-    let origin = gateway_origin();
+    let origin = app_origin();
     url.as_str().starts_with(&origin)
-        || url.as_str().starts_with("http://localhost:1420")
+        || url.as_str().starts_with("http://localhost:21223")
         || url.scheme() == "tauri"
 }
 
@@ -29,9 +29,9 @@ fn open_in_system_browser(app: &tauri::AppHandle, url: &url::Url) {
 
 pub fn create_main_window(app: &App) -> tauri::Result<()> {
     let handle = app.handle().clone();
-    let gateway_url: url::Url = gateway_origin().parse().expect("gateway url");
+    let app_url: url::Url = app_origin().parse().expect("app url");
 
-    WebviewWindowBuilder::new(app, "main", WebviewUrl::External(gateway_url))
+    WebviewWindowBuilder::new(app, "main", WebviewUrl::External(app_url))
         .title("AgentPod")
         .inner_size(1280.0, 840.0)
         .resizable(true)

@@ -14,6 +14,7 @@ from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamablehttp_client
 
 from ..config import get_settings
+from ..db import run_in_thread
 from ..logging import get_logger
 from ..tool_settings import is_mcp_server_enabled
 from ..tools import Tool, ToolError, ToolResult
@@ -98,7 +99,7 @@ class MCPManager:
         if self._started:
             return
         self._started = True
-        cfgs = list_mcp_servers(self._workspace_id)
+        cfgs = await run_in_thread(list_mcp_servers, self._workspace_id)
         if not cfgs:
             return
 
@@ -122,7 +123,7 @@ class MCPManager:
             await self.start()
             return len(self._sessions)
 
-        cfgs = list_mcp_servers(self._workspace_id)
+        cfgs = await run_in_thread(list_mcp_servers, self._workspace_id)
         missing = [cfg for cfg in cfgs if cfg.name not in self._sessions]
         if not missing:
             return 0
@@ -162,7 +163,7 @@ class MCPManager:
         stack = AsyncExitStack()
         try:
             if cfg.transport == "stdio":
-                _prepare_stdio_connect(cfg, self._workspace_id)
+                await run_in_thread(_prepare_stdio_connect, cfg, self._workspace_id)
                 params = StdioServerParameters(
                     command=cfg.command[0] if cfg.command else "",
                     args=cfg.command[1:] + cfg.args if len(cfg.command) > 1 else cfg.args,
@@ -291,7 +292,7 @@ class MCPManager:
                     workspace_id=self._workspace_id,
                     error=str(exc) or repr(exc),
                 )
-                cfg = get_mcp_server(server_name, self._workspace_id)
+                cfg = await run_in_thread(get_mcp_server, server_name, self._workspace_id)
                 if cfg is None:
                     await self.remove_server(server_name)
                     continue
@@ -396,7 +397,7 @@ class MCPManager:
 
     async def add_server(self, cfg: MCPServerConfig) -> dict[str, Any]:
         try:
-            await self._connect(cfg)
+            await self._connect_timed(cfg)
         except (OAuthRequiredError, asyncio.CancelledError) as exc:
             if isinstance(exc, asyncio.CancelledError):
                 raise
@@ -435,14 +436,14 @@ class MCPManager:
         }
 
     async def reconnect_server(self, server_name: str) -> dict[str, Any]:
-        cfg = get_mcp_server(server_name, self._workspace_id)
+        cfg = await run_in_thread(get_mcp_server, server_name, self._workspace_id)
         if cfg is None:
             return {"name": server_name, "connected": False, "tools": [], "error": "server not found"}
         lock = self._reconnect_locks.setdefault(server_name, asyncio.Lock())
         async with lock:
             await self.remove_server(server_name)
             if cfg.transport == "stdio":
-                _prepare_stdio_connect(cfg, self._workspace_id)
+                await run_in_thread(_prepare_stdio_connect, cfg, self._workspace_id)
             return await self.add_server(cfg)
 
     async def remove_server(self, server_name: str) -> bool:
@@ -531,8 +532,13 @@ async def _get_or_create_manager(workspace_id: str) -> MCPManager:
         return mgr
 
 
+async def ensure_mcp_manager(workspace_id: str) -> MCPManager:
+    """获取 MCP manager，不触发全量连接（避免保存/重连单服时阻塞）。"""
+    return await _get_or_create_manager(workspace_id)
+
+
 async def ensure_mcp_started(workspace_id: str) -> MCPManager:
-    mgr = await _get_or_create_manager(workspace_id)
+    mgr = await ensure_mcp_manager(workspace_id)
     if not mgr._started:
         await mgr.start()
     return mgr
@@ -557,7 +563,7 @@ async def _deferred_reconnect_server(workspace_id: str, server_name: str) -> Non
     mgr = await _get_or_create_manager(wid)
     if server_name in mgr._sessions:
         return
-    cfg = get_mcp_server(server_name, wid)
+    cfg = await run_in_thread(get_mcp_server, server_name, wid)
     if cfg is None:
         return
     runtime = await mgr.reconnect_server(server_name)
@@ -633,7 +639,8 @@ async def stop_all_mcp() -> None:
 
 
 async def connect_mcp_server(cfg: MCPServerConfig) -> dict[str, Any]:
-    mgr = await ensure_mcp_started(get_workspace_id())
+    mgr = await ensure_mcp_manager(get_workspace_id())
+    mgr._started = True
     return await mgr.add_server(cfg)
 
 
@@ -651,5 +658,6 @@ def list_mcp_runtime() -> dict[str, dict[str, Any]]:
 
 
 async def reconnect_mcp_server(server_name: str) -> dict[str, Any]:
-    mgr = await ensure_mcp_started(get_workspace_id())
+    mgr = await ensure_mcp_manager(get_workspace_id())
+    mgr._started = True
     return await mgr.reconnect_server(server_name)

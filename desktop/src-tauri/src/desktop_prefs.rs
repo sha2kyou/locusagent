@@ -1,0 +1,114 @@
+use std::fs;
+use std::path::PathBuf;
+use std::sync::Mutex;
+
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager, State};
+
+#[derive(Clone, Serialize, Deserialize, Default)]
+pub struct DesktopPrefs {
+    #[serde(default)]
+    pub run_in_background: bool,
+    #[serde(default)]
+    pub launch_at_login: bool,
+}
+
+pub struct PrefsState(pub Mutex<DesktopPrefs>);
+
+fn prefs_file() -> PathBuf {
+    let home = std::env::var("AGENTPOD_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            std::env::var("HOME")
+                .map(PathBuf::from)
+                .unwrap_or_default()
+                .join(".agentpod")
+        });
+    home.join("desktop.prefs.json")
+}
+
+pub fn load_prefs() -> DesktopPrefs {
+    let path = prefs_file();
+    if !path.is_file() {
+        return DesktopPrefs::default();
+    }
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_default()
+}
+
+fn save_prefs(prefs: &DesktopPrefs) -> Result<(), String> {
+    let path = prefs_file();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let json = serde_json::to_string_pretty(prefs).map_err(|e| e.to_string())?;
+    fs::write(path, json).map_err(|e| e.to_string())
+}
+
+pub fn run_in_background(app: &AppHandle) -> bool {
+    app.try_state::<PrefsState>()
+        .and_then(|state| state.0.lock().ok().map(|prefs| prefs.run_in_background))
+        .unwrap_or(false)
+}
+
+fn apply_autostart(app: &AppHandle, enabled: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+
+    let autolaunch = app.autolaunch();
+    if enabled {
+        autolaunch.enable().map_err(|e| e.to_string())
+    } else {
+        autolaunch.disable().map_err(|e| e.to_string())
+    }
+}
+
+pub fn sync_autostart(app: &AppHandle, prefs: &DesktopPrefs) -> Result<(), String> {
+    apply_autostart(app, prefs.launch_at_login)
+}
+
+pub fn show_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
+pub fn hide_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+}
+
+#[tauri::command]
+pub fn desktop_get_prefs(state: State<PrefsState>) -> DesktopPrefs {
+    state.0.lock().expect("prefs lock poisoned").clone()
+}
+
+#[tauri::command]
+pub fn desktop_set_prefs(
+    app: AppHandle,
+    state: State<PrefsState>,
+    prefs: DesktopPrefs,
+) -> Result<DesktopPrefs, String> {
+    apply_autostart(&app, prefs.launch_at_login)?;
+    *state.0.lock().expect("prefs lock poisoned") = prefs.clone();
+    save_prefs(&prefs)?;
+    Ok(prefs)
+}
+
+pub fn install_window_close_handler(app: &AppHandle) {
+    let handle = app.clone();
+    if let Some(window) = app.get_webview_window("main") {
+        window.on_window_event(move |event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if run_in_background(&handle) {
+                    api.prevent_close();
+                    hide_main_window(&handle);
+                }
+            }
+        });
+    }
+}

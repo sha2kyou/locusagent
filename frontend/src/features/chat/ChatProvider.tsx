@@ -93,7 +93,7 @@ export function useChat() {
 
 const DEFAULT_TITLE = "新对话";
 const PAGE_SIZE = 10;
-const DEFAULT_MAX_FILE_SIZE = 1024 * 1024;
+const DEFAULT_MAX_FILE_SIZE = 25 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENTS = 1;
 const MAX_ATTACHMENT_CHARS = 16000;
 const IMAGE_LIKE_EXTS = [
@@ -801,6 +801,38 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             processable: created.processable,
             truncated: !!created.truncated,
           });
+        } else if (isOfficeDocumentFile(file)) {
+          const contentSha256 = await sha256HexFile(file);
+          if (pendingHasDigest(contentSha256)) {
+            toast("相同文件已添加", "info");
+            continue;
+          }
+          const fileDataBase64 = await fileToBase64(file);
+          const created = await apiCreateAttachment({
+            session_id: currentIdRef.current,
+            name: file.name,
+            size_bytes: file.size,
+            kind: "text",
+            mime_type: file.type || guessOfficeMimeType(file.name),
+            file_data_base64: fileDataBase64,
+            processable: true,
+            truncated: false,
+          });
+          if (!created.processable) {
+            toast(created.unsupportedReason ?? "该文档无法解析", "info");
+          }
+          next.push({
+            id: uid("f"),
+            attachmentId: created.id,
+            name: created.name,
+            size: file.size,
+            kind: "text",
+            text: created.text,
+            contentSha256,
+            processable: created.processable,
+            unsupportedReason: created.unsupportedReason,
+            truncated: !!created.truncated,
+          });
         } else if (isImageLikeFile(file)) {
           const contentSha256 = await sha256HexFile(file);
           if (pendingHasDigest(contentSha256)) {
@@ -842,7 +874,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             kind: "other",
             mime_type: file.type || undefined,
             processable: false,
-            unsupported_reason: "当前仅支持文本或图片附件",
+            unsupported_reason: "当前支持文本、图片、Excel（.xlsx）与 Word（.docx）附件",
             truncated: false,
           });
           next.push({
@@ -852,7 +884,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             size: file.size,
             kind: "other",
             processable: false,
-            unsupportedReason: created.unsupportedReason ?? "当前仅支持文本或图片附件",
+            unsupportedReason: created.unsupportedReason ?? "当前支持文本、图片、Excel（.xlsx）与 Word（.docx）附件",
             truncated: false,
           });
         }
@@ -1024,6 +1056,31 @@ function isProcessableTextFile(file: File): boolean {
   return textExts.some((ext) => lower.endsWith(ext));
 }
 
+function isOfficeDocumentFile(file: File): boolean {
+  const lower = file.name.toLowerCase();
+  if (lower.endsWith(".xlsx") || lower.endsWith(".xlsm") || lower.endsWith(".docx")) return true;
+  const mime = (file.type || "").split(";", 1)[0].trim().toLowerCase();
+  return (
+    mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    mime === "application/vnd.ms-excel.sheet.macroenabled.12" ||
+    mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  );
+}
+
+function guessOfficeMimeType(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".docx")) {
+    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  }
+  if (lower.endsWith(".xlsm")) {
+    return "application/vnd.ms-excel.sheet.macroenabled.12";
+  }
+  if (lower.endsWith(".xlsx")) {
+    return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  }
+  return "application/octet-stream";
+}
+
 function isImageLikeFile(file: File): boolean {
   if (file.type.startsWith("image/")) return true;
   const lower = file.name.toLowerCase();
@@ -1038,6 +1095,27 @@ function guessMimeTypeByName(name: string): string | undefined {
   if (lower.endsWith(".gif")) return "image/gif";
   if (lower.endsWith(".bmp")) return "image/bmp";
   return undefined;
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== "string" || !result.startsWith("data:")) {
+        reject(new Error("invalid file reader result"));
+        return;
+      }
+      const comma = result.indexOf(",");
+      if (comma < 0) {
+        reject(new Error("invalid data url"));
+        return;
+      }
+      resolve(result.slice(comma + 1));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("file reader failed"));
+    reader.readAsDataURL(file);
+  });
 }
 
 function fileToDataUrl(file: File): Promise<string> {

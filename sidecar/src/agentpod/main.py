@@ -227,3 +227,36 @@ app.include_router(agent_internal_router.router)
 @app.get("/health")
 async def health() -> JSONResponse:
     return JSONResponse({"status": "ok"})
+
+
+def _install_desktop_static(app: FastAPI) -> None:
+    """桌面端：Backend 同端口托管内嵌 SPA（:21223）。"""
+    from pathlib import Path
+
+    from fastapi import HTTPException
+    from fastapi.responses import FileResponse
+    from starlette.staticfiles import StaticFiles
+
+    raw = os.environ.get("AGENTPOD_STATIC_DIR", "").strip()
+    if not raw:
+        return
+    root = Path(raw)
+    index = root / "index.html"
+    if not index.is_file():
+        return
+
+    assets = root / "assets"
+    if assets.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(assets)), name="desktop-static-assets")
+
+    @app.get("/{spa_path:path}", include_in_schema=False)
+    async def desktop_spa(spa_path: str) -> FileResponse:
+        if spa_path.startswith("api/") or spa_path == "health":
+            raise HTTPException(status_code=404)
+        target = root / spa_path
+        if spa_path and target.is_file():
+            return FileResponse(target)
+        return FileResponse(index)
+
+
+_install_desktop_static(app)

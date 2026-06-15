@@ -86,15 +86,13 @@ async def _add_mcp(args: dict[str, Any]) -> ToolResult:
     except (ValueError, FileExistsError) as exc:
         raise ToolError(str(exc)) from exc
 
-    from ..mcp_.client import connect_mcp_server, ensure_mcp_started, sync_mcp_tools_for_workspace
+    from ..mcp_.client import connect_mcp_server
     from ..workspace import get_workspace_id
     from ..workspace_runtime import invalidate_mcp_runtime, mark_mcp_runtime_ready
 
     wid = get_workspace_id()
     invalidate_mcp_runtime(wid)
-    await ensure_mcp_started(wid)
     runtime = await connect_mcp_server(cfg)
-    await sync_mcp_tools_for_workspace(wid)
     mark_mcp_runtime_ready(wid)
     if runtime.get("connected"):
         return ToolResult(

@@ -21,6 +21,6 @@
   },
   "app": {
     "timezone": "UTC",
-    "public_base_url": "http://127.0.0.1:1420"
+    "public_base_url": "http://127.0.0.1:21223"
   }
 }

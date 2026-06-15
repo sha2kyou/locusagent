@@ -1,6 +1,5 @@
 import type { NotificationEntry } from "@/api/types";
 import { getWorkspaceId } from "@/api/client";
-import { DESKTOP_API_ORIGIN, isDesktopApp } from "@/lib/desktop-app";
 
 export type NotificationWsEvent =
   | { type: "sync"; items: NotificationEntry[]; unread_count: number }
@@ -10,11 +9,9 @@ export type NotificationWsEvent =
 export function notificationWsUrl(): string {
   const workspaceId = getWorkspaceId();
   const suffix = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : "";
-  // 桌面端 WS 绕过本地 gateway 二次握手（易断连）；Cookie 按 host 共享，1223 仍可鉴权。
-  const base = isDesktopApp() ? DESKTOP_API_ORIGIN : window.location.origin;
-  const proto = base.startsWith("https:") ? "wss:" : "ws:";
-  const host = new URL(base).host;
-  return `${proto}//${host}/api/notifications/ws${suffix}`;
+  // 与 REST 同源（桌面端 Backend :21223 同时提供 UI 与 API），保证 session Cookie 与 WS 鉴权一致。
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${window.location.host}/api/notifications/ws${suffix}`;
 }
 
 export function parseNotificationWsEvent(raw: string): NotificationWsEvent | null {

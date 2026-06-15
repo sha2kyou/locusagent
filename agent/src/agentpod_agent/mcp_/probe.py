@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import httpx
@@ -24,9 +25,13 @@ class McpProbeError(RuntimeError):
     pass
 
 
+_PROBE_HTTP_TIMEOUT = httpx.Timeout(8.0)
+_PROBE_TOTAL_SECONDS = 15.0
+
+
 async def _probe_www_auth(server_url: str) -> str | None:
     headers = {MCP_PROTOCOL_VERSION: LATEST_PROTOCOL_VERSION}
-    async with httpx.AsyncClient(timeout=httpx.Timeout(20.0), follow_redirects=False) as client:
+    async with httpx.AsyncClient(timeout=_PROBE_HTTP_TIMEOUT, follow_redirects=False) as client:
         for method in ("POST", "GET"):
             try:
                 resp = await client.request(
@@ -42,7 +47,7 @@ async def _probe_www_auth(server_url: str) -> str | None:
     return None
 
 
-async def probe_http_oauth_supported(server_url: str) -> bool:
+async def _probe_http_oauth_supported(server_url: str) -> bool:
     """有 registration_endpoint 时返回 True，否则 False。"""
     url = server_url.strip()
     if not url:
@@ -53,7 +58,7 @@ async def probe_http_oauth_supported(server_url: str) -> bool:
     headers = {MCP_PROTOCOL_VERSION: LATEST_PROTOCOL_VERSION}
     auth_server_url: str | None = None
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(20.0)) as client:
+    async with httpx.AsyncClient(timeout=_PROBE_HTTP_TIMEOUT) as client:
         for prm_url in prm_urls:
             try:
                 resp = await client.get(prm_url, headers=headers)
@@ -77,6 +82,13 @@ async def probe_http_oauth_supported(server_url: str) -> bool:
             if metadata is not None and metadata.registration_endpoint:
                 return True
     return False
+
+
+async def probe_http_oauth_supported(server_url: str) -> bool:
+    try:
+        return await asyncio.wait_for(_probe_http_oauth_supported(server_url), timeout=_PROBE_TOTAL_SECONDS)
+    except TimeoutError:
+        return False
 
 
 async def build_http_mcp_config(
