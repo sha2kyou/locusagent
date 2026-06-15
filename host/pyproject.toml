@@ -1,6 +1,6 @@
 [project]
 name = "agentpod-host"
-version = "0.1.15"
+version = "0.1.16"
 description = "AgentPod host: session, settings, API proxy"
 requires-python = ">=3.11"
 dependencies = [

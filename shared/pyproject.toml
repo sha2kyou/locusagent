@@ -1,6 +1,6 @@
 [project]
 name = "agentpod-shared"
-version = "0.1.15"
+version = "0.1.16"
 description = "AgentPod shared: settings, local storage, embeddings, memory cache"
 requires-python = ">=3.11"
 dependencies = [
