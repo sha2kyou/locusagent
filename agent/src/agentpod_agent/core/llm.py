@@ -16,5 +16,5 @@ def get_llm_client() -> AsyncOpenAI:
         base_url=settings.llm_base_url,
         api_key=settings.internal_token,
         max_retries=2,
-        timeout=120.0,
+        timeout=300.0,
     )
