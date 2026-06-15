@@ -1,4 +1,4 @@
-// 后端 /api/* 契约类型（依据 host + agent 容器实现整理）
+// 后端 /api/* 契约类型（依据 host + agent 实现整理）
 
 export interface Me {
   current_workspace_id?: string;

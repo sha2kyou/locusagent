@@ -37,7 +37,7 @@ export function setWorkspaceId(id: string | null | undefined): void {
 }
 
 function parseApiError(status: number, data: unknown): ApiError {
-  // 容器/代理错误：{ error: { code, message, detail } }
+  // 后端/代理错误：{ error: { code, message, detail } }
   if (data && typeof data === "object" && "error" in data) {
     const err = (data as { error?: { code?: string; message?: string; detail?: unknown } }).error;
     if (err) {

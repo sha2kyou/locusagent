@@ -1,4 +1,4 @@
-"""当前运行环境信息工具（容器视角）。"""
+"""当前运行环境信息工具。"""
 
 from __future__ import annotations
 

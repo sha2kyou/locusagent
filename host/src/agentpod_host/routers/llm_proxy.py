@@ -1,4 +1,4 @@
-"""Agent 容器 LLM 代理：平台 API Key 仅留在 Host，容器用 Internal Token 鉴权。"""
+"""Agent LLM 代理：平台 API Key 仅留在 Host，Agent 用 Internal Token 鉴权。"""
 
 from __future__ import annotations
 

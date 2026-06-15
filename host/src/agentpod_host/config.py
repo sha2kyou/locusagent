@@ -19,12 +19,12 @@ class Settings(BaseSettings):
     encryption_key: str = Field(default="", alias="ENCRYPTION_KEY")
     session_secret: str = Field(default="", alias="SESSION_SECRET")
 
-    host_sqlite_path: str = Field(default="/data/host.sqlite", alias="HOST_SQLITE_PATH")
+    host_sqlite_path: str = Field(default="", alias="HOST_SQLITE_PATH")
 
     agent_service_url: str = Field(default="http://127.0.0.1:8080", alias="AGENT_SERVICE_URL")
     agent_internal_token: str = Field(default="", alias="AGENT_INTERNAL_TOKEN")
-    enable_terminal: bool = Field(default=False, alias="ENABLE_TERMINAL")
-    terminal_whitelist: str = Field(default="", alias="TERMINAL_WHITELIST")
+    enable_terminal: bool = Field(default=True, alias="ENABLE_TERMINAL")
+    terminal_whitelist: str = Field(default="git,npm,node,python3,make", alias="TERMINAL_WHITELIST")
     terminal_denylist: str = Field(default="sh,bash,zsh,dash,fish", alias="TERMINAL_DENYLIST")
     terminal_restrict_workspace: bool = Field(default=True, alias="TERMINAL_RESTRICT_WORKSPACE")
     sandbox_max_memory_mb: int = Field(default=512, alias="SANDBOX_MAX_MEMORY_MB")

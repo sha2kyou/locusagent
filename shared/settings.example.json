@@ -12,8 +12,8 @@
     "jina_api_key": ""
   },
   "terminal": {
-    "enable_terminal": false,
-    "whitelist": "",
+    "enable_terminal": true,
+    "whitelist": "git,npm,node,python3,make",
     "denylist": "sh,bash,zsh,dash,fish"
   },
   "paths": {

@@ -1,10 +1,10 @@
 """Skill 加载器：扫描 SKILL.md（YAML frontmatter + Markdown 正文）。
 
 来源：
-- 公共：/app/skills/*/SKILL.md（只读挂载，宿主提供）
-- 私有：/data/skills/*/SKILL.md（用户 volume）
+- 内置/共享：打包 skills 目录（只读）
+- 私有：工作区 skills/*/SKILL.md
 
-加载策略：私有同名覆盖公共。
+加载策略：私有同名覆盖共享。
 """
 
 from __future__ import annotations

@@ -46,6 +46,13 @@ fn bundled_python(app: &AppHandle) -> Option<PathBuf> {
     None
 }
 
+fn bundled_readme(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .resolve("README.md", BaseDirectory::Resource)
+        .ok()
+        .filter(|p| p.is_file())
+}
+
 fn bundled_skills_dir(app: &AppHandle) -> Option<PathBuf> {
     app.path()
         .resolve("shared-skills", BaseDirectory::Resource)
@@ -92,6 +99,9 @@ pub fn spawn_backend(app: &AppHandle) -> std::io::Result<Child> {
     }
     if let Some(skills) = skills_dir {
         command.env("AGENTPOD_BUNDLED_SKILLS_DIR", skills);
+    }
+    if let Some(readme) = bundled_readme(app) {
+        command.env("AGENTPOD_README_PATH", readme);
     }
 
     let mut child = command.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;

@@ -232,7 +232,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
       return visible;
     } catch {
-      /* 容器未就绪等：忽略，由就绪提示兜底 */
+      /* 后端未就绪等：忽略，由就绪提示兜底 */
       return [];
     } finally {
       if (mountedRef.current) setLoadingSessions(false);

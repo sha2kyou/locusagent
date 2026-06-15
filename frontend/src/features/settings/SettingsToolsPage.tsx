@@ -10,7 +10,7 @@ import { SettingsSection } from "./SettingsSection";
 export function SettingsToolsPage() {
   const toast = useToast();
   const [enableTerminal, setEnableTerminal] = useState(false);
-  const [whitelist, setWhitelist] = useState("");
+  const [whitelist, setWhitelist] = useState("git,npm,node,python3,make");
   const [denylist, setDenylist] = useState("sh,bash,zsh,dash,fish");
   const [saving, setSaving] = useState(false);
 

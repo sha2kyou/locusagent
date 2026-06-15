@@ -81,7 +81,7 @@ export async function streamChatCompletion(
       throw new ApiError("未登录", { status: 401, code: "unauthenticated" });
     }
 
-    // 容器启动中：503 + Retry-After，自动重试
+    // 后端启动中：503 + Retry-After，自动重试
     if (res.status === 503 && attempt < MAX_RETRIES) {
       const retryAfter = Number(res.headers.get("Retry-After")) || 2;
       attempt += 1;

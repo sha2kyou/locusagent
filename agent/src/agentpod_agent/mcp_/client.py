@@ -653,21 +653,3 @@ def list_mcp_runtime() -> dict[str, dict[str, Any]]:
 async def reconnect_mcp_server(server_name: str) -> dict[str, Any]:
     mgr = await ensure_mcp_started(get_workspace_id())
     return await mgr.reconnect_server(server_name)
-
-
-async def reconnect_all_mcp_servers_for_workspace(workspace_id: str) -> dict[str, Any]:
-    mgr = await ensure_mcp_started(workspace_id)
-    results: dict[str, Any] = {}
-    for cfg in list_mcp_servers(workspace_id):
-        results[cfg.name] = await mgr.reconnect_server(cfg.name)
-    return results
-
-
-async def reconnect_all_mcp_servers() -> dict[str, Any]:
-    from ..workspace import iter_workspace_ids, set_workspace_id
-
-    all_results: dict[str, Any] = {}
-    for wid in iter_workspace_ids():
-        set_workspace_id(wid)
-        all_results[wid] = await reconnect_all_mcp_servers_for_workspace(wid)
-    return all_results

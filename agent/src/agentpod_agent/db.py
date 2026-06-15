@@ -1,8 +1,7 @@
-"""容器内 SQLite：memory / sessions / messages 表，WAL + sqlite-vec。
+"""Agent 内 SQLite：memory / sessions / messages 表，WAL + sqlite-vec。
 
 并发模型：每次操作经 ``asyncio.to_thread`` 在线程池中用独立短连接执行，写并发
-依赖 WAL(单写多读)+ ``busy_timeout`` 排队等待，而非应用层写队列。单用户容器内
-并发量低，足够；如未来出现写争用再引入显式写串行。
+依赖 WAL（单写多读）与 ``busy_timeout`` 排队等待，而非应用层写队列。
 """
 
 from __future__ import annotations

@@ -267,7 +267,7 @@ register_builtin(
         name="mcp_manage",
         description=(
             "管理 MCP 服务连接：add（新增）/ update（更新配置）/ remove（移除）。\n"
-            "查询用 mcp_view；重连/刷新工具列表用 mcp_refresh；不能创建/删除/切换 AgentPod 多工作区容器。"
+            "查询用 mcp_view；重连/刷新工具列表用 mcp_refresh；不能创建/删除/切换 AgentPod 工作区。"
         ),
         parameters={
             "type": "object",

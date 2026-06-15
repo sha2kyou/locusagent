@@ -1,4 +1,4 @@
-"""定时任务执行：唤醒容器 → Agent 跑一轮 → 更新状态 → 可选通知。"""
+"""定时任务执行：调用 Agent 跑一轮 → 更新状态 → 可选通知。"""
 
 from __future__ import annotations
 

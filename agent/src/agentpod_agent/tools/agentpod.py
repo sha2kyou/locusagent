@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
-from .base import Tool, ToolError, ToolResult, register_builtin
+from agentpod_shared.settings_store import shared_skills_dir
 
-_README_PATH = Path("/app/README.md")
+from .base import Tool, ToolError, ToolResult, register_builtin
 
 _DESCRIPTION = (
     "Query information about the AgentPod platform — what it is, its architecture, "
@@ -18,10 +19,31 @@ _DESCRIPTION = (
 )
 
 
+def _resolve_readme_path() -> Path | None:
+    override = os.environ.get("AGENTPOD_README_PATH", "").strip()
+    if override:
+        path = Path(override)
+        if path.is_file():
+            return path
+
+    repo_readme = Path(__file__).resolve().parents[4] / "README.md"
+    if repo_readme.is_file():
+        return repo_readme
+
+    skills = shared_skills_dir()
+    if skills is not None:
+        bundled = skills.parent / "README.md"
+        if bundled.is_file():
+            return bundled
+
+    return None
+
+
 async def _handle(args: dict) -> ToolResult:
-    if not _README_PATH.exists():
-        raise ToolError("AgentPod README not found in container.")
-    content = _README_PATH.read_text(encoding="utf-8")
+    readme = _resolve_readme_path()
+    if readme is None:
+        raise ToolError("AgentPod README not found.")
+    content = readme.read_text(encoding="utf-8")
     return ToolResult(content=content)
 
 

@@ -1,7 +1,6 @@
 """私有 Skill 文件 CRUD。
 
-私有目录：/data/skills/{name}/SKILL.md
-公共只读，不允许通过此处修改。
+私有目录：工作区 skills/{name}/SKILL.md
 """
 
 from __future__ import annotations

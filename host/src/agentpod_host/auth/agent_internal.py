@@ -1,4 +1,4 @@
-"""校验来自 Agent 容器的 X-Internal-Token。"""
+"""校验来自 Agent 的 X-Internal-Token。"""
 
 from __future__ import annotations
 

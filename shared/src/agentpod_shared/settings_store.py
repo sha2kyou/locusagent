@@ -63,8 +63,8 @@ class AppSection(BaseModel):
 
 
 class TerminalSection(BaseModel):
-    enable_terminal: bool = False
-    whitelist: str = ""
+    enable_terminal: bool = True
+    whitelist: str = "git,npm,node,python3,make"
     denylist: str = "sh,bash,zsh,dash,fish"
 
 

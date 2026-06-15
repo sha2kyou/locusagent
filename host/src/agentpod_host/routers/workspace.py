@@ -1,6 +1,6 @@
-"""工作区管理转发：Session 鉴权 → 容器 /workspace/*。
+"""工作区 API 转发：Session 鉴权 → Agent /workspace/*。
 
-V1 唯一写入路径：宿主**不直接写**用户 volume，所有 CRUD 转发到容器 API。
+Host 不直接写工作区数据，CRUD 经内部 HTTP 转发到 Agent。
 """
 
 from __future__ import annotations
@@ -101,7 +101,7 @@ async def cancel_session_run(
     session_id: str,
     ctx: AuthContext = Depends(require_session),
 ):
-    """按 session 粒度取消运行中的任务，避免容器级 stop 造成 run 状态残留。"""
+    """按 session 粒度取消运行中的任务。"""
     return await proxy_to_agent(request, f"/workspace/sessions/{session_id}/cancel")
 
 
@@ -156,7 +156,7 @@ async def proxy_chat_for_web(
     request: Request,
     ctx: AuthContext = Depends(require_session),
 ):
-    """前端 Chat 页专用：session 鉴权代理到容器 /v1/chat/completions。
+    """前端 Chat 页专用：session 鉴权代理到 Agent /v1/chat/completions。
 
     避免与对外 API 路径白名单冲突；同时保持 session 与 bearer 互斥。
     """

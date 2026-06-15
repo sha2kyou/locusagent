@@ -21,9 +21,6 @@ Usage:
 
   ./rebuild.sh desktop --fresh-venv
       Force full rebuild of bundled Python venv (slow; default is incremental).
-
-  ./rebuild.sh migrate-docker [extra args]
-      Migrate Docker volume apod-data-2 to ~/.agentpod (see scripts/migrate_docker_volume.py).
 EOF
 }
 
@@ -189,9 +186,6 @@ case "$cmd" in
     ;;
   desktop)
     rebuild_desktop "$@"
-    ;;
-  migrate-docker)
-    python3 "$ROOT_DIR/scripts/migrate_docker_volume.py" "$@"
     ;;
   *)
     usage

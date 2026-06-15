@@ -1,6 +1,6 @@
-"""容器内 /workspace/* 路由：Skills / MCP / Memory / Sessions CRUD。
+"""Agent /workspace/* 路由：Skills / MCP / Memory / Sessions CRUD。
 
-宿主**不直接写**用户 volume，所有写入由此处统一。
+工作区数据写入由此处统一处理。
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
-"""容器内 X-Internal-Token 校验依赖。
+"""Agent 内 X-Internal-Token 校验。
 
-容器对外仅暴露 /health 不鉴权，其他端点必须 HMAC 比对。
+对外仅 /health 不鉴权，其他端点必须 HMAC 比对。
 """
 
 from __future__ import annotations

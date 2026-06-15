@@ -110,7 +110,7 @@ function applyLiveThinkingState(messages: ChatMessage[]): ChatMessage[] {
 }
 
 /**
- * 把后端历史消息（OpenAI 格式 assistant.tool_calls + role=tool 结果 + legacy 元数据）
+ * 把后端历史消息（OpenAI 格式 assistant.tool_calls + role=tool 结果）转为 UI 消息。
  * 合并为前端时间线：相邻的 assistant/tool 行归入同一条 assistant 消息，按发生顺序保留 text/tool 块。
  */
 export function coalesceHistory(items: Message[], opts: CoalesceHistoryOptions = {}): ChatMessage[] {

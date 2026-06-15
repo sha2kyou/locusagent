@@ -1,4 +1,4 @@
-"""从 LLM_BASE_URL 解析路径前缀，供代理与容器 base 拼接。"""
+"""从 LLM_BASE_URL 解析路径前缀，供 Host 代理与 Agent 拼接。"""
 
 from __future__ import annotations
 

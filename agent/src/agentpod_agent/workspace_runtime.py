@@ -52,7 +52,7 @@ async def ensure_workspace_context(workspace_id: str) -> None:
             removed = tool_registry.unregister_mcp_tools_outside_workspace(workspace_id)
             if removed:
                 log.info("mcp_tools_purged_for_workspace_switch", removed=removed, workspace_id=workspace_id)
-            # 仅真实切换工作区时失效 MCP 缓存；首次请求 / 容器 bootstrap 不清除预热结果。
+            # 仅真实切换工作区时失效 MCP 缓存；首次请求 / 启动 bootstrap 不清除预热结果。
             if _active_workspace_id is not None:
                 _mcp_ready_workspace = None
                 log.info(
@@ -182,7 +182,7 @@ async def _mcp_reconnect_loop() -> None:
 
 
 def start_mcp_reconnect_loop() -> None:
-    """启动定时补连未在线 MCP（容器 lifespan 内调用）。"""
+    """启动定时补连未在线 MCP（应用 lifespan 内调用）。"""
     global _mcp_reconnect_stop, _mcp_reconnect_task
     from .config import get_settings
 

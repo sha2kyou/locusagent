@@ -120,38 +120,6 @@ def _to_attachment_meta_row(row: Any) -> dict[str, Any]:
     }
 
 
-async def _migrate_attachment_object_key(
-    attachment_id: str,
-    *,
-    canonical_key: str,
-    legacy_key: str,
-) -> None:
-    if legacy_key == canonical_key:
-        return
-
-    def _do() -> None:
-        with conn_scope(load_vec=False) as c:
-            c.execute(
-                "UPDATE attachments SET object_key = ? WHERE id = ? AND object_key = ?",
-                (canonical_key, attachment_id, legacy_key),
-            )
-
-    await run_in_thread(_do)
-
-
-async def _delete_orphan_object_keys(keys: list[str]) -> None:
-    if not keys:
-        return
-
-    def _do() -> list[str]:
-        with conn_scope(load_vec=False) as c:
-            return _unreferenced_object_keys(c, keys)
-
-    orphan_keys = await run_in_thread(_do)
-    if orphan_keys:
-        await delete_attachment_objects(orphan_keys)
-
-
 async def _hydrate_attachment(meta: dict[str, Any]) -> dict[str, Any]:
     out = {
         "id": meta["id"],
@@ -172,19 +140,10 @@ async def _hydrate_attachment(meta: dict[str, Any]) -> dict[str, Any]:
             out["unsupportedReason"] = "附件对象不存在"
         return out
     try:
-        data, resolved_key = await resolve_attachment_bytes(
+        data, _resolved_key = await resolve_attachment_bytes(
             object_key,
             content_sha256=content_sha256 or None,
         )
-        if data is not None and content_sha256:
-            canonical = blob_object_key(content_sha256)
-            if object_key and object_key != canonical and resolved_key == canonical:
-                await _migrate_attachment_object_key(
-                    str(meta["id"]),
-                    canonical_key=canonical,
-                    legacy_key=object_key,
-                )
-                await _delete_orphan_object_keys([object_key])
     except AttachmentStorageError as exc:
         log.warning("attachment_load_failed", attachment_id=out["id"], error=str(exc))
         out["processable"] = False
@@ -301,13 +260,6 @@ def _compose_user_content_with_attachments(text: str, attachments: list[dict[str
         names = ", ".join(str(a.get("name") or "附件") for a in unsupported)
         text_parts.append({"type": "text", "text": f"用户还上传了不可解析附件：{names}。"})
     return text_parts
-
-
-def _is_legacy_event_meta(tool_calls: Any) -> bool:
-    if not isinstance(tool_calls, list) or not tool_calls:
-        return False
-    first = tool_calls[0]
-    return isinstance(first, dict) and "event_type" in first
 
 
 def _is_openai_tool_calls(tool_calls: Any) -> bool:
@@ -1131,7 +1083,7 @@ async def persist_context_compression(
 
 
 async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
-    """从 DB 重建 OpenAI 格式上下文（仅 active 消息；跳过 legacy UI 伪 tool 消息）。"""
+    """从 DB 重建 OpenAI 格式上下文（仅 active 消息）。"""
 
     def _do() -> tuple[list[Any], dict[int, list[dict[str, Any]]]]:
         with conn_scope(load_vec=False) as c:
@@ -1186,8 +1138,6 @@ async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
                 continue
 
             if role == "assistant":
-                if _is_legacy_event_meta(tool_calls):
-                    continue
                 d: dict[str, Any] = {"role": "assistant", "id": msg_id}
                 if content:
                     d["content"] = content
@@ -1205,20 +1155,6 @@ async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
                 continue
 
             if role == "tool":
-                if _is_legacy_event_meta(tool_calls):
-                    if tool_calls and tool_calls[0].get("event_type") == "tool_result":
-                        tc_id = tool_calls[0].get("tool_call_id") or ""
-                        preview = content or (tool_calls[0].get("preview") or "")
-                        if tc_id:
-                            out.append(
-                                {
-                                    "role": "tool",
-                                    "tool_call_id": tc_id,
-                                    "content": preview,
-                                    "id": msg_id,
-                                }
-                            )
-                    continue
                 tc_id = r["tool_call_id"] or ""
                 if tc_id:
                     out.append(

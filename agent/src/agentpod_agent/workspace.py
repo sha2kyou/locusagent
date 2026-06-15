@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-import shutil
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
 from pathlib import Path
@@ -73,46 +72,8 @@ def workspace_data_dir(workspace_id: str | None = None) -> Path:
 
 
 def ensure_workspace_storage_initialized(workspace_id: str) -> None:
-    """Initialize workspace directory and one-time migrate legacy /data layout."""
-    settings = get_settings()
-    target_dir = workspace_data_dir(workspace_id)
-    marker = workspaces_root_dir() / ".legacy-migrated"
-    marker_text = ""
-    if marker.exists():
-        marker_text = marker.read_text(encoding="utf-8", errors="ignore").strip().lower()
-        if marker_text.startswith("migrated-to:") or marker_text == "no-legacy":
-            return
-    legacy_db = settings.data_dir / "agent.sqlite"
-    if not legacy_db.exists():
-        marker.write_text("no-legacy\n", encoding="utf-8")
-        return
-    target_db = target_dir / "agent.sqlite"
-    should_copy_db = not target_db.exists()
-    if target_db.exists():
-        legacy_size = legacy_db.stat().st_size
-        target_size = target_db.stat().st_size
-        # 新建空库通常很小；若旧库明显更大，则覆盖迁移历史数据。
-        if target_size <= 512 * 1024 and legacy_size > target_size * 3:
-            should_copy_db = True
-    if should_copy_db:
-        shutil.copy2(legacy_db, target_db)
-    for filename in ("mcp.yaml", "tool_settings.yaml"):
-        src = settings.data_dir / filename
-        if src.exists():
-            dst = target_dir / filename
-            if should_copy_db or not dst.exists():
-                shutil.copy2(src, dst)
-    for dirname in ("skills", "workspace"):
-        src_dir = settings.data_dir / dirname
-        dst_dir = target_dir / dirname
-        if src_dir.exists() and (should_copy_db or not dst_dir.exists()):
-            if dst_dir.exists():
-                shutil.rmtree(dst_dir)
-            shutil.copytree(src_dir, dst_dir)
-    if should_copy_db:
-        marker.write_text(f"migrated-to:{workspace_id}\n", encoding="utf-8")
-    elif not marker_text:
-        marker.write_text(f"already-present:{workspace_id}\n", encoding="utf-8")
+    """Ensure workspace data directory exists."""
+    workspace_data_dir(workspace_id)
 
 
 async def for_each_workspace(coro: Callable[[str], Awaitable[None]]) -> None:

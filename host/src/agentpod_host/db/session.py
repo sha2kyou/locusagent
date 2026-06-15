@@ -9,7 +9,6 @@ from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from ..config import get_settings
-from .legacy import repair_legacy_bigint_autoincrement
 from .models import Base
 
 _engine: AsyncEngine | None = None
@@ -44,7 +43,6 @@ async def init_engine() -> AsyncEngine:
 
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        await conn.run_sync(repair_legacy_bigint_autoincrement)
 
     return _engine
 

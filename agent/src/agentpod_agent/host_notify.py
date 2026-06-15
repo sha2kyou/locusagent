@@ -1,4 +1,4 @@
-"""Agent 容器 → 宿主：站内通知（fire-and-forget）。"""
+"""Agent → Host：站内通知（fire-and-forget）。"""
 
 from __future__ import annotations
 

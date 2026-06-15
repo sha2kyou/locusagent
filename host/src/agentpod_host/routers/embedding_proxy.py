@@ -1,4 +1,4 @@
-"""Agent 容器 embedding：桌面内嵌 fastembed 小模型。"""
+"""Agent embedding：桌面内嵌 fastembed 小模型。"""
 
 from __future__ import annotations
 

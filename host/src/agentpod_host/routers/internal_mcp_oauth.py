@@ -1,4 +1,4 @@
-"""Agent 容器内部：MCP OAuth 凭据读写。"""
+"""Agent 内部：MCP OAuth 凭据读写。"""
 
 from __future__ import annotations
 

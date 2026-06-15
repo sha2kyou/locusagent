@@ -1,4 +1,4 @@
-"""Agent 容器内部回调：写入用户站内通知。"""
+"""Agent 内部回调：写入用户站内通知。"""
 
 from __future__ import annotations
 
