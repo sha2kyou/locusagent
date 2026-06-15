@@ -14,20 +14,6 @@ brew install --cask agentpod
 
 首次启动在 **设置 → 模型** 填写 LLM API Key。
 
-## 架构
-
-```
-AgentPod.app
-  └─ Sidecar :21223   Python FastAPI（host + agent + 内嵌 React UI）
-        └─ ~/.agentpod/
-             ├── settings.json
-             ├── host.sqlite
-             ├── workspaces/<id>/agent.sqlite
-             ├── attachments/
-             ├── models/          fastembed ONNX
-             └── skills/
-```
-
 ## 构建
 
 依赖 Python 3.11+、Node.js、Rust。
@@ -36,3 +22,7 @@ AgentPod.app
 ./rebuild.sh
 open dist/AgentPod.app
 ```
+
+## 文档
+
+- [AGENT.md](./AGENT.md) — 供应用内 Agent 阅读的平台能力说明（`agentpod` 工具加载此文件）

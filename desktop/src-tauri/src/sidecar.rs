@@ -88,9 +88,9 @@ fn bundled_python(app: &AppHandle) -> Option<PathBuf> {
     None
 }
 
-fn bundled_readme(app: &AppHandle) -> Option<PathBuf> {
+fn bundled_agent_doc(app: &AppHandle) -> Option<PathBuf> {
     app.path()
-        .resolve("README.md", BaseDirectory::Resource)
+        .resolve("AGENT.md", BaseDirectory::Resource)
         .ok()
         .filter(|p| p.is_file())
 }
@@ -142,8 +142,8 @@ pub fn spawn_backend(app: &AppHandle) -> std::io::Result<Child> {
     if let Some(skills) = skills_dir {
         command.env("AGENTPOD_BUNDLED_SKILLS_DIR", skills);
     }
-    if let Some(readme) = bundled_readme(app) {
-        command.env("AGENTPOD_README_PATH", readme);
+    if let Some(agent_doc) = bundled_agent_doc(app) {
+        command.env("AGENTPOD_AGENT_DOC_PATH", agent_doc);
     }
     let static_dir = crate::gateway::resolve_static_dir(app);
     if static_dir.join("index.html").is_file() {

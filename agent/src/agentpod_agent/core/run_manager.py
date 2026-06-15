@@ -32,6 +32,28 @@ HEARTBEAT_SECONDS = 60
 _active: dict[str, StreamRunHandle] = {}
 
 
+def _try_enqueue_sse(handle: StreamRunHandle, ev: dict[str, Any]) -> None:
+    """SSE 队列满时丢弃事件，避免 worker 被慢客户端/断连拖死。"""
+    try:
+        handle.queue.put_nowait(ev)
+    except asyncio.QueueFull:
+        log.warning(
+            "sse_queue_full",
+            run_id=handle.run_id,
+            session_id=handle.session_id,
+            event_type=ev.get("type"),
+        )
+
+
+async def _emit_loop_event(
+    handle: StreamRunHandle,
+    persist_queue: asyncio.Queue[dict[str, Any] | None],
+    public: dict[str, Any],
+) -> None:
+    await persist_queue.put(public)
+    _try_enqueue_sse(handle, public)
+
+
 @dataclass
 class StreamRunHandle:
     run_id: str
@@ -327,12 +349,11 @@ async def _worker(
                     public["name"] = mapped_name
                 tool_name = str(public.get("name") or "")
                 public["tool_kind"] = _tool_kind(tool_name)
-            await handle.queue.put(public)
-            await persist_queue.put(public)
+            await _emit_loop_event(handle, persist_queue, public)
     except asyncio.CancelledError:
         stream_error = CANCELLED_MARK
         log.info("run_worker_cancelled", run_id=handle.run_id, session_id=handle.session_id)
-        await handle.queue.put({"type": ERROR, "message": "已停止生成"})
+        _try_enqueue_sse(handle, {"type": ERROR, "message": "已停止生成"})
     except StreamHealthError as exc:
         stream_error = str(exc)
         log.warning(
@@ -341,19 +362,23 @@ async def _worker(
             code=exc.code,
             error=stream_error,
         )
-        await handle.queue.put({"type": ERROR, "message": stream_error, "code": exc.code})
+        _try_enqueue_sse(
+            handle,
+            {"type": ERROR, "message": stream_error, "code": exc.code},
+        )
     except Exception as exc:
         stream_error = str(exc)
         log.error("run_worker_failed", run_id=handle.run_id, error=stream_error)
-        await handle.queue.put({"type": ERROR, "message": stream_error})
+        _try_enqueue_sse(handle, {"type": ERROR, "message": stream_error})
     else:
-        await handle.queue.put(
+        _try_enqueue_sse(
+            handle,
             {
                 "type": FINISHED,
                 "final_text": state.get("final_text") or "",
                 "total_tokens": state.get("total_tokens") or 0,
                 "error": stream_error,
-            }
+            },
         )
     stop_heartbeat.set()
     heartbeat_task.cancel()

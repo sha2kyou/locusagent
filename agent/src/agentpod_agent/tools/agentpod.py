@@ -10,40 +10,48 @@ from agentpod_shared.settings_store import shared_skills_dir
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 _DESCRIPTION = (
-    "Query information about the AgentPod platform — what it is, its architecture, "
-    "features (Skills, MCP, Memory, Artifacts, Workspaces, Scheduled Tasks, etc.), "
-    "configuration, deployment, and usage. "
-    "Use this tool when the user asks what AgentPod is, what capabilities the platform provides, "
-    "how to set it up, or anything else about AgentPod itself. "
-    "Do not use web_search or web_extract for questions about AgentPod."
+    "Load the AgentPod agent capability guide: what the platform can do for users, "
+    "which tools you have, delivery conventions, UI handoffs, and user-facing troubleshooting. "
+    "Use when the user asks about AgentPod itself, what you can help with on this platform, "
+    "or how to guide them through settings, workspaces, logs, scheduled tasks, etc. "
+    "This is not source code or system architecture — do not use web_search for AgentPod questions."
 )
 
 
-def _resolve_readme_path() -> Path | None:
-    override = os.environ.get("AGENTPOD_README_PATH", "").strip()
+def _resolve_agent_doc_path() -> Path | None:
+    override = os.environ.get("AGENTPOD_AGENT_DOC_PATH", "").strip()
     if override:
         path = Path(override)
         if path.is_file():
             return path
 
-    repo_readme = Path(__file__).resolve().parents[4] / "README.md"
-    if repo_readme.is_file():
-        return repo_readme
+    override_readme = os.environ.get("AGENTPOD_README_PATH", "").strip()
+    if override_readme:
+        path = Path(override_readme)
+        if path.is_file():
+            return path
+
+    repo_root = Path(__file__).resolve().parents[4]
+    for name in ("AGENT.md", "README.md"):
+        candidate = repo_root / name
+        if candidate.is_file():
+            return candidate
 
     skills = shared_skills_dir()
     if skills is not None:
-        bundled = skills.parent / "README.md"
-        if bundled.is_file():
-            return bundled
+        for name in ("AGENT.md", "README.md"):
+            bundled = skills.parent / name
+            if bundled.is_file():
+                return bundled
 
     return None
 
 
 async def _handle(args: dict) -> ToolResult:
-    readme = _resolve_readme_path()
-    if readme is None:
-        raise ToolError("AgentPod README not found.")
-    content = readme.read_text(encoding="utf-8")
+    doc = _resolve_agent_doc_path()
+    if doc is None:
+        raise ToolError("AgentPod agent capability doc not found.")
+    content = doc.read_text(encoding="utf-8")
     return ToolResult(content=content)
 
 

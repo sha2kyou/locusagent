@@ -43,6 +43,9 @@ import { coalesceHistory, historyPollKey } from "./history";
 import { isTodoTool, parseTodoPlan, type TodoPlan } from "./todo";
 import { formatToolArgsPreview } from "./tool-args";
 
+/** 切页回来后轮询恢复 active run 的间隔（毫秒） */
+const ACTIVE_RUN_POLL_MS = 500;
+
 export interface PendingAttachment {
   id: string;
   attachmentId: string;
@@ -340,7 +343,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           setSessionTodoPlan(parseTodoPlan(todoPlan));
         }
         if (live) {
-          if (token === pollTokenRef.current) window.setTimeout(tick, 2000);
+          if (token === pollTokenRef.current) window.setTimeout(tick, ACTIVE_RUN_POLL_MS);
         } else {
           setIsRunning(false);
         }
