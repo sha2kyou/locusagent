@@ -24,8 +24,8 @@ export function sidebarNavContainerClass(expanded: boolean) {
 /** 侧栏导航行：统一高度、间距与 active/hover 态 */
 export function sidebarNavRowClass(isActive: boolean, expanded: boolean) {
   return cn(
-    "flex h-9 w-full items-center gap-2 rounded-lg px-2 text-[13px] font-medium leading-none transition-colors",
-    !expanded && "md:mx-auto md:h-9 md:w-9 md:justify-center md:gap-0 md:px-0",
+    "flex min-h-9 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium leading-normal transition-colors",
+    !expanded && "md:mx-auto md:h-9 md:w-9 md:justify-center md:gap-0 md:px-0 md:py-0",
     isActive
       ? "bg-sidebar-accent text-foreground"
       : "text-muted-foreground/75 hover:bg-sidebar-accent/50 hover:text-foreground",
@@ -38,7 +38,7 @@ export const sidebarNavIconSlotClass = "flex w-[18px] shrink-0 items-center just
 export const sidebarNavIconClass = "size-[18px] shrink-0";
 
 export function sidebarNavLabelClass(expanded: boolean) {
-  return cn("min-w-0 truncate leading-none", !expanded && "md:hidden");
+  return cn("min-w-0 truncate leading-normal", !expanded && "md:hidden");
 }
 
 /** 分组线距侧栏左右边距（收起 60px + 居中 w-6 → 18px；展开 nav 13px + 分割线 5px） */

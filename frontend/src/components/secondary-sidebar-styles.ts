@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 export const secondarySidebarHeaderClass =
   "apod-secondary-sidebar-header shrink-0 space-y-2.5 border-b border-sidebar-sub-border/45 px-3 pb-3 pt-1";
 
-export const secondarySidebarHeaderTitleRowClass = "flex h-11 items-center gap-2 px-1";
+export const secondarySidebarHeaderTitleRowClass = "flex min-h-11 items-center gap-2 px-1 py-1";
 
 export const secondarySidebarTitleClass =
   "min-w-0 flex-1 text-[14px] font-bold tracking-tight";
@@ -21,7 +21,7 @@ export const secondarySidebarGroupLabelClass =
 
 export function secondarySidebarRowClass(isActive: boolean) {
   return cn(
-    "group flex h-8 cursor-pointer select-none items-center gap-1.5 rounded-md px-2 text-[13px] leading-none transition-colors",
+    "group flex min-h-8 cursor-pointer select-none items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] leading-normal transition-colors",
     isActive
       ? "bg-sidebar-sub-accent font-medium text-foreground shadow-xs"
       : "text-muted-foreground hover:bg-sidebar-sub-accent/70 hover:text-foreground/90",
@@ -29,7 +29,7 @@ export function secondarySidebarRowClass(isActive: boolean) {
 }
 
 export const secondarySidebarRowLabelClass =
-  "min-w-0 flex-1 truncate text-left leading-none";
+  "min-w-0 flex-1 truncate text-left leading-normal";
 
 export const secondarySidebarRowActionsClass =
   "flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100";

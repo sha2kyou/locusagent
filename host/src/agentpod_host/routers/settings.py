@@ -132,15 +132,16 @@ async def read_activity_logs(
 
 @router.get("/backend-logs", response_model=BackendLogsOut)
 async def read_backend_logs(
-    lines: int = 500,
+    lines: int = 2000,
     ctx: AuthContext = Depends(require_session),
 ) -> BackendLogsOut:
     _ = ctx
+    line_limit = max(1, min(lines, 5000))
     home = Path(os.environ.get("AGENTPOD_HOME", Path.home() / ".agentpod"))
     log_path = home / "desktop-backend.log"
     if not log_path.is_file():
         return BackendLogsOut(lines=[], path=str(log_path))
-    buf: deque[str] = deque(maxlen=lines)
+    buf: deque[str] = deque(maxlen=line_limit)
     with log_path.open(errors="replace") as f:
         for line in f:
             buf.append(line.rstrip("\n"))

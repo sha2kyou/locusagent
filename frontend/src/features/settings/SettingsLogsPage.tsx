@@ -4,7 +4,7 @@ import { getBackendLogs } from "@/api/endpoints";
 import type { BackendLogs } from "@/api/types";
 
 const POLL_MS = 3000;
-const MAX_LINES = 500;
+const MAX_LINES = 2000;
 
 export function SettingsLogsPage() {
   const [data, setData] = useState<BackendLogs | null>(null);

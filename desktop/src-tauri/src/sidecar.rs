@@ -34,8 +34,8 @@ fn backend_log_path() -> PathBuf {
     agentpod_home().join("desktop-backend.log")
 }
 
-/// 持续读取子进程 stderr，避免管道写满导致 Python 事件循环在 flush 上卡死。
-fn spawn_stderr_drainer(stderr: impl std::io::Read + Send + 'static) {
+/// 持续读取子进程输出并写入 desktop-backend.log，避免管道写满导致子进程阻塞。
+fn spawn_log_drainer(stream: impl std::io::Read + Send + 'static) {
     thread::spawn(move || {
         let home = agentpod_home();
         let _ = std::fs::create_dir_all(&home);
@@ -44,7 +44,7 @@ fn spawn_stderr_drainer(stderr: impl std::io::Read + Send + 'static) {
             .append(true)
             .open(backend_log_path())
             .ok();
-        let reader = BufReader::new(stderr);
+        let reader = BufReader::new(stream);
         for line in reader.lines() {
             match line {
                 Ok(text) if !text.is_empty() => {
@@ -57,14 +57,6 @@ fn spawn_stderr_drainer(stderr: impl std::io::Read + Send + 'static) {
                 Err(_) => break,
             }
         }
-    });
-}
-
-/// 丢弃未读取的 stdout，避免管道缓冲区满导致子进程阻塞。
-fn spawn_stdout_drainer(stdout: impl std::io::Read + Send + 'static) {
-    thread::spawn(move || {
-        let reader = BufReader::new(stdout);
-        for _ in reader.lines() {}
     });
 }
 
@@ -168,10 +160,10 @@ pub fn spawn_backend(app: &AppHandle) -> std::io::Result<Child> {
         .spawn()?;
 
     if let Some(stdout) = child.stdout.take() {
-        spawn_stdout_drainer(stdout);
+        spawn_log_drainer(stdout);
     }
     if let Some(stderr) = child.stderr.take() {
-        spawn_stderr_drainer(stderr);
+        spawn_log_drainer(stderr);
     }
 
     Ok(child)

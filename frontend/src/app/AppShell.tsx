@@ -209,7 +209,7 @@ export function AppShell() {
                 )}
                 title={currentWorkspace?.description || currentWorkspaceLabel}
               >
-                <span className={cn("max-w-full truncate leading-4", !expanded && "md:hidden")}>
+                <span className={cn("max-w-full truncate leading-normal", !expanded && "md:hidden")}>
                   {currentWorkspaceLabel}
                 </span>
                 {!expanded && <span className="hidden md:block text-[10px]">WS</span>}
