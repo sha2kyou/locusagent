@@ -86,7 +86,7 @@ repackage_dmg() {
   local dmg_dir="$ROOT_DIR/desktop/src-tauri/target/release/bundle/dmg"
   local version
   version="$(tr -d '[:space:]' < "$ROOT_DIR/VERSION")"
-  local dmg_out="$dmg_dir/AgentPod_${version}_aarch64.dmg"
+  local dmg_out="$dmg_dir/AgentPod_${version}_macos-arm64.dmg"
 
   if [[ ! -d "$app_src" ]]; then
     echo "error: missing $app_src" >&2

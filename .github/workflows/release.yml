@@ -101,7 +101,7 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME}"
           VERSION="${TAG#v}"
-          DMG_NAME="AgentPod_${VERSION}_aarch64.dmg"
+          DMG_NAME="AgentPod_${VERSION}_macos-arm64.dmg"
           SHA256="$(shasum -a 256 "${DMG_NAME}" | awk '{print $1}')"
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "sha256=${SHA256}" >> "${GITHUB_OUTPUT}"
@@ -119,7 +119,7 @@ jobs:
             version "${{ steps.vars.outputs.version }}"
             sha256 "${{ steps.vars.outputs.sha256 }}"
 
-            url "https://github.com/sha2kyou/agentpod/releases/download/v#{version}/AgentPod_#{version}_aarch64.dmg",
+            url "https://github.com/sha2kyou/agentpod/releases/download/v#{version}/AgentPod_#{version}_macos-arm64.dmg",
                 verified: "github.com/sha2kyou/agentpod/"
             name "AgentPod"
             desc "macOS desktop AI agent with chat, skills, MCP, and memory"
