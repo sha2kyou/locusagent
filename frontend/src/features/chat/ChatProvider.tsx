@@ -35,13 +35,13 @@ import {
   type ChatAttachment,
   type ChatMessage,
   type ChatPart,
-  type ToolPart,
   emptyAssistant,
   uid,
   userMessage,
 } from "./model";
 import { convertMessage } from "./convert";
 import { coalesceHistory } from "./history";
+import { mergeStreamSyncParts } from "./stream-sync";
 import { isTodoTool, parseTodoPlan, type TodoPlan } from "./todo";
 import { formatToolArgsPreview } from "./tool-args";
 
@@ -58,6 +58,15 @@ export interface PendingAttachment {
   processable: boolean;
   unsupportedReason?: string;
   truncated: boolean;
+}
+
+export interface QueuedMessage {
+  id: string;
+  displayText: string;
+  requestText: string;
+  requestContent: ChatRequestContent;
+  displayAttachments?: ChatAttachment[];
+  attachmentIds: string[];
 }
 
 interface ChatContextValue {
@@ -78,6 +87,10 @@ interface ChatContextValue {
   addPendingFiles: (files: FileList | File[]) => Promise<void>;
   removePendingAttachment: (id: string) => void;
   clearPendingAttachments: () => void;
+  messageQueue: QueuedMessage[];
+  enqueueFromComposer: (text: string) => boolean;
+  removeQueuedMessage: (id: string) => void;
+  flushQueueHead: () => Promise<void>;
   send: (text: string) => void;
   regenerate: () => void;
   newSession: () => void;
@@ -179,6 +192,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([]);
+  const messageQueueRef = useRef<QueuedMessage[]>([]);
+  const isRunningRef = useRef(false);
+  const tryProcessQueueRef = useRef<() => void>(() => {});
   const messageAttachments = useMemo<Record<string, ChatAttachment[]>>(() => {
     const map: Record<string, ChatAttachment[]> = {};
     for (const msg of messages) {
@@ -222,6 +239,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     pendingAttachmentsRef.current = pendingAttachments;
   }, [pendingAttachments]);
+
+  useEffect(() => {
+    isRunningRef.current = isRunning;
+  }, [isRunning]);
+
+  const clearMessageQueue = () => {
+    messageQueueRef.current = [];
+    setMessageQueue([]);
+  };
+
+  const updateMessageQueue = (updater: (prev: QueuedMessage[]) => QueuedMessage[]) => {
+    setMessageQueue((prev) => {
+      const next = updater(prev);
+      messageQueueRef.current = next;
+      return next;
+    });
+  };
 
   const setCurrent = (id: string | null) => {
     currentIdRef.current = id;
@@ -338,26 +372,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // ---- 流式事件处理（新请求与 active run 重连共用） ----
   const applyStreamSync = (sync: NonNullable<ChatChunk["x_sync"]>) => {
-    const reasoning = (sync.reasoning_content || "").trim();
-    const content = (sync.content || "").trim();
     const syncId = sync.assistant_message_id != null ? `a_${sync.assistant_message_id}` : undefined;
     setMessages((prev) => {
       const idx = lastAssistantIndex(prev);
-      const toolParts =
-        idx >= 0 ? prev[idx].parts.filter((p): p is ToolPart => p.type === "tool") : [];
-      const parts: ChatPart[] = [];
-      if (reasoning) parts.push({ type: "thinking", text: reasoning, completed: false });
-      if (content) parts.push({ type: "text", text: content });
-      const merged = [...parts, ...toolParts];
       if (idx >= 0) {
         const m = prev[idx];
+        const merged = mergeStreamSyncParts(m.parts, sync, { live: true });
         const next = {
           ...m,
           id: syncId ?? m.id,
-          parts: merged.length ? merged : m.parts,
+          parts: merged,
         };
         return [...prev.slice(0, idx), next, ...prev.slice(idx + 1)];
       }
+      const merged = mergeStreamSyncParts([], sync, { live: true });
       const assistant: ChatMessage = {
         ...emptyAssistant(),
         ...(syncId ? { id: syncId } : {}),
@@ -396,18 +424,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       return;
     }
     if (ev === "tool_call") {
-      updateLastAssistant((parts) => [
-        ...completeThinkingParts(parts),
-        {
-          type: "tool",
-          id: chunk.x_tool_id || chunk.x_tool_call_id || uid("t"),
-          toolName: chunk.x_tool_name || "tool",
-          toolKind: chunk.x_tool_kind || "tool",
-          running: true,
-          startedAt: Date.now(),
-          argsPreview: formatToolArgsPreview(chunk.x_tool_args),
-        },
-      ]);
+      const toolId = chunk.x_tool_id || chunk.x_tool_call_id || uid("t");
+      updateLastAssistant((parts) => {
+        if (parts.some((p) => p.type === "tool" && p.id === toolId)) return parts;
+        return [
+          ...completeThinkingParts(parts),
+          {
+            type: "tool",
+            id: toolId,
+            toolName: chunk.x_tool_name || "tool",
+            toolKind: chunk.x_tool_kind || "tool",
+            running: true,
+            startedAt: Date.now(),
+            argsPreview: formatToolArgsPreview(chunk.x_tool_args),
+          },
+        ];
+      });
     } else if (ev === "tool_result") {
       const id = chunk.x_tool_call_id || chunk.x_tool_id;
       const preview = chunk.x_preview;
@@ -549,9 +581,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 : p,
             ),
           );
+          isRunningRef.current = false;
           setIsRunning(false);
           void refreshSessions();
           watchTitle(sid);
+          queueMicrotask(() => {
+            tryProcessQueueRef.current();
+          });
         }
       }
     })();
@@ -569,8 +605,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setCurrent(null);
     setMessages([]);
     setSessionTodoPlan(null);
+    isRunningRef.current = false;
     setIsRunning(false);
     setPendingAttachments([]);
+    clearMessageQueue();
     setLastErrored(false);
   };
 
@@ -580,8 +618,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     stopActiveRunAttach();
     stopTitlePoll();
     setCurrent(id);
+    isRunningRef.current = false;
     setIsRunning(false);
     setPendingAttachments([]);
+    clearMessageQueue();
     setLastErrored(false);
     void (async () => {
       try {
@@ -667,6 +707,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       return [...arr, emptyAssistant()];
     });
     setIsRunning(true);
+    isRunningRef.current = true;
 
     const ac = new AbortController();
     abortRef.current = ac;
@@ -770,6 +811,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         );
         // 用户主动中断时由 cancel() 在后端收敛后再置 false，避免可发送但 run 仍 active
         if (!ac.signal.aborted) {
+          isRunningRef.current = false;
           setIsRunning(false);
           const sidAfterRun = currentIdRef.current;
           if (sidAfterRun) {
@@ -780,6 +822,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               })
               .catch(() => {});
           }
+          queueMicrotask(() => {
+            tryProcessQueueRef.current();
+          });
         }
       }
       void refreshSessions();
@@ -824,6 +869,65 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
     }
     setIsRunning(false);
+    isRunningRef.current = false;
+  };
+
+  const sendQueuedMessage = (item: QueuedMessage) => {
+    void runTurn(item.displayText, {
+      appendUser: true,
+      requestText: item.requestText,
+      requestContent: item.requestContent,
+      displayAttachments: item.displayAttachments,
+      attachmentIds: item.attachmentIds,
+    });
+  };
+
+  const tryProcessQueue = () => {
+    const item = messageQueueRef.current[0];
+    if (!item || isRunningRef.current) return;
+    updateMessageQueue((prev) => prev.slice(1));
+    sendQueuedMessage(item);
+  };
+
+  tryProcessQueueRef.current = tryProcessQueue;
+
+  const buildQueuedMessage = (text: string): QueuedMessage | null => {
+    const attachments = pendingAttachmentsRef.current;
+    const requestText = text.trim();
+    if (!requestText && attachments.length === 0) return null;
+    const displayText = buildDisplayText(requestText, attachments);
+    const displayAttachments = buildDisplayAttachments(attachments);
+    const attachmentIds = attachments.map((file) => file.attachmentId);
+    return {
+      id: uid("q"),
+      displayText,
+      requestText,
+      requestContent: requestText,
+      displayAttachments,
+      attachmentIds,
+    };
+  };
+
+  const enqueueFromComposer = (text: string): boolean => {
+    const item = buildQueuedMessage(text);
+    if (!item) return false;
+    updateMessageQueue((prev) => [...prev, item]);
+    clearPendingAttachments();
+    return true;
+  };
+
+  const removeQueuedMessage = (id: string) => {
+    updateMessageQueue((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const flushQueueHead = async () => {
+    const item = messageQueueRef.current[0];
+    if (!item) return;
+    updateMessageQueue((prev) => prev.slice(1));
+    if (isRunningRef.current) {
+      await cancel();
+    }
+    sendQueuedMessage(item);
   };
 
   // ---- 会话操作 ----
@@ -1055,6 +1159,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         addPendingFiles,
         removePendingAttachment,
         clearPendingAttachments,
+        messageQueue,
+        enqueueFromComposer,
+        removeQueuedMessage,
+        flushQueueHead,
         send: (text: string) => {
           void send(text);
         },

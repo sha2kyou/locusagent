@@ -495,7 +495,7 @@ async def get_active_run(session_id: str) -> dict[str, Any] | None:
             msg_id = d.get("assistant_message_id")
             if msg_id:
                 msg = c.execute(
-                    "SELECT id, role, content, tool_calls, tool_call_id, created_at "
+                    "SELECT id, role, content, reasoning_content, tool_calls, tool_call_id, created_at "
                     "FROM messages WHERE id = ?",
                     (msg_id,),
                 ).fetchone()

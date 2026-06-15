@@ -3,6 +3,7 @@ import {
   ComposerPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
+  useAui,
   useMessage,
   useThreadRuntime,
   type TextMessagePartComponent,
@@ -105,9 +106,18 @@ function Composer() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { onCompositionStart, onCompositionEnd, shouldBlockEnter } = useImeEnterGuard();
   const runtime = useThreadRuntime();
+  const aui = useAui();
   const toast = useToast();
-  const { addPendingFiles, isRunning, pendingAttachments, removePendingAttachment } =
-    useChat();
+  const {
+    addPendingFiles,
+    isRunning,
+    pendingAttachments,
+    removePendingAttachment,
+    messageQueue,
+    enqueueFromComposer,
+    removeQueuedMessage,
+    flushQueueHead,
+  } = useChat();
 
   // 全局 "/" 聚焦输入（不在其它输入/可编辑元素中时）
   useGlobalFocusShortcut(inputRef);
@@ -123,6 +133,35 @@ function Composer() {
     if (shouldBlockEnter(e)) {
       e.preventDefault();
       return;
+    }
+
+    if (e.key === "Enter" && !e.shiftKey) {
+      const text = inputRef.current?.value ?? "";
+      const trimmed = text.trim();
+      const hasComposerContent = trimmed.length > 0 || pendingAttachments.length > 0;
+      const hasQueue = messageQueue.length > 0;
+
+      if (isRunning) {
+        if (hasComposerContent) {
+          e.preventDefault();
+          if (enqueueFromComposer(text)) {
+            aui.composer().setText("");
+          }
+          return;
+        }
+        if (hasQueue) {
+          e.preventDefault();
+          void flushQueueHead();
+          return;
+        }
+        return;
+      }
+
+      if (!hasComposerContent && hasQueue) {
+        e.preventDefault();
+        void flushQueueHead();
+        return;
+      }
     }
 
     if (e.key === "Escape") {
@@ -146,6 +185,52 @@ function Composer() {
 
   return (
     <div className="px-6 pb-6 pt-2">
+      {messageQueue.length > 0 ? (
+        <div className="mx-auto mb-2 flex w-full max-w-3xl flex-col gap-1.5">
+          {messageQueue.map((item, index) => (
+            <div
+              key={item.id}
+              className="flex items-start gap-2 rounded-lg border border-border/80 bg-surface/60 px-3 py-2 text-sm shadow-xs"
+            >
+              <div className="min-w-0 flex-1">
+                {index === 0 && isRunning ? (
+                  <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    排队中
+                  </p>
+                ) : null}
+                <p className="line-clamp-3 whitespace-pre-wrap break-words text-foreground/90">
+                  {item.requestText ||
+                    item.displayAttachments?.map((file) => file.name).join("、") ||
+                    "（空消息）"}
+                </p>
+                {item.displayAttachments && item.displayAttachments.length > 0 ? (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {item.displayAttachments.map((file) => (
+                      <span
+                        key={file.id}
+                        className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-background/70 px-2 py-0.5 text-[11px] text-muted-foreground"
+                      >
+                        <Paperclip className="size-2.5 shrink-0" />
+                        <span className="max-w-40 truncate">{file.name}</span>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => removeQueuedMessage(item.id)}
+                className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                aria-label="从队列移除"
+                title="从队列移除"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       {pendingAttachments.length > 0 ? (
         <div className="mx-auto mb-2 flex w-full max-w-3xl flex-wrap gap-1.5">
           {pendingAttachments.map((file) => (
@@ -182,8 +267,7 @@ function Composer() {
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          disabled={isRunning}
-          className="mb-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+          className="mb-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           aria-label="添加附件"
           title="添加附件"
         >
@@ -225,7 +309,11 @@ function Composer() {
       </ComposerPrimitive.Root>
 
       <p className="mx-auto mt-2 max-w-3xl text-center text-[11px] text-muted-foreground/50">
-        Enter 发送 · Shift+Enter 换行
+        {isRunning
+          ? "Enter 排队 · 空输入 Enter 立即发送队首 · Shift+Enter 换行"
+          : messageQueue.length > 0
+            ? "Enter 发送 · 空输入 Enter 发送队首 · Shift+Enter 换行"
+            : "Enter 发送 · Shift+Enter 换行"}
       </p>
     </div>
   );
