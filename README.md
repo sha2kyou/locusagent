@@ -8,6 +8,14 @@
 
 Configuration and runtime data live under `~/.agentpod/` (`settings.json`, SQLite databases, and per-workspace storage).
 
+## About the name
+
+**Agent** + **Pod**: an AI agent in its own isolated runtime.
+
+The project began as a self-hosted platform: a **Host** control plane orchestrated **one Docker container per user**. Each container was the *pod*—where that user's chat loop, tools, SQLite data, and MCP connections ran, isolated from everyone else.
+
+Later the product became a **local macOS desktop app**. Host and Agent now ship as a bundled sidecar monolith; on a single machine, **multi-workspace** isolation on disk replaced per-user containers. The name stayed: *Pod* still means a dedicated, isolated place for an agent to run.
+
 ## Highlights
 
 - **Local & private** — Conversations, memory, and workspace files stay on your Mac. No cloud account required beyond your LLM provider API key.
@@ -18,17 +26,19 @@ Configuration and runtime data live under `~/.agentpod/` (`settings.json`, SQLit
 - **Artifacts** — Save deliverables into categorized libraries and recall them later.
 - **Scheduled tasks** — Cron-style prompts that run automatically in the background.
 - **Multi-workspace** — Separate files, sessions, memory, and settings for different projects or clients.
-- **Resilient streaming** — Agent runs continue on the server side if you navigate away or refresh; the UI reconnects to in-progress runs.
+- **Resilient streaming** — Agent runs continue locally in the background if you navigate away or refresh; the UI reconnects to in-progress runs.
 
 ## Install
 
-macOS (Apple Silicon), via Homebrew:
+macOS **Apple Silicon (arm64) only** — via Homebrew:
 
 ```bash
 brew tap sha2kyou/tap
 brew trust --cask sha2kyou/tap/agentpod
 brew install --cask agentpod
 ```
+
+Intel Macs are not supported in current release builds.
 
 ### First launch
 
@@ -43,7 +53,7 @@ agentpod/
 ├── frontend/          React + Vite SPA (chat UI, settings, routes)
 ├── desktop/           Tauri 2 shell (macOS .app / .dmg)
 ├── sidecar/           Bundled Python entrypoint (Host + Agent monolith)
-├── host/              API gateway, auth, proxies, workspace orchestration
+├── host/              Settings, API proxies, workspace metadata
 ├── agent/             Chat loop, tools, memory, MCP, persistence
 ├── shared/            Shared settings & utilities
 ├── shared-skills/     Built-in Skills shipped with the app
@@ -51,11 +61,11 @@ agentpod/
 └── scripts/           Version sync, bundle helpers
 ```
 
-At runtime the desktop app embeds a standalone Python 3.11 environment and serves the UI over a local HTTP port (`127.0.0.1:21223` in dev).
+The sidecar listens on **`127.0.0.1:21223`** and serves both the UI and API from the same origin. In production the desktop app embeds a standalone Python 3.11 runtime; in development you usually run `agentpod-serve` yourself (see below).
 
 ## Build from source
 
-**Requirements:** macOS, Python 3.11+, [uv](https://docs.astral.sh/uv/), Node.js 22+, Rust (stable).
+**Requirements:** macOS (Apple Silicon), Python 3.11+, [uv](https://docs.astral.sh/uv/), Node.js 22+, Rust (stable).
 
 Full desktop build (bundled venv + frontend + Tauri release):
 
@@ -76,34 +86,47 @@ python3 scripts/sync-version.py     # sync VERSION → all manifests
 
 ## Development
 
-### Python (sidecar / tests)
+### Sidecar (API + UI host)
+
+From the repo root:
+
+```bash
+uv sync --group dev
+uv run agentpod-serve
+```
+
+Or use `./rebuild.sh sidecar` and run `agentpod-serve` from `sidecar/.venv`.
+
+The process binds to `http://127.0.0.1:21223` and uses `~/.agentpod/` for data.
+
+### Python tests
 
 ```bash
 uv sync --group dev
 uv run pytest tests/ -q
 ```
 
-For an editable local sidecar venv: `./rebuild.sh sidecar`, then activate `sidecar/.venv`.
+### Frontend (Vite HMR)
 
-### Frontend
+With the sidecar running in another terminal:
 
 ```bash
 cd frontend
 npm ci
-npm run dev              # Vite dev server
-npm run build:desktop    # production bundle for Tauri
+npm run dev              # Vite dev server; proxies /api to :21223
+npm run build:desktop    # production bundle for Tauri / sidecar static UI
 npm run lint
-npm run test:latex && npm run test:notifications && npm run test:toast
+npm run test:latex && npm run test:notifications && npm run test:toast && npm run test:stream-sync
 ```
 
-### Desktop (Tauri dev)
+### Desktop (Tauri shell)
 
-Run the sidecar/backend separately or use the bundled flow, then:
+Build the desktop bundle first (`npm run build:desktop` in `frontend/`), start `agentpod-serve`, then:
 
 ```bash
 cd desktop
 npm ci
-npm run dev              # tauri dev → loads frontend from devUrl
+npm run dev              # Tauri window → devUrl http://127.0.0.1:21223
 ```
 
 ## Configuration
@@ -111,10 +134,12 @@ npm run dev              # tauri dev → loads frontend from devUrl
 | Location | Purpose |
 |----------|---------|
 | `~/.agentpod/settings.json` | Global settings (models, tool keys, host options) |
-| `~/.agentpod/` SQLite | Sessions, messages, memory, artifacts metadata |
-| Per-workspace dirs under `~/.agentpod/workspaces/` | Files, env vars, isolated state |
+| `~/.agentpod/host.sqlite` | Host metadata (workspace registry, etc.) |
+| `~/.agentpod/workspaces/<id>/agent.sqlite` | Sessions, messages, memory, runs for that workspace |
+| `~/.agentpod/workspaces/<id>/workspace/` | Workspace files the agent can read and write |
+| `~/.agentpod/skills/` | User Skills synced from the app |
 
-See `shared/settings.example.json` for a annotated example of host settings.
+See `shared/settings.example.json` for an annotated example of host settings.
 
 ## Documentation
 
