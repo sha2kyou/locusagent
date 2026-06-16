@@ -21,8 +21,32 @@ function Assert-LastExitCode {
 
 function Remove-ExternallyManagedMarker {
     param([string]$Root)
+    $knownPaths = @(
+        (Join-Path $Root "Lib\EXTERNALLY-MANAGED"),
+        (Join-Path $Root "lib\python3.11\EXTERNALLY-MANAGED")
+    )
+    foreach ($path in $knownPaths) {
+        if (Test-Path $path) {
+            Set-ItemProperty -LiteralPath $path -Name IsReadOnly -Value $false
+            Remove-Item -LiteralPath $path -Force
+        }
+    }
     Get-ChildItem -Path $Root -Recurse -File -Filter "EXTERNALLY-MANAGED" -ErrorAction SilentlyContinue |
-        Remove-Item -Force -ErrorAction SilentlyContinue
+        ForEach-Object {
+            $_.IsReadOnly = $false
+            Remove-Item -LiteralPath $_.FullName -Force
+        }
+}
+
+function Invoke-BundledPip {
+    param(
+        [string]$Python,
+        [Parameter(ValueFromRemainingArguments = $true)]
+        [string[]]$PipArgs
+    )
+    $allArgs = $PipArgs + @("--break-system-packages")
+    & $Python -m pip @allArgs
+    Assert-LastExitCode ("pip " + ($PipArgs -join " "))
 }
 
 function Setup-BundleResources {
@@ -52,17 +76,15 @@ function Setup-BundleResources {
     Remove-ExternallyManagedMarker -Root $BundleVenv
 
     & $py -m ensurepip --upgrade 2>$null
-    & $py -m pip install -U pip
-    Assert-LastExitCode "pip upgrade"
-    & $py -m pip install --no-cache-dir `
+    Invoke-BundledPip -Python $py install -U pip
+    Invoke-BundledPip -Python $py install --no-cache-dir `
         (Join-Path $RootDir "shared") `
         (Join-Path $RootDir "host") `
         (Join-Path $RootDir "agent") `
         (Join-Path $RootDir "sidecar")
-    Assert-LastExitCode "pip install sidecar packages"
 
     Write-Host "==> prune bundle python (drop pip tooling, bytecode cache)"
-    & $py -m pip uninstall -y pip setuptools wheel 2>$null
+    & $py -m pip uninstall -y pip setuptools wheel --break-system-packages 2>$null
 
     Get-ChildItem -Path $BundleVenv -Recurse -Directory -Filter "__pycache__" |
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
