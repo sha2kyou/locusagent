@@ -87,7 +87,7 @@ export function SettingsToolsPage() {
           <div>
             <Button variant="primary" disabled={saving} onClick={() => void save()}>
               {saving && <Loader2 className="size-4 animate-spin" />}
-              {t("settings.tools.save")}
+              {t("common.actions.save")}
             </Button>
           </div>
         </div>

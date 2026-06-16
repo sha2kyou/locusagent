@@ -201,7 +201,7 @@ export function SettingsGeneralPage() {
                 onClick={() => void saveDesktopPrefs()}
               >
                 {desktopPrefsSaving && <Loader2 className="size-4 animate-spin" />}
-                {t("settings.general.saveDesktopPrefs")}
+                {t("common.actions.save")}
               </Button>
             </div>
           </div>
@@ -227,7 +227,7 @@ export function SettingsGeneralPage() {
           <div>
             <Button variant="primary" disabled={timezoneSaving} onClick={() => void saveTimezone()}>
               {timezoneSaving && <Loader2 className="size-4 animate-spin" />}
-              {t("settings.general.timezone.save")}
+              {t("common.actions.save")}
             </Button>
           </div>
         </div>
