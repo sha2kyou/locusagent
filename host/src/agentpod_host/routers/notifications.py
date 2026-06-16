@@ -139,6 +139,7 @@ async def remove_one(
 @router.websocket("/ws")
 async def notifications_ws(websocket: WebSocket) -> None:
     if not is_valid_session_token(websocket.cookies.get(SESSION_COOKIE_NAME)):
+        await websocket.accept()
         await websocket.close(code=4401, reason="missing session")
         return
 

@@ -1,8 +1,8 @@
 //! 读取 ~/.agentpod/settings.json 中的应用配置（桌面壳侧）。
 
-use std::path::PathBuf;
-
 use serde::Deserialize;
+
+use crate::agentpod_paths::agentpod_home;
 
 #[derive(Deserialize, Default)]
 struct DeveloperSection {
@@ -14,26 +14,6 @@ struct DeveloperSection {
 struct SettingsDocument {
     #[serde(default)]
     developer: DeveloperSection,
-}
-
-fn agentpod_home() -> PathBuf {
-    if let Ok(raw) = std::env::var("AGENTPOD_HOME") {
-        return PathBuf::from(raw);
-    }
-    #[cfg(windows)]
-    {
-        std::env::var("USERPROFILE")
-            .map(PathBuf::from)
-            .unwrap_or_default()
-            .join(".agentpod")
-    }
-    #[cfg(not(windows))]
-    {
-        std::env::var("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_default()
-            .join(".agentpod")
-    }
 }
 
 fn load_settings() -> SettingsDocument {

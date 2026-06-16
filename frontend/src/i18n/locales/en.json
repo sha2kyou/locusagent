@@ -158,8 +158,8 @@
         "title": "Developer tools",
         "description": "When enabled, open Web Inspector from the context menu to debug the UI and network.",
         "label": "Enable developer tools",
-        "hint": "When off, the context menu entry is hidden and any open inspector is closed.",
-        "shortcutNote": "On macOS, Cmd + Option + I may still open the system Web Inspector outside app-controlled entry points."
+        "hint": "When off, hides Inspect Element in the native context menu and closes any open inspector.",
+        "shortcutNote": "Other menu items (such as Reload) remain provided by the WebView with system-localized labels."
       }
     },
     "logs": {

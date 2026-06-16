@@ -1,10 +1,11 @@
+mod agentpod_paths;
 mod app_settings;
-mod desktop_devtools;
 mod desktop_prefs;
 mod external_links;
 mod gateway;
 mod sidecar;
 mod tray;
+mod webview_devtools;
 
 #[cfg(target_os = "macos")]
 mod menu_bar_icon;
@@ -38,7 +39,7 @@ pub fn run() {
             desktop_get_prefs,
             desktop_get_system_locale,
             desktop_set_prefs,
-            desktop_devtools::desktop_apply_devtools_settings,
+            webview_devtools::desktop_apply_devtools_settings,
         ])
         .setup(|app| {
             let prefs = load_prefs();
@@ -64,6 +65,8 @@ pub fn run() {
                 .map_err(|err| format!("backend not ready: {err}"))?;
 
             external_links::create_main_window(app).map_err(|err| format!("main window: {err}"))?;
+            webview_devtools::sync_devtools_runtime(app.handle())
+                .map_err(|err| format!("webview devtools: {err}"))?;
             install_window_close_handler(app.handle());
 
             Ok(())

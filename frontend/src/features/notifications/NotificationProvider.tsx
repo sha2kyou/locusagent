@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   listNotifications,
@@ -15,6 +16,7 @@ import {
 } from "@/api/endpoints";
 import type { NotificationEntry } from "@/api/types";
 import { useAuth } from "@/app/auth";
+import { stripWorkspacePrefix } from "@/app/workspace-route";
 import { useToast } from "@/components/ui/toast";
 import {
   mirrorNotificationEntryToSystem,
@@ -41,6 +43,7 @@ export function useNotifications() {
 
 const WS_RETRY_MS = 3_000;
 const WS_PING_MS = 25_000;
+const WS_AUTH_CLOSE_CODE = 4401;
 
 function toastTypeFromKind(kind: NotificationEntry["kind"]): "info" | "success" | "error" {
   if (kind === "error") return "error";
@@ -51,11 +54,15 @@ function toastTypeFromKind(kind: NotificationEntry["kind"]): "info" | "success" 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const { me } = useAuth();
+  const location = useLocation();
   const toast = useToast();
   const [items, setItems] = useState<NotificationEntry[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const knownUnreadRef = useRef<number | null>(null);
+
+  const workspaceKey =
+    stripWorkspacePrefix(location.pathname).workspaceId ?? me?.current_workspace_id ?? "";
 
   const notifyNew = useCallback(
     (count: number, item?: NotificationEntry) => {
@@ -110,6 +117,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     [notifyNew],
   );
 
+  const applySyncRef = useRef(applySync);
+  const applyPushRef = useRef(applyPush);
+  applySyncRef.current = applySync;
+  applyPushRef.current = applyPush;
+
   useEffect(() => {
     if (!me) {
       setItems([]);
@@ -124,52 +136,46 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!me) return;
-    let cancelled = false;
-    void listNotifications()
-      .then((data) => {
-        if (cancelled) return;
-        applySync(data.items, data.unread_count);
-      })
-      .catch(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [me, applySync]);
-
-  useEffect(() => {
-    if (!me) return;
 
     let ws: WebSocket | null = null;
     let retryTimer = 0;
     let pingTimer = 0;
     let stopped = false;
+    let generation = 0;
 
     const connect = () => {
       if (stopped) return;
-      ws = new WebSocket(notificationWsUrl());
+      const gen = ++generation;
+      const socket = new WebSocket(notificationWsUrl());
+      ws = socket;
 
-      ws.onmessage = (ev) => {
+      socket.onmessage = (ev) => {
+        if (gen !== generation) return;
         const data = parseNotificationWsEvent(String(ev.data));
         if (!data) return;
         if (data.type === "sync") {
-          applySync(data.items, data.unread_count);
+          applySyncRef.current(data.items, data.unread_count);
         } else if (data.type === "notification") {
-          applyPush(data.item, data.unread_count);
+          applyPushRef.current(data.item, data.unread_count);
         }
       };
 
-      ws.onclose = () => {
-        if (!stopped) retryTimer = window.setTimeout(connect, WS_RETRY_MS);
-      };
-
-      ws.onerror = () => {
-        ws?.close();
+      socket.onclose = (ev) => {
+        if (stopped || gen !== generation) return;
+        if (ev.code === WS_AUTH_CLOSE_CODE) return;
+        retryTimer = window.setTimeout(connect, WS_RETRY_MS);
       };
     };
 
-    connect();
+    void listNotifications()
+      .then((data) => {
+        if (stopped) return;
+        applySyncRef.current(data.items, data.unread_count);
+        connect();
+      })
+      .catch(() => {
+        if (!stopped) setLoading(false);
+      });
 
     pingTimer = window.setInterval(() => {
       if (ws?.readyState === WebSocket.OPEN) ws.send("ping");
@@ -177,11 +183,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
     return () => {
       stopped = true;
+      generation += 1;
       window.clearTimeout(retryTimer);
       window.clearInterval(pingTimer);
-      ws?.close();
+      if (ws) {
+        ws.onclose = null;
+        ws.close();
+        ws = null;
+      }
     };
-  }, [me, applySync, applyPush]);
+  }, [me, workspaceKey]);
 
   const markRead = useCallback(async (id: number) => {
     await markNotificationRead(id);
@@ -208,4 +219,4 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       {children}
     </NotificationContext.Provider>
   );
-}
+};

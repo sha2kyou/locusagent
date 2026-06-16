@@ -5,6 +5,8 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
+use crate::agentpod_paths::agentpod_home;
+
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct DesktopPrefs {
     #[serde(default)]
@@ -15,29 +17,8 @@ pub struct DesktopPrefs {
 
 pub struct PrefsState(pub Mutex<DesktopPrefs>);
 
-fn default_agentpod_home() -> PathBuf {
-    #[cfg(windows)]
-    {
-        std::env::var("USERPROFILE")
-            .map(PathBuf::from)
-            .unwrap_or_default()
-            .join(".agentpod")
-    }
-    #[cfg(not(windows))]
-    {
-        std::env::var("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_default()
-            .join(".agentpod")
-    }
-}
-
 fn prefs_file() -> PathBuf {
-    let home = std::env::var("AGENTPOD_HOME")
-        .ok()
-        .map(PathBuf::from)
-        .unwrap_or_else(default_agentpod_home);
-    home.join("desktop.prefs.json")
+    agentpod_home().join("desktop.prefs.json")
 }
 
 pub fn load_prefs() -> DesktopPrefs {

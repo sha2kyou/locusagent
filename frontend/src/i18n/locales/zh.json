@@ -158,8 +158,8 @@
         "title": "开发者工具",
         "description": "开启后可在右键菜单打开 Web Inspector，用于调试页面与网络请求。",
         "label": "启用开发者工具",
-        "hint": "关闭后隐藏右键菜单中的「打开开发者工具」；若已打开会自动关闭。",
-        "shortcutNote": "macOS 系统快捷键 Cmd + Option + I 可能仍可打开 Inspector，这不属于应用内入口。"
+        "hint": "关闭后隐藏原生右键菜单中的「检查元素」，并关闭已打开的 Inspector。",
+        "shortcutNote": "其余菜单项（如重新载入）仍由 WebView 原生提供，文案随系统语言显示。"
       }
     },
     "logs": {

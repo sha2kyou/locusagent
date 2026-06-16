@@ -50,6 +50,8 @@ pub fn create_main_window(app: &App) -> tauri::Result<()> {
         builder = builder.decorations(true);
     }
 
+    builder = builder.devtools(crate::webview_devtools::initial_webview_devtools_enabled());
+
     builder
         .on_navigation({
             let handle = handle.clone();

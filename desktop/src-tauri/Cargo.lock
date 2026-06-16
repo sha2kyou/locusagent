@@ -14,6 +14,7 @@ version = "0.1.19"
 dependencies = [
  "objc2-app-kit",
  "objc2-foundation",
+ "objc2-web-kit",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
