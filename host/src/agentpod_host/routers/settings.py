@@ -180,7 +180,7 @@ async def save_timezone(
 
     set_app_timezone(tz)
     await recalc_task_schedules()
-    record_activity("settings", "timezone_save", f"时区已保存：{tz}")
+    record_activity("settings", "timezone_save", f"Timezone saved: {tz}")
     return TimezoneConfigOut(timezone=tz)
 
 
@@ -202,7 +202,7 @@ async def save_locale(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     set_app_locale(locale)
-    record_activity("settings", "locale_save", f"语言已保存：{locale}")
+    record_activity("settings", "locale_save", f"Locale saved: {locale}")
     return LocaleConfigOut(locale=locale)
 
 
@@ -264,5 +264,5 @@ async def save_app_config(
     if payload.timezone is not None:
         await recalc_task_schedules()
 
-    record_activity("settings", "app_config_save", "应用配置已保存")
+    record_activity("settings", "app_config_save", "App config saved")
     return AppConfigOut.model_validate(app_config_for_api(doc))
