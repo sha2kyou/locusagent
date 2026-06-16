@@ -82,6 +82,12 @@ def copy_workspace_on_disk(source_id: str, target_id: str) -> None:
     _strip_conversation_data(dst / "agent.sqlite")
 
 
+def delete_workspace_on_disk(workspace_id: str) -> None:
+    path = _workspaces_root() / workspace_id
+    if path.is_dir():
+        shutil.rmtree(path)
+
+
 async def copy_mcp_oauth_credentials(
     session: AsyncSession,
     *,

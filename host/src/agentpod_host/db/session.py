@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from ..config import get_settings
@@ -18,6 +19,10 @@ _engine_db_path: Path | None = None
 
 def _sqlite_url(path: Path) -> str:
     return f"sqlite+aiosqlite:///{path}"
+
+
+def _enable_sqlite_foreign_keys(dbapi_connection, _connection_record) -> None:
+    dbapi_connection.execute("PRAGMA foreign_keys=ON")
 
 
 async def init_engine() -> AsyncEngine:
@@ -38,6 +43,7 @@ async def init_engine() -> AsyncEngine:
         pool_pre_ping=True,
         connect_args={"check_same_thread": False},
     )
+    event.listen(_engine.sync_engine, "connect", _enable_sqlite_foreign_keys)
     _sessionmaker = async_sessionmaker(_engine, expire_on_commit=False, class_=AsyncSession)
     _engine_db_path = db_path
 

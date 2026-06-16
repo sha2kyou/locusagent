@@ -14,6 +14,7 @@ from agentpod_host.workspaces import (
     agent_sqlite_session_count,
     copy_mcp_oauth_credentials,
     copy_workspace_on_disk,
+    delete_workspace_on_disk,
     ensure_default_workspace,
     suggest_workspace_copy_name,
     sync_workspaces_from_disk,
@@ -155,3 +156,45 @@ async def test_copy_mcp_oauth_credentials(host_session):
     ).scalar_one()
     assert row.server_name == "notion"
     assert row.tokens_enc == b"enc"
+
+
+@pytest.mark.asyncio
+async def test_delete_workspace_removes_mcp_oauth_credentials(host_session):
+    session, home = host_session
+    target = "ws_0123456789abcdef0125"
+    _seed_agent_db(home / "workspaces", WS_A, [])
+    _seed_agent_db(home / "workspaces", target, [])
+    session.add(Workspace(id=WS_A, name="源", description="", is_default=True))
+    session.add(Workspace(id=target, name="副本", description="", is_default=False))
+    session.add(
+        McpOauthCredential(
+            workspace_id=WS_A,
+            server_name="notion",
+            server_url="https://example.com/mcp",
+            tokens_enc=b"enc",
+            client_info_enc=b"client",
+        )
+    )
+    await session.flush()
+    await copy_mcp_oauth_credentials(session, source_id=WS_A, target_id=target)
+
+    row = (await session.execute(select(Workspace).where(Workspace.id == target))).scalar_one()
+    await session.delete(row)
+    await session.flush()
+
+    remaining = (
+        await session.execute(select(McpOauthCredential).where(McpOauthCredential.workspace_id == target))
+    ).scalars().all()
+    assert remaining == []
+
+
+@pytest.mark.asyncio
+async def test_delete_workspace_on_disk(host_session):
+    _, home = host_session
+    _seed_agent_db(home / "workspaces", WS_A, ["chat"])
+    path = home / "workspaces" / WS_A
+    assert path.is_dir()
+
+    delete_workspace_on_disk(WS_A)
+
+    assert not path.exists()

@@ -13,6 +13,7 @@ from agentpod_shared.activity_log import record_activity
 from ..workspaces import (
     copy_mcp_oauth_credentials,
     copy_workspace_on_disk,
+    delete_workspace_on_disk,
     ensure_default_workspace,
     normalize_workspace_description,
     normalize_workspace_name,
@@ -253,5 +254,13 @@ async def delete_workspace(
         if len(rows) <= 1:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="at least one workspace required")
         await session.delete(target)
+        await session.flush()
+    try:
+        delete_workspace_on_disk(workspace_id)
+    except OSError as exc:
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="failed to remove workspace data",
+        ) from exc
     record_activity("workspace", "delete", f"已删除工作区", workspace_id=workspace_id)
     return {"deleted": True}

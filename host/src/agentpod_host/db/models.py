@@ -119,9 +119,18 @@ class Workspace(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    notifications: Mapped[list[Notification]] = relationship(back_populates="workspace")
-    scheduled_tasks: Mapped[list[ScheduledTask]] = relationship(back_populates="workspace")
-    mcp_oauth_credentials: Mapped[list["McpOauthCredential"]] = relationship(back_populates="workspace")
+    notifications: Mapped[list[Notification]] = relationship(
+        back_populates="workspace",
+        cascade="all, delete-orphan",
+    )
+    scheduled_tasks: Mapped[list[ScheduledTask]] = relationship(
+        back_populates="workspace",
+        cascade="all, delete-orphan",
+    )
+    mcp_oauth_credentials: Mapped[list["McpOauthCredential"]] = relationship(
+        back_populates="workspace",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         Index("idx_workspaces_created", "created_at"),
