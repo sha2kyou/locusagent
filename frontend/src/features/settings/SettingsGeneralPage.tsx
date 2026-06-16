@@ -5,7 +5,8 @@ import { Input, Label } from "@/components/ui/field";
 import { SegmentControl } from "@/components/ui/segment-control";
 import { useToast } from "@/components/ui/toast";
 import { useTheme, type ThemePreference } from "@/app/theme";
-import { getTimezoneConfig, putTimezoneConfig } from "@/api/endpoints";
+import { useRefreshAppTimezone, useAppTimezone } from "@/lib/use-app-timezone";
+import { putTimezoneConfig } from "@/api/endpoints";
 import { getDesktopPrefs, isDesktopPrefsAvailable, setDesktopPrefs } from "@/lib/desktop-prefs";
 import { SettingsSection } from "./SettingsSection";
 
@@ -29,6 +30,8 @@ const TIMEZONE_OPTIONS = [
 export function SettingsGeneralPage() {
   const toast = useToast();
   const { preference: themePreference, setPreference: setThemePreference } = useTheme();
+  const appTimeZone = useAppTimezone();
+  const refreshAppTimeZone = useRefreshAppTimezone();
   const [timezone, setTimezone] = useState("UTC");
   const [timezoneSaving, setTimezoneSaving] = useState(false);
   const [runInBackground, setRunInBackground] = useState(false);
@@ -37,10 +40,8 @@ export function SettingsGeneralPage() {
   const desktopPrefsAvailable = isDesktopPrefsAvailable();
 
   useEffect(() => {
-    void getTimezoneConfig().then((tz) => {
-      setTimezone(tz.timezone || "UTC");
-    });
-  }, []);
+    setTimezone(appTimeZone);
+  }, [appTimeZone]);
 
   useEffect(() => {
     if (!desktopPrefsAvailable) return;
@@ -55,6 +56,7 @@ export function SettingsGeneralPage() {
     try {
       const next = await putTimezoneConfig({ timezone: timezone.trim() || "UTC" });
       setTimezone(next.timezone);
+      await refreshAppTimeZone();
       toast(`时区已保存：${next.timezone}`, "success");
     } catch (e) {
       toast((e as Error).message, "error");

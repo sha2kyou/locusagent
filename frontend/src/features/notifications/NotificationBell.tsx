@@ -8,7 +8,7 @@ import {
   floatingPanelClass,
   floatingPanelHeaderClass,
 } from "@/components/ui/surface-styles";
-import { formatRelative } from "@/lib/format-time";
+import { useTimeFormatters } from "@/lib/use-app-timezone";
 import { useNotifications } from "./NotificationProvider";
 import type { NotificationEntry } from "@/api/types";
 
@@ -51,6 +51,7 @@ function NotificationRow({
   item: NotificationEntry;
   onOpen: () => void;
 }) {
+  const { formatRelative } = useTimeFormatters();
   const category = displayCategory(item);
   const title = displayTitle(item);
   return (

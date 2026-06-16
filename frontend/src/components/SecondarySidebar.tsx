@@ -19,15 +19,14 @@ export function SecondarySidebar({
       )}
       <aside
         className={cn(
-          "fixed inset-y-0 z-50 flex w-[272px] flex-col bg-sidebar-sub transition-transform duration-200 md:static md:z-auto md:w-[240px] md:translate-x-0 md:border-sidebar-sub-border",
+          "fixed inset-y-0 z-50 flex w-[272px] flex-col bg-sidebar-sub transition-transform duration-200 md:static md:z-auto md:w-[240px] md:translate-x-0",
           mobileSide === "right"
             ? mobileOpen
-              ? "right-0 border-l border-sidebar-sub-border translate-x-0"
-              : "right-0 border-l border-sidebar-sub-border translate-x-full"
+              ? "right-0 translate-x-0"
+              : "right-0 translate-x-full"
             : mobileOpen
-              ? "left-0 border-r border-sidebar-sub-border translate-x-0"
-              : "left-0 border-r border-sidebar-sub-border -translate-x-full",
-          mobileSide === "right" ? "md:border-l" : "md:border-r",
+              ? "left-0 translate-x-0"
+              : "left-0 -translate-x-full",
         )}
       >
         {children}

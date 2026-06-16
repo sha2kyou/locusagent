@@ -7,6 +7,7 @@ import "./index.css";
 import { ToastProvider } from "@/components/ui/toast";
 import { DialogProvider } from "@/components/ui/dialogs";
 import { AuthProvider } from "@/app/auth";
+import { AppTimezoneProvider } from "@/lib/use-app-timezone";
 import { NotificationProvider } from "@/features/notifications/NotificationProvider";
 import { ThemeProvider } from "@/app/theme";
 import { AppShell } from "@/app/AppShell";
@@ -101,9 +102,11 @@ const router = createBrowserRouter([
     path: "/",
     element: (
       <AuthProvider>
-        <NotificationProvider>
-          <AppShell />
-        </NotificationProvider>
+        <AppTimezoneProvider>
+          <NotificationProvider>
+            <AppShell />
+          </NotificationProvider>
+        </AppTimezoneProvider>
       </AuthProvider>
     ),
     children: shellChildren,
@@ -112,9 +115,11 @@ const router = createBrowserRouter([
     path: "/w/:workspaceId",
     element: (
       <AuthProvider>
-        <NotificationProvider>
-          <AppShell />
-        </NotificationProvider>
+        <AppTimezoneProvider>
+          <NotificationProvider>
+            <AppShell />
+          </NotificationProvider>
+        </AppTimezoneProvider>
       </AuthProvider>
     ),
     children: shellChildren,

@@ -14,7 +14,7 @@ import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatFull, formatRelative } from "@/lib/format-time";
+import { useTimeFormatters } from "@/lib/use-app-timezone";
 import { toastAction } from "@/lib/toast-copy";
 import {
   createArtifactCategory,
@@ -78,6 +78,7 @@ function ArtifactRow({
   onOpen: () => void;
   onDelete: () => void;
 }) {
+  const { formatRelative } = useTimeFormatters();
   return (
     <ListCard className="group p-0 overflow-hidden">
       <div className="flex items-start justify-between gap-3 px-4 py-3">
@@ -115,6 +116,7 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
   const { setMobileAction } = useShell();
   const toast = useToast();
   const { confirm } = useDialogs();
+  const { formatFull } = useTimeFormatters();
   const [categories, setCategories] = useState<ArtifactCategory[] | null>(null);
   const [items, setItems] = useState<ArtifactEntry[] | null>(null);
   const [selected, setSelected] = useState<ArtifactEntry | null>(null);

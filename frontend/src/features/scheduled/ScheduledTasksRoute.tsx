@@ -15,7 +15,6 @@ import { useToast } from "@/components/ui/toast";
 import {
   createScheduledTask,
   deleteScheduledTask,
-  getTimezoneConfig,
   listScheduledTasks,
   runScheduledTaskNow,
   updateScheduledTask,
@@ -23,6 +22,7 @@ import {
 import type { ScheduledTask, ScheduleKind } from "@/api/types";
 import { cn } from "@/lib/utils";
 import { toastAction } from "@/lib/toast-copy";
+import { useTimeFormatters } from "@/lib/use-app-timezone";
 
 const CRON_LOCALE_ZH: CronLocale = {
   everyText: "每",
@@ -57,41 +57,6 @@ const CRON_LOCALE_ZH: CronLocale = {
   altWeekDays: ["日", "一", "二", "三", "四", "五", "六"],
   altMonths: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"],
 };
-
-function formatWhen(iso: string | null, tz: string): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  try {
-    return d.toLocaleString(undefined, { timeZone: tz });
-  } catch {
-    return d.toLocaleString();
-  }
-}
-
-function toDatetimeLocal(iso: string | null, tz: string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  try {
-    const fmt = new Intl.DateTimeFormat("en-CA", {
-      timeZone: tz,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-    const parts = fmt.formatToParts(d);
-    const get = (type: Intl.DateTimeFormatPartTypes) =>
-      parts.find((p) => p.type === type)?.value ?? "00";
-    return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
-  } catch {
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  }
-}
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -302,9 +267,12 @@ function isTaskBusy(task: ScheduledTask, pendingRunIds: ReadonlySet<number>): bo
   );
 }
 
-function scheduleLabel(task: ScheduledTask, tz: string): string {
+function scheduleLabel(
+  task: ScheduledTask,
+  formatDt: (iso: string | null | undefined) => string,
+): string {
   if (task.schedule_kind === "once") {
-    return task.run_at ? `单次 · ${formatWhen(task.run_at, tz)}` : "单次";
+    return task.run_at ? `单次 · ${formatDt(task.run_at)}` : "单次";
   }
   return `Cron · ${task.cron_expr ?? ""}`;
 }
@@ -312,6 +280,7 @@ function scheduleLabel(task: ScheduledTask, tz: string): string {
 export function ScheduledTasksRoute() {
   const toast = useToast();
   const { confirm } = useDialogs();
+  const { timeZone, formatDateTime, toDatetimeLocal } = useTimeFormatters();
   const [items, setItems] = useState<ScheduledTask[] | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [title, setTitle] = useState("");
@@ -323,14 +292,12 @@ export function ScheduledTasksRoute() {
   const [notify, setNotify] = useState(true);
   const [saving, setSaving] = useState(false);
   const [pendingRunIds, setPendingRunIds] = useState<Set<number>>(() => new Set());
-  const [userTimezone, setUserTimezone] = useState("UTC");
   const formRef = useRef<HTMLDivElement>(null);
 
   const load = async (silent = false) => {
     try {
-      const [{ items }, tz] = await Promise.all([listScheduledTasks(), getTimezoneConfig()]);
+      const { items } = await listScheduledTasks();
       setItems(items);
-      setUserTimezone(tz.timezone || "UTC");
     } catch (e) {
       if (!silent) toast((e as Error).message, "error");
       if (!silent) setItems([]);
@@ -369,7 +336,7 @@ export function ScheduledTasksRoute() {
     setPrompt(task.prompt);
     setScheduleKind(task.schedule_kind);
     setCronExpr(task.cron_expr ?? "0 9 * * *");
-    setRunAt(toDatetimeLocal(task.run_at, userTimezone));
+    setRunAt(toDatetimeLocal(task.run_at));
     setEnabled(task.enabled);
     setNotify(task.notify);
     requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
@@ -480,10 +447,10 @@ export function ScheduledTasksRoute() {
                           <Badge variant={st.variant}>{st.text}</Badge>
                           {task.notify ? <Badge variant="outline">通知</Badge> : null}
                         </div>
-                        <p className={listItemBriefClass}>{scheduleLabel(task, userTimezone)}</p>
+                        <p className={listItemBriefClass}>{scheduleLabel(task, formatDateTime)}</p>
                         <p className={listItemBriefClass}>
-                          下次执行：{formatWhen(task.next_run_at, userTimezone)}
-                          {task.last_run_at ? ` · 上次：${formatWhen(task.last_run_at, userTimezone)}` : ""}
+                          下次执行：{formatDateTime(task.next_run_at)}
+                          {task.last_run_at ? ` · 上次：${formatDateTime(task.last_run_at)}` : ""}
                         </p>
                         {task.last_error ? (
                           <p className="mt-1 text-xs text-destructive">{task.last_error}</p>
@@ -599,7 +566,7 @@ export function ScheduledTasksRoute() {
                     <Label>执行时间</Label>
                     <DateTimePicker value={runAt} onChange={setRunAt} />
                     <p className="text-xs text-muted-foreground">
-                      按设置时区（{userTimezone}）填写，例如 2026-06-01 09:00
+                      按设置时区（{timeZone}）填写，例如 2026-06-01 09:00
                     </p>
                   </div>
                 )}

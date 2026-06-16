@@ -26,7 +26,7 @@ import { useChat } from "./ChatProvider";
 import type { ChatAttachment } from "./model";
 import { downloadAttachment, attachmentDownloadUrl } from "@/api/endpoints";
 import { Drawer } from "@/components/ui/drawer";
-import { formatFull, formatMessageTime } from "@/lib/format-time";
+import { useTimeFormatters } from "@/lib/use-app-timezone";
 
 const PROMPT_CHIPS = [
   "帮我总结这个网页的要点：sidefyapp.com",
@@ -553,6 +553,7 @@ function MessageRoleLabel() {
 }
 
 function MessageTimestamp({ iso }: { iso?: string }) {
+  const { formatFull, formatMessageTime } = useTimeFormatters();
   if (!iso) return null;
   return (
     <time

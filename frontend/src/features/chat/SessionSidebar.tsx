@@ -20,20 +20,8 @@ import {
   secondarySidebarScrollClass,
   secondarySidebarSkeletonWrapClass,
 } from "@/components/secondary-sidebar-styles";
-
-function groupLabel(iso: string): string {
-  const d = new Date(iso).getTime();
-  const now = Date.now();
-  const day = 86400000;
-  const diff = now - d;
-  if (diff < day) return "今天";
-  if (diff < 2 * day) return "昨天";
-  if (diff < 7 * day) return "过去 7 天";
-  if (diff < 30 * day) return "过去 30 天";
-  return "更早";
-}
-
-const ORDER = ["今天", "昨天", "过去 7 天", "过去 30 天", "更早"];
+import { SESSION_LIST_GROUP_ORDER } from "@/lib/format-time";
+import { useTimeFormatters } from "@/lib/use-app-timezone";
 
 function sessionLabel(title: string): string {
   return title.trim() || "新对话";
@@ -49,6 +37,7 @@ export function SessionSidebar({
   const { sessions, loadingSessions, hasMoreSessions, loadingMoreSessions, loadMoreSessions, currentId, query, setQuery, newSession, selectSession, deleteSession } = useChat();
   const { confirm } = useDialogs();
   const toast = useToast();
+  const { sessionListGroupLabel } = useTimeFormatters();
 
   const handleSelect = (id: string) => {
     selectSession(id);
@@ -65,11 +54,14 @@ export function SessionSidebar({
     );
     const map = new Map<string, SessionMeta[]>();
     for (const s of filtered) {
-      const key = groupLabel(s.updated_at || s.created_at);
+      const key = sessionListGroupLabel(s.updated_at || s.created_at);
       (map.get(key) ?? map.set(key, []).get(key)!).push(s);
     }
-    return ORDER.filter((k) => map.has(k)).map((k) => ({ label: k, items: map.get(k)! }));
-  }, [sessions, query]);
+    return SESSION_LIST_GROUP_ORDER.filter((k) => map.has(k)).map((k) => ({
+      label: k,
+      items: map.get(k)!,
+    }));
+  }, [sessions, query, sessionListGroupLabel]);
 
   const onDelete = async (s: SessionMeta) => {
     const label = sessionLabel(s.title);

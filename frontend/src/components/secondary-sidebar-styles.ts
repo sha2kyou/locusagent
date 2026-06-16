@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 export const secondarySidebarHeaderClass =
-  "apod-secondary-sidebar-header shrink-0 space-y-2.5 border-b border-sidebar-sub-border/45 px-3 pb-3 pt-1";
+  "apod-secondary-sidebar-header shrink-0 space-y-2.5 px-3 pb-3 pt-1";
 
 export const secondarySidebarHeaderTitleRowClass = "flex min-h-11 items-center gap-2 px-1 py-1";
 
