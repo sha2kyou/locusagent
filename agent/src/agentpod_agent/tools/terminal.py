@@ -15,6 +15,7 @@ from ..subprocess_sandbox import (
     should_restrict_terminal_workdir,
     terminate_process_tree,
 )
+from .proc_env import build_proc_env
 from ..subprocess_env import safe_subprocess_env
 from .base import Tool, ToolError, ToolResult, register_builtin
 
@@ -91,10 +92,11 @@ async def _terminal(args: dict[str, Any]) -> ToolResult:
         cwd = str(resolved)
     preexec_fn = build_sandbox_preexec_fn()
     exec_parts = [resolved, *parts[1:]]
+    proc_env = await build_proc_env(args)
     proc = await asyncio.create_subprocess_exec(
         *exec_parts,
         cwd=cwd,
-        env=safe_subprocess_env(),
+        env=proc_env,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
         start_new_session=True,
@@ -120,7 +122,8 @@ register_builtin(
         description=(
             "Run shell commands for build, install, git, process management, scripts. "
             "Subject to terminal enable flag, allow/deny lists, resource limits, timeout cleanup; "
-            "not for file read/search (prefer read_file and search_files)."
+            "not for file read/search (prefer read_file and search_files). "
+            "Optional env: workspace env var names to inject (values from env_vars store)."
         ),
         parameters={
             "type": "object",
@@ -128,6 +131,11 @@ register_builtin(
                 "command": {"type": "string", "description": "Shell command to run"},
                 "timeout": {"type": "number", "minimum": 0.1, "default": DEFAULT_TIMEOUT},
                 "workdir": {"type": "string", "description": "Optional working directory (default workspace root)"},
+                "env": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Workspace env var names to inject into the process environment.",
+                },
             },
             "required": ["command"],
         },

@@ -186,7 +186,9 @@ async def build_stable_prompt() -> str:
         "example piecewise: $$\\begin{cases} x + y = 5 \\\\ 2x - y = 1 \\end{cases}$$.",
         "Before executing code, verify required context (API keys, DB connections, timezone or path deps) "
         "only when the request depends on external resources. "
-        "Use env_vars for credentials/config; get_current_user for runtime identity and timezone; otherwise execute directly.",
+        "Use env_vars to store credentials/config; pass env var names to execute_code or terminal when needed "
+        "(values inject at runtime—do not recall into code). "
+        "Use get_current_user for runtime identity and timezone; otherwise execute directly.",
         "When the user asks for the current date or time, use the runtime context's current user local time—do not invent or estimate.",
         "When the user explicitly requests a deliverable (create, generate and save, export, archive, artifact), "
         "archive with artifact_save. "
@@ -263,7 +265,7 @@ async def build_volatile_prompt(*, session_id: str | None = None) -> str:
         parts.append(
             "Each line: #id [long-term|short-term]. "
             "Add with memory(action=add); update with memory(action=replace, id=..., content=...). "
-            "Use env_vars for credentials and config keys."
+            "Use env_vars for credentials; pass names to execute_code/terminal env param when running code."
         )
         parts.extend(f"- {m}" for m in snapshot)
     now_utc = datetime.now(UTC)

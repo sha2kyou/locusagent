@@ -5,6 +5,7 @@ from typing import Any
 from sqlite3 import IntegrityError
 
 from ..config import get_settings
+from ..subprocess_env import is_reserved_env_name, normalize_env_names
 from ..db import conn_scope, run_in_thread
 from ..logging import get_logger
 from ..memory.embedder import EmbeddingUnavailable, embed_text
@@ -106,10 +107,50 @@ async def list_env_vars(limit: int = 200) -> list[dict[str, Any]]:
     return await run_in_thread(_do)
 
 
+async def get_env_vars_by_names(names: list[str]) -> dict[str, str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw in names:
+        n = _normalize_name(raw)
+        if not n or n in seen:
+            continue
+        seen.add(n)
+        normalized.append(n)
+    if not normalized:
+        return {}
+
+    def _do() -> dict[str, str]:
+        placeholders = ",".join("?" * len(normalized))
+        with conn_scope(load_vec=False) as c:
+            rows = c.execute(
+                f"SELECT name, value FROM env_vars WHERE name IN ({placeholders})",
+                normalized,
+            ).fetchall()
+        return {str(r["name"]): str(r["value"]) for r in rows}
+
+    return await run_in_thread(_do)
+
+
+async def resolve_env_var_names(names: list[str]) -> dict[str, str]:
+    normalized = normalize_env_names(names)
+    if not normalized:
+        return {}
+    reserved = [n for n in normalized if is_reserved_env_name(n)]
+    if reserved:
+        raise ValueError(f"env var name not allowed: {', '.join(reserved)}")
+    resolved = await get_env_vars_by_names(normalized)
+    missing = [n for n in normalized if n not in resolved]
+    if missing:
+        raise ValueError(f"env var not found: {', '.join(missing)}")
+    return {n: resolved[n] for n in normalized}
+
+
 async def add_env_var(name: str, value: str, description: str = "") -> int:
     n = _normalize_name(name)
     if not n:
         raise ValueError("name is empty")
+    if is_reserved_env_name(n):
+        raise ValueError(f"reserved env var name: {n}")
     if not str(value).strip():
         raise ValueError("value is empty")
 
@@ -145,6 +186,8 @@ async def update_env_var(
         raise ValueError("nothing to update")
     if has_name and not _normalize_name(str(name)):
         raise ValueError("name is empty")
+    if has_name and is_reserved_env_name(str(name)):
+        raise ValueError(f"reserved env var name: {name}")
     if has_value and not str(value).strip():
         raise ValueError("value is empty")
 

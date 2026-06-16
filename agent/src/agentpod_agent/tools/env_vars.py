@@ -5,8 +5,26 @@ from __future__ import annotations
 from typing import Any
 
 from ..env_vars import add_env_var, delete_env_var, list_env_vars, recall_env_vars, update_env_var
+from ..subprocess_env import is_reserved_env_name
 from .args import pick_action, pick_int, pick_str
 from .base import Tool, ToolError, ToolResult, register_builtin
+
+
+def _public_env_var_item(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "description": row.get("description"),
+        "embedding_state": row.get("embedding_state"),
+    }
+
+
+def _format_env_var_line(row: dict[str, Any], *, bullet: str = "") -> str:
+    desc = str(row.get("description") or "").strip()
+    suffix = f" // {desc}" if desc else ""
+    state = row.get("embedding_state") or "pending"
+    body = f"#{row['id']}[{state}] {row['name']} (value set){suffix}"
+    return f"{bullet}{body}" if bullet else body
 
 
 async def _select_env_var_by_name(name: str) -> int:
@@ -43,10 +61,14 @@ async def _env_vars_tool(args: dict[str, Any]) -> ToolResult:
             raise ToolError("name is required for add")
         if not value:
             raise ToolError("value is required for add")
+        if is_reserved_env_name(name):
+            raise ToolError(f"reserved env var name: {name}")
         try:
             env_id = await add_env_var(name, value, description)
         except FileExistsError:
             raise ToolError(f"env var already exists: {name}") from None
+        except ValueError as exc:
+            raise ToolError(str(exc)) from exc
         return ToolResult(content=f"env_var#{env_id} saved")
 
     if action == "update":
@@ -56,6 +78,8 @@ async def _env_vars_tool(args: dict[str, Any]) -> ToolResult:
         description = args.get("description")
         if name is None and value is None and description is None:
             raise ToolError("at least one of name, value, or description is required for update")
+        if name is not None and is_reserved_env_name(str(name)):
+            raise ToolError(f"reserved env var name: {name}")
         try:
             ok = await update_env_var(
                 env_id,
@@ -65,6 +89,8 @@ async def _env_vars_tool(args: dict[str, Any]) -> ToolResult:
             )
         except FileExistsError:
             raise ToolError(f"env var already exists: {name}") from None
+        except ValueError as exc:
+            raise ToolError(str(exc)) from exc
         if not ok:
             raise ToolError(f"env_var#{env_id} not found")
         return ToolResult(content=f"env_var#{env_id} updated")
@@ -82,12 +108,8 @@ async def _env_vars_tool(args: dict[str, Any]) -> ToolResult:
         if not rows:
             return ToolResult(content="(empty)")
         return ToolResult(
-            content="\n".join(
-                f"#{r['id']}[{r['embedding_state']}] {r['name']}={r['value']}"
-                + (f" // {r['description']}" if r.get("description") else "")
-                for r in rows
-            ),
-            metadata={"items": rows},
+            content="\n".join(_format_env_var_line(r) for r in rows),
+            metadata={"items": [_public_env_var_item(r) for r in rows]},
         )
 
     if action == "recall":
@@ -99,12 +121,8 @@ async def _env_vars_tool(args: dict[str, Any]) -> ToolResult:
         if not rows:
             return ToolResult(content="(no recall hits)")
         return ToolResult(
-            content="\n".join(
-                f"- #{r['id']} {r['name']}={r['value']}"
-                + (f" // {r['description']}" if r.get("description") else "")
-                for r in rows
-            ),
-            metadata={"items": rows},
+            content="\n".join(_format_env_var_line(r, bullet="- ") for r in rows),
+            metadata={"items": [_public_env_var_item(r) for r in rows]},
         )
 
     raise ToolError(f"unknown action: {action}")
@@ -114,11 +132,11 @@ register_builtin(
     Tool(
         name="env_vars",
         description=(
-            "Manage workspace env-var knowledge base (name/value/description) with semantic recall."
-            "For config keys, endpoints, non-secret runtime params, team conventions."
-            "Actions: add / update / delete / list / recall."
-            "For update/delete: prefer id from list/recall; else exact name. "
-            "Do not use when the user only asks about code logic, not config persistence."
+            "Persist workspace environment variables (name/value/description) with semantic recall. "
+            "Use for API keys, SMTP passwords, tokens, and other runtime secrets. "
+            "Actions: add / update / delete / list / recall (list/recall return names only, not values). "
+            "At runtime pass variable names via execute_code or terminal env param—do not read values into code. "
+            "For update/delete: prefer id from list/recall; else exact name."
         ),
         parameters={
             "type": "object",

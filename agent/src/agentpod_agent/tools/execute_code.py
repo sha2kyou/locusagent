@@ -12,6 +12,7 @@ from ..subprocess_sandbox import (
     terminate_process_tree,
     workspace_root_dir,
 )
+from .proc_env import build_proc_env
 from ..subprocess_env import safe_subprocess_env
 from .base import Tool, ToolError, ToolResult, register_builtin
 
@@ -51,13 +52,14 @@ async def _execute_code(args: dict[str, Any]) -> ToolResult:
     cwd = _resolve_workdir(str(args.get("workdir", "") or "").strip() or None)
     py = _python_bin(root)
     preexec_fn = build_sandbox_preexec_fn()
+    proc_env = await build_proc_env(args)
 
     proc = await asyncio.create_subprocess_exec(
         py,
         "-c",
         code,
         cwd=str(cwd),
-        env=safe_subprocess_env(),
+        env=proc_env,
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -86,7 +88,9 @@ register_builtin(
         name="execute_code",
         description=(
             "Run a code snippet (Python). Runs under workspace; uses .venv/bin/python if present."
-            "Subject to resource limits and timeout process-group cleanup."
+            "Subject to resource limits and timeout process-group cleanup. "
+            "Optional env: workspace env var names to inject (values resolved from env_vars store; "
+            "use os.environ in code—do not embed secrets in code)."
         ),
         parameters={
             "type": "object",
@@ -96,6 +100,11 @@ register_builtin(
                 "stdin": {"type": "string", "description": "Optional stdin"},
                 "timeout": {"type": "number", "minimum": 0.1, "default": DEFAULT_TIMEOUT},
                 "workdir": {"type": "string", "description": "Optional path relative to workspace"},
+                "env": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Workspace env var names to inject into the process environment.",
+                },
             },
             "required": ["code"],
             "additionalProperties": False,
