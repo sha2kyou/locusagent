@@ -986,7 +986,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const processPendingFiles = async (files: FileList | File[]) => {
     const maxFileSize = normalizeAttachmentMaxBytes(me?.attachment_max_bytes);
-    const selected = Array.from(files).slice(0, 1);
+    const selected = Array.from(files).slice(0, MAX_TOTAL_ATTACHMENTS);
     if (selected.length === 0) return;
     if (Array.from(files).length > 1) {
       toast(t("chat.attachment.oneAtATime"), "info");

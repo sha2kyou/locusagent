@@ -8,6 +8,24 @@ from typing import Any
 
 import structlog
 
+# uvicorn access log paths to suppress (e.g. log viewer polling).
+_ACCESS_LOG_SKIP_PATHS = (
+    "/api/settings/backend-logs",
+)
+
+
+class _AccessLogPathFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(path in msg for path in _ACCESS_LOG_SKIP_PATHS)
+
+
+def _install_access_log_filters() -> None:
+    access_logger = logging.getLogger("uvicorn.access")
+    if not any(isinstance(f, _AccessLogPathFilter) for f in access_logger.filters):
+        access_logger.addFilter(_AccessLogPathFilter())
+
+
 SENSITIVE_KEYS = {
     "llm_api_key",
     "tavily_api_key",
@@ -53,6 +71,7 @@ def configure_logging(level: str = "INFO") -> None:
         ),
         cache_logger_on_first_use=True,
     )
+    _install_access_log_filters()
 
 
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
