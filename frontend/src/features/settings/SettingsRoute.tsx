@@ -11,7 +11,7 @@ import {
   secondarySidebarScrollClass,
   secondarySidebarTitleClass,
 } from "@/components/secondary-sidebar-styles";
-import { SETTINGS_NAV, SETTINGS_PAGE_META, type SettingsNavId } from "./settings-nav";
+import { getSettingsNav, SETTINGS_PAGE_META, type SettingsNavId } from "./settings-nav";
 
 export function SettingsRoute() {
   const { t } = useTranslation();
@@ -29,7 +29,7 @@ export function SettingsRoute() {
         </div>
         <div className={secondarySidebarScrollClass}>
           <nav className={secondarySidebarListClass}>
-            {SETTINGS_NAV.map((item) => (
+            {getSettingsNav().map((item) => (
               <NavLink
                 key={item.to}
                 to={`${base}/${item.to}`}

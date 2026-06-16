@@ -54,6 +54,9 @@ const SettingsToolsPage = lazy(() =>
 const SettingsLogsPage = lazy(() =>
   import("@/features/settings/SettingsLogsPage").then((m) => ({ default: m.SettingsLogsPage })),
 );
+const SettingsDeveloperPage = lazy(() =>
+  import("@/features/settings/SettingsDeveloperPage").then((m) => ({ default: m.SettingsDeveloperPage })),
+);
 const SettingsIndexRedirect = lazy(() =>
   import("@/features/settings/SettingsRoute").then((m) => ({ default: m.SettingsIndexRedirect })),
 );
@@ -94,6 +97,7 @@ const shellChildren = [
       { path: "tools", element: <SettingsToolsPage /> },
       { path: "usage", element: <SettingsUsagePage /> },
       { path: "logs", element: <SettingsLogsPage /> },
+      { path: "developer", element: <SettingsDeveloperPage /> },
     ],
   },
   { path: "*", element: <ChatFallbackRedirect /> },

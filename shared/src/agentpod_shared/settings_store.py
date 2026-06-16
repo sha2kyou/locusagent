@@ -69,11 +69,16 @@ class TerminalSection(BaseModel):
     denylist: str = "sh,bash,zsh,dash,fish"
 
 
+class DeveloperSection(BaseModel):
+    devtools_enabled: bool = False
+
+
 class SettingsDocument(BaseModel):
     llm: LlmSection = Field(default_factory=LlmSection)
     embedding: EmbeddingSection = Field(default_factory=EmbeddingSection)
     tools: ToolsSection = Field(default_factory=ToolsSection)
     terminal: TerminalSection = Field(default_factory=TerminalSection)
+    developer: DeveloperSection = Field(default_factory=DeveloperSection)
     paths: PathsSection = Field(default_factory=PathsSection)
     secrets: SecretsSection = Field(default_factory=SecretsSection)
     app: AppSection = Field(default_factory=AppSection)
@@ -189,6 +194,7 @@ def apply_app_config_update(
     enable_terminal: bool | None = None,
     terminal_whitelist: str | None = None,
     terminal_denylist: str | None = None,
+    devtools_enabled: bool | None = None,
 ) -> SettingsDocument:
     doc = load_settings_document()
     if llm_base_url is not None:
@@ -223,6 +229,8 @@ def apply_app_config_update(
         doc.terminal.whitelist = terminal_whitelist.strip()
     if terminal_denylist is not None:
         doc.terminal.denylist = terminal_denylist.strip() or doc.terminal.denylist
+    if devtools_enabled is not None:
+        doc.developer.devtools_enabled = devtools_enabled
     save_settings_document(doc)
     clear_settings_cache()
     return doc
@@ -317,6 +325,9 @@ def app_config_for_api(doc: SettingsDocument | None = None) -> dict[str, Any]:
             "enable_terminal": d.terminal.enable_terminal,
             "whitelist": d.terminal.whitelist,
             "denylist": d.terminal.denylist,
+        },
+        "developer": {
+            "devtools_enabled": d.developer.devtools_enabled,
         },
         "app": {
             "timezone": get_app_timezone(d),

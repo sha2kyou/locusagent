@@ -15,6 +15,7 @@
     "autostart:default",
     "allow-desktop-get-prefs",
     "allow-desktop-get-system-locale",
-    "allow-desktop-set-prefs"
+    "allow-desktop-set-prefs",
+    "allow-desktop-apply-devtools-settings"
   ]
 }

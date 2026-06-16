@@ -77,11 +77,16 @@ class TerminalConfigOut(BaseModel):
     denylist: str
 
 
+class DeveloperConfigOut(BaseModel):
+    devtools_enabled: bool
+
+
 class AppConfigOut(BaseModel):
     llm: LlmConfigOut
     tools: ToolsConfigOut
     embedding: EmbeddingConfigOut
     terminal: TerminalConfigOut
+    developer: DeveloperConfigOut
     app: AppSectionOut
 
 
@@ -124,6 +129,7 @@ class AppConfigIn(BaseModel):
     enable_terminal: bool | None = None
     terminal_whitelist: str | None = Field(default=None, max_length=2048)
     terminal_denylist: str | None = Field(default=None, max_length=2048)
+    devtools_enabled: bool | None = None
 
 
 @router.get("/usage-summary", response_model=UsageSummaryOut)
@@ -254,6 +260,7 @@ async def save_app_config(
         enable_terminal=payload.enable_terminal,
         terminal_whitelist=payload.terminal_whitelist,
         terminal_denylist=payload.terminal_denylist,
+        devtools_enabled=payload.devtools_enabled,
     )
     if payload.timezone is not None:
         doc = set_app_timezone(validate_timezone(payload.timezone))

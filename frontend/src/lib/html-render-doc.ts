@@ -28,19 +28,54 @@ function stripEchartsScripts(html: string): string {
   return html.replace(ECHARTS_SCRIPT_RE, "");
 }
 
-/** 将内联 echarts 初始化延后到 window.load，避免在库脚本执行前运行 */
+const ECHARTS_CDN = `https://cdn.jsdelivr.net/npm/echarts@${ECHARTS_VERSION}/dist/echarts.min.js`;
+
+/** 剥掉 Agent 常见的 DOMContentLoaded / load 包裹，避免与异步注入的 ECharts 发生时序竞争 */
+function unwrapReadyWrapper(content: string): string {
+  const trimmed = content.trim();
+  const m = trimmed.match(
+    /^(?:document|window)\.addEventListener\s*\(\s*['"](?:DOMContentLoaded|load)['"]\s*,\s*function\s*\(\s*\)\s*\{([\s\S]*)\}\s*\)\s*;?\s*$/,
+  );
+  return m ? m[1].trim() : trimmed;
+}
+
+/**
+ * 将内联 echarts 初始化改为轮询等待 echarts 可用后执行。
+ * ECharts 由 injectEchartsScript 异步注入，不能再依赖 DOMContentLoaded / load。
+ */
 function deferInlineEchartsScripts(html: string): string {
   return html.replace(INLINE_SCRIPT_RE, (full, attrs, content) => {
     if (!ECHARTS_USAGE_RE.test(content)) return full;
-    const trimmed = content.trim();
-    if (/^window\.addEventListener\s*\(\s*['"]load['"]/.test(trimmed)) return full;
-    return `<script${attrs}>window.addEventListener('load',function(){${content}});</script>`;
+    const inner = unwrapReadyWrapper(content);
+    return (
+      `<script${attrs}>!function(){` +
+      `function go(){${inner}}` +
+      `if(typeof echarts!=='undefined'){go()}` +
+      `else{var t=setInterval(function(){if(typeof echarts!=='undefined'){clearInterval(t);go()}},50);` +
+      `setTimeout(function(){clearInterval(t)},30000)}` +
+      `}();</` +
+      `script>`
+    );
   });
 }
 
+/**
+ * 注入 ECharts 加载器：优先本地 vendor，onload 后检测 echarts 是否可用；
+ * 若本地返回非 JS 内容（如 index.html SPA fallback）或加载失败，则回退到 CDN。
+ */
 function injectEchartsScript(html: string, origin: string): string {
   if (!ECHARTS_USAGE_RE.test(html)) return html;
-  const tag = `<script defer src="${origin}${ECHARTS_VENDOR_PATH}"></script>`;
+  const local = `${origin}${ECHARTS_VENDOR_PATH}`;
+  const cdn = ECHARTS_CDN;
+  const tag =
+    `<scr` +
+    `ipt>!function(){` +
+    `function loadCdn(){var s=document.createElement('script');s.src='${cdn}';document.head.appendChild(s)}` +
+    `var s=document.createElement('script');s.src='${local}';` +
+    `s.onload=function(){if(typeof echarts==='undefined')loadCdn()};` +
+    `s.onerror=loadCdn;` +
+    `document.head.appendChild(s)}();</` +
+    `script>`;
   if (/<\/head>/i.test(html)) return html.replace(/<\/head>/i, `${tag}</head>`);
   return tag + html;
 }

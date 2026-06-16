@@ -225,6 +225,9 @@ export interface AppConfig {
     whitelist: string;
     denylist: string;
   };
+  developer: {
+    devtools_enabled: boolean;
+  };
   app: {
     timezone: string;
     locale: string;
@@ -250,6 +253,7 @@ export interface AppConfigUpdate {
   enable_terminal?: boolean;
   terminal_whitelist?: string;
   terminal_denylist?: string;
+  devtools_enabled?: boolean;
 }
 
 export interface UsageSummaryRow {

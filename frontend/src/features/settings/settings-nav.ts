@@ -1,6 +1,7 @@
-import { BarChart3, Cpu, ScrollText, Settings2, Terminal } from "lucide-react";
+import { BarChart3, Code2, Cpu, ScrollText, Settings2, Terminal } from "lucide-react";
+import { isDesktopApp } from "@/lib/desktop-app";
 
-export const SETTINGS_NAV = [
+export const SETTINGS_NAV_BASE = [
   { to: "general", labelKey: "settings.nav.general.label", descriptionKey: "settings.nav.general.description", icon: Settings2 },
   { to: "models", labelKey: "settings.nav.models.label", descriptionKey: "settings.nav.models.description", icon: Cpu },
   { to: "tools", labelKey: "settings.nav.tools.label", descriptionKey: "settings.nav.tools.description", icon: Terminal },
@@ -8,7 +9,23 @@ export const SETTINGS_NAV = [
   { to: "logs", labelKey: "settings.nav.logs.label", descriptionKey: "settings.nav.logs.description", icon: ScrollText },
 ] as const;
 
-export type SettingsNavId = (typeof SETTINGS_NAV)[number]["to"];
+export const SETTINGS_NAV_DEVELOPER = {
+  to: "developer",
+  labelKey: "settings.nav.developer.label",
+  descriptionKey: "settings.nav.developer.description",
+  icon: Code2,
+} as const;
+
+export type SettingsNavId =
+  | (typeof SETTINGS_NAV_BASE)[number]["to"]
+  | typeof SETTINGS_NAV_DEVELOPER.to;
+
+export function getSettingsNav() {
+  if (isDesktopApp()) {
+    return [...SETTINGS_NAV_BASE, SETTINGS_NAV_DEVELOPER];
+  }
+  return [...SETTINGS_NAV_BASE];
+}
 
 export const SETTINGS_PAGE_META: Record<SettingsNavId, { titleKey: string; subtitleKey: string }> = {
   general: { titleKey: "settings.pages.general.title", subtitleKey: "settings.pages.general.subtitle" },
@@ -16,4 +33,11 @@ export const SETTINGS_PAGE_META: Record<SettingsNavId, { titleKey: string; subti
   tools: { titleKey: "settings.pages.tools.title", subtitleKey: "settings.pages.tools.subtitle" },
   usage: { titleKey: "settings.pages.usage.title", subtitleKey: "settings.pages.usage.subtitle" },
   logs: { titleKey: "settings.pages.logs.title", subtitleKey: "settings.pages.logs.subtitle" },
+  developer: {
+    titleKey: "settings.pages.developer.title",
+    subtitleKey: "settings.pages.developer.subtitle",
+  },
 };
+
+/** @deprecated use getSettingsNav() */
+export const SETTINGS_NAV = SETTINGS_NAV_BASE;

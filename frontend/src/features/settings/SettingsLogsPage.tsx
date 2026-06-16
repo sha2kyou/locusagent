@@ -62,7 +62,7 @@ export function SettingsLogsPage() {
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="h-[min(72vh,44rem)] overflow-y-auto rounded-lg border border-border bg-[#0d0d0d] p-3 font-mono text-xs leading-5 text-green-400"
+        className="h-[min(72vh,44rem)] overflow-y-auto rounded-lg border border-border bg-surface/40 p-3 font-mono text-xs leading-5 text-foreground/85"
       >
         {loading && (
           <div className="flex items-center gap-2 text-muted-foreground">

@@ -43,14 +43,16 @@
       "models": { "label": "Models & Services", "description": "LLM, embedding & third-party tools" },
       "tools": { "label": "Tools", "description": "Terminal toggle & allow/deny lists" },
       "usage": { "label": "Usage", "description": "Token & API call stats" },
-      "logs": { "label": "Logs", "description": "Backend process output" }
+      "logs": { "label": "Logs", "description": "Backend process output" },
+      "developer": { "label": "Developer", "description": "Debug tools & developer options" }
     },
     "pages": {
       "general": { "title": "General", "subtitle": "Theme & timezone" },
       "models": { "title": "Models & Services", "subtitle": "LLM, embedding & third-party tools" },
       "tools": { "title": "Tools", "subtitle": "Terminal toggle, allow & deny lists" },
       "usage": { "title": "Usage", "subtitle": "Token & API calls by scenario" },
-      "logs": { "title": "Logs", "subtitle": "Backend process output" }
+      "logs": { "title": "Logs", "subtitle": "Backend process output" },
+      "developer": { "title": "Developer", "subtitle": "Debug & developer options" }
     },
     "general": {
       "language": {
@@ -148,6 +150,17 @@
       },
       "saved": "Terminal settings saved",
       "save": "Save"
+    },
+    "developer": {
+      "save": "Save",
+      "saved": "Developer settings saved",
+      "devtools": {
+        "title": "Developer tools",
+        "description": "When enabled, open Web Inspector from the context menu to debug the UI and network.",
+        "label": "Enable developer tools",
+        "hint": "When off, the context menu entry is hidden and any open inspector is closed.",
+        "shortcutNote": "On macOS, Cmd + Option + I may still open the system Web Inspector outside app-controlled entry points."
+      }
     },
     "logs": {
       "loading": "Loading…",

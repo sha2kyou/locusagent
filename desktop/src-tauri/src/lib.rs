@@ -1,3 +1,5 @@
+mod app_settings;
+mod desktop_devtools;
 mod desktop_prefs;
 mod external_links;
 mod gateway;
@@ -36,6 +38,7 @@ pub fn run() {
             desktop_get_prefs,
             desktop_get_system_locale,
             desktop_set_prefs,
+            desktop_devtools::desktop_apply_devtools_settings,
         ])
         .setup(|app| {
             let prefs = load_prefs();

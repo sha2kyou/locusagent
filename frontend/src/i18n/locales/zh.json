@@ -43,14 +43,16 @@
       "models": { "label": "模型与服务", "description": "LLM、嵌入与第三方工具" },
       "tools": { "label": "工具", "description": "Terminal 开关与白名单" },
       "usage": { "label": "用量统计", "description": "Token 与 API 调用" },
-      "logs": { "label": "日志", "description": "后端进程运行输出" }
+      "logs": { "label": "日志", "description": "后端进程运行输出" },
+      "developer": { "label": "开发者", "description": "调试工具与开发者选项" }
     },
     "pages": {
       "general": { "title": "通用", "subtitle": "主题与时区" },
       "models": { "title": "模型与服务", "subtitle": "LLM、向量嵌入与第三方工具" },
       "tools": { "title": "工具", "subtitle": "Terminal 开关、白名单与禁止项" },
       "usage": { "title": "用量统计", "subtitle": "按场景汇总 Token 与 API 调用" },
-      "logs": { "title": "日志", "subtitle": "后端进程运行输出" }
+      "logs": { "title": "日志", "subtitle": "后端进程运行输出" },
+      "developer": { "title": "开发者", "subtitle": "调试与开发者选项" }
     },
     "general": {
       "language": {
@@ -148,6 +150,17 @@
       },
       "saved": "Terminal 设置已保存",
       "save": "保存"
+    },
+    "developer": {
+      "save": "保存",
+      "saved": "开发者设置已保存",
+      "devtools": {
+        "title": "开发者工具",
+        "description": "开启后可在右键菜单打开 Web Inspector，用于调试页面与网络请求。",
+        "label": "启用开发者工具",
+        "hint": "关闭后隐藏右键菜单中的「打开开发者工具」；若已打开会自动关闭。",
+        "shortcutNote": "macOS 系统快捷键 Cmd + Option + I 可能仍可打开 Inspector，这不属于应用内入口。"
+      }
     },
     "logs": {
       "loading": "加载中…",

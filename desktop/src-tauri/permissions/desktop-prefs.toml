@@ -12,3 +12,8 @@ commands.allow = ["desktop_get_prefs"]
 identifier = "allow-desktop-set-prefs"
 description = "Write menu bar and autostart desktop preferences."
 commands.allow = ["desktop_set_prefs"]
+
+[[permission]]
+identifier = "allow-desktop-apply-devtools-settings"
+description = "Apply developer devtools settings from settings.json."
+commands.allow = ["desktop_apply_devtools_settings"]
