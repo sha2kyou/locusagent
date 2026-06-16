@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { AlertTriangle } from "lucide-react";
 import { Modal } from "./modal";
 import { Button } from "./button";
@@ -35,6 +36,7 @@ export function useDialogs() {
 }
 
 export function DialogProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
   const [confirmState, setConfirmState] = useState<ConfirmOptions | null>(null);
   const [promptState, setPromptState] = useState<PromptOptions | null>(null);
   const [promptValue, setPromptValue] = useState("");
@@ -74,20 +76,20 @@ export function DialogProvider({ children }: { children: ReactNode }) {
       <Modal
         open={!!confirmState}
         onClose={() => settleConfirm(false)}
-        title={confirmState?.title ?? "确认"}
+        title={confirmState?.title ?? t("common.dialog.confirmTitle")}
         description={confirmState?.danger ? undefined : confirmState?.body}
         showClose={false}
         size="sm"
         footer={
           <>
             <Button variant="secondary" onClick={() => settleConfirm(false)}>
-              {confirmState?.cancelText ?? "取消"}
+              {confirmState?.cancelText ?? t("common.actions.cancel")}
             </Button>
             <Button
               variant={confirmState?.danger ? "danger" : "primary"}
               onClick={() => settleConfirm(true)}
             >
-              {confirmState?.confirmText ?? "确定"}
+              {confirmState?.confirmText ?? t("common.actions.confirm")}
             </Button>
           </>
         }
@@ -103,17 +105,17 @@ export function DialogProvider({ children }: { children: ReactNode }) {
       <Modal
         open={!!promptState}
         onClose={() => settlePrompt(null)}
-        title={promptState?.title ?? "输入"}
+        title={promptState?.title ?? t("common.dialog.promptTitle")}
         description={promptState?.body}
         showClose={false}
         size="sm"
         footer={
           <>
             <Button variant="secondary" onClick={() => settlePrompt(null)}>
-              {promptState?.cancelText ?? "取消"}
+              {promptState?.cancelText ?? t("common.actions.cancel")}
             </Button>
             <Button variant="primary" onClick={() => settlePrompt(promptValue)}>
-              {promptState?.confirmText ?? "确定"}
+              {promptState?.confirmText ?? t("common.actions.confirm")}
             </Button>
           </>
         }

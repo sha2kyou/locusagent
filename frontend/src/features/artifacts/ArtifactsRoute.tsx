@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Download, Loader2, PanelLeft, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -73,10 +74,12 @@ function ArtifactRow({
   a,
   onOpen,
   onDelete,
+  deleteLabel,
 }: {
   a: ArtifactEntry;
   onOpen: () => void;
   onDelete: () => void;
+  deleteLabel: string;
 }) {
   const { formatRelative } = useTimeFormatters();
   return (
@@ -96,7 +99,7 @@ function ArtifactRow({
           size="icon-sm"
           className={listRowHoverActionsClass}
           onClick={onDelete}
-          aria-label="删除"
+          aria-label={deleteLabel}
         >
           <Trash2 className="size-3.5" />
         </Button>
@@ -111,6 +114,7 @@ export function ArtifactsRoute() {
 }
 
 function ArtifactsPage({ categoryId }: { categoryId?: string }) {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const { setMobileAction } = useShell();
@@ -151,7 +155,7 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
       <button
         type="button"
         onClick={() => setSidebarOpen(true)}
-        aria-label="产物类目"
+        aria-label={t("artifacts.sidebar.categories")}
         className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground"
       >
         <PanelLeft className="size-5" />
@@ -257,11 +261,11 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
     try {
       if (editingCategory) {
         await updateArtifactCategory(editingCategory.id, { name, description });
-        toast(toastAction("已更新", name, "类目"), "success");
+        toast(toastAction("updated", name, "category"), "success");
       } else {
         const created = await createArtifactCategory(name, description);
         navigate(toWorkspacePath(`/artifacts/c/${created.id}`));
-        toast(toastAction("已添加", name, "类目"), "success");
+        toast(toastAction("added", name, "category"), "success");
       }
       await loadCategories();
       if (categoryId) await loadArtifacts();
@@ -283,10 +287,10 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
   const removeCategoryById = async (c: ArtifactCategory) => {
     if (
       !(await confirm({
-        title: "删除类目",
-        body: `删除「${c.name}」？该类目下的产物将一并删除。`,
+        title: t("artifacts.deleteConfirm.categoryTitle"),
+        body: t("artifacts.deleteConfirm.categoryBody", { name: c.name }),
         danger: true,
-        confirmText: "删除",
+        confirmText: t("common.actions.delete"),
       }))
     ) {
       return;
@@ -298,7 +302,7 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
       if (categoryId === c.id) {
         navigateAfterCategoriesChange(cats);
       }
-      toast(toastAction("已删除", c.name, "类目"), "success");
+      toast(toastAction("deleted", c.name, "category"), "success");
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -307,10 +311,10 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
   const removeArtifact = async (a: ArtifactEntry) => {
     if (
       !(await confirm({
-        title: "删除产物",
-        body: `确定删除「${a.title}」？此操作不可恢复。`,
+        title: t("artifacts.deleteConfirm.artifactTitle"),
+        body: t("artifacts.deleteConfirm.artifactBody", { title: a.title }),
         danger: true,
-        confirmText: "删除",
+        confirmText: t("common.actions.delete"),
       }))
     )
       return;
@@ -318,16 +322,16 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
       await deleteArtifact(a.id);
       setSelected(null);
       await loadArtifacts();
-      toast(toastAction("已删除", a.title, "产物"), "success");
+      toast(toastAction("deleted", a.title, "artifact"), "success");
     } catch (e) {
       toast((e as Error).message, "error");
     }
   };
 
-  const title = showCategoryView ? (currentCategory?.name ?? "产物") : "产物";
+  const title = showCategoryView ? (currentCategory?.name ?? t("artifacts.title")) : t("artifacts.title");
   const subtitle = showCategoryView
-    ? currentCategory?.description?.trim() || "该类目下的产物，按保存时间从新到旧显示"
-    : "创建类目后，可在此查看归档产物";
+    ? currentCategory?.description?.trim() || t("artifacts.subtitle.category")
+    : t("artifacts.subtitle.default");
   const exportOriginalLabel = selected
     ? selected.type === "html"
       ? "HTML"
@@ -336,7 +340,7 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
         : selected.type === "markdown"
           ? "Markdown"
           : "Text"
-    : "原始类型";
+    : t("artifacts.export.originalType");
 
   const catName = (id: string | null) =>
     id ? ((categories ?? []).find((c) => c.id === id)?.name ?? "") : "";
@@ -365,12 +369,12 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
         <div className="min-w-0 flex-1 overflow-y-auto">
           <ReadyGate>
             {categories === null ? (
-              <PageContainer embedded title="产物" subtitle="创建类目后，可在此查看归档产物">
+              <PageContainer embedded title={t("artifacts.title")} subtitle={t("artifacts.subtitle.default")}>
                 <Loading />
               </PageContainer>
             ) : !showCategoryView ? (
               <PageContainer embedded title={title} subtitle={subtitle}>
-                <Empty text="暂无类目。点击侧栏「新建类目」创建第一个类目。" />
+                <Empty text={t("artifacts.empty.noCategories")} />
               </PageContainer>
             ) : currentCategory === null ? (
               <PageContainer embedded title={title} subtitle={subtitle}>
@@ -382,7 +386,7 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
                   <SearchInput
                     value={artifactQuery}
                     onChange={(e) => setArtifactQuery(e.target.value)}
-                    placeholder="搜索产物…"
+                    placeholder={t("artifacts.searchPlaceholder")}
                   />
 
                   {items === null ? (
@@ -391,8 +395,8 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
                     <Empty
                       text={
                         artifactQuery
-                          ? "无匹配产物"
-                          : "暂无产物。在对话中请 AI 保存、导出或归档内容后，会出现在这里"
+                          ? t("artifacts.empty.noMatch")
+                          : t("artifacts.empty.noArtifacts")
                       }
                     />
                   ) : (
@@ -401,6 +405,7 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
                         <ArtifactRow
                           key={a.id}
                           a={a}
+                          deleteLabel={t("common.actions.delete")}
                           onOpen={() => setSelected(a)}
                           onDelete={() => {
                             void removeArtifact(a);
@@ -420,13 +425,13 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
         open={categoryDialogOpen}
         onClose={closeCategoryDialog}
         closeDisabled={savingCategory}
-        title={editingCategory ? "编辑类目" : "新建类目"}
-        description="名称用于展示，描述可帮助 AI 在归档时选择合适类目。"
+        title={editingCategory ? t("artifacts.categoryForm.editTitle") : t("artifacts.categoryForm.createTitle")}
+        description={t("artifacts.categoryForm.description")}
         size="sm"
         footer={
           <>
             <Button variant="secondary" disabled={savingCategory} onClick={closeCategoryDialog}>
-              取消
+              {t("common.actions.cancel")}
             </Button>
             <Button
               variant="primary"
@@ -436,27 +441,27 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
               }}
             >
               {savingCategory && <Loader2 className="size-4 animate-spin" />}
-              {editingCategory ? "保存" : "添加"}
+              {editingCategory ? t("common.actions.save") : t("common.actions.add")}
             </Button>
           </>
         }
       >
         <div className="grid gap-3">
           <div className="grid gap-1.5">
-            <Label>类目名称</Label>
+            <Label>{t("artifacts.categoryForm.nameLabel")}</Label>
             <Input
               value={newCategoryName}
               onChange={(e) => setNewCategoryName(e.target.value)}
-              placeholder="如：内容、报告、规划"
+              placeholder={t("artifacts.categoryForm.namePlaceholder")}
             />
           </div>
           <div className="grid gap-1.5">
-            <Label>类目描述（可选）</Label>
+            <Label>{t("artifacts.categoryForm.descLabel")}</Label>
             <Textarea
               rows={3}
               value={newCategoryDesc}
               onChange={(e) => setNewCategoryDesc(e.target.value)}
-              placeholder="用于指导 AI 选择该类目"
+              placeholder={t("artifacts.categoryForm.descPlaceholder")}
             />
           </div>
         </div>
@@ -478,8 +483,8 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
                 variant="ghost"
                 size="sm"
                 onClick={() => setExportMenuOpen((v) => !v)}
-                title="导出"
-                aria-label="导出"
+                title={t("common.actions.export")}
+                aria-label={t("common.actions.export")}
                 aria-haspopup="menu"
                 aria-expanded={exportMenuOpen}
               >

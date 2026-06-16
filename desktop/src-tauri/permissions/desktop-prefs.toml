@@ -1,4 +1,9 @@
 [[permission]]
+identifier = "allow-desktop-get-system-locale"
+description = "Read the OS preferred locale for first-run language detection."
+commands.allow = ["desktop_get_system_locale"]
+
+[[permission]]
 identifier = "allow-desktop-get-prefs"
 description = "Read menu bar and autostart desktop preferences."
 commands.allow = ["desktop_get_prefs"]

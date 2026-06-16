@@ -1,0 +1,671 @@
+{
+  "nav": {
+    "chat": "Chat",
+    "skills": "Skills",
+    "mcp": "MCP",
+    "memory": "Memory",
+    "envVars": "Env Vars",
+    "workspaces": "Workspaces",
+    "scheduledTasks": "Scheduled",
+    "settings": "Settings",
+    "artifacts": "Artifacts",
+    "artifactsNewCategory": "New Category",
+    "defaultWorkspace": "Default Workspace",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "menu": "Menu",
+    "chatList": "Chat list"
+  },
+  "common": {
+    "close": "Close",
+    "loading": "Loading…",
+    "actions": {
+      "save": "Save",
+      "add": "Add",
+      "delete": "Delete",
+      "edit": "Edit",
+      "cancel": "Cancel",
+      "confirm": "OK",
+      "details": "Details",
+      "body": "Body",
+      "export": "Export",
+      "runOnce": "Run once"
+    },
+    "dialog": {
+      "confirmTitle": "Confirm",
+      "promptTitle": "Input"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "nav": {
+      "general": { "label": "General", "description": "Theme, timezone & menu bar" },
+      "models": { "label": "Models & Services", "description": "LLM, embedding & third-party tools" },
+      "tools": { "label": "Tools", "description": "Terminal toggle & allow/deny lists" },
+      "usage": { "label": "Usage", "description": "Token & API call stats" },
+      "logs": { "label": "Logs", "description": "Backend process output" }
+    },
+    "pages": {
+      "general": { "title": "General", "subtitle": "Theme & timezone" },
+      "models": { "title": "Models & Services", "subtitle": "LLM, embedding & third-party tools" },
+      "tools": { "title": "Tools", "subtitle": "Terminal toggle, allow & deny lists" },
+      "usage": { "title": "Usage", "subtitle": "Token & API calls by scenario" },
+      "logs": { "title": "Logs", "subtitle": "Backend process output" }
+    },
+    "general": {
+      "language": {
+        "title": "Language",
+        "description": "Display language. Takes effect immediately.",
+        "options": { "zh": "简体中文", "en": "English" }
+      },
+      "theme": {
+        "title": "Theme",
+        "description": "Color scheme. Takes effect immediately.",
+        "system": "System",
+        "light": "Light",
+        "dark": "Dark"
+      },
+      "menubar": {
+        "title": "Menu Bar & Background",
+        "description": "Keep AgentPod in the menu bar after closing the window. Launch at login must be enabled manually."
+      },
+      "runInBackground": {
+        "label": "Keep running in menu bar after closing window",
+        "hint": "Hides the window instead of quitting. Reopen from the menu bar icon."
+      },
+      "launchAtLogin": {
+        "label": "Launch AgentPod at login",
+        "hint": "Starts the app when you log in. Off by default."
+      },
+      "saveDesktopPrefs": "Save desktop preferences",
+      "desktopPrefsSaved": "Desktop preferences saved",
+      "desktopPrefsAutostartFailed": "Preferences saved, but launch at login could not be updated",
+      "timezone": {
+        "label": "Timezone",
+        "save": "Save timezone",
+        "saved": "Timezone saved: {{tz}}"
+      }
+    },
+    "models": {
+      "llm": {
+        "title": "Chat Model (LLM)",
+        "description": "Primary model for chat and tool calls. Leave empty to keep current config.",
+        "primaryLabel": "Primary model",
+        "configured": "Configured",
+        "notConfigured": "Not configured",
+        "keepEmpty": "Leave empty to keep unchanged"
+      },
+      "auxiliary": {
+        "title": "Scenario Models",
+        "description": "Override primary model per scenario. Empty fields fall back to primary.",
+        "configuredCount": "{{count}} configured",
+        "fields": {
+          "vision": { "label": "Vision model", "hint": "Image understanding; falls back to primary if empty" },
+          "webExtract": { "label": "Web extract model", "hint": "Structured web content extraction; falls back to primary if empty" },
+          "compression": { "label": "Context compression model", "hint": "Long conversation merging; falls back to primary if empty" },
+          "titleGeneration": { "label": "Title generation model", "hint": "Auto session titles; falls back to primary if empty" },
+          "approval": { "label": "Safety check model", "hint": "Sensitive operation approval; falls back to primary if empty" },
+          "curator": { "label": "Memory curator model", "hint": "Long-term memory curation; falls back to primary if empty" },
+          "skillReflect": { "label": "Skill reflection model", "hint": "Post-skill reflection; falls back to primary if empty" }
+        }
+      },
+      "embedding": {
+        "title": "Vector Embedding",
+        "description": "Used for memory retrieval and semantic search.",
+        "modelLabel": "Embedding model"
+      },
+      "apiBaseUrl": "API Base URL",
+      "apiKey": "API Key",
+      "thirdPartyKeys": {
+        "tavily": "Tavily Key",
+        "jina": "Jina Key",
+        "tavilyPlaceholder": "Optional, web search",
+        "jinaPlaceholder": "Optional, page reading"
+      },
+      "thirdParty": {
+        "title": "Third-party Tools",
+        "description": "API keys for web search, page reading, etc."
+      },
+      "saved": "Configuration saved",
+      "save": "Save configuration"
+    },
+    "tools": {
+      "terminal": {
+        "title": "Terminal",
+        "description": "Control whether the agent can run shell commands, and allow/deny executable names (comma-separated, no paths)."
+      },
+      "enableTerminal": "Enable terminal tool",
+      "whitelist": {
+        "label": "Allow list",
+        "hint": "Only executables in this list are allowed",
+        "detail": "Bare command names only (e.g. git, npm); no paths. Empty list denies all commands."
+      },
+      "denylist": {
+        "label": "Deny list",
+        "hint": "Executables in this list are blocked",
+        "detail": "Commands on the deny list are blocked even if they appear on the allow list."
+      },
+      "saved": "Terminal settings saved",
+      "save": "Save"
+    },
+    "logs": {
+      "loading": "Loading…",
+      "empty": "No logs yet."
+    },
+    "usage": {
+      "loading": "Loading…",
+      "empty": "No usage data yet. Complete a chat to start tracking.",
+      "table": { "scene": "Scenario", "token": "Tokens", "apiCalls": "API calls" },
+      "scenarios": {
+        "chat": "Chat",
+        "compression": "Context compression",
+        "title_generation": "Title generation",
+        "curator": "Memory curation",
+        "memory_autostore": "Auto memory extraction",
+        "skill_reflect": "Background self-improvement",
+        "approval": "Write review",
+        "tavily": "Web search",
+        "duckduckgo": "Web search",
+        "jina": "Web reading",
+        "embedding": "Vector embedding",
+        "scheduled_run": "Scheduled task",
+        "todo_intent": "Task intent recognition",
+        "background_review_intent": "Background review intent"
+      }
+    }
+  },
+  "copy": {
+    "agent": {
+      "unavailable": "AgentPod is temporarily unavailable. Please try again later.",
+      "startingTimeout": "AgentPod startup timed out. Please try again later or contact your administrator.",
+      "composerPlaceholder": "Message AgentPod…",
+      "authLoadFailed": "Cannot connect to server. Please try again later.",
+      "streamRetry": "AgentPod starting, retry in {{seconds}}s ({{attempt}}/{{max}})"
+    },
+    "toast": {
+      "unnamed": "(unnamed)"
+    }
+  },
+  "toast": {
+    "actions": {
+      "deleted": "Deleted",
+      "added": "Added",
+      "updated": "Updated",
+      "reconnected": "Reconnected",
+      "oauthDisconnected": "OAuth disconnected",
+      "started": "Started",
+      "withKind": "{{action}} {{kind}} \"{{name}}\"",
+      "withoutKind": "{{action}} \"{{name}}\""
+    },
+    "kinds": {
+      "session": "chat",
+      "skill": "skill",
+      "memory": "memory",
+      "workspace": "workspace",
+      "category": "category",
+      "artifact": "artifact",
+      "scheduledTask": "scheduled task",
+      "envVar": "env var",
+      "mcpService": "MCP service"
+    }
+  },
+  "time": {
+    "sessionGroups": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "last7": "Last 7 days",
+      "last30": "Last 30 days",
+      "older": "Older"
+    },
+    "relative": {
+      "justNow": "Just now",
+      "minutesAgo": "{{count}} min ago",
+      "hoursAgo": "{{count}} hr ago",
+      "daysAgo": "{{count}} days ago"
+    }
+  },
+  "errors": {
+    "requestFailed": "Request failed ({{status}})",
+    "timeout": "Request timed out. Please try again.",
+    "unauthenticated": "Not signed in",
+    "downloadFailed": "Download failed ({{status}})"
+  },
+  "auth": {
+    "retry": "Retry"
+  },
+  "chat": {
+    "session": {
+      "defaultTitle": "New chat",
+      "deleteTitle": "Delete chat",
+      "deleteBody": "Delete \"{{label}}\"? This cannot be undone."
+    },
+    "sidebar": {
+      "title": "Chats",
+      "newSession": "New chat",
+      "searchPlaceholder": "Search chats…",
+      "noMatch": "No matching chats",
+      "empty": "No chats yet",
+      "loadMore": "Load more"
+    },
+    "empty": {
+      "title": "How can I help?",
+      "subtitle": "AgentPod can read/write files, search the web, and use tools to help with tasks.",
+      "suggestions": [
+        "Summarize the key points of this page: sidefyapp.com",
+        "What can AgentPod do?",
+        "What is the normal distribution PDF formula?",
+        "Search and summarize the latest AI progress"
+      ]
+    },
+    "queue": {
+      "pending": "Queued",
+      "emptyMessage": "(empty message)"
+    },
+    "composer": {
+      "removeFromQueue": "Remove from queue",
+      "addAttachment": "Add attachment",
+      "attachmentProcessing": "Processing attachment…",
+      "removeAttachment": "Remove attachment",
+      "send": "Send",
+      "stop": "Stop",
+      "scrollToBottom": "Scroll to bottom",
+      "keyboardHint": {
+        "queue": "Enter to queue · Empty Enter sends queue head · Shift+Enter for newline",
+        "queueWithPending": "Enter to send · Empty Enter sends queue head · Shift+Enter for newline",
+        "default": "Enter to send · Shift+Enter for newline"
+      },
+      "longPaste": "Pasted long text ({{count}} chars)"
+    },
+    "message": {
+      "copy": "Copy",
+      "retry": "Retry",
+      "regenerate": "Regenerate",
+      "userLabel": "You",
+      "archived": "Compressed (excluded from context)"
+    },
+    "attachment": {
+      "unparseable": "Unparseable",
+      "text": "Text attachment",
+      "textTruncated": "Text attachment (truncated)",
+      "image": "Image attachment",
+      "generic": "Attachment",
+      "download": "Download",
+      "downloadFailed": "Download failed",
+      "exportUnsupported": "This attachment cannot be exported",
+      "emptyFile": "(empty file)",
+      "previewUnsupported": "Preview not supported for this attachment type.",
+      "parseUnsupported": "This attachment cannot be parsed or displayed.",
+      "imageMissingData": "Image attachment has no renderable data.",
+      "oneAtATime": "Only one attachment at a time",
+      "duplicate": "Same file already added",
+      "reused": "Reused existing attachment",
+      "replaced": "Replaced with new attachment",
+      "supportedTypes": "Supported: text, images, Excel (.xlsx), Word (.docx)",
+      "sizeExceeded": "{{file}} exceeds {{size}}, skipped",
+      "readFailed": "Read failed",
+      "readFailedRetry": "{{file}} read failed, please retry",
+      "truncatedDisplay": "Attachment content was truncated for display.",
+      "fileTruncatedSuffix": "... (file truncated)",
+      "documentUnparseable": "This document cannot be parsed",
+      "imageUnparseable": "This image format cannot be parsed",
+      "viewNamed": "View {{name}}",
+      "downloadNamed": "Download {{name}}",
+      "removeNamed": "Remove {{name}}"
+    },
+    "errors": {
+      "generic": "Something went wrong",
+      "stopped": "(generation stopped)",
+      "toolsStopped": "Stopped",
+      "sessionNotFound": "Chat not found",
+      "stillGenerating": "This chat is still generating",
+      "visionUnsupported": "Current model or endpoint does not support images. Switch to a vision-capable model.",
+      "requestFailed": "Request failed"
+    },
+    "meta": { "running": "Running" },
+    "todo": {
+      "activeTitle": "Task progress",
+      "summary": "{{done}}/{{total}} steps done",
+      "summaryWithInterrupted": "{{done}}/{{total}} steps done · {{interrupted}} interrupted",
+      "interruptedNote": "Interrupted (new topic)"
+    },
+    "clarify": {
+      "otherPlaceholder": "Other (free text)…",
+      "question": "Question: {{text}}",
+      "answer": "Answer: {{text}}"
+    },
+    "markdown": {
+      "wrapOn": "Wrap lines",
+      "wrapOff": "No wrap",
+      "copyCode": "Copy code",
+      "copy": "Copy",
+      "vizGenerating": "Generating visualization…",
+      "vizEmpty": "Nothing to render",
+      "fullscreen": "Fullscreen",
+      "openInNewWindow": "Open in new window",
+      "copySource": "Copy source",
+      "htmlPreview": "HTML preview"
+    },
+    "compression": {
+      "header": "[Auto context compression]",
+      "headerWithMeta": "[Auto context compression] mode={{mode}}, tokens: {{before}} -> {{after}}",
+      "noSummary": "No displayable summary was generated.",
+      "noSummaryTruncated": "No displayable summary was generated (truncation applied)."
+    }
+  },
+  "skills": {
+    "title": "Skills",
+    "subtitle": "Shared and private skill management",
+    "counts": { "shared": "Shared {{count}}", "private": "Private {{count}}" },
+    "tabs": { "shared": "Shared skills", "private": "Private skills" },
+    "searchPlaceholder": "Search skills…",
+    "noMatch": "No matching skills",
+    "empty": "No skills yet",
+    "badge": { "autoExtract": "Auto-extract", "noBody": "(no body)" },
+    "form": {
+      "deleteTitle": "Delete skill",
+      "editTitle": "Edit skill",
+      "editSummary": "Edit skill: {{name}}",
+      "addTitle": "Add skill",
+      "deleteBody": "Delete \"{{name}}\"?"
+    },
+    "fields": {
+      "name": "Name (unique)",
+      "description": "Description",
+      "triggers": "Triggers (comma-separated)",
+      "body": "Body (Markdown)"
+    }
+  },
+  "mcp": {
+    "title": "MCP",
+    "subtitle": "MCP service connections & tool management",
+    "serviceCount": "{{count}} services",
+    "status": { "connecting": "Connecting", "online": "Online", "offline": "Offline" },
+    "oauth": { "connected": "Authorized", "pending": "Pending auth" },
+    "searchPlaceholder": "Search MCP services…",
+    "noMatch": "No matching MCP services",
+    "empty": "No MCP services yet",
+    "selectWorkspace": "Select a workspace first",
+    "actions": {
+      "oauthAuthorize": "OAuth authorize",
+      "disconnectOAuth": "Disconnect OAuth",
+      "reconnect": "Reconnect"
+    },
+    "form": {
+      "addTitle": "Add MCP service",
+      "editTitle": "Edit service",
+      "editSummary": "Edit service: {{name}}",
+      "deleteTitle": "Delete MCP service",
+      "deleteBody": "Delete \"{{name}}\"?",
+      "validation": { "env": "Environment variables", "headers": "Headers" }
+    },
+    "fields": {
+      "name": "Name (unique)",
+      "transport": "Transport",
+      "command": "Command",
+      "url": "URL",
+      "format": "Format",
+      "envJson": "Environment variables (JSON)",
+      "headersJson": "Headers (JSON)"
+    },
+    "headersHint": {
+      "preserve": "Headers are configured. Leave empty to keep; fill in to overwrite.",
+      "oauth": "OAuth support is detected on save. If supported, an authorize button appears; otherwise enter header credentials here."
+    },
+    "oauthFlow": {
+      "browserOpened": "Opened \"{{name}}\" authorization in your browser. It will refresh when complete.",
+      "success": "\"{{name}}\" OAuth authorized",
+      "incomplete": "\"{{name}}\" authorization incomplete or timed out. Please retry.",
+      "connecting": "\"{{name}}\" connecting in background…",
+      "reconnecting": "\"{{name}}\" reconnecting in background…"
+    },
+    "validation": {
+      "jsonParseFailed": "{{label}} JSON parse failed",
+      "mustBeObject": "{{label}} must be a JSON object",
+      "keyEmpty": "{{label}} key cannot be empty",
+      "valueMustBeString": "{{label}} {{key}} value must be a string"
+    },
+    "toolDetail": {
+      "description": "Description",
+      "noDescription": "No description",
+      "paramsSummary": "Parameter summary",
+      "noParamsSummary": "No parameter summary",
+      "inputSchema": "Input schema"
+    }
+  },
+  "memory": {
+    "title": "Memory",
+    "subtitle": "Long-term and short-term memory",
+    "counts": { "long": "Long-term {{count}}", "short": "Short-term {{count}}" },
+    "tabs": { "long": "Long-term", "short": "Short-term" },
+    "searchPlaceholder": "Search memories…",
+    "noMatch": "No matching memories",
+    "empty": "No memories yet",
+    "item": { "title": "Memory #{{id}}", "autoExtract": "Auto-extract", "details": "Details" },
+    "actions": {
+      "moveToShort": "Move to short-term memory",
+      "moveToLong": "Move to long-term memory"
+    },
+    "form": {
+      "deleteTitle": "Delete memory",
+      "editTitle": "Edit memory",
+      "editSummary": "Edit memory #{{id}}",
+      "addTitle": "Add memory",
+      "deleteBody": "Delete this memory?"
+    },
+    "fields": {
+      "content": "Content",
+      "contentPlaceholder": "Content to remember…"
+    }
+  },
+  "workspaces": {
+    "title": "Workspaces",
+    "subtitle": "Create, switch and manage workspaces",
+    "errors": { "nameTooLong": "Name cannot exceed 25 characters" },
+    "searchPlaceholder": "Search workspaces…",
+    "noMatch": "No matching workspaces",
+    "empty": "No workspaces yet",
+    "badges": { "default": "Default", "current": "Current" },
+    "actions": {
+      "switch": "Switch to this workspace",
+      "edit": "Edit workspace",
+      "delete": "Delete workspace"
+    },
+    "deleteConfirm": {
+      "title": "Delete workspace",
+      "body": "Delete \"{{name}}\"? Chats and config in this workspace cannot be recovered."
+    },
+    "form": { "editTitle": "Edit workspace", "createTitle": "New workspace" },
+    "fields": {
+      "name": "Name (max 25 chars)",
+      "namePlaceholder": "My workspace",
+      "description": "Description (optional)",
+      "descriptionPlaceholder": "Brief purpose"
+    }
+  },
+  "envVars": {
+    "title": "Environment Variables",
+    "subtitle": "Store key-value pairs with descriptions for the agent at runtime",
+    "count": "{{count}} total",
+    "searchPlaceholder": "Search env vars…",
+    "noMatch": "No matching env vars",
+    "empty": "No env vars yet",
+    "detail": {
+      "valueAndDescription": "Value & description",
+      "hideValue": "Hide value",
+      "showValue": "Show value",
+      "noDescription": "(no description)"
+    },
+    "form": {
+      "deleteTitle": "Delete env var",
+      "editTitle": "Edit env var",
+      "addTitle": "Add env var",
+      "deleteBody": "Delete \"{{name}}\"?"
+    },
+    "fields": {
+      "key": "Key (unique)",
+      "description": "Description (optional)",
+      "valuePlaceholder": "production_db_password"
+    }
+  },
+  "scheduled": {
+    "title": "Scheduled Tasks",
+    "subtitle": "Run AgentPod on a cron or one-time schedule; each run creates a new session",
+    "count": "{{count}} total",
+    "empty": "No scheduled tasks yet",
+    "notifyBadge": "Notify",
+    "status": {
+      "completed": "Completed",
+      "running": "Running",
+      "queued": "Queued",
+      "disabled": "Disabled",
+      "failed": "Last run failed",
+      "waiting": "Waiting"
+    },
+    "type": { "once": "Once", "onceAt": "Once · {{time}}", "cron": "Cron · {{expr}}" },
+    "validation": {
+      "title": "Enter a task title",
+      "instruction": "Enter the instruction to run",
+      "cron": "Enter a cron expression",
+      "runAt": "Select a run time"
+    },
+    "runSchedule": { "next": "Next run:", "last": "Last run:" },
+    "actions": { "runOnce": "Run once", "instruction": "Instruction", "lastResult": "Last run result" },
+    "form": {
+      "editTitle": "Edit task",
+      "createTitle": "New task",
+      "title": "Title",
+      "titlePlaceholder": "e.g. Daily briefing",
+      "instruction": "Instruction (prompt for AgentPod)",
+      "instructionPlaceholder": "AgentPod will run this instruction at the scheduled time…",
+      "type": "Type",
+      "cronPicker": "Cron picker",
+      "cronHint": "Interpreted in your configured timezone. The cron expression is generated from the visual picker.",
+      "runAt": "Run time",
+      "runAtHint": "Use timezone {{timeZone}}, e.g. 2026-06-01 09:00",
+      "typeCron": "Recurring (Cron)",
+      "typeOnce": "Once",
+      "typeImmutable": "Type cannot be changed after creation",
+      "enabled": "Enabled",
+      "notify": "Notify",
+      "deleteTitle": "Delete scheduled task",
+      "deleteBody": "Delete \"{{title}}\"?"
+    },
+    "datetimePicker": {
+      "placeholder": "Click to pick date and time",
+      "openCalendar": "Open calendar",
+      "prevMonth": "Previous month",
+      "nextMonth": "Next month",
+      "yearMonth": "{{year}}/{{month}}",
+      "hour": "Hour",
+      "minute": "Minute",
+      "clear": "Clear",
+      "done": "Done",
+      "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    },
+    "cron": {
+      "everyText": "Every",
+      "emptyMonths": "every month",
+      "emptyMonthDays": "every day",
+      "emptyMonthDaysShort": "day",
+      "emptyWeekDays": "every week",
+      "emptyWeekDaysShort": "week",
+      "emptyHours": "every hour",
+      "emptyMinutes": "every minute",
+      "emptyMinutesForHourPeriod": "minute",
+      "yearOption": "year",
+      "monthOption": "month",
+      "weekOption": "week",
+      "dayOption": "day",
+      "hourOption": "hour",
+      "minuteOption": "minute",
+      "rebootOption": "reboot",
+      "prefixPeriod": "Every",
+      "prefixMonths": "in",
+      "prefixMonthDays": "on",
+      "prefixWeekDays": "on",
+      "prefixWeekDaysForMonthAndYearPeriod": "on",
+      "prefixHours": "at",
+      "prefixMinutes": "at",
+      "prefixMinutesForHourPeriod": "at",
+      "suffixMinutesForHourPeriod": "minute(s)",
+      "errorInvalidCron": "Invalid cron expression",
+      "clearButtonText": "Clear",
+      "weekDays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+      "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+      "altWeekDays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+      "altMonths": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]
+    }
+  },
+  "artifacts": {
+    "title": "Artifacts",
+    "subtitle": {
+      "default": "Create categories to browse archived artifacts here",
+      "category": "Artifacts in this category, newest first"
+    },
+    "empty": {
+      "noCategories": "No categories yet. Click \"New Category\" in the sidebar to create one.",
+      "noMatch": "No matching artifacts",
+      "noArtifacts": "No artifacts yet. Ask the AI to save or export content in chat."
+    },
+    "searchPlaceholder": "Search artifacts…",
+    "export": { "originalType": "Original type" },
+    "deleteConfirm": {
+      "categoryTitle": "Delete category",
+      "categoryBody": "Delete category \"{{name}}\"? All artifacts in it will be removed.",
+      "artifactTitle": "Delete artifact",
+      "artifactBody": "Delete artifact \"{{title}}\"?"
+    },
+    "categoryForm": {
+      "editTitle": "Edit category",
+      "createTitle": "New category",
+      "description": "Name is shown in the UI; description helps the AI pick a category when archiving.",
+      "nameLabel": "Category name",
+      "descLabel": "Description (optional)",
+      "namePlaceholder": "e.g. content, reports, plans",
+      "descPlaceholder": "Guides the AI when choosing this category"
+    },
+    "sidebar": {
+      "categories": "Artifact categories",
+      "searchPlaceholder": "Search categories…",
+      "noMatch": "No matching categories",
+      "empty": "No categories",
+      "editCategory": "Edit category",
+      "deleteCategory": "Delete category"
+    }
+  },
+  "notifications": {
+    "bell": { "ariaLabel": "Notifications" },
+    "panel": {
+      "title": "Messages",
+      "markAllRead": "Mark all as read",
+      "allRead": "All read",
+      "loading": "Loading…",
+      "empty": "No messages"
+    },
+    "newMessages": "You have {{count}} new messages",
+    "newMessage": "You have 1 new message",
+    "category": {
+      "artifactSaved": "Save artifact",
+      "selfImprovement": "Self-improvement",
+      "scheduledTask": "Scheduled task"
+    },
+    "toast": {
+      "selfImprovement": "Self-improvement: {{body}}",
+      "artifactSaved": "Artifact saved: {{title}} ({{category}})"
+    }
+  },
+  "embedding": {
+    "status": {
+      "pending": "Queued",
+      "ready": "Indexed",
+      "failed": "Keyword only"
+    }
+  },
+  "tools": {
+    "title": "Tools",
+    "subtitle": "Tool availability is preset by the system per runtime scenario",
+    "count": "{{count}} tools",
+    "noDescription": "No description",
+    "empty": "No entries"
+  }
+}

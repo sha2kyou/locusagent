@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ComposerPrimitive,
   MessagePrimitive,
@@ -15,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { useImeEnterGuard } from "@/lib/ime-enter";
 import { useCopy } from "@/lib/useCopy";
 import {
-  AGENT_COMPOSER_PLACEHOLDER,
+  getAgentComposerPlaceholder,
 } from "@/lib/agent-status-copy";
 import { Markdown, ThinkingBlock } from "./Markdown";
 import type { ChatMessage } from "./model";
@@ -28,17 +29,13 @@ import { downloadAttachment, attachmentDownloadUrl } from "@/api/endpoints";
 import { Drawer } from "@/components/ui/drawer";
 import { useTimeFormatters } from "@/lib/use-app-timezone";
 
-const PROMPT_CHIPS = [
-  "帮我总结这个网页的要点：sidefyapp.com",
-  "AgentPod 有哪些功能？",
-  "什么是正态分布概率密度公式？",
-  "搜索并总结最新的 AI 进展",
-];
 const EMPTY_ATTACHMENTS: ChatAttachment[] = [];
 
 const UserText: TextMessagePartComponent = ({ text }) => <Markdown text={text} />;
 
 export function Thread() {
+  const { t } = useTranslation();
+  const promptChips = t("chat.empty.suggestions", { returnObjects: true }) as string[];
   return (
     <ThreadPrimitive.Root className="flex h-full flex-col">
       <ThreadPrimitive.Viewport className="relative flex-1 overflow-y-auto">
@@ -56,12 +53,12 @@ export function Thread() {
         <div className="relative z-10 mx-auto w-full max-w-3xl px-6 py-10">
           <ThreadPrimitive.Empty>
             <div className="flex min-h-[55vh] flex-col items-center justify-center text-center">
-              <h2 className="text-2xl font-semibold tracking-tight">有什么可以帮你？</h2>
+              <h2 className="text-2xl font-semibold tracking-tight">{t("chat.empty.title")}</h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                AgentPod 可读写文件、调用工具、检索网页、记忆与回忆。
+                {t("chat.empty.subtitle")}
               </p>
               <div className="mt-6 flex max-w-lg flex-wrap justify-center gap-2">
-                  {PROMPT_CHIPS.map((p) => (
+                  {promptChips.map((p) => (
                     <ThreadPrimitive.Suggestion
                       key={p}
                       prompt={p}
@@ -87,7 +84,7 @@ export function Thread() {
             variant="secondary"
             size="icon"
             className="sticky bottom-4 left-1/2 -translate-x-1/2 rounded-full shadow-lg transition-opacity disabled:pointer-events-none disabled:opacity-0"
-            aria-label="滚动到底部"
+            aria-label={t("chat.composer.scrollToBottom")}
           >
             <ArrowDown />
           </Button>
@@ -102,6 +99,7 @@ export function Thread() {
 const LONG_PASTE_THRESHOLD = 8000;
 
 function Composer() {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { onCompositionStart, onCompositionEnd, shouldBlockEnter } = useImeEnterGuard();
@@ -126,7 +124,7 @@ function Composer() {
   const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const len = e.clipboardData.getData("text").length;
     if (len > LONG_PASTE_THRESHOLD) {
-      toast(`已粘贴较长文本（${len.toLocaleString()} 字符）`, "info");
+      toast(t("chat.composer.longPaste", { count: len.toLocaleString() }), "info");
     }
   };
 
@@ -196,13 +194,13 @@ function Composer() {
               <div className="min-w-0 flex-1">
                 {index === 0 && isRunning ? (
                   <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    排队中
+                    {t("chat.queue.pending")}
                   </p>
                 ) : null}
                 <p className="line-clamp-3 whitespace-pre-wrap break-words text-foreground/90">
                   {item.requestText ||
                     item.displayAttachments?.map((file) => file.name).join("、") ||
-                    "（空消息）"}
+                    t("chat.queue.emptyMessage")}
                 </p>
                 {item.displayAttachments && item.displayAttachments.length > 0 ? (
                   <div className="mt-1 flex flex-wrap gap-1">
@@ -222,8 +220,8 @@ function Composer() {
                 type="button"
                 onClick={() => removeQueuedMessage(item.id)}
                 className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground"
-                aria-label="从队列移除"
-                title="从队列移除"
+                aria-label={t("chat.composer.removeFromQueue")}
+                title={t("chat.composer.removeFromQueue")}
               >
                 <X className="size-3.5" />
               </button>
@@ -241,13 +239,13 @@ function Composer() {
             >
               <Paperclip className="size-3 shrink-0" />
               <span className="max-w-56 truncate">{file.name}</span>
-              {!file.processable ? <span className="text-warning">不可解析</span> : null}
+              {!file.processable ? <span className="text-warning">{t("chat.attachment.unparseable")}</span> : null}
               <button
                 type="button"
                 onClick={() => removePendingAttachment(file.id)}
                 className="inline-flex size-4 items-center justify-center rounded-full transition hover:bg-accent hover:text-foreground"
-                aria-label={`移除 ${file.name}`}
-                title="移除附件"
+                aria-label={t("chat.attachment.removeNamed", { name: file.name })}
+                title={t("chat.composer.removeAttachment")}
               >
                 <X className="size-3" />
               </button>
@@ -270,8 +268,8 @@ function Composer() {
           disabled={isAddingAttachment}
           onClick={() => fileInputRef.current?.click()}
           className="mb-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-          aria-label="添加附件"
-          title={isAddingAttachment ? "附件处理中…" : "添加附件"}
+          aria-label={t("chat.composer.addAttachment")}
+          title={isAddingAttachment ? t("chat.composer.attachmentProcessing") : t("chat.composer.addAttachment")}
         >
           <Paperclip className={cn("size-4", isAddingAttachment && "animate-pulse")} />
         </button>
@@ -284,7 +282,7 @@ function Composer() {
           onCompositionEnd={onCompositionEnd}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
-          placeholder={AGENT_COMPOSER_PLACEHOLDER}
+          placeholder={getAgentComposerPlaceholder()}
           className="max-h-48 flex-1 resize-none bg-transparent py-1 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/60"
         />
 
@@ -292,7 +290,7 @@ function Composer() {
           <ComposerPrimitive.Send asChild>
             <button
               className="mb-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand text-brand-foreground shadow-xs transition-[background,transform,opacity] hover:opacity-90 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="发送"
+              aria-label={t("chat.composer.send")}
             >
               <ArrowUp className="size-4" />
             </button>
@@ -302,7 +300,7 @@ function Composer() {
           <ComposerPrimitive.Cancel asChild>
             <button
               className="mb-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground shadow-xs transition-colors hover:bg-secondary active:translate-y-px"
-              aria-label="停止"
+              aria-label={t("chat.composer.stop")}
             >
               <Square className="size-3 fill-current" />
             </button>
@@ -312,10 +310,10 @@ function Composer() {
 
       <p className="mx-auto mt-2 max-w-3xl text-center text-[11px] text-muted-foreground/50">
         {isRunning
-          ? "Enter 排队 · 空输入 Enter 立即发送队首 · Shift+Enter 换行"
+          ? t("chat.composer.keyboardHint.queue")
           : messageQueue.length > 0
-            ? "Enter 发送 · 空输入 Enter 发送队首 · Shift+Enter 换行"
-            : "Enter 发送 · Shift+Enter 换行"}
+            ? t("chat.composer.keyboardHint.queueWithPending")
+            : t("chat.composer.keyboardHint.default")}
       </p>
     </div>
   );
@@ -344,14 +342,15 @@ function useMessageText(): string {
 }
 
 function CopyButton({ text }: { text: string }) {
+  const { t } = useTranslation();
   const [copied, copy] = useCopy();
   return (
     <button
       type="button"
       onClick={() => copy(text)}
       className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground"
-      aria-label="复制"
-      title="复制"
+      aria-label={t("chat.message.copy")}
+      title={t("chat.message.copy")}
     >
       {copied ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5" />}
     </button>
@@ -362,11 +361,11 @@ function isServerDownloadable(file: ChatAttachment): boolean {
   return file.kind === "other" && !file.processable && file.id.startsWith("att_");
 }
 
-function attachmentDescription(file: ChatAttachment): string {
-  if (!file.processable) return "不可解析";
-  if (file.kind === "text") return file.truncated ? "文本附件（已截断）" : "文本附件";
-  if (file.kind === "image") return "图片附件";
-  return "附件";
+function attachmentDescription(file: ChatAttachment, t: (key: string) => string): string {
+  if (!file.processable) return t("chat.attachment.unparseable");
+  if (file.kind === "text") return file.truncated ? t("chat.attachment.textTruncated") : t("chat.attachment.text");
+  if (file.kind === "image") return t("chat.attachment.image");
+  return t("chat.attachment.generic");
 }
 
 function attachmentImageSrc(file: ChatAttachment): string | null {
@@ -424,6 +423,7 @@ function MessageAttachmentChips({
   align: "start" | "end";
   onSelect: (file: ChatAttachment) => void;
 }) {
+  const { t } = useTranslation();
   if (attachments.length === 0) return null;
   return (
     <div
@@ -438,7 +438,11 @@ function MessageAttachmentChips({
           key={file.id}
           onClick={() => onSelect(file)}
           className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/70 px-2.5 py-1 text-xs text-muted-foreground transition hover:bg-surface"
-          title={isServerDownloadable(file) ? `下载 ${file.name}` : `查看 ${file.name}`}
+          title={
+            isServerDownloadable(file)
+              ? t("chat.attachment.downloadNamed", { name: file.name })
+              : t("chat.attachment.viewNamed", { name: file.name })
+          }
         >
           {isServerDownloadable(file) ? (
             <Download className="size-3" />
@@ -447,7 +451,7 @@ function MessageAttachmentChips({
           )}
           <span className="max-w-56 truncate">{file.name}</span>
           {!file.processable && !isServerDownloadable(file) ? (
-            <span className="text-warning">不可解析</span>
+            <span className="text-warning">{t("chat.attachment.unparseable")}</span>
           ) : null}
         </button>
       ))}
@@ -456,13 +460,14 @@ function MessageAttachmentChips({
 }
 
 function useAttachmentSelect() {
+  const { t } = useTranslation();
   const toast = useToast();
   const [selectedAttachment, setSelectedAttachment] = useState<ChatAttachment | null>(null);
 
   const selectAttachment = (file: ChatAttachment) => {
     if (isServerDownloadable(file)) {
       void downloadAttachment(file.id, file.name).catch((err: unknown) => {
-        toast(err instanceof Error ? err.message : "下载失败", "error");
+        toast(err instanceof Error ? err.message : t("chat.attachment.downloadFailed"), "error");
       });
       return;
     }
@@ -479,13 +484,14 @@ function AttachmentDrawer({
   file: ChatAttachment | null;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const toast = useToast();
   return (
     <Drawer
       open={!!file}
       onClose={onClose}
       title={file?.name}
-      description={file ? attachmentDescription(file) : undefined}
+      description={file ? attachmentDescription(file, t) : undefined}
       actions={
         <Button
           variant="ghost"
@@ -495,17 +501,17 @@ function AttachmentDrawer({
             if (!file) return;
             if (file.kind === "image" && attachmentImageSrc(file) && !attachmentImageSrc(file)!.startsWith("data:")) {
               void downloadAttachment(file.id, file.name).catch((err: unknown) => {
-                toast(err instanceof Error ? err.message : "下载失败", "error");
+                toast(err instanceof Error ? err.message : t("chat.attachment.downloadFailed"), "error");
               });
               return;
             }
             const exported = exportInlineAttachment(file);
             if (!exported) {
-              toast("当前附件暂不支持导出", "info");
+              toast(t("chat.attachment.exportUnsupported"), "info");
             }
           }}
-          title="下载"
-          aria-label="下载"
+          title={t("chat.attachment.download")}
+          aria-label={t("chat.attachment.download")}
         >
           <Download className="size-4" />
         </Button>
@@ -515,7 +521,7 @@ function AttachmentDrawer({
         <div className="space-y-4">
           {file.processable && file.kind === "text" ? (
             <pre className="max-h-[65vh] overflow-auto whitespace-pre-wrap rounded-md bg-surface-2 p-3 font-mono text-xs text-foreground">
-              {file.text || "（空文件）"}
+              {file.text || t("chat.attachment.emptyFile")}
             </pre>
           ) : file.processable && file.kind === "image" ? (
             attachmentImageSrc(file) ? (
@@ -527,16 +533,16 @@ function AttachmentDrawer({
                 />
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">图片附件缺少可渲染数据。</p>
+              <p className="text-sm text-muted-foreground">{t("chat.attachment.imageMissingData")}</p>
             )
           ) : (
             <p className="text-sm text-muted-foreground">
               {file.processable
-                ? "该附件类型暂不支持预览。"
-                : file.unsupportedReason || "该附件当前不可解析，无法展示内容。"}
+                ? t("chat.attachment.previewUnsupported")
+                : file.unsupportedReason || t("chat.attachment.parseUnsupported")}
             </p>
           )}
-          {file.truncated ? <p className="text-xs text-warning">附件内容过长，已截断显示。</p> : null}
+          {file.truncated ? <p className="text-xs text-warning">{t("chat.attachment.truncatedDisplay")}</p> : null}
         </div>
       ) : null}
     </Drawer>
@@ -547,8 +553,9 @@ const messageMetaRowClass =
   "flex items-center gap-2 opacity-100 transition md:opacity-0 md:group-hover:opacity-100";
 
 function MessageRoleLabel() {
+  const { t } = useTranslation();
   return (
-    <span className="text-[11px] font-medium tracking-wide text-muted-foreground">你</span>
+    <span className="text-[11px] font-medium tracking-wide text-muted-foreground">{t("chat.message.userLabel")}</span>
   );
 }
 
@@ -567,6 +574,7 @@ function MessageTimestamp({ iso }: { iso?: string }) {
 }
 
 function UserMessage() {
+  const { t } = useTranslation();
   const { messageAttachments, messages } = useChat();
   const text = useMessageText();
   const messageId = useMessage((m) => String(m.id ?? ""));
@@ -580,7 +588,7 @@ function UserMessage() {
       className={cn("group mb-6 flex flex-col items-end gap-1 text-sm apod-enter-up", archived && "opacity-55")}
     >
       {archived ? (
-        <p className="text-[11px] text-muted-foreground">已压缩（不再带入上下文）</p>
+        <p className="text-[11px] text-muted-foreground">{t("chat.message.archived")}</p>
       ) : (
         <MessageRoleLabel />
       )}
@@ -675,6 +683,7 @@ function AssistantPartList({
 }
 
 function AssistantMessage() {
+  const { t } = useTranslation();
   const { regenerate, canRegenerate, lastErrored, messages, isRunning, messageAttachments, sessionTodoPlan } =
     useChat();
   const id = useMessage((m) => m.id);
@@ -689,7 +698,7 @@ function AssistantMessage() {
   return (
     <MessagePrimitive.Root className={cn("group mb-6 flex flex-col gap-1 text-sm apod-enter-up", archived && "opacity-55")}>
       {archived ? (
-        <p className="text-[11px] text-muted-foreground">已压缩（不再带入上下文）</p>
+        <p className="text-[11px] text-muted-foreground">{t("chat.message.archived")}</p>
       ) : null}
       <div className="min-w-0">
         <AssistantPartList
@@ -719,7 +728,7 @@ function AssistantMessage() {
               onClick={regenerate}
               className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-lg border border-destructive/40 bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive transition hover:bg-destructive/15"
             >
-              <RotateCcw className="size-3.5" /> 重试
+              <RotateCcw className="size-3.5" /> {t("chat.message.retry")}
             </button>
           </ThreadPrimitive.If>
         ) : null}
@@ -735,8 +744,8 @@ function AssistantMessage() {
               onClick={regenerate}
               disabled={!canRegenerate}
               className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-40"
-              aria-label="重新生成"
-              title="重新生成"
+              aria-label={t("chat.message.regenerate")}
+              title={t("chat.message.regenerate")}
             >
               <RotateCcw className="size-3.5" />
             </button>

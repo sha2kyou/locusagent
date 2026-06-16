@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Check, Loader2, Pencil, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { ReadyGate } from "@/components/ReadyGate";
@@ -23,6 +24,7 @@ import { withWorkspacePrefix } from "@/app/workspace-route";
 import { toastAction } from "@/lib/toast-copy";
 
 export function WorkspacesRoute() {
+  const { t } = useTranslation();
   const toast = useToast();
   const { confirm } = useDialogs();
   const { me } = useAuth();
@@ -82,17 +84,17 @@ export function WorkspacesRoute() {
     const nextName = name.trim();
     if (!nextName) return;
     if (nextName.length > 25) {
-      toast("名称不能超过 25 字", "error");
+      toast(t("workspaces.errors.nameTooLong"), "error");
       return;
     }
     setSaving(true);
     try {
       if (editing) {
         await updateWorkspace(editing.id, { name: nextName, description: description.trim() });
-        toast(toastAction("已更新", nextName, "工作区"), "success");
+        toast(toastAction("updated", nextName, "workspace"), "success");
       } else {
         await createWorkspace({ name: nextName, description: description.trim() });
-        toast(toastAction("已添加", nextName, "工作区"), "success");
+        toast(toastAction("added", nextName, "workspace"), "success");
       }
       resetForm();
       await load();
@@ -105,10 +107,10 @@ export function WorkspacesRoute() {
 
   const remove = async (workspace: WorkspaceItem) => {
     const ok = await confirm({
-      title: "删除工作区",
-      body: `删除「${workspace.name}」后不可恢复，确认删除？`,
+      title: t("workspaces.deleteConfirm.title"),
+      body: t("workspaces.deleteConfirm.body", { name: workspace.name }),
       danger: true,
-      confirmText: "删除",
+      confirmText: t("common.actions.delete"),
     });
     if (!ok) return;
     try {
@@ -119,7 +121,7 @@ export function WorkspacesRoute() {
         window.location.href = "/chat";
         return;
       }
-      toast(toastAction("已删除", workspace.name, "工作区"), "success");
+      toast(toastAction("deleted", workspace.name, "workspace"), "success");
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -133,15 +135,15 @@ export function WorkspacesRoute() {
   };
 
   return (
-    <PageContainer title="工作区" subtitle="创建、切换与管理工作区">
+    <PageContainer title={t("workspaces.title")} subtitle={t("workspaces.subtitle")}>
       <ReadyGate>
         <div className="space-y-4">
-          <SearchInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索工作区…" />
+          <SearchInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("workspaces.searchPlaceholder")} />
 
           {items === null ? (
             <Loading />
           ) : filtered.length === 0 ? (
-            <Empty text={query ? "无匹配工作区" : "暂无工作区"} />
+            <Empty text={query ? t("workspaces.noMatch") : t("workspaces.empty")} />
           ) : (
             <div className="space-y-2">
               {filtered.map((w) => {
@@ -152,8 +154,8 @@ export function WorkspacesRoute() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <span className="truncate font-medium">{w.name}</span>
-                          {w.is_default && <Badge variant="outline">默认</Badge>}
-                          {isCurrent && <Badge variant="brand">当前</Badge>}
+                          {w.is_default && <Badge variant="outline">{t("workspaces.badges.default")}</Badge>}
+                          {isCurrent && <Badge variant="brand">{t("workspaces.badges.current")}</Badge>}
                         </div>
                         {w.description && (
                           <p className={listItemDescriptionClass}>{w.description}</p>
@@ -165,8 +167,8 @@ export function WorkspacesRoute() {
                             variant="ghost"
                             size="icon-sm"
                             className={listRowHoverActionsClass}
-                            title="切换到该工作区"
-                            aria-label="切换到该工作区"
+                            title={t("workspaces.actions.switch")}
+                            aria-label={t("workspaces.actions.switch")}
                             onClick={() => switchWorkspace(w.id)}
                           >
                             <Check className="size-4" />
@@ -176,8 +178,8 @@ export function WorkspacesRoute() {
                           variant="ghost"
                           size="icon-sm"
                           className={listRowHoverActionsClass}
-                          title="编辑工作区"
-                          aria-label="编辑工作区"
+                          title={t("workspaces.actions.edit")}
+                          aria-label={t("workspaces.actions.edit")}
                           onClick={() => startEdit(w)}
                         >
                           <Pencil className="size-4" />
@@ -187,8 +189,8 @@ export function WorkspacesRoute() {
                             variant="ghost"
                             size="icon-sm"
                             className={listRowHoverActionsClass}
-                            title="删除工作区"
-                            aria-label="删除工作区"
+                            title={t("workspaces.actions.delete")}
+                            aria-label={t("workspaces.actions.delete")}
                             onClick={() => {
                               void remove(w);
                             }}
@@ -206,7 +208,7 @@ export function WorkspacesRoute() {
 
           <div ref={formRef}>
             <CollapsiblePanel
-              summary={editing ? "编辑工作区" : "新建工作区"}
+              summary={editing ? t("workspaces.form.editTitle") : t("workspaces.form.createTitle")}
               defaultOpen={!!editing}
               onOpenChange={(open) => {
                 if (!open) resetForm();
@@ -214,20 +216,20 @@ export function WorkspacesRoute() {
             >
               <div className="grid gap-3">
                 <div className="grid gap-1.5">
-                  <Label>名称（25 字内）</Label>
+                  <Label>{t("workspaces.fields.name")}</Label>
                   <Input
                     value={name}
                     onChange={(e) => setName(e.target.value.slice(0, 25))}
-                    placeholder="输入工作区名称"
+                    placeholder={t("workspaces.fields.namePlaceholder")}
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label>描述（可选）</Label>
+                  <Label>{t("workspaces.fields.description")}</Label>
                   <Textarea
                     rows={2}
                     value={description}
                     onChange={(e) => setDescription(e.target.value.slice(0, 200))}
-                    placeholder="输入工作区描述"
+                    placeholder={t("workspaces.fields.descriptionPlaceholder")}
                   />
                 </div>
                 <div className="flex gap-2">
@@ -239,7 +241,7 @@ export function WorkspacesRoute() {
                     }}
                   >
                     {saving && <Loader2 className="size-4 animate-spin" />}
-                    {editing ? "保存" : "添加"}
+                    {editing ? t("common.actions.save") : t("common.actions.add")}
                   </Button>
                 </div>
               </div>

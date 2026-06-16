@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { before, describe, it } from "node:test";
 
+import { ensureI18nReady } from "../i18n/index.ts";
+import i18n from "../i18n/index.ts";
 import { toastAction, truncateToastLabel } from "./toast-copy.ts";
+
+before(async () => {
+  await ensureI18nReady();
+  await i18n.changeLanguage("zh");
+});
 
 describe("toast-copy", () => {
   it("truncates long labels", () => {
@@ -11,6 +18,6 @@ describe("toast-copy", () => {
   });
 
   it("formats delete with kind", () => {
-    assert.equal(toastAction("已删除", "线性代数", "产物"), "已删除产物「线性代数」");
+    assert.equal(toastAction("deleted", "线性代数", "artifact"), "已删除产物「线性代数」");
   });
 });

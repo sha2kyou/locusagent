@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { KeyRound, Loader2, Pencil, RefreshCw, ShieldCheck, ShieldOff, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import { Tag } from "@/components/ui/tag";
 import { getWorkspaceId } from "@/api/client";
 import { createMcp, deleteMcp, disconnectMcpOAuth, getMcpOAuthAuthorizeUrl, listMcp, reconnectMcp, updateMcp } from "@/api/endpoints";
 import type { McpInput, McpServer, McpTool } from "@/api/types";
+import i18n from "@/i18n";
 import { openExternalUrl } from "@/lib/open-external";
 import { pollMcpOAuthConnected } from "@/lib/mcp-oauth";
 import { toastAction } from "@/lib/toast-copy";
@@ -25,17 +27,17 @@ function parseKvJson(raw: string, label: string): Record<string, string> {
   try {
     parsed = JSON.parse(source);
   } catch {
-    throw new Error(`${label} JSON 解析失败`);
+    throw new Error(i18n.t("mcp.validation.jsonParseFailed", { label }));
   }
   if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
-    throw new Error(`${label}必须是 JSON 对象`);
+    throw new Error(i18n.t("mcp.validation.mustBeObject", { label }));
   }
   const entries = Object.entries(parsed as Record<string, unknown>);
   const out: Record<string, string> = {};
   for (const [k, v] of entries) {
     const key = k.trim();
-    if (!key) throw new Error(`${label} key 不能为空`);
-    if (typeof v !== "string") throw new Error(`${label} ${key} 的值必须是字符串`);
+    if (!key) throw new Error(i18n.t("mcp.validation.keyEmpty", { label }));
+    if (typeof v !== "string") throw new Error(i18n.t("mcp.validation.valueMustBeString", { label, key }));
     out[key] = v;
   }
   return out;
@@ -67,15 +69,16 @@ function mcpConnectionStatus(s: McpServer): {
   dotClass: string;
 } {
   if (s.pending) {
-    return { label: "连接中", variant: "warning", dotClass: "bg-warning" };
+    return { label: i18n.t("mcp.status.connecting"), variant: "warning", dotClass: "bg-warning" };
   }
   if (s.connected) {
-    return { label: "在线", variant: "success", dotClass: "bg-success" };
+    return { label: i18n.t("mcp.status.online"), variant: "success", dotClass: "bg-success" };
   }
-  return { label: "离线", variant: "danger", dotClass: "bg-destructive" };
+  return { label: i18n.t("mcp.status.offline"), variant: "danger", dotClass: "bg-destructive" };
 }
 
 export function McpRoute() {
+  const { t } = useTranslation();
   const toast = useToast();
   const { confirm } = useDialogs();
   const [items, setItems] = useState<McpServer[] | null>(null);
@@ -97,6 +100,9 @@ export function McpRoute() {
   const [oauthPending, setOauthPending] = useState<string | null>(null);
   const [reconnecting, setReconnecting] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
+
+  const envLabel = t("mcp.form.validation.env");
+  const headersLabel = t("mcp.form.validation.headers");
 
   const load = async (opts?: { sync?: boolean; silent?: boolean }) => {
     try {
@@ -130,20 +136,20 @@ export function McpRoute() {
   const startOAuth = async (s: McpServer) => {
     const workspaceId = getWorkspaceId();
     if (!workspaceId) {
-      toast("请先选择工作区", "error");
+      toast(t("mcp.selectWorkspace"), "error");
       return;
     }
     setOauthPending(s.name);
     try {
       const { authorize_url: authorizeUrl } = await getMcpOAuthAuthorizeUrl(s.name, workspaceId);
       await openExternalUrl(authorizeUrl);
-      toast(`已在系统浏览器打开「${s.name}」授权页，完成后会自动刷新`, "info");
+      toast(t("mcp.oauthFlow.browserOpened", { name: s.name }), "info");
       const ok = await pollMcpOAuthConnected(s.name);
       if (ok) {
-        toast(`「${s.name}」OAuth 授权成功`, "success");
+        toast(t("mcp.oauthFlow.success", { name: s.name }), "success");
         await load({ sync: true });
       } else {
-        toast(`「${s.name}」授权未完成或超时，请重试`, "error");
+        toast(t("mcp.oauthFlow.incomplete", { name: s.name }), "error");
       }
     } catch (e) {
       toast((e as Error).message, "error");
@@ -158,12 +164,12 @@ export function McpRoute() {
       return;
     }
     try {
-      parseKvJson(envJson, "环境变量");
+      parseKvJson(envJson, envLabel);
       setEnvError(null);
     } catch (e) {
       setEnvError((e as Error).message);
     }
-  }, [envJson, transport]);
+  }, [envJson, transport, envLabel]);
 
   useEffect(() => {
     if (transport !== "http") {
@@ -171,16 +177,16 @@ export function McpRoute() {
       return;
     }
     try {
-      parseKvJson(headersJson, "请求头");
+      parseKvJson(headersJson, headersLabel);
       setHeadersError(null);
     } catch (e) {
       setHeadersError((e as Error).message);
     }
-  }, [headersJson, transport]);
+  }, [headersJson, transport, headersLabel]);
 
   const buildPayload = (): McpInput => {
     if (transport === "stdio") {
-      const env = parseKvJson(envJson, "环境变量");
+      const env = parseKvJson(envJson, envLabel);
       const base: McpInput = {
         name,
         transport,
@@ -190,7 +196,7 @@ export function McpRoute() {
       if (Object.keys(env).length > 0) base.env = env;
       return base;
     }
-    const headers = parseKvJson(headersJson, "请求头");
+    const headers = parseKvJson(headersJson, headersLabel);
     const base: McpInput = { name, transport, url: url.trim() };
     if (Object.keys(headers).length > 0) base.headers = headers;
     return base;
@@ -224,7 +230,7 @@ export function McpRoute() {
 
   const formatEnvJson = () => {
     try {
-      setEnvJson(JSON.stringify(parseKvJson(envJson, "环境变量"), null, 2));
+      setEnvJson(JSON.stringify(parseKvJson(envJson, envLabel), null, 2));
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -232,7 +238,7 @@ export function McpRoute() {
 
   const formatHeadersJson = () => {
     try {
-      setHeadersJson(JSON.stringify(parseKvJson(headersJson, "请求头"), null, 2));
+      setHeadersJson(JSON.stringify(parseKvJson(headersJson, headersLabel), null, 2));
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -246,9 +252,9 @@ export function McpRoute() {
         ? await updateMcp(editing, buildPayload())
         : await createMcp(buildPayload());
       if (saved.pending) {
-        toast(`「${saved.name}」正在后台连接…`, "info");
+        toast(t("mcp.oauthFlow.connecting", { name: saved.name }), "info");
       } else {
-        toast(toastAction(editing ? "已更新" : "已添加", label, "MCP 服务"), "success");
+        toast(toastAction(editing ? "updated" : "added", label, "mcpService"), "success");
       }
       reset();
       await load();
@@ -264,9 +270,9 @@ export function McpRoute() {
     try {
       const saved = await reconnectMcp(s.name);
       if (saved.pending) {
-        toast(`「${s.name}」正在后台重连…`, "info");
+        toast(t("mcp.oauthFlow.reconnecting", { name: s.name }), "info");
       } else {
-        toast(toastAction("已重连", s.name, "MCP 服务"), "success");
+        toast(toastAction("reconnected", s.name, "mcpService"), "success");
       }
       await load();
     } catch (e) {
@@ -282,9 +288,9 @@ export function McpRoute() {
       try {
         await reconnectMcp(s.name);
       } catch {
-        // 预期：无 token 时重连失败
+        // expected when no token
       }
-      toast(toastAction("已断开 OAuth", s.name, "MCP 服务"), "success");
+      toast(toastAction("oauthDisconnected", s.name, "mcpService"), "success");
       await load();
     } catch (e) {
       toast((e as Error).message, "error");
@@ -292,12 +298,21 @@ export function McpRoute() {
   };
 
   const remove = async (s: McpServer) => {
-    if (!(await confirm({ title: "删除 MCP 服务", body: `删除「${s.name}」？`, danger: true, confirmText: "删除" }))) return;
+    if (
+      !(await confirm({
+        title: t("mcp.form.deleteTitle"),
+        body: t("mcp.form.deleteBody", { name: s.name }),
+        danger: true,
+        confirmText: t("common.actions.delete"),
+      }))
+    ) {
+      return;
+    }
     try {
       await deleteMcp(s.name);
       if (editing === s.name) reset();
       await load();
-      toast(toastAction("已删除", s.name, "MCP 服务"), "success");
+      toast(toastAction("deleted", s.name, "mcpService"), "success");
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -319,22 +334,22 @@ export function McpRoute() {
 
   return (
     <PageContainer
-      title="MCP"
-      subtitle="MCP 服务连接与工具管理"
-      actions={items ? <Badge variant="outline">{items.length} 个服务</Badge> : undefined}
+      title={t("mcp.title")}
+      subtitle={t("mcp.subtitle")}
+      actions={items ? <Badge variant="outline">{t("mcp.serviceCount", { count: items.length })}</Badge> : undefined}
     >
       <ReadyGate>
         <div className="space-y-4">
           <SearchInput
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索 MCP 服务…"
+            placeholder={t("mcp.searchPlaceholder")}
           />
 
           {items === null ? (
             <Loading />
           ) : filtered.length === 0 ? (
-            <Empty text={query ? "无匹配 MCP 服务" : "暂无 MCP 服务"} />
+            <Empty text={query ? t("mcp.noMatch") : t("mcp.empty")} />
           ) : (
             <div className="space-y-2">
               {filtered.map((s) => {
@@ -357,7 +372,7 @@ export function McpRoute() {
                             ) : (
                               <KeyRound className="size-3.5" aria-hidden />
                             )}
-                            {s.oauth_connected ? "已授权" : "待授权"}
+                            {s.oauth_connected ? t("mcp.oauth.connected") : t("mcp.oauth.pending")}
                           </Badge>
                         ) : null}
                       </div>
@@ -373,8 +388,8 @@ export function McpRoute() {
                           className={listRowHoverActionsClass}
                           disabled={oauthPending === s.name}
                           onClick={() => void startOAuth(s)}
-                          aria-label="OAuth 授权"
-                          title="OAuth 授权"
+                          aria-label={t("mcp.actions.oauthAuthorize")}
+                          title={t("mcp.actions.oauthAuthorize")}
                         >
                           {oauthPending === s.name ? (
                             <Loader2 className="size-4 animate-spin" />
@@ -389,8 +404,8 @@ export function McpRoute() {
                           size="icon-sm"
                           className={listRowHoverActionsClass}
                           onClick={() => disconnectOAuth(s)}
-                          aria-label="解除 OAuth 授权"
-                          title="解除 OAuth 授权"
+                          aria-label={t("mcp.actions.disconnectOAuth")}
+                          title={t("mcp.actions.disconnectOAuth")}
                         >
                           <ShieldOff />
                         </Button>
@@ -401,7 +416,7 @@ export function McpRoute() {
                         className={listRowHoverActionsClass}
                         disabled={reconnecting === s.name || s.pending}
                         onClick={() => void reconnect(s)}
-                        aria-label="重连"
+                        aria-label={t("mcp.actions.reconnect")}
                       >
                         {reconnecting === s.name || s.pending ? (
                           <Loader2 className="size-4 animate-spin" />
@@ -409,11 +424,11 @@ export function McpRoute() {
                           <RefreshCw />
                         )}
                       </Button>
-                      <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => startEdit(s)} aria-label="编辑"><Pencil /></Button>
-                      <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => remove(s)} aria-label="删除"><Trash2 /></Button>
+                      <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => startEdit(s)} aria-label={t("common.actions.edit")}><Pencil /></Button>
+                      <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => remove(s)} aria-label={t("common.actions.delete")}><Trash2 /></Button>
                     </div>
                   </div>
-                  <CollapsibleSection summary="详情">
+                  <CollapsibleSection summary={t("common.actions.details")}>
                     <div className="space-y-2 text-sm">
                       <p className="break-all text-foreground">
                         {s.transport === "http" ? s.url : (s.command ?? []).join(" ")}
@@ -431,12 +446,12 @@ export function McpRoute() {
                       {s.runtime_error && <p className="text-xs text-destructive">{s.runtime_error}</p>}
                       {s.tools.length > 0 && (
                         <div className="flex flex-wrap gap-1">
-                          {s.tools.map((t) => (
+                          {s.tools.map((tool) => (
                             <Tag
-                              key={t.full_name}
-                              onClick={() => setSelectedTool({ serverName: s.name, tool: t })}
+                              key={tool.full_name}
+                              onClick={() => setSelectedTool({ serverName: s.name, tool })}
                             >
-                              {t.name}
+                              {tool.name}
                             </Tag>
                           ))}
                         </div>
@@ -451,7 +466,7 @@ export function McpRoute() {
 
           <div ref={formRef}>
           <CollapsiblePanel
-            summary={editing ? `编辑服务：${editing}` : "添加 MCP 服务"}
+            summary={editing ? t("mcp.form.editSummary", { name: editing }) : t("mcp.form.addTitle")}
             defaultOpen={!!editing}
             onOpenChange={(open) => {
               if (!open) reset();
@@ -460,11 +475,11 @@ export function McpRoute() {
             <div className="grid gap-3">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="grid gap-1.5">
-                  <Label>名称（唯一）</Label>
+                  <Label>{t("mcp.fields.name")}</Label>
                   <Input value={name} disabled={!!editing} onChange={(e) => setName(e.target.value)} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label>传输方式</Label>
+                  <Label>{t("mcp.fields.transport")}</Label>
                   <Select value={transport} onChange={(e) => setTransport(e.target.value as "stdio" | "http")}>
                     <option value="stdio">stdio</option>
                     <option value="http">http</option>
@@ -473,21 +488,21 @@ export function McpRoute() {
               </div>
               {transport === "stdio" ? (
                 <div className="grid gap-1.5">
-                  <Label>命令</Label>
+                  <Label>{t("mcp.fields.command")}</Label>
                   <Input value={command} onChange={(e) => setCommand(e.target.value)} placeholder="npx @scope/mcp-server" />
                 </div>
               ) : (
                 <div className="grid gap-1.5">
-                  <Label>URL</Label>
+                  <Label>{t("mcp.fields.url")}</Label>
                   <Input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://mcp.notion.com/mcp" />
                 </div>
               )}
               {transport === "stdio" ? (
                 <div className="grid gap-1.5">
                   <div className="flex items-center justify-between gap-2">
-                    <Label>环境变量（JSON）</Label>
+                    <Label>{t("mcp.fields.envJson")}</Label>
                     <Button variant="ghost" size="sm" onClick={formatEnvJson}>
-                      格式化
+                      {t("mcp.fields.format")}
                     </Button>
                   </div>
                   <Textarea
@@ -502,9 +517,9 @@ export function McpRoute() {
               ) : (
                 <div className="grid gap-1.5">
                   <div className="flex items-center justify-between gap-2">
-                    <Label>请求头（JSON）</Label>
+                    <Label>{t("mcp.fields.headersJson")}</Label>
                     <Button variant="ghost" size="sm" onClick={formatHeadersJson}>
-                      格式化
+                      {t("mcp.fields.format")}
                     </Button>
                   </div>
                   <Textarea
@@ -517,15 +532,15 @@ export function McpRoute() {
                   {headersError ? <p className="text-xs text-destructive">{headersError}</p> : null}
                   <p className="text-xs text-muted-foreground">
                     {editing && headersConfigured
-                      ? "已配置请求头，留空则保留；填写则覆盖。"
-                      : "保存时会自动探测是否支持 OAuth；支持则显示授权按钮，否则在此填写请求头凭据。"}
+                      ? t("mcp.headersHint.preserve")
+                      : t("mcp.headersHint.oauth")}
                   </p>
                 </div>
               )}
               <div className="flex gap-2">
                 <Button variant="primary" disabled={saving || !name.trim() || formInvalid} onClick={submit}>
                   {saving && <Loader2 className="size-4 animate-spin" />}
-                  {editing ? "保存" : "添加"}
+                  {editing ? t("common.actions.save") : t("common.actions.add")}
                 </Button>
               </div>
             </div>
@@ -542,19 +557,19 @@ export function McpRoute() {
         {selectedTool ? (
           <div className="space-y-4">
             <section className="space-y-1">
-              <h3 className="text-sm font-medium">描述</h3>
+              <h3 className="text-sm font-medium">{t("mcp.toolDetail.description")}</h3>
               <p className="whitespace-pre-wrap text-sm text-foreground">
-                {normalizeText(selectedTool.tool.description, "无描述")}
+                {normalizeText(selectedTool.tool.description, t("mcp.toolDetail.noDescription"))}
               </p>
             </section>
             <section className="space-y-1">
-              <h3 className="text-sm font-medium">参数摘要</h3>
+              <h3 className="text-sm font-medium">{t("mcp.toolDetail.paramsSummary")}</h3>
               <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                {normalizeText(selectedTool.tool.schema_summary, "无参数摘要")}
+                {normalizeText(selectedTool.tool.schema_summary, t("mcp.toolDetail.noParamsSummary"))}
               </p>
             </section>
             <section className="space-y-1">
-              <h3 className="text-sm font-medium">输入 Schema</h3>
+              <h3 className="text-sm font-medium">{t("mcp.toolDetail.inputSchema")}</h3>
               <pre className="max-h-[45vh] overflow-auto whitespace-pre-wrap rounded-md bg-surface-2 p-3 font-mono text-xs text-foreground">
                 {JSON.stringify(selectedTool.tool.input_schema ?? {}, null, 2)}
               </pre>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { getBackendLogs } from "@/api/endpoints";
 import type { BackendLogs } from "@/api/types";
 
@@ -7,6 +8,7 @@ const POLL_MS = 3000;
 const MAX_LINES = 2000;
 
 export function SettingsLogsPage() {
+  const { t } = useTranslation();
   const [data, setData] = useState<BackendLogs | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,14 +67,14 @@ export function SettingsLogsPage() {
         {loading && (
           <div className="flex items-center gap-2 text-muted-foreground">
             <Loader2 className="size-3.5 animate-spin" />
-            加载中…
+            {t("settings.logs.loading")}
           </div>
         )}
         {!loading && error && (
           <span className="text-destructive">{error}</span>
         )}
         {!loading && !error && (!data || data.lines.length === 0) && (
-          <span className="text-muted-foreground">暂无日志。</span>
+          <span className="text-muted-foreground">{t("settings.logs.empty")}</span>
         )}
         {!loading && !error && data && data.lines.length > 0 &&
           data.lines.map((line, i) => (

@@ -1,3 +1,5 @@
+import i18n from "../i18n/index.ts";
+
 const TZ_PROBE_DATE = new Date("2020-01-01T00:00:00Z");
 
 /** 校验 IANA 时区；无效时降级为 UTC */
@@ -58,30 +60,40 @@ function daysBetweenDateKeys(earlierKey: string, laterKey: string): number {
   return Math.round((b - a) / 86400000);
 }
 
-export const SESSION_LIST_GROUP_ORDER = [
-  "今天",
-  "昨天",
-  "过去 7 天",
-  "过去 30 天",
-  "更早",
-] as const;
+export type SessionListGroupKey = "today" | "yesterday" | "last7" | "last30" | "older";
 
-/** 对话列表分组：按用户时区的日历日划分今天 / 昨天等 */
+export const SESSION_LIST_GROUP_ORDER: readonly SessionListGroupKey[] = [
+  "today",
+  "yesterday",
+  "last7",
+  "last30",
+  "older",
+];
+
+export function sessionListGroupKey(
+  iso: string,
+  timeZone: string,
+  now = new Date(),
+): SessionListGroupKey {
+  const tz = resolveAppTimeZone(timeZone);
+  const sessionKey = calendarDateKeyInTimeZone(iso, tz);
+  if (!sessionKey) return "older";
+  const nowKey = calendarDateKeyFromDateEnCa(now, tz);
+  const diffDays = daysBetweenDateKeys(sessionKey, nowKey);
+  if (diffDays === 0) return "today";
+  if (diffDays === 1) return "yesterday";
+  if (diffDays < 7) return "last7";
+  if (diffDays < 30) return "last30";
+  return "older";
+}
+
 export function sessionListGroupLabel(
   iso: string,
   timeZone: string,
   now = new Date(),
 ): string {
-  const tz = resolveAppTimeZone(timeZone);
-  const sessionKey = calendarDateKeyInTimeZone(iso, tz);
-  if (!sessionKey) return "更早";
-  const nowKey = calendarDateKeyFromDateEnCa(now, tz);
-  const diffDays = daysBetweenDateKeys(sessionKey, nowKey);
-  if (diffDays === 0) return "今天";
-  if (diffDays === 1) return "昨天";
-  if (diffDays < 7) return "过去 7 天";
-  if (diffDays < 30) return "过去 30 天";
-  return "更早";
+  const key = sessionListGroupKey(iso, timeZone, now);
+  return i18n.t(`time.sessionGroups.${key}`);
 }
 
 /** 相对时间：刚刚 / N 分钟前 / …，超出 30 天显示日期 */
@@ -92,16 +104,16 @@ export function formatRelative(iso: string, timeZone = "UTC"): string {
   if (Number.isNaN(t)) return iso;
   const diff = Date.now() - t;
   const m = Math.floor(diff / 60000);
-  if (m < 1) return "刚刚";
-  if (m < 60) return `${m} 分钟前`;
+  if (m < 1) return i18n.t("time.relative.justNow");
+  if (m < 60) return i18n.t("time.relative.minutesAgo", { count: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h} 小时前`;
+  if (h < 24) return i18n.t("time.relative.hoursAgo", { count: h });
 
   const sessionKey = calendarDateKeyInTimeZone(iso, tz);
   const nowKey = calendarDateKeyFromDateEnCa(new Date(), tz);
   if (sessionKey && nowKey) {
     const diffDays = daysBetweenDateKeys(sessionKey, nowKey);
-    if (diffDays < 30) return `${diffDays} 天前`;
+    if (diffDays < 30) return i18n.t("time.relative.daysAgo", { count: diffDays });
   }
 
   return formatWithTimeZone(new Date(t), tz, {

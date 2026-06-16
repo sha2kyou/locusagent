@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "./button";
@@ -24,6 +25,7 @@ export function Drawer({
   actions,
   children,
 }: DrawerProps) {
+  const { t } = useTranslation();
   const panelRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -77,7 +79,7 @@ export function Drawer({
           </div>
           <div className="flex shrink-0 items-center gap-0.5">
             {actions}
-            <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="关闭">
+            <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label={t("common.close")}>
               <X />
             </Button>
           </div>

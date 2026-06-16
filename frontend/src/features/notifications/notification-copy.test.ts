@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { before, describe, it } from "node:test";
 
+import { ensureI18nReady } from "../../i18n/index.ts";
+import i18n from "../../i18n/index.ts";
 import { toastMessageForNotification } from "./notification-copy.ts";
 import type { NotificationEntry } from "@/api/types";
+
+before(async () => {
+  await ensureI18nReady();
+  await i18n.changeLanguage("zh");
+});
 
 function item(partial: Partial<NotificationEntry> & Pick<NotificationEntry, "title">): NotificationEntry {
   return {

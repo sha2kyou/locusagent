@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Bell, BrushCleaning, X } from "lucide-react";
@@ -10,6 +11,10 @@ import {
 } from "@/components/ui/surface-styles";
 import { useTimeFormatters } from "@/lib/use-app-timezone";
 import { useNotifications } from "./NotificationProvider";
+import {
+  displayNotificationCategory,
+  displayNotificationTitle,
+} from "./notification-copy";
 import type { NotificationEntry } from "@/api/types";
 
 const PANEL_WIDTH = 352;
@@ -31,19 +36,6 @@ function computePanelPos(anchor: DOMRect, align: "start" | "end") {
   };
 }
 
-function displayCategory(item: NotificationEntry): string | null {
-  if (item.category) return item.category;
-  if (item.title.startsWith("产物已保存：")) return "保存产物";
-  return null;
-}
-
-function displayTitle(item: NotificationEntry): string {
-  if (item.category) return item.title;
-  const prefix = "产物已保存：";
-  if (item.title.startsWith(prefix)) return item.title.slice(prefix.length);
-  return item.title;
-}
-
 function NotificationRow({
   item,
   onOpen,
@@ -51,9 +43,10 @@ function NotificationRow({
   item: NotificationEntry;
   onOpen: () => void;
 }) {
+  const { t } = useTranslation();
   const { formatRelative } = useTimeFormatters();
-  const category = displayCategory(item);
-  const title = displayTitle(item);
+  const category = displayNotificationCategory(item, t);
+  const title = displayNotificationTitle(item, t);
   return (
     <div
       className="group flex gap-1 rounded-lg transition-colors hover:bg-secondary"
@@ -96,6 +89,7 @@ export function NotificationBell({
   /** start：左对齐向右展开（侧栏）；end：右对齐向左展开（顶栏右侧） */
   menuAlign?: "start" | "end";
 }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { items, unreadCount, loading, markRead, markAllRead } = useNotifications();
   const [open, setOpen] = useState(false);
@@ -152,7 +146,7 @@ export function NotificationBell({
           >
             <div className={floatingPanelHeaderClass}>
               <div className="flex items-center gap-2">
-                <span className="text-[13px] font-semibold tracking-tight">消息</span>
+                <span className="text-[13px] font-semibold tracking-tight">{t("notifications.panel.title")}</span>
                 {unreadCount > 0 && (
                   <span className="rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-semibold leading-none text-brand-foreground">
                     {unreadCount > 99 ? "99+" : unreadCount}
@@ -165,13 +159,13 @@ export function NotificationBell({
                     variant="ghost"
                     size="icon-sm"
                     onClick={() => void markAllRead()}
-                    aria-label="全部标记为已读"
-                    title="全部已读"
+                    aria-label={t("notifications.panel.markAllRead")}
+                    title={t("notifications.panel.allRead")}
                   >
                     <BrushCleaning className="size-4" />
                   </Button>
                 ) : null}
-                <Button variant="ghost" size="icon-sm" onClick={() => setOpen(false)} aria-label="关闭">
+                <Button variant="ghost" size="icon-sm" onClick={() => setOpen(false)} aria-label={t("common.close")}>
                   <X className="size-4" />
                 </Button>
               </div>
@@ -179,11 +173,11 @@ export function NotificationBell({
 
             <div className="max-h-[min(24rem,60vh)] overflow-y-auto p-1.5">
               {loading && items.length === 0 ? (
-                <p className="px-3 py-10 text-center text-sm text-muted-foreground">加载中…</p>
+                <p className="px-3 py-10 text-center text-sm text-muted-foreground">{t("notifications.panel.loading")}</p>
               ) : items.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 px-3 py-10 text-center">
                   <Bell className="size-8 text-muted-foreground/40" />
-                  <p className="text-sm text-muted-foreground">暂无消息</p>
+                  <p className="text-sm text-muted-foreground">{t("notifications.panel.empty")}</p>
                 </div>
               ) : (
                 <div className="flex flex-col gap-1">
@@ -208,7 +202,7 @@ export function NotificationBell({
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          aria-label="消息通知"
+          aria-label={t("notifications.bell.ariaLabel")}
           aria-expanded={open}
           className={cn(
             "relative inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-secondary hover:text-foreground",

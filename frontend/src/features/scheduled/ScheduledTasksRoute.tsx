@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Loader2, Pencil, Play, Trash2 } from "lucide-react";
+import type { TFunction } from "i18next";
+import { useTranslation } from "react-i18next";
 import { Cron, type Locale as CronLocale } from "react-js-cron";
 import "react-js-cron/styles.css";
 import { PageContainer } from "@/components/PageContainer";
@@ -24,39 +26,41 @@ import { cn } from "@/lib/utils";
 import { toastAction } from "@/lib/toast-copy";
 import { useTimeFormatters } from "@/lib/use-app-timezone";
 
-const CRON_LOCALE_ZH: CronLocale = {
-  everyText: "每",
-  emptyMonths: "每月",
-  emptyMonthDays: "每天",
-  emptyMonthDaysShort: "天",
-  emptyWeekDays: "每周",
-  emptyWeekDaysShort: "周",
-  emptyHours: "每小时",
-  emptyMinutes: "每分钟",
-  emptyMinutesForHourPeriod: "分钟",
-  yearOption: "年",
-  monthOption: "月",
-  weekOption: "周",
-  dayOption: "日",
-  hourOption: "小时",
-  minuteOption: "分钟",
-  rebootOption: "重启后",
-  prefixPeriod: "周期",
-  prefixMonths: "在",
-  prefixMonthDays: "在",
-  prefixWeekDays: "在",
-  prefixWeekDaysForMonthAndYearPeriod: "在",
-  prefixHours: "在",
-  prefixMinutes: "在",
-  prefixMinutesForHourPeriod: "在",
-  suffixMinutesForHourPeriod: "分钟",
-  errorInvalidCron: "Cron 表达式无效",
-  clearButtonText: "清空",
-  weekDays: ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
-  months: ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"],
-  altWeekDays: ["日", "一", "二", "三", "四", "五", "六"],
-  altMonths: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"],
-};
+function buildCronLocale(t: TFunction): CronLocale {
+  return {
+    everyText: t("scheduled.cron.everyText"),
+    emptyMonths: t("scheduled.cron.emptyMonths"),
+    emptyMonthDays: t("scheduled.cron.emptyMonthDays"),
+    emptyMonthDaysShort: t("scheduled.cron.emptyMonthDaysShort"),
+    emptyWeekDays: t("scheduled.cron.emptyWeekDays"),
+    emptyWeekDaysShort: t("scheduled.cron.emptyWeekDaysShort"),
+    emptyHours: t("scheduled.cron.emptyHours"),
+    emptyMinutes: t("scheduled.cron.emptyMinutes"),
+    emptyMinutesForHourPeriod: t("scheduled.cron.emptyMinutesForHourPeriod"),
+    yearOption: t("scheduled.cron.yearOption"),
+    monthOption: t("scheduled.cron.monthOption"),
+    weekOption: t("scheduled.cron.weekOption"),
+    dayOption: t("scheduled.cron.dayOption"),
+    hourOption: t("scheduled.cron.hourOption"),
+    minuteOption: t("scheduled.cron.minuteOption"),
+    rebootOption: t("scheduled.cron.rebootOption"),
+    prefixPeriod: t("scheduled.cron.prefixPeriod"),
+    prefixMonths: t("scheduled.cron.prefixMonths"),
+    prefixMonthDays: t("scheduled.cron.prefixMonthDays"),
+    prefixWeekDays: t("scheduled.cron.prefixWeekDays"),
+    prefixWeekDaysForMonthAndYearPeriod: t("scheduled.cron.prefixWeekDaysForMonthAndYearPeriod"),
+    prefixHours: t("scheduled.cron.prefixHours"),
+    prefixMinutes: t("scheduled.cron.prefixMinutes"),
+    prefixMinutesForHourPeriod: t("scheduled.cron.prefixMinutesForHourPeriod"),
+    suffixMinutesForHourPeriod: t("scheduled.cron.suffixMinutesForHourPeriod"),
+    errorInvalidCron: t("scheduled.cron.errorInvalidCron"),
+    clearButtonText: t("scheduled.cron.clearButtonText"),
+    weekDays: t("scheduled.cron.weekDays", { returnObjects: true }) as string[],
+    months: t("scheduled.cron.months", { returnObjects: true }) as string[],
+    altWeekDays: t("scheduled.cron.altWeekDays", { returnObjects: true }) as string[],
+    altMonths: t("scheduled.cron.altMonths", { returnObjects: true }) as string[],
+  };
+}
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -89,6 +93,8 @@ function DateTimePicker({
   value: string;
   onChange: (next: string) => void;
 }) {
+  const { t } = useTranslation();
+  const weekdays = t("scheduled.datetimePicker.weekdays", { returnObjects: true }) as string[];
   const now = new Date();
   const parsed = parseDateTimeLocal(value);
   const [open, setOpen] = useState(false);
@@ -152,32 +158,32 @@ function DateTimePicker({
         readOnly
         value={display}
         onClick={() => setOpen((v) => !v)}
-        placeholder="点击选择日期和时间"
+        placeholder={t("scheduled.datetimePicker.placeholder")}
         className="cursor-pointer pr-10"
       />
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="absolute right-1 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary"
-        aria-label="打开日历"
+        aria-label={t("scheduled.datetimePicker.openCalendar")}
       >
         <CalendarDays className="size-4" />
       </button>
       {open ? (
         <ListCard className="absolute bottom-full left-0 z-20 mb-2 w-[320px] overflow-hidden p-0 shadow-lg bg-surface!">
           <div className="flex items-center justify-between px-4 py-3">
-            <Button variant="ghost" size="icon-sm" onClick={() => shiftMonth(-1)} aria-label="上个月">
+            <Button variant="ghost" size="icon-sm" onClick={() => shiftMonth(-1)} aria-label={t("scheduled.datetimePicker.prevMonth")}>
               <ChevronLeft className="size-4" />
             </Button>
             <span className="text-sm font-medium">
-              {viewY}年{viewM}月
+              {t("scheduled.datetimePicker.yearMonth", { year: viewY, month: viewM })}
             </span>
-            <Button variant="ghost" size="icon-sm" onClick={() => shiftMonth(1)} aria-label="下个月">
+            <Button variant="ghost" size="icon-sm" onClick={() => shiftMonth(1)} aria-label={t("scheduled.datetimePicker.nextMonth")}>
               <ChevronRight className="size-4" />
             </Button>
           </div>
           <div className="grid grid-cols-7 gap-1 px-4 pb-1 text-center text-xs text-muted-foreground">
-            {["日", "一", "二", "三", "四", "五", "六"].map((w) => (
+            {weekdays.map((w) => (
               <span key={w}>{w}</span>
             ))}
           </div>
@@ -206,7 +212,7 @@ function DateTimePicker({
           <div className="grid gap-3 px-4 pb-3">
             <div className="grid grid-cols-2 gap-2">
               <div className="grid gap-1">
-                <Label>小时</Label>
+                <Label>{t("scheduled.datetimePicker.hour")}</Label>
                 <Select
                   value={String(selected?.hh ?? 9)}
                   onChange={(e) => applyTime(Number(e.target.value), null)}
@@ -219,7 +225,7 @@ function DateTimePicker({
                 </Select>
               </div>
               <div className="grid gap-1">
-                <Label>分钟</Label>
+                <Label>{t("scheduled.datetimePicker.minute")}</Label>
                 <Select
                   value={String(selected?.mm ?? 0)}
                   onChange={(e) => applyTime(null, Number(e.target.value))}
@@ -237,10 +243,10 @@ function DateTimePicker({
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={() => onChange("")}>
-                清空
+                {t("scheduled.datetimePicker.clear")}
               </Button>
               <Button variant="secondary" size="sm" onClick={() => setOpen(false)}>
-                完成
+                {t("scheduled.datetimePicker.done")}
               </Button>
             </div>
           </div>
@@ -250,13 +256,13 @@ function DateTimePicker({
   );
 }
 
-function statusBadge(task: ScheduledTask) {
-  if (task.completed_at) return { text: "已完成", variant: "neutral" as const };
-  if (task.last_run_status === "running") return { text: "运行中", variant: "warning" as const };
-  if (task.last_run_status === "queued") return { text: "排队中", variant: "warning" as const };
-  if (!task.enabled) return { text: "已停用", variant: "neutral" as const };
-  if (task.last_run_status === "failed") return { text: "上次失败", variant: "warning" as const };
-  return { text: "等待中", variant: "success" as const };
+function statusBadge(task: ScheduledTask, t: TFunction) {
+  if (task.completed_at) return { text: t("scheduled.status.completed"), variant: "neutral" as const };
+  if (task.last_run_status === "running") return { text: t("scheduled.status.running"), variant: "warning" as const };
+  if (task.last_run_status === "queued") return { text: t("scheduled.status.queued"), variant: "warning" as const };
+  if (!task.enabled) return { text: t("scheduled.status.disabled"), variant: "neutral" as const };
+  if (task.last_run_status === "failed") return { text: t("scheduled.status.failed"), variant: "warning" as const };
+  return { text: t("scheduled.status.waiting"), variant: "success" as const };
 }
 
 function isTaskBusy(task: ScheduledTask, pendingRunIds: ReadonlySet<number>): boolean {
@@ -270,14 +276,19 @@ function isTaskBusy(task: ScheduledTask, pendingRunIds: ReadonlySet<number>): bo
 function scheduleLabel(
   task: ScheduledTask,
   formatDt: (iso: string | null | undefined) => string,
+  t: TFunction,
 ): string {
   if (task.schedule_kind === "once") {
-    return task.run_at ? `单次 · ${formatDt(task.run_at)}` : "单次";
+    return task.run_at
+      ? t("scheduled.type.onceAt", { time: formatDt(task.run_at) })
+      : t("scheduled.type.once");
   }
-  return `Cron · ${task.cron_expr ?? ""}`;
+  return t("scheduled.type.cron", { expr: task.cron_expr ?? "" });
 }
 
 export function ScheduledTasksRoute() {
+  const { t, i18n } = useTranslation();
+  const cronLocale = useMemo(() => buildCronLocale(t), [t, i18n.language]);
   const toast = useToast();
   const { confirm } = useDialogs();
   const { timeZone, formatDateTime, toDatetimeLocal } = useTimeFormatters();
@@ -344,19 +355,19 @@ export function ScheduledTasksRoute() {
 
   const submit = async () => {
     if (!title.trim()) {
-      toast("请填写任务标题", "error");
+      toast(t("scheduled.validation.title"), "error");
       return;
     }
     if (!prompt.trim()) {
-      toast("请填写要执行的指令", "error");
+      toast(t("scheduled.validation.instruction"), "error");
       return;
     }
     if (scheduleKind === "cron" && !cronExpr.trim()) {
-      toast("请填写 Cron 表达式", "error");
+      toast(t("scheduled.validation.cron"), "error");
       return;
     }
     if (scheduleKind === "once" && !runAt.trim()) {
-      toast("请选择执行时间", "error");
+      toast(t("scheduled.validation.runAt"), "error");
       return;
     }
     setSaving(true);
@@ -372,10 +383,10 @@ export function ScheduledTasksRoute() {
       };
       if (editingId) {
         await updateScheduledTask(editingId, body);
-        toast(toastAction("已更新", title.trim(), "定时任务"), "success");
+        toast(toastAction("updated", title.trim(), "scheduledTask"), "success");
       } else {
         await createScheduledTask(body);
-        toast(toastAction("已添加", title.trim(), "定时任务"), "success");
+        toast(toastAction("added", title.trim(), "scheduledTask"), "success");
       }
       reset();
       await load();
@@ -392,7 +403,7 @@ export function ScheduledTasksRoute() {
     setSaving(true);
     try {
       await runScheduledTaskNow(task.id);
-      toast(toastAction("已开始运行", task.title, "定时任务"), "success");
+      toast(toastAction("started", task.title, "scheduledTask"), "success");
       await load();
     } catch (e) {
       toast((e as Error).message, "error");
@@ -408,13 +419,21 @@ export function ScheduledTasksRoute() {
 
   const remove = async (task: ScheduledTask) => {
     if (isTaskBusy(task, pendingRunIds)) return;
-    if (!(await confirm({ title: "删除定时任务", body: `确定删除「${task.title}」？`, danger: true, confirmText: "删除" }))) return;
+    if (
+      !(await confirm({
+        title: t("scheduled.form.deleteTitle"),
+        body: t("scheduled.form.deleteBody", { title: task.title }),
+        danger: true,
+        confirmText: t("common.actions.delete"),
+      }))
+    )
+      return;
     setSaving(true);
     try {
       await deleteScheduledTask(task.id);
       if (editingId === task.id) reset();
       await load();
-      toast(toastAction("已删除", task.title, "定时任务"), "success");
+      toast(toastAction("deleted", task.title, "scheduledTask"), "success");
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
@@ -424,20 +443,20 @@ export function ScheduledTasksRoute() {
 
   return (
     <PageContainer
-      title="定时任务"
-      subtitle="按 Cron 或指定时间自动运行 AgentPod；每次执行新建会话"
-      actions={items ? <Badge variant="outline">共 {items.length} 条</Badge> : undefined}
+      title={t("scheduled.title")}
+      subtitle={t("scheduled.subtitle")}
+      actions={items ? <Badge variant="outline">{t("scheduled.count", { count: items.length })}</Badge> : undefined}
     >
       <ReadyGate>
         <div className="space-y-4">
           {items === null ? (
             <Loading />
           ) : items.length === 0 ? (
-            <Empty text="暂无定时任务" />
+            <Empty text={t("scheduled.empty")} />
           ) : (
             <div className="space-y-2">
               {items.map((task) => {
-                const st = statusBadge(task);
+                const st = statusBadge(task, t);
                 return (
                   <ListCard key={task.id} className="group p-0 overflow-hidden">
                     <div className="flex items-start gap-2 px-4 py-3">
@@ -445,12 +464,14 @@ export function ScheduledTasksRoute() {
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-medium">{task.title}</span>
                           <Badge variant={st.variant}>{st.text}</Badge>
-                          {task.notify ? <Badge variant="outline">通知</Badge> : null}
+                          {task.notify ? <Badge variant="outline">{t("scheduled.notifyBadge")}</Badge> : null}
                         </div>
-                        <p className={listItemBriefClass}>{scheduleLabel(task, formatDateTime)}</p>
+                        <p className={listItemBriefClass}>{scheduleLabel(task, formatDateTime, t)}</p>
                         <p className={listItemBriefClass}>
-                          下次执行：{formatDateTime(task.next_run_at)}
-                          {task.last_run_at ? ` · 上次：${formatDateTime(task.last_run_at)}` : ""}
+                          {t("scheduled.runSchedule.next")}{formatDateTime(task.next_run_at)}
+                          {task.last_run_at
+                            ? ` · ${t("scheduled.runSchedule.last")}${formatDateTime(task.last_run_at)}`
+                            : ""}
                         </p>
                         {task.last_error ? (
                           <p className="mt-1 text-xs text-destructive">{task.last_error}</p>
@@ -465,8 +486,8 @@ export function ScheduledTasksRoute() {
                               className={listRowHoverActionsClass}
                               disabled={saving || isTaskBusy(task, pendingRunIds)}
                               onClick={() => void runOnce(task)}
-                              aria-label="运行一次"
-                              title="运行一次"
+                              aria-label={t("scheduled.actions.runOnce")}
+                              title={t("scheduled.actions.runOnce")}
                             >
                               <Play />
                             </Button>
@@ -476,8 +497,8 @@ export function ScheduledTasksRoute() {
                               className={listRowHoverActionsClass}
                               disabled={saving || isTaskBusy(task, pendingRunIds)}
                               onClick={() => startEdit(task)}
-                              aria-label="编辑"
-                              title="编辑"
+                              aria-label={t("common.actions.edit")}
+                              title={t("common.actions.edit")}
                             >
                               <Pencil />
                             </Button>
@@ -489,18 +510,18 @@ export function ScheduledTasksRoute() {
                           className={listRowHoverActionsClass}
                           disabled={saving || isTaskBusy(task, pendingRunIds)}
                           onClick={() => void remove(task)}
-                          aria-label="删除"
-                          title="删除"
+                          aria-label={t("common.actions.delete")}
+                          title={t("common.actions.delete")}
                         >
                           <Trash2 />
                         </Button>
                       </div>
                     </div>
-                    <CollapsibleSection summary="指令内容">
+                    <CollapsibleSection summary={t("scheduled.actions.instruction")}>
                       <pre className="whitespace-pre-wrap text-sm text-foreground">{task.prompt}</pre>
                     </CollapsibleSection>
                     {task.last_run_summary ? (
-                      <CollapsibleSection summary="上次执行结果">
+                      <CollapsibleSection summary={t("scheduled.actions.lastResult")}>
                         <pre className="whitespace-pre-wrap text-sm text-foreground">{task.last_run_summary}</pre>
                       </CollapsibleSection>
                     ) : null}
@@ -512,7 +533,7 @@ export function ScheduledTasksRoute() {
 
           <div ref={formRef}>
             <CollapsiblePanel
-              summary={<span>{editingId ? "编辑任务" : "新建任务"}</span>}
+              summary={<span>{editingId ? t("scheduled.form.editTitle") : t("scheduled.form.createTitle")}</span>}
               defaultOpen={!!editingId || items?.length === 0}
               onOpenChange={(open) => {
                 if (!open) reset();
@@ -520,70 +541,72 @@ export function ScheduledTasksRoute() {
             >
               <div className="grid gap-3">
                 <div className="grid gap-1.5">
-                  <Label>标题</Label>
-                  <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例如：每日早报" />
+                  <Label>{t("scheduled.form.title")}</Label>
+                  <Input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder={t("scheduled.form.titlePlaceholder")}
+                  />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label>指令（发给 AgentPod 的 prompt）</Label>
+                  <Label>{t("scheduled.form.instruction")}</Label>
                   <Textarea
                     rows={5}
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
-                    placeholder="到点后 AgentPod 将按此指令执行…"
+                    placeholder={t("scheduled.form.instructionPlaceholder")}
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label>类型</Label>
+                  <Label>{t("scheduled.form.type")}</Label>
                   <SegmentControl
                     value={scheduleKind}
                     onChange={setScheduleKind}
                     options={[
-                      { value: "cron", label: "重复（Cron）", disabled: !!editingId },
-                      { value: "once", label: "单次", disabled: !!editingId },
+                      { value: "cron", label: t("scheduled.form.typeCron"), disabled: !!editingId },
+                      { value: "once", label: t("scheduled.form.typeOnce"), disabled: !!editingId },
                     ]}
                     className={cn(editingId && "opacity-60")}
                   />
                   {editingId ? (
-                    <p className="text-xs text-muted-foreground">类型创建后不可修改</p>
+                    <p className="text-xs text-muted-foreground">{t("scheduled.form.typeImmutable")}</p>
                   ) : null}
                 </div>
                 {scheduleKind === "cron" ? (
                   <div className="grid gap-1.5">
-                    <Label>Cron 选择器</Label>
+                    <Label>{t("scheduled.form.cronPicker")}</Label>
                     <Cron
                       value={cronExpr}
                       setValue={(next: string) => setCronExpr(next || "")}
                       clearButton={false}
                       humanizeLabels
-                      locale={CRON_LOCALE_ZH}
+                      locale={cronLocale}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      按设置中的时区解释。可视化选择后会自动生成 Cron 表达式。
-                    </p>
+                    <p className="text-xs text-muted-foreground">{t("scheduled.form.cronHint")}</p>
                   </div>
                 ) : (
                   <div className="grid gap-1.5">
-                    <Label>执行时间</Label>
+                    <Label>{t("scheduled.form.runAt")}</Label>
                     <DateTimePicker value={runAt} onChange={setRunAt} />
                     <p className="text-xs text-muted-foreground">
-                      按设置时区（{timeZone}）填写，例如 2026-06-01 09:00
+                      {t("scheduled.form.runAtHint", { timeZone })}
                     </p>
                   </div>
                 )}
                 <div className="flex flex-wrap gap-4">
                   <label className="flex items-center gap-2 text-sm">
                     <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
-                    启用
+                    {t("scheduled.form.enabled")}
                   </label>
                   <label className="flex items-center gap-2 text-sm">
                     <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
-                    通知
+                    {t("scheduled.form.notify")}
                   </label>
                 </div>
                 <div className="flex gap-2">
                   <Button variant="primary" disabled={saving} onClick={() => void submit()}>
                     {saving && <Loader2 className="size-4 animate-spin" />}
-                    {editingId ? "保存" : "添加"}
+                    {editingId ? t("common.actions.save") : t("common.actions.add")}
                   </Button>
                 </div>
               </div>

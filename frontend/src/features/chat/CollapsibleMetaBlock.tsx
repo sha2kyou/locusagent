@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronRight, Loader2 } from "lucide-react";
 import { ListCard } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
@@ -62,6 +63,7 @@ export function CollapsibleMetaBlock({
   children?: ReactNode;
   className?: string;
 }) {
+  const { t } = useTranslation();
   const [open, toggleOpen] = usePinnedCollapse(blockId, false);
   const isOpen = lockWhenActive && active ? true : open;
   const expandable = Boolean(children) && (!lockWhenActive || !active);
@@ -87,7 +89,7 @@ export function CollapsibleMetaBlock({
         <span className="shrink-0 whitespace-nowrap text-[13px] font-medium text-foreground">{displayTitle}</span>
         {showRunningBadge && running ? (
           <span className="shrink-0 rounded-full bg-brand/10 px-1.5 py-0.5 text-[10px] font-medium text-brand">
-            执行中
+            {t("chat.meta.running")}
           </span>
         ) : null}
         {showPreview ? (

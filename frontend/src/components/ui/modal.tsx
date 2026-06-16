@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "./button";
@@ -33,6 +34,7 @@ export function Modal({
   showClose = true,
   closeDisabled = false,
 }: ModalProps) {
+  const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   const closeDisabledRef = useRef(closeDisabled);
@@ -122,7 +124,7 @@ export function Modal({
               )}
             </div>
             {showClose && !closeDisabled && (
-              <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="关闭">
+              <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label={t("common.close")}>
                 <X />
               </Button>
             )}

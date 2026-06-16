@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -165,6 +166,7 @@ function extractLang(children: ReactNode): string {
 }
 
 function CodeBlock({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [wrap, setWrap] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -191,8 +193,8 @@ function CodeBlock({ children }: { children: ReactNode }) {
               "apod-code-block-action inline-flex size-6 items-center justify-center rounded-md",
               wrap && "apod-code-block-action-active",
             )}
-            aria-label="自动换行"
-            title={wrap ? "取消换行" : "自动换行"}
+            aria-label={wrap ? t("chat.markdown.wrapOff") : t("chat.markdown.wrapOn")}
+            title={wrap ? t("chat.markdown.wrapOff") : t("chat.markdown.wrapOn")}
           >
             <WrapText className="size-3.5" />
           </button>
@@ -200,8 +202,8 @@ function CodeBlock({ children }: { children: ReactNode }) {
             type="button"
             onClick={copy}
             className="apod-code-block-action inline-flex size-6 items-center justify-center rounded-md"
-            aria-label="复制代码"
-            title="复制"
+            aria-label={t("chat.markdown.copyCode")}
+            title={t("chat.markdown.copy")}
           >
             {copied ? (
               <Check className="size-3.5 apod-code-block-action-success" />
@@ -276,10 +278,11 @@ function buildSrcDoc(html: string): string {
 }
 
 function HtmlPending() {
+  const { t } = useTranslation();
   return (
     <div className="my-3 overflow-hidden rounded-lg border border-border">
       <div className="flex items-center gap-2 border-b border-border bg-surface-2/60 px-3 py-1.5 text-xs text-muted-foreground">
-        <Loader2 className="size-3.5 animate-spin" /> 正在生成可视化…
+        <Loader2 className="size-3.5 animate-spin" /> {t("chat.markdown.vizGenerating")}
       </div>
       <div className="space-y-2 p-4">
         <div className="h-3 w-1/3 animate-pulse rounded bg-muted-foreground/15" />
@@ -290,6 +293,7 @@ function HtmlPending() {
 }
 
 export function HtmlRender({ html }: { html: string }) {
+  const { t } = useTranslation();
   const ref = useRef<HTMLIFrameElement>(null);
   const [copied, setCopied] = useState(false);
   const [height, setHeight] = useState(320);
@@ -323,21 +327,21 @@ export function HtmlRender({ html }: { html: string }) {
   if (!html.trim()) {
     return (
       <div className="my-3 rounded-lg border border-border bg-surface/40 px-3 py-4 text-center text-xs text-muted-foreground">
-        无可渲染内容
+        {t("chat.markdown.vizEmpty")}
       </div>
     );
   }
 
   const tools: Array<{ key: string; icon: ReactNode; label: string; onClick: () => void }> = [
-    { key: "full", icon: <Expand className="size-3.5" />, label: "全屏", onClick: fullscreen },
-    { key: "open", icon: <ExternalLink className="size-3.5" />, label: "新窗口打开", onClick: openNew },
-    { key: "copy", icon: copied ? <Check className="size-3.5 text-success" /> : <Code2 className="size-3.5" />, label: "复制源码", onClick: copy },
+    { key: "full", icon: <Expand className="size-3.5" />, label: t("chat.markdown.fullscreen"), onClick: fullscreen },
+    { key: "open", icon: <ExternalLink className="size-3.5" />, label: t("chat.markdown.openInNewWindow"), onClick: openNew },
+    { key: "copy", icon: copied ? <Check className="size-3.5 text-success" /> : <Code2 className="size-3.5" />, label: t("chat.markdown.copySource"), onClick: copy },
   ];
 
   return (
     <div className="my-3 overflow-hidden rounded-lg border border-border">
       <div className="flex items-center justify-between border-b border-border bg-surface-2/60 px-3 py-1.5 text-xs text-muted-foreground">
-        <span>HTML 预览</span>
+        <span>{t("chat.markdown.htmlPreview")}</span>
         <div className="flex items-center gap-0.5">
           {tools.map((t) => (
             <button

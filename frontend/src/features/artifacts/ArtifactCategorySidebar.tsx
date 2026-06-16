@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import type { ArtifactCategory } from "@/api/types";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,7 @@ export function ArtifactCategorySidebar({
   onEditCategory: (category: ArtifactCategory) => void;
   onDeleteCategory: (category: ArtifactCategory) => void;
 }) {
+  const { t } = useTranslation();
   const q = categoryQuery.trim().toLowerCase();
   const filtered =
     categories?.filter((c) =>
@@ -47,14 +49,14 @@ export function ArtifactCategorySidebar({
   return (
     <SecondarySidebar mobileOpen={mobileOpen} mobileSide="right" onClose={onClose}>
       <SecondarySidebarHeader
-        title="产物"
+        title={t("artifacts.title")}
         actions={
           <Button
             variant="ghost"
             size="icon-sm"
             onClick={onAddCategory}
-            title="新建类目"
-            aria-label="新建类目"
+            title={t("nav.artifactsNewCategory")}
+            aria-label={t("nav.artifactsNewCategory")}
           >
             <Plus className="size-4" />
           </Button>
@@ -63,7 +65,7 @@ export function ArtifactCategorySidebar({
           <SearchInput
             value={categoryQuery}
             onChange={(e) => onCategoryQueryChange(e.target.value)}
-            placeholder="搜索类目…"
+            placeholder={t("artifacts.sidebar.searchPlaceholder")}
           />
         }
       />
@@ -76,7 +78,7 @@ export function ArtifactCategorySidebar({
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <SidebarEmpty text={categoryQuery ? "无匹配类目" : "暂无类目"} />
+          <SidebarEmpty text={categoryQuery ? t("artifacts.sidebar.noMatch") : t("artifacts.sidebar.empty")} />
         ) : (
           <div className={secondarySidebarListClass}>
             {filtered.map((c) => (
@@ -91,7 +93,7 @@ export function ArtifactCategorySidebar({
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      aria-label="编辑类目"
+                      aria-label={t("artifacts.sidebar.editCategory")}
                       onClick={() => onEditCategory(c)}
                     >
                       <Pencil />
@@ -100,7 +102,7 @@ export function ArtifactCategorySidebar({
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      aria-label="删除类目"
+                      aria-label={t("artifacts.sidebar.deleteCategory")}
                       onClick={() => onDeleteCategory(c)}
                     >
                       <Trash2 />

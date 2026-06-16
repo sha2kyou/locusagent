@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { createBrowserRouter, Navigate, RouterProvider, useLocation } from "react-router-dom";
 import { stripWorkspacePrefix, withWorkspacePrefix } from "@/app/workspace-route";
 import { installExternalLinkHandling } from "@/lib/open-external";
+import { ensureI18nReady } from "@/i18n";
 import "./index.css";
 import { ToastProvider } from "@/components/ui/toast";
 import { DialogProvider } from "@/components/ui/dialogs";
@@ -128,14 +129,16 @@ const router = createBrowserRouter([
 
 installExternalLinkHandling();
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <ThemeProvider>
-      <ToastProvider>
-        <DialogProvider>
-          <RouterProvider router={router} />
-        </DialogProvider>
-      </ToastProvider>
-    </ThemeProvider>
-  </StrictMode>,
-);
+void ensureI18nReady().then(() => {
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <ThemeProvider>
+        <ToastProvider>
+          <DialogProvider>
+            <RouterProvider router={router} />
+          </DialogProvider>
+        </ToastProvider>
+      </ThemeProvider>
+    </StrictMode>,
+  );
+});

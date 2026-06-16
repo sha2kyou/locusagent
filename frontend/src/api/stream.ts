@@ -1,5 +1,6 @@
 import type { ChatChunk } from "./types";
 import { ApiError, getWorkspaceId } from "./client";
+import i18n from "@/i18n";
 import {
   STREAM_MAX_RETRIES,
   userMessageFromContainerError,
@@ -119,7 +120,7 @@ export async function streamChatCompletion(
     });
 
     if (res.status === 401) {
-      throw new ApiError("未登录", { status: 401, code: "unauthenticated" });
+      throw new ApiError(i18n.t("errors.unauthenticated"), { status: 401, code: "unauthenticated" });
     }
 
     // 后端启动中：503 + Retry-After，自动重试
@@ -136,7 +137,7 @@ export async function streamChatCompletion(
       const err = (data as { error?: { code?: string; message?: string; detail?: unknown } })?.error;
       const code = err?.code;
       const friendly = userMessageFromContainerError(code, res.status);
-      throw new ApiError(friendly || err?.message || `请求失败 (${res.status})`, {
+      throw new ApiError(friendly || err?.message || i18n.t("errors.requestFailed", { status: res.status }), {
         status: res.status,
         code,
         detail: err?.detail,
@@ -173,7 +174,7 @@ export async function streamActiveRun(
   );
 
   if (res.status === 401) {
-    throw new ApiError("未登录", { status: 401, code: "unauthenticated" });
+    throw new ApiError(i18n.t("errors.unauthenticated"), { status: 401, code: "unauthenticated" });
   }
 
   if (!res.ok || !res.body) {
@@ -181,7 +182,7 @@ export async function streamActiveRun(
     const err = (data as { error?: { code?: string; message?: string; detail?: unknown } })?.error;
     const code = err?.code;
     const friendly = userMessageFromContainerError(code, res.status);
-    throw new ApiError(friendly || err?.message || `请求失败 (${res.status})`, {
+    throw new ApiError(friendly || err?.message || i18n.t("errors.requestFailed", { status: res.status }), {
       status: res.status,
       code,
       detail: err?.detail,

@@ -1,4 +1,5 @@
 import { createContext, Suspense, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Brain,
@@ -46,28 +47,25 @@ export function useShell() {
   return ctx;
 }
 
-type NavEntry = { to: string; label: string; icon: typeof MessagesSquare };
+type NavEntry = { to: string; labelKey: string; icon: typeof MessagesSquare };
 
-// 内容类：日常产出与消费
-const NAV_PRIMARY: NavEntry[] = [{ to: "/chat", label: "对话", icon: MessagesSquare }];
-// 能力扩展
+const NAV_PRIMARY: NavEntry[] = [{ to: "/chat", labelKey: "nav.chat", icon: MessagesSquare }];
 const NAV_CAPABILITIES: NavEntry[] = [
-  { to: "/skills", label: "技能", icon: Sparkles },
-  { to: "/mcp", label: "MCP", icon: Plug },
-  // { to: "/tools", label: "工具", icon: Wrench },
+  { to: "/skills", labelKey: "nav.skills", icon: Sparkles },
+  { to: "/mcp", labelKey: "nav.mcp", icon: Plug },
+  // { to: "/tools", labelKey: "nav.tools", icon: Wrench },
 ];
-// 上下文与密钥
 const NAV_CONTEXT: NavEntry[] = [
-  { to: "/memory", label: "记忆", icon: Brain },
-  { to: "/env-vars", label: "环境变量", icon: KeyRound },
+  { to: "/memory", labelKey: "nav.memory", icon: Brain },
+  { to: "/env-vars", labelKey: "nav.envVars", icon: KeyRound },
 ];
-const NAV_WORKSPACE: NavEntry = { to: "/workspaces", label: "工作区", icon: FolderOpen };
-// 自动化：独立展示于配置组下方
-const NAV_AUTOMATION: NavEntry[] = [{ to: "/scheduled-tasks", label: "定时任务", icon: Clock }];
+const NAV_WORKSPACE: NavEntry = { to: "/workspaces", labelKey: "nav.workspaces", icon: FolderOpen };
+const NAV_AUTOMATION: NavEntry[] = [{ to: "/scheduled-tasks", labelKey: "nav.scheduledTasks", icon: Clock }];
 
 const EXPAND_KEY = "apod-nav-expanded";
 
 export function AppShell() {
+  const { t } = useTranslation();
   const { me } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -81,7 +79,7 @@ export function AppShell() {
   const [menuScrollable, setMenuScrollable] = useState(false);
   const defaultWorkspaceId = workspaces.find((w) => w.is_default)?.id ?? "";
   const currentWorkspace = workspaces.find((w) => w.id === me?.current_workspace_id) ?? null;
-  const currentWorkspaceLabel = currentWorkspace?.name || "默认工作区";
+  const currentWorkspaceLabel = currentWorkspace?.name || t("nav.defaultWorkspace");
   const isDefaultWorkspace = !!currentWorkspace && currentWorkspace.is_default;
   const routeWorkspace = stripWorkspacePrefix(location.pathname);
   const onChatRoute = isChatRoutePath(location.pathname);
@@ -145,12 +143,10 @@ export function AppShell() {
         }
       />
       <div className="flex h-full">
-        {/* 移动端遮罩 */}
         {navOpen && (
           <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={() => setNavOpen(false)} />
         )}
 
-        {/* 左侧导航栏 */}
         <aside
           className={cn(
             "fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar transition-transform duration-200",
@@ -160,16 +156,13 @@ export function AppShell() {
             expanded ? sidebarPrimaryWidthClass.expanded : sidebarPrimaryWidthClass.collapsed,
           )}
         >
-          {/* 桌面端顶栏留白（拖拽 / 红绿灯） */}
           <div
             {...desktopDragRegionProps("deep")}
             className="apod-sidebar-header hidden shrink-0 md:block"
           />
 
-          {/* 移动端顶栏占位，与主区顶栏对齐 */}
           <div className="h-12 shrink-0 md:hidden" />
 
-          {/* 导航列表 */}
           <nav ref={navListRef} className={sidebarNavContainerClass(expanded)}>
             {NAV_PRIMARY.map((item) => (
               <NavRow key={item.to} {...item} basePrefix={workspacePrefix} expanded={expanded} onNavigate={() => setNavOpen(false)} />
@@ -193,7 +186,6 @@ export function AppShell() {
             ))}
           </nav>
 
-          {/* 底部：设置入口 */}
           <div
             className={cn(
               "relative shrink-0 border-t border-sidebar-border/40 p-2.5",
@@ -217,7 +209,7 @@ export function AppShell() {
             )}
             <NavLink
               to={`${workspacePrefix}/settings`}
-              title="设置"
+              title={t("nav.settings")}
               onClick={() => setNavOpen(false)}
               className={({ isActive }) =>
                 cn(
@@ -229,30 +221,27 @@ export function AppShell() {
               <span className={sidebarNavIconSlotClass} aria-hidden>
                 <Settings className={sidebarNavIconClass} strokeWidth={1.75} />
               </span>
-              <span className={sidebarNavLabelClass(expanded)}>设置</span>
+              <span className={sidebarNavLabelClass(expanded)}>{t("nav.settings")}</span>
             </NavLink>
           </div>
 
-          {/* 收起/展开：仅桌面，置于最底部 */}
           <div className={cn("hidden shrink-0 border-t border-sidebar-border/40 p-2 md:block", !expanded && "md:flex md:justify-center")}>
             <button
               type="button"
               onClick={() => setExpanded((v) => !v)}
-              title={expanded ? "收起" : "展开"}
+              title={expanded ? t("nav.collapse") : t("nav.expand")}
               className={cn(
                 "flex h-9 items-center gap-2.5 rounded-lg px-2 text-xs text-muted-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-foreground",
                 expanded ? "w-full justify-start" : "w-9 justify-center",
               )}
             >
               {expanded ? <ChevronsLeft className="size-4 shrink-0" /> : <PanelLeft className="size-4 shrink-0" />}
-              {expanded && <span>收起</span>}
+              {expanded && <span>{t("nav.collapse")}</span>}
             </button>
           </div>
         </aside>
 
-        {/* 主区 */}
         <div className="relative flex min-w-0 flex-1 flex-col">
-          {/* 移动端顶栏 */}
           <div
             {...desktopDragRegionProps("deep")}
             className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 md:hidden"
@@ -260,7 +249,7 @@ export function AppShell() {
             <button
               type="button"
               onClick={() => setNavOpen(true)}
-              aria-label="菜单"
+              aria-label={t("nav.menu")}
               className="-ml-1 inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground"
             >
               <Menu className="size-5" />
@@ -272,7 +261,6 @@ export function AppShell() {
             </div>
           </div>
           <main className="relative min-w-0 flex-1 overflow-hidden">
-            {/* 桌面端：右上角浮动，不占布局高度 */}
             <div className="pointer-events-none absolute right-3 top-3 z-[70] hidden md:block">
               <NotificationBell menuAlign="end" className="pointer-events-auto" />
             </div>
@@ -296,12 +284,14 @@ function NavGroupDivider({ expanded }: { expanded: boolean }) {
 
 function NavRow({
   to,
-  label,
+  labelKey,
   icon: Icon,
   basePrefix,
   expanded,
   onNavigate,
 }: NavEntry & { basePrefix: string; expanded: boolean; onNavigate: () => void }) {
+  const { t } = useTranslation();
+  const label = t(labelKey);
   return (
     <NavLink
       to={`${basePrefix}${to}`}

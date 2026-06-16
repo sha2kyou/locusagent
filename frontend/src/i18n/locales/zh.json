@@ -1,0 +1,671 @@
+{
+  "nav": {
+    "chat": "对话",
+    "skills": "技能",
+    "mcp": "MCP",
+    "memory": "记忆",
+    "envVars": "环境变量",
+    "workspaces": "工作区",
+    "scheduledTasks": "定时任务",
+    "settings": "设置",
+    "artifacts": "产物",
+    "artifactsNewCategory": "新建类目",
+    "defaultWorkspace": "默认工作区",
+    "collapse": "收起",
+    "expand": "展开",
+    "menu": "菜单",
+    "chatList": "对话列表"
+  },
+  "common": {
+    "close": "关闭",
+    "loading": "加载中…",
+    "actions": {
+      "save": "保存",
+      "add": "添加",
+      "delete": "删除",
+      "edit": "编辑",
+      "cancel": "取消",
+      "confirm": "确定",
+      "details": "详情",
+      "body": "正文",
+      "export": "导出",
+      "runOnce": "运行一次"
+    },
+    "dialog": {
+      "confirmTitle": "确认",
+      "promptTitle": "输入"
+    }
+  },
+  "settings": {
+    "title": "设置",
+    "nav": {
+      "general": { "label": "通用", "description": "主题、时区与菜单栏" },
+      "models": { "label": "模型与服务", "description": "LLM、嵌入与第三方工具" },
+      "tools": { "label": "工具", "description": "Terminal 开关与白名单" },
+      "usage": { "label": "用量统计", "description": "Token 与 API 调用" },
+      "logs": { "label": "日志", "description": "后端进程运行输出" }
+    },
+    "pages": {
+      "general": { "title": "通用", "subtitle": "主题与时区" },
+      "models": { "title": "模型与服务", "subtitle": "LLM、向量嵌入与第三方工具" },
+      "tools": { "title": "工具", "subtitle": "Terminal 开关、白名单与禁止项" },
+      "usage": { "title": "用量统计", "subtitle": "按场景汇总 Token 与 API 调用" },
+      "logs": { "title": "日志", "subtitle": "后端进程运行输出" }
+    },
+    "general": {
+      "language": {
+        "title": "语言",
+        "description": "界面显示语言，立即生效。",
+        "options": { "zh": "简体中文", "en": "English" }
+      },
+      "theme": {
+        "title": "主题",
+        "description": "界面配色方案，立即生效。",
+        "system": "跟随系统",
+        "light": "浅色",
+        "dark": "深色"
+      },
+      "menubar": {
+        "title": "菜单栏与后台",
+        "description": "关闭窗口后可在菜单栏保留 AgentPod；开机自启需在此手动开启。"
+      },
+      "runInBackground": {
+        "label": "关闭窗口后在菜单栏继续运行",
+        "hint": "点击窗口关闭按钮时隐藏窗口，不退出应用；可从菜单栏图标重新打开。"
+      },
+      "launchAtLogin": {
+        "label": "登录时自动启动 AgentPod",
+        "hint": "在系统登录时启动应用；默认关闭，需手动开启。"
+      },
+      "saveDesktopPrefs": "保存桌面偏好",
+      "desktopPrefsSaved": "桌面偏好已保存",
+      "desktopPrefsAutostartFailed": "偏好已保存，但开机自启设置失败",
+      "timezone": {
+        "label": "时区",
+        "save": "保存时区",
+        "saved": "时区已保存：{{tz}}"
+      }
+    },
+    "models": {
+      "llm": {
+        "title": "对话模型（LLM）",
+        "description": "主模型用于对话与工具调用；留空则保持当前配置。",
+        "primaryLabel": "主模型",
+        "configured": "已配置",
+        "notConfigured": "未配置",
+        "keepEmpty": "留空保持不变"
+      },
+      "auxiliary": {
+        "title": "场景模型",
+        "description": "按场景覆盖主模型；留空均回退主模型。",
+        "configuredCount": "{{count}} 项已配置",
+        "fields": {
+          "vision": { "label": "Vision 模型", "hint": "图片理解；留空则使用主模型" },
+          "webExtract": { "label": "网页提取模型", "hint": "网页内容结构化提取；留空则使用主模型" },
+          "compression": { "label": "上下文压缩模型", "hint": "长对话上下文合并；留空则使用主模型" },
+          "titleGeneration": { "label": "标题生成模型", "hint": "会话标题自动生成；留空则使用主模型" },
+          "approval": { "label": "安全检查模型", "hint": "敏感操作审批；留空则使用主模型" },
+          "curator": { "label": "记忆策展模型", "hint": "长期记忆整理；留空则使用主模型" },
+          "skillReflect": { "label": "技能反思模型", "hint": "技能执行后反思；留空则使用主模型" }
+        }
+      },
+      "embedding": {
+        "title": "向量嵌入（Embedding）",
+        "description": "用于记忆检索与语义搜索。",
+        "modelLabel": "Embedding 模型"
+      },
+      "apiBaseUrl": "API Base URL",
+      "apiKey": "API Key",
+      "thirdPartyKeys": {
+        "tavily": "Tavily Key",
+        "jina": "Jina Key",
+        "tavilyPlaceholder": "可选，网络搜索",
+        "jinaPlaceholder": "可选，网页阅读"
+      },
+      "thirdParty": {
+        "title": "第三方工具",
+        "description": "网络搜索与网页阅读等外部服务 API Key。"
+      },
+      "saved": "配置已保存",
+      "save": "保存配置"
+    },
+    "tools": {
+      "terminal": {
+        "title": "Terminal",
+        "description": "控制 Agent 是否可执行 shell 命令，以及允许/禁止的可执行文件名（逗号分隔，不含路径）。"
+      },
+      "enableTerminal": "启用 terminal 工具",
+      "whitelist": {
+        "label": "白名单",
+        "hint": "仅允许列表中的可执行文件名",
+        "detail": "仅允许 bare 命令名（如 git、npm），不允许路径；为空时拒绝所有命令。"
+      },
+      "denylist": {
+        "label": "禁止项",
+        "hint": "禁止列表中的可执行文件名",
+        "detail": "即使在白名单中，命中禁止项的命令也会被拦截。"
+      },
+      "saved": "Terminal 设置已保存",
+      "save": "保存"
+    },
+    "logs": {
+      "loading": "加载中…",
+      "empty": "暂无日志。"
+    },
+    "usage": {
+      "loading": "加载中…",
+      "empty": "暂无用量数据，完成一次对话后将开始累计。",
+      "table": { "scene": "场景", "token": "Token", "apiCalls": "API 次数" },
+      "scenarios": {
+        "chat": "对话",
+        "compression": "上下文压缩",
+        "title_generation": "标题生成",
+        "curator": "记忆策展",
+        "memory_autostore": "记忆自动提取",
+        "skill_reflect": "后台自我改进",
+        "approval": "写入审查",
+        "tavily": "网络搜索",
+        "duckduckgo": "网络搜索",
+        "jina": "网页阅读",
+        "embedding": "向量嵌入",
+        "scheduled_run": "定时任务",
+        "todo_intent": "任务意图识别",
+        "background_review_intent": "后台改进意图"
+      }
+    }
+  },
+  "copy": {
+    "agent": {
+      "unavailable": "AgentPod 暂时不可用，请稍后重试。",
+      "startingTimeout": "AgentPod 启动超时，请稍后再试；若持续失败请联系管理员。",
+      "composerPlaceholder": "给 AgentPod 发送消息…",
+      "authLoadFailed": "无法连接服务器，请稍后重试。",
+      "streamRetry": "AgentPod 启动中，{{seconds}}s 后重试（{{attempt}}/{{max}}）"
+    },
+    "toast": {
+      "unnamed": "（未命名）"
+    }
+  },
+  "toast": {
+    "actions": {
+      "deleted": "已删除",
+      "added": "已添加",
+      "updated": "已更新",
+      "reconnected": "已重连",
+      "oauthDisconnected": "已断开 OAuth",
+      "started": "已开始运行",
+      "withKind": "{{action}}{{kind}}「{{name}}」",
+      "withoutKind": "{{action}}「{{name}}」"
+    },
+    "kinds": {
+      "session": "对话",
+      "skill": "技能",
+      "memory": "记忆",
+      "workspace": "工作区",
+      "category": "类目",
+      "artifact": "产物",
+      "scheduledTask": "定时任务",
+      "envVar": "环境变量",
+      "mcpService": "MCP 服务"
+    }
+  },
+  "time": {
+    "sessionGroups": {
+      "today": "今天",
+      "yesterday": "昨天",
+      "last7": "过去 7 天",
+      "last30": "过去 30 天",
+      "older": "更早"
+    },
+    "relative": {
+      "justNow": "刚刚",
+      "minutesAgo": "{{count}} 分钟前",
+      "hoursAgo": "{{count}} 小时前",
+      "daysAgo": "{{count}} 天前"
+    }
+  },
+  "errors": {
+    "requestFailed": "请求失败 ({{status}})",
+    "timeout": "请求超时，请稍后重试",
+    "unauthenticated": "未登录",
+    "downloadFailed": "下载失败 ({{status}})"
+  },
+  "auth": {
+    "retry": "重试"
+  },
+  "chat": {
+    "session": {
+      "defaultTitle": "新对话",
+      "deleteTitle": "删除对话",
+      "deleteBody": "确定删除「{{label}}」？此操作不可恢复。"
+    },
+    "sidebar": {
+      "title": "对话",
+      "newSession": "新对话",
+      "searchPlaceholder": "搜索对话…",
+      "noMatch": "无匹配对话",
+      "empty": "暂无对话",
+      "loadMore": "加载更多"
+    },
+    "empty": {
+      "title": "有什么可以帮你？",
+      "subtitle": "AgentPod 可读写文件、搜索网络、调用工具，帮你完成各类任务。",
+      "suggestions": [
+        "帮我总结这个网页的要点：sidefyapp.com",
+        "AgentPod 有哪些功能？",
+        "什么是正态分布概率密度公式？",
+        "搜索并总结最新的 AI 进展"
+      ]
+    },
+    "queue": {
+      "pending": "排队中",
+      "emptyMessage": "（空消息）"
+    },
+    "composer": {
+      "removeFromQueue": "从队列移除",
+      "addAttachment": "添加附件",
+      "attachmentProcessing": "附件处理中…",
+      "removeAttachment": "移除附件",
+      "send": "发送",
+      "stop": "停止",
+      "scrollToBottom": "滚动到底部",
+      "keyboardHint": {
+        "queue": "Enter 排队 · 空输入 Enter 立即发送队首 · Shift+Enter 换行",
+        "queueWithPending": "Enter 发送 · 空输入 Enter 发送队首 · Shift+Enter 换行",
+        "default": "Enter 发送 · Shift+Enter 换行"
+      },
+      "longPaste": "已粘贴较长文本（{{count}} 字符）"
+    },
+    "message": {
+      "copy": "复制",
+      "retry": "重试",
+      "regenerate": "重新生成",
+      "userLabel": "你",
+      "archived": "已压缩（不再带入上下文）"
+    },
+    "attachment": {
+      "unparseable": "不可解析",
+      "text": "文本附件",
+      "textTruncated": "文本附件（已截断）",
+      "image": "图片附件",
+      "generic": "附件",
+      "download": "下载",
+      "downloadFailed": "下载失败",
+      "exportUnsupported": "当前附件暂不支持导出",
+      "emptyFile": "（空文件）",
+      "previewUnsupported": "该附件类型暂不支持预览。",
+      "parseUnsupported": "该附件当前不可解析，无法展示内容。",
+      "imageMissingData": "图片附件缺少可渲染数据。",
+      "oneAtATime": "一次仅支持添加 1 个附件",
+      "duplicate": "相同文件已添加",
+      "reused": "已复用已有附件",
+      "replaced": "已替换为新附件",
+      "supportedTypes": "当前支持文本、图片、Excel（.xlsx）与 Word（.docx）附件",
+      "sizeExceeded": "{{file}} 超过 {{size}}，已跳过",
+      "readFailed": "读取失败",
+      "readFailedRetry": "{{file}} 读取失败，请重试",
+      "truncatedDisplay": "附件内容过长，已截断显示。",
+      "fileTruncatedSuffix": "...（文件过长，已截断）",
+      "documentUnparseable": "该文档无法解析",
+      "imageUnparseable": "该图片格式不可解析",
+      "viewNamed": "查看 {{name}}",
+      "downloadNamed": "下载 {{name}}",
+      "removeNamed": "移除 {{name}}"
+    },
+    "errors": {
+      "generic": "出错了",
+      "stopped": "（已停止生成）",
+      "toolsStopped": "已停止",
+      "sessionNotFound": "对话不存在",
+      "stillGenerating": "该对话仍在生成中",
+      "visionUnsupported": "当前模型或上游端点不支持图片输入，请切换支持视觉的模型后重试。",
+      "requestFailed": "请求失败"
+    },
+    "meta": { "running": "执行中" },
+    "todo": {
+      "activeTitle": "任务进度",
+      "summary": "{{done}}/{{total}} 步已完成",
+      "summaryWithInterrupted": "{{done}}/{{total}} 步已完成 · {{interrupted}} 步已中断",
+      "interruptedNote": "执行中断（新话题）"
+    },
+    "clarify": {
+      "otherPlaceholder": "其他（自由输入）…",
+      "question": "问题：{{text}}",
+      "answer": "回答：{{text}}"
+    },
+    "markdown": {
+      "wrapOn": "自动换行",
+      "wrapOff": "取消换行",
+      "copyCode": "复制代码",
+      "copy": "复制",
+      "vizGenerating": "正在生成可视化…",
+      "vizEmpty": "无可渲染内容",
+      "fullscreen": "全屏",
+      "openInNewWindow": "新窗口打开",
+      "copySource": "复制源码",
+      "htmlPreview": "HTML 预览"
+    },
+    "compression": {
+      "header": "【自动上下文压缩】",
+      "headerWithMeta": "【自动上下文压缩】mode={{mode}}, tokens: {{before}} -> {{after}}",
+      "noSummary": "本次未生成可展示摘要。",
+      "noSummaryTruncated": "本次未生成可展示摘要（已进行截断保留）。"
+    }
+  },
+  "skills": {
+    "title": "技能",
+    "subtitle": "共享与私有技能管理",
+    "counts": { "shared": "共享 {{count}}", "private": "私有 {{count}}" },
+    "tabs": { "shared": "共享技能", "private": "私有技能" },
+    "searchPlaceholder": "搜索技能…",
+    "noMatch": "无匹配技能",
+    "empty": "暂无技能",
+    "badge": { "autoExtract": "自动提取", "noBody": "（无正文）" },
+    "form": {
+      "deleteTitle": "删除技能",
+      "editTitle": "编辑技能",
+      "editSummary": "编辑技能：{{name}}",
+      "addTitle": "添加技能",
+      "deleteBody": "确定删除「{{name}}」？"
+    },
+    "fields": {
+      "name": "名称（唯一）",
+      "description": "描述",
+      "triggers": "触发词（逗号分隔）",
+      "body": "正文（Markdown）"
+    }
+  },
+  "mcp": {
+    "title": "MCP",
+    "subtitle": "MCP 服务连接与工具管理",
+    "serviceCount": "{{count}} 个服务",
+    "status": { "connecting": "连接中", "online": "在线", "offline": "离线" },
+    "oauth": { "connected": "已授权", "pending": "待授权" },
+    "searchPlaceholder": "搜索 MCP 服务…",
+    "noMatch": "无匹配 MCP 服务",
+    "empty": "暂无 MCP 服务",
+    "selectWorkspace": "请先选择工作区",
+    "actions": {
+      "oauthAuthorize": "OAuth 授权",
+      "disconnectOAuth": "解除 OAuth 授权",
+      "reconnect": "重连"
+    },
+    "form": {
+      "addTitle": "添加 MCP 服务",
+      "editTitle": "编辑服务",
+      "editSummary": "编辑服务：{{name}}",
+      "deleteTitle": "删除 MCP 服务",
+      "deleteBody": "删除「{{name}}」？",
+      "validation": { "env": "环境变量", "headers": "请求头" }
+    },
+    "fields": {
+      "name": "名称（唯一）",
+      "transport": "传输方式",
+      "command": "命令",
+      "url": "URL",
+      "format": "格式化",
+      "envJson": "环境变量（JSON）",
+      "headersJson": "请求头（JSON）"
+    },
+    "headersHint": {
+      "preserve": "已配置请求头，留空则保留；填写则覆盖。",
+      "oauth": "保存时会自动探测是否支持 OAuth；支持则显示授权按钮，否则在此填写请求头凭据。"
+    },
+    "oauthFlow": {
+      "browserOpened": "已在系统浏览器打开「{{name}}」授权页，完成后会自动刷新",
+      "success": "「{{name}}」OAuth 授权成功",
+      "incomplete": "「{{name}}」授权未完成或超时，请重试",
+      "connecting": "「{{name}}」正在后台连接…",
+      "reconnecting": "「{{name}}」正在后台重连…"
+    },
+    "validation": {
+      "jsonParseFailed": "{{label}} JSON 解析失败",
+      "mustBeObject": "{{label}}必须是 JSON 对象",
+      "keyEmpty": "{{label}} key 不能为空",
+      "valueMustBeString": "{{label}} {{key}} 的值必须是字符串"
+    },
+    "toolDetail": {
+      "description": "描述",
+      "noDescription": "无描述",
+      "paramsSummary": "参数摘要",
+      "noParamsSummary": "无参数摘要",
+      "inputSchema": "输入 Schema"
+    }
+  },
+  "memory": {
+    "title": "记忆",
+    "subtitle": "长期与短期记忆管理",
+    "counts": { "long": "长期 {{count}}", "short": "短期 {{count}}" },
+    "tabs": { "long": "长期记忆", "short": "短期记忆" },
+    "searchPlaceholder": "搜索记忆…",
+    "noMatch": "无匹配记忆",
+    "empty": "暂无记忆",
+    "item": { "title": "记忆 #{{id}}", "autoExtract": "自动提取", "details": "详情" },
+    "actions": {
+      "moveToShort": "移至短期记忆",
+      "moveToLong": "移至长期记忆"
+    },
+    "form": {
+      "deleteTitle": "删除记忆",
+      "editTitle": "编辑记忆",
+      "editSummary": "编辑记忆 #{{id}}",
+      "addTitle": "添加记忆",
+      "deleteBody": "确定删除该记忆？"
+    },
+    "fields": {
+      "content": "内容",
+      "contentPlaceholder": "输入要记住的内容…"
+    }
+  },
+  "workspaces": {
+    "title": "工作区",
+    "subtitle": "创建、切换与管理工作区",
+    "errors": { "nameTooLong": "名称不能超过 25 字" },
+    "searchPlaceholder": "搜索工作区…",
+    "noMatch": "无匹配工作区",
+    "empty": "暂无工作区",
+    "badges": { "default": "默认", "current": "当前" },
+    "actions": {
+      "switch": "切换到该工作区",
+      "edit": "编辑工作区",
+      "delete": "删除工作区"
+    },
+    "deleteConfirm": {
+      "title": "删除工作区",
+      "body": "确定删除「{{name}}」？该工作区下的对话与配置将不可恢复。"
+    },
+    "form": { "editTitle": "编辑工作区", "createTitle": "新建工作区" },
+    "fields": {
+      "name": "名称（25 字内）",
+      "namePlaceholder": "我的工作区",
+      "description": "描述（可选）",
+      "descriptionPlaceholder": "简要说明用途"
+    }
+  },
+  "envVars": {
+    "title": "环境变量",
+    "subtitle": "保存 KV 与描述，供 Agent 在运行时读取",
+    "count": "共 {{count}} 条",
+    "searchPlaceholder": "搜索环境变量…",
+    "noMatch": "无匹配环境变量",
+    "empty": "暂无环境变量",
+    "detail": {
+      "valueAndDescription": "值与描述",
+      "hideValue": "隐藏值",
+      "showValue": "显示值",
+      "noDescription": "（无描述）"
+    },
+    "form": {
+      "deleteTitle": "删除环境变量",
+      "editTitle": "编辑环境变量",
+      "addTitle": "添加环境变量",
+      "deleteBody": "确定删除「{{name}}」？"
+    },
+    "fields": {
+      "key": "Key（唯一）",
+      "description": "描述（可选）",
+      "valuePlaceholder": "生产库密码"
+    }
+  },
+  "scheduled": {
+    "title": "定时任务",
+    "subtitle": "按 Cron 或指定时间自动运行 AgentPod；每次执行新建会话",
+    "count": "共 {{count}} 条",
+    "empty": "暂无定时任务",
+    "notifyBadge": "通知",
+    "status": {
+      "completed": "已完成",
+      "running": "运行中",
+      "queued": "排队中",
+      "disabled": "已停用",
+      "failed": "上次失败",
+      "waiting": "等待中"
+    },
+    "type": { "once": "单次", "onceAt": "单次 · {{time}}", "cron": "Cron · {{expr}}" },
+    "validation": {
+      "title": "请填写任务标题",
+      "instruction": "请填写要执行的指令",
+      "cron": "请填写 Cron 表达式",
+      "runAt": "请选择执行时间"
+    },
+    "runSchedule": { "next": "下次执行：", "last": "上次：" },
+    "actions": { "runOnce": "运行一次", "instruction": "指令内容", "lastResult": "上次执行结果" },
+    "form": {
+      "editTitle": "编辑任务",
+      "createTitle": "新建任务",
+      "title": "标题",
+      "titlePlaceholder": "例如：每日早报",
+      "instruction": "指令（发给 AgentPod 的 prompt）",
+      "instructionPlaceholder": "到点后 AgentPod 将按此指令执行…",
+      "type": "类型",
+      "cronPicker": "Cron 选择器",
+      "cronHint": "按设置中的时区解释。可视化选择后会自动生成 Cron 表达式。",
+      "runAt": "执行时间",
+      "runAtHint": "按设置时区（{{timeZone}}）填写，例如 2026-06-01 09:00",
+      "typeCron": "重复（Cron）",
+      "typeOnce": "单次",
+      "typeImmutable": "类型创建后不可修改",
+      "enabled": "启用",
+      "notify": "通知",
+      "deleteTitle": "删除定时任务",
+      "deleteBody": "确定删除「{{title}}」？"
+    },
+    "datetimePicker": {
+      "placeholder": "点击选择日期和时间",
+      "openCalendar": "打开日历",
+      "prevMonth": "上个月",
+      "nextMonth": "下个月",
+      "yearMonth": "{{year}}年{{month}}月",
+      "hour": "小时",
+      "minute": "分钟",
+      "clear": "清空",
+      "done": "完成",
+      "weekdays": ["日", "一", "二", "三", "四", "五", "六"]
+    },
+    "cron": {
+      "everyText": "每",
+      "emptyMonths": "每月",
+      "emptyMonthDays": "每天",
+      "emptyMonthDaysShort": "天",
+      "emptyWeekDays": "每周",
+      "emptyWeekDaysShort": "周",
+      "emptyHours": "每小时",
+      "emptyMinutes": "每分钟",
+      "emptyMinutesForHourPeriod": "分钟",
+      "yearOption": "年",
+      "monthOption": "月",
+      "weekOption": "周",
+      "dayOption": "日",
+      "hourOption": "小时",
+      "minuteOption": "分钟",
+      "rebootOption": "重启后",
+      "prefixPeriod": "周期",
+      "prefixMonths": "在",
+      "prefixMonthDays": "在",
+      "prefixWeekDays": "在",
+      "prefixWeekDaysForMonthAndYearPeriod": "在",
+      "prefixHours": "在",
+      "prefixMinutes": "在",
+      "prefixMinutesForHourPeriod": "在",
+      "suffixMinutesForHourPeriod": "分钟",
+      "errorInvalidCron": "Cron 表达式无效",
+      "clearButtonText": "清空",
+      "weekDays": ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
+      "months": ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"],
+      "altWeekDays": ["日", "一", "二", "三", "四", "五", "六"],
+      "altMonths": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]
+    }
+  },
+  "artifacts": {
+    "title": "产物",
+    "subtitle": {
+      "default": "创建类目后，可在此查看归档产物",
+      "category": "该类目下的产物，按保存时间从新到旧显示"
+    },
+    "empty": {
+      "noCategories": "暂无类目。点击侧栏「新建类目」创建第一个类目。",
+      "noMatch": "无匹配产物",
+      "noArtifacts": "暂无产物。在对话中请 AI 保存、导出或归档内容后，会出现在这里"
+    },
+    "searchPlaceholder": "搜索产物…",
+    "export": { "originalType": "原始类型" },
+    "deleteConfirm": {
+      "categoryTitle": "删除类目",
+      "categoryBody": "确定删除类目「{{name}}」？该类目下的产物将一并删除。",
+      "artifactTitle": "删除产物",
+      "artifactBody": "确定删除产物「{{title}}」？"
+    },
+    "categoryForm": {
+      "editTitle": "编辑类目",
+      "createTitle": "新建类目",
+      "description": "名称用于展示，描述可帮助 AI 在归档时选择合适类目。",
+      "nameLabel": "类目名称",
+      "descLabel": "类目描述（可选）",
+      "namePlaceholder": "如：内容、报告、规划",
+      "descPlaceholder": "用于指导 AI 选择该类目"
+    },
+    "sidebar": {
+      "categories": "产物类目",
+      "searchPlaceholder": "搜索类目…",
+      "noMatch": "无匹配类目",
+      "empty": "暂无类目",
+      "editCategory": "编辑类目",
+      "deleteCategory": "删除类目"
+    }
+  },
+  "notifications": {
+    "bell": { "ariaLabel": "消息通知" },
+    "panel": {
+      "title": "消息",
+      "markAllRead": "全部标记为已读",
+      "allRead": "全部已读",
+      "loading": "加载中…",
+      "empty": "暂无消息"
+    },
+    "newMessages": "你有 {{count}} 条新消息",
+    "newMessage": "你有 1 条新消息",
+    "category": {
+      "artifactSaved": "保存产物",
+      "selfImprovement": "自我改进",
+      "scheduledTask": "定时任务"
+    },
+    "toast": {
+      "selfImprovement": "自我改进：{{body}}",
+      "artifactSaved": "产物已保存：{{title}}（{{category}}）"
+    }
+  },
+  "embedding": {
+    "status": {
+      "pending": "排队中",
+      "ready": "已索引",
+      "failed": "仅关键词"
+    }
+  },
+  "tools": {
+    "title": "工具",
+    "subtitle": "工具可用性由系统按运行场景预设",
+    "count": "工具 {{count}}",
+    "noDescription": "暂无说明",
+    "empty": "暂无条目"
+  }
+}

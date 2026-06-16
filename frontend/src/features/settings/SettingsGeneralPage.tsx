@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
 import { SegmentControl } from "@/components/ui/segment-control";
@@ -8,13 +9,9 @@ import { useTheme, type ThemePreference } from "@/app/theme";
 import { useRefreshAppTimezone, useAppTimezone } from "@/lib/use-app-timezone";
 import { putTimezoneConfig } from "@/api/endpoints";
 import { getDesktopPrefs, isDesktopPrefsAvailable, setDesktopPrefs } from "@/lib/desktop-prefs";
+import { isDesktopPrefsPartialSaveError } from "@/lib/desktop-prefs-errors";
+import { setAppLocale, SUPPORTED_LOCALES, type AppLocale } from "@/i18n";
 import { SettingsSection } from "./SettingsSection";
-
-const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
-  { value: "system", label: "跟随系统" },
-  { value: "light", label: "浅色" },
-  { value: "dark", label: "深色" },
-];
 
 const TIMEZONE_OPTIONS = [
   "UTC",
@@ -28,6 +25,7 @@ const TIMEZONE_OPTIONS = [
 ];
 
 export function SettingsGeneralPage() {
+  const { t, i18n } = useTranslation();
   const toast = useToast();
   const { preference: themePreference, setPreference: setThemePreference } = useTheme();
   const appTimeZone = useAppTimezone();
@@ -38,6 +36,26 @@ export function SettingsGeneralPage() {
   const [launchAtLogin, setLaunchAtLogin] = useState(false);
   const [desktopPrefsSaving, setDesktopPrefsSaving] = useState(false);
   const desktopPrefsAvailable = isDesktopPrefsAvailable();
+
+  const themeOptions = useMemo(
+    (): { value: ThemePreference; label: string }[] => [
+      { value: "system", label: t("settings.general.theme.system") },
+      { value: "light", label: t("settings.general.theme.light") },
+      { value: "dark", label: t("settings.general.theme.dark") },
+    ],
+    [t],
+  );
+
+  const languageOptions = useMemo(
+    () =>
+      SUPPORTED_LOCALES.map((locale) => ({
+        value: locale,
+        label: t(`settings.general.language.options.${locale}`),
+      })),
+    [t],
+  );
+
+  const appLocale: AppLocale = i18n.language === "en" ? "en" : "zh";
 
   useEffect(() => {
     setTimezone(appTimeZone);
@@ -57,7 +75,7 @@ export function SettingsGeneralPage() {
       const next = await putTimezoneConfig({ timezone: timezone.trim() || "UTC" });
       setTimezone(next.timezone);
       await refreshAppTimeZone();
-      toast(`时区已保存：${next.timezone}`, "success");
+      toast(t("settings.general.timezone.saved", { tz: next.timezone }), "success");
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
@@ -74,10 +92,10 @@ export function SettingsGeneralPage() {
       });
       setRunInBackground(next.run_in_background);
       setLaunchAtLogin(next.launch_at_login);
-      toast("桌面偏好已保存", "success");
+      toast(t("settings.general.desktopPrefsSaved"), "success");
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      if (message.includes("偏好已保存")) {
+      if (isDesktopPrefsPartialSaveError(message)) {
         try {
           const next = await getDesktopPrefs();
           setRunInBackground(next.run_in_background);
@@ -85,7 +103,7 @@ export function SettingsGeneralPage() {
         } catch {
           // 忽略回读失败
         }
-        toast(message, "info");
+        toast(t("settings.general.desktopPrefsAutostartFailed"), "info");
       } else {
         toast(message, "error");
       }
@@ -96,10 +114,23 @@ export function SettingsGeneralPage() {
 
   return (
     <div className="space-y-5">
+      <SettingsSection
+        title={t("settings.general.language.title")}
+        description={t("settings.general.language.description")}
+      >
+        <SegmentControl
+          value={appLocale}
+          onChange={(locale) => setAppLocale(locale as AppLocale)}
+          options={languageOptions}
+          className="w-full max-w-md"
+          optionClassName="flex-1 text-center"
+        />
+      </SettingsSection>
+
       {desktopPrefsAvailable && (
         <SettingsSection
-          title="菜单栏与后台"
-          description="关闭窗口后可在菜单栏保留 AgentPod；开机自启需在此手动开启。"
+          title={t("settings.general.menubar.title")}
+          description={t("settings.general.menubar.description")}
         >
           <div className="grid max-w-xl gap-4">
             <label className="flex cursor-pointer items-start gap-2 text-sm">
@@ -110,9 +141,9 @@ export function SettingsGeneralPage() {
                 onChange={(e) => setRunInBackground(e.target.checked)}
               />
               <span>
-                关闭窗口后在菜单栏继续运行
+                {t("settings.general.runInBackground.label")}
                 <span className="mt-1 block text-xs text-muted-foreground">
-                  点击窗口关闭按钮时隐藏窗口，不退出应用；可从菜单栏图标重新打开。
+                  {t("settings.general.runInBackground.hint")}
                 </span>
               </span>
             </label>
@@ -124,9 +155,9 @@ export function SettingsGeneralPage() {
                 onChange={(e) => setLaunchAtLogin(e.target.checked)}
               />
               <span>
-                登录时自动启动 AgentPod
+                {t("settings.general.launchAtLogin.label")}
                 <span className="mt-1 block text-xs text-muted-foreground">
-                  在系统登录时启动应用；默认关闭，需手动开启。
+                  {t("settings.general.launchAtLogin.hint")}
                 </span>
               </span>
             </label>
@@ -137,27 +168,30 @@ export function SettingsGeneralPage() {
                 onClick={() => void saveDesktopPrefs()}
               >
                 {desktopPrefsSaving && <Loader2 className="size-4 animate-spin" />}
-                保存桌面偏好
+                {t("settings.general.saveDesktopPrefs")}
               </Button>
             </div>
           </div>
         </SettingsSection>
       )}
 
-      <SettingsSection title="主题" description="界面配色方案，立即生效。">
+      <SettingsSection
+        title={t("settings.general.theme.title")}
+        description={t("settings.general.theme.description")}
+      >
         <SegmentControl
           value={themePreference}
           onChange={setThemePreference}
-          options={THEME_OPTIONS}
+          options={themeOptions}
           className="w-full max-w-md"
           optionClassName="flex-1 text-center"
         />
       </SettingsSection>
 
-      <SettingsSection title="时区">
+      <SettingsSection title={t("settings.general.timezone.label")}>
         <div className="grid max-w-md gap-3">
           <div className="grid gap-1.5">
-            <Label>时区</Label>
+            <Label>{t("settings.general.timezone.label")}</Label>
             <Input
               list="timezone-options"
               value={timezone}
@@ -173,7 +207,7 @@ export function SettingsGeneralPage() {
           <div>
             <Button variant="primary" disabled={timezoneSaving} onClick={() => void saveTimezone()}>
               {timezoneSaving && <Loader2 className="size-4 animate-spin" />}
-              保存时区
+              {t("settings.general.timezone.save")}
             </Button>
           </div>
         </div>

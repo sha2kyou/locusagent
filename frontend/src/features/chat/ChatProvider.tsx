@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { AssistantRuntimeProvider, useExternalStoreRuntime } from "@assistant-ui/react";
 import {
@@ -25,6 +26,7 @@ import { streamChatCompletion, streamActiveRun } from "@/api/stream";
 import { formatStreamRetryToast, userMessageFromContainerError } from "@/lib/agent-status-copy";
 import { sha256HexBytes, sha256HexText, bytesToBase64 } from "@/lib/file-digest";
 import { toastAction } from "@/lib/toast-copy";
+import { displaySessionTitle, isBackendDefaultSessionTitle } from "@/lib/session-title";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/app/auth";
 import { withWorkspacePrefix } from "@/app/workspace-route";
@@ -107,7 +109,6 @@ export function useChat() {
   return ctx;
 }
 
-const DEFAULT_TITLE = "新对话";
 const PAGE_SIZE = 10;
 const DEFAULT_MAX_FILE_SIZE = 25 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENTS = 1;
@@ -177,6 +178,7 @@ async function waitActiveRunSettled(sessionId: string): Promise<void> {
 }
 
 export function ChatProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
   const toast = useToast();
   const { me } = useAuth();
   const navigate = useNavigate();
@@ -362,7 +364,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       tries += 1;
       const items = await refreshSessions();
       const found = items.find((s) => s.id === sid);
-      if (found && found.title && found.title !== DEFAULT_TITLE) {
+      if (found && found.title && !isBackendDefaultSessionTitle(found.title)) {
         stopTitlePoll();
         return;
       }
@@ -513,7 +515,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         return prev;
       });
     } else if (ev === "error") {
-      updateLastAssistant((p) => p, chunk.x_message || "出错了");
+      updateLastAssistant((p) => p, chunk.x_message || t("chat.errors.generic"));
     } else {
       const delta = chunk.choices?.[0]?.delta;
       const reasoning = delta?.reasoning_content;
@@ -646,7 +648,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
       } catch (e) {
         if (token !== loadTokenRef.current || !mountedRef.current) return;
-        toast((e as Error).message || "对话不存在", "error");
+        toast((e as Error).message || t("chat.errors.sessionNotFound"), "error");
         resetToNewChat();
         navigate(chatPath(null, urlWorkspaceId), { replace: true });
       }
@@ -769,9 +771,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       const err = e as { code?: string; message?: string; status?: number };
       if (ac.signal.aborted) {
-        if (firstToken) updateLastAssistant((p) => appendText(p, "（已停止生成）"));
+        if (firstToken) updateLastAssistant((p) => appendText(p, t("chat.errors.stopped")));
       } else if (err.code === "run_in_progress") {
-        toast("该对话仍在生成中", "info");
+        toast(t("chat.errors.stillGenerating"), "info");
         const runId = e instanceof ApiError ? String((e.detail as { run_id?: string } | undefined)?.run_id || "") : "";
         if (mountedRef.current && currentIdRef.current) {
           handoffToAttach = true;
@@ -786,7 +788,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
         return;
       } else if (isImageInputUnsupportedError(err)) {
-        const tip = "当前模型或上游端点不支持图片输入，请切换支持视觉的模型后重试。";
+        const tip = t("chat.errors.visionUnsupported");
         updateLastAssistant((p) => p, tip);
         toast(tip, "error");
         setLastErrored(true);
@@ -795,7 +797,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const code = e instanceof ApiError ? e.code : err.code;
         const friendly = userMessageFromContainerError(code, status);
         const message =
-          friendly || (e instanceof Error ? e.message : undefined) || "请求失败";
+          friendly || (e instanceof Error ? e.message : undefined) || t("chat.errors.requestFailed");
         updateLastAssistant((p) => p, message);
         setLastErrored(true);
       }
@@ -861,7 +863,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const cancel = async () => {
     abortChat();
     stopActiveRunAttach();
-    stopRunningTools("已停止");
+    stopRunningTools(t("chat.errors.toolsStopped"));
     updateLastAssistant((parts) => completeThinkingParts(parts));
 
     const sid = currentIdRef.current;
@@ -947,7 +949,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // toast 放在 Provider：删除当前对话会触发路由 remount，Sidebar 层调用不可靠
   const deleteSession = async (id: string, options?: { silent?: boolean }) => {
     const raw = sessions.find((s) => s.id === id)?.title ?? "";
-    const title = raw.trim() || DEFAULT_TITLE;
+    const title = displaySessionTitle(raw, t);
     const wasCurrent = currentIdRef.current === id || urlSessionId === id;
     if (wasCurrent) {
       abortChat();
@@ -955,7 +957,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
     await apiDeleteSession(id);
     if (!options?.silent) {
-      toast(toastAction("已删除", title, "对话"), "success");
+      toast(toastAction("deleted", title, "session"), "success");
     }
     if (!mountedRef.current) return;
     await refreshSessions();
@@ -1029,14 +1031,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const selected = Array.from(files).slice(0, 1);
     if (selected.length === 0) return;
     if (Array.from(files).length > 1) {
-      toast("一次仅支持添加 1 个附件", "info");
+      toast(t("chat.attachment.oneAtATime"), "info");
     }
     const next: PendingAttachment[] = [];
     setIsAddingAttachment(true);
     try {
       for (const file of selected) {
         if (file.size > maxFileSize) {
-          toast(`${file.name} 超过 ${formatBytes(maxFileSize)}，已跳过`, "error");
+          toast(t("chat.attachment.sizeExceeded", { file: file.name, size: formatBytes(maxFileSize) }), "error");
           continue;
         }
         const uploadTimeoutMs = attachmentUploadTimeoutMs(file.size);
@@ -1047,11 +1049,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             const normalized = raw.replace(/\r\n/g, "\n");
             const truncated = normalized.length > MAX_ATTACHMENT_CHARS;
             const textContent = truncated
-              ? `${normalized.slice(0, MAX_ATTACHMENT_CHARS)}\n...（文件过长，已截断）`
+              ? `${normalized.slice(0, MAX_ATTACHMENT_CHARS)}\n${t("chat.attachment.fileTruncatedSuffix")}`
               : normalized;
             const contentSha256 = await sha256HexText(textContent);
             if (pendingHasDigest(contentSha256)) {
-              toast("相同文件已添加", "info");
+              toast(t("chat.attachment.duplicate"), "info");
               continue;
             }
             const created = await createAttachmentDeduped({
@@ -1074,7 +1076,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               }),
             });
             if (created.reused) {
-              toast("已复用已有附件", "info");
+              toast(t("chat.attachment.reused"), "info");
             }
             next.push({
               id: uid("f"),
@@ -1091,7 +1093,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             const bytes = new Uint8Array(await file.arrayBuffer());
             const fileSha256 = await sha256HexBytes(bytes);
             if (pendingHasDigest(fileSha256)) {
-              toast("相同文件已添加", "info");
+              toast(t("chat.attachment.duplicate"), "info");
               continue;
             }
             const officeMime = file.type || guessOfficeMimeType(file.name);
@@ -1115,10 +1117,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               }),
             });
             if (created.reused) {
-              toast("已复用已有附件", "info");
+              toast(t("chat.attachment.reused"), "info");
             }
             if (!created.processable) {
-              toast(created.unsupportedReason ?? "该文档无法解析", "info");
+              toast(created.unsupportedReason ?? t("chat.attachment.documentUnparseable"), "info");
             }
             next.push({
               id: uid("f"),
@@ -1136,7 +1138,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             const bytes = new Uint8Array(await file.arrayBuffer());
             const contentSha256 = await sha256HexBytes(bytes);
             if (pendingHasDigest(contentSha256)) {
-              toast("相同文件已添加", "info");
+              toast(t("chat.attachment.duplicate"), "info");
               continue;
             }
             const mimeType =
@@ -1162,10 +1164,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               }),
             });
             if (created.reused) {
-              toast("已复用已有附件", "info");
+              toast(t("chat.attachment.reused"), "info");
             }
             if (!created.processable) {
-              toast(created.unsupportedReason ?? "该图片格式不可解析", "info");
+              toast(created.unsupportedReason ?? t("chat.attachment.imageUnparseable"), "info");
             }
             next.push({
               id: uid("f"),
@@ -1188,7 +1190,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 kind: "other",
                 mime_type: file.type || undefined,
                 processable: false,
-                unsupported_reason: "当前支持文本、图片、Excel（.xlsx）与 Word（.docx）附件",
+                unsupported_reason: t("chat.attachment.supportedTypes"),
                 truncated: false,
               },
               { timeoutMs: uploadTimeoutMs },
@@ -1202,17 +1204,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               processable: false,
               unsupportedReason:
                 created.unsupportedReason ??
-                "当前支持文本、图片、Excel（.xlsx）与 Word（.docx）附件",
+                t("chat.attachment.supportedTypes"),
               truncated: false,
             });
           }
         } catch {
-          toast(`${file.name} 读取失败，请重试`, "error");
+          toast(t("chat.attachment.readFailedRetry", { file: file.name }), "error");
         }
       }
       if (next.length > 0) {
         if (remain <= 0) {
-          toast("已替换为新附件", "info");
+          toast(t("chat.attachment.replaced"), "info");
         }
         setPendingAttachments(next);
       }

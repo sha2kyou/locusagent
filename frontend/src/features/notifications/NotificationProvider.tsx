@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useTranslation } from "react-i18next";
 import {
   listNotifications,
   markAllNotificationsRead,
@@ -48,6 +49,7 @@ function toastTypeFromKind(kind: NotificationEntry["kind"]): "info" | "success" 
 }
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
   const { me } = useAuth();
   const toast = useToast();
   const [items, setItems] = useState<NotificationEntry[]>([]);
@@ -62,12 +64,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         mirrorNotificationEntryToSystem(item);
       } else if (knownUnreadRef.current !== null && count > knownUnreadRef.current) {
         const delta = count - knownUnreadRef.current;
-        toast(delta === 1 ? "你有 1 条新消息" : `你有 ${delta} 条新消息`, "info", { sticky: true });
+        toast(delta === 1 ? t("notifications.newMessage") : t("notifications.newMessages", { count: delta }), "info", { sticky: true });
         mirrorNotificationSummaryToSystem(delta);
       }
       knownUnreadRef.current = count;
     },
-    [toast],
+    [toast, t],
   );
 
   const applySync = useCallback(
@@ -84,7 +86,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           );
           mirrorNotificationEntryToSystem(unreadItems[0]);
         } else {
-          toast(delta === 1 ? "你有 1 条新消息" : `你有 ${delta} 条新消息`, "info", { sticky: true });
+          toast(delta === 1 ? t("notifications.newMessage") : t("notifications.newMessages", { count: delta }), "info", { sticky: true });
           mirrorNotificationSummaryToSystem(delta);
         }
       }
@@ -93,7 +95,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       knownUnreadRef.current = count;
       setLoading(false);
     },
-    [toast],
+    [toast, t],
   );
 
   const applyPush = useCallback(

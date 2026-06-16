@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useMessage, type ToolCallMessagePartComponent } from "@assistant-ui/react";
 import { Blocks, Brain, HelpCircle, Send, Sparkles, Wrench } from "lucide-react";
 import { CollapsibleMetaBlock } from "./CollapsibleMetaBlock";
@@ -9,6 +10,7 @@ import { useChat } from "./ChatProvider";
 import type { ToolPart } from "./model";
 import { formatToolArgsPreview } from "./tool-args";
 import { isTodoTool, parseTodoPlan } from "./todo";
+import i18n from "@/i18n";
 
 const KIND_ICON = {
   skill: Sparkles,
@@ -68,10 +70,11 @@ function parseClarify(result: unknown): ClarifyPayload | null {
 }
 
 function clarifyMessage(question: string, answer: string): string {
-  return `问题：${question}\n回答：${answer}`;
+  return `${i18n.t("chat.clarify.question", { text: question })}\n${i18n.t("chat.clarify.answer", { text: answer })}`;
 }
 
 function ClarifyCard({ payload }: { payload: ClarifyPayload }) {
+  const { t } = useTranslation();
   const { send, isRunning } = useChat();
   const { isLast } = useMessage();
   const { onCompositionStart, onCompositionEnd, shouldBlockEnter } = useImeEnterGuard();
@@ -121,7 +124,7 @@ function ClarifyCard({ payload }: { payload: ClarifyPayload }) {
             onKeyDown={(e) => {
               if (shouldBlockEnter(e)) e.preventDefault();
             }}
-            placeholder="其他（自由输入）…"
+            placeholder={t("chat.clarify.otherPlaceholder")}
             disabled={disabled}
             className="h-8 min-w-0 flex-1 rounded-md border border-border bg-surface px-2.5 text-[13px] text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-45"
           />

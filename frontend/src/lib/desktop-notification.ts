@@ -1,4 +1,5 @@
 import type { NotificationEntry } from "@/api/types";
+import i18n from "../i18n/index.ts";
 import { isDesktopApp } from "@/lib/desktop-app";
 
 async function invokeNotify(options: { title: string; body?: string; id?: number }): Promise<void> {
@@ -30,6 +31,6 @@ export function mirrorNotificationEntryToSystem(item: NotificationEntry): void {
 export function mirrorNotificationSummaryToSystem(delta: number): void {
   if (!isDesktopApp()) return;
   void invokeNotify({
-    title: delta === 1 ? "你有 1 条新消息" : `你有 ${delta} 条新消息`,
+    title: delta === 1 ? i18n.t("notifications.newMessage") : i18n.t("notifications.newMessages", { count: delta }),
   }).catch(() => {});
 }

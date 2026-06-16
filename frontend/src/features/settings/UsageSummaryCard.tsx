@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { getUsageSummary } from "@/api/endpoints";
 import type { UsageSummary } from "@/api/types";
 import { formatTokenCount, usageScenarioLabel } from "./usageLabels";
@@ -14,6 +15,7 @@ interface AggregatedRow {
 }
 
 export function UsageSummaryCard({ active }: { active?: boolean }) {
+  const { t } = useTranslation();
   const [data, setData] = useState<UsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +70,7 @@ export function UsageSummaryCard({ active }: { active?: boolean }) {
       {loading && (
         <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" />
-          加载中…
+          {t("settings.usage.loading")}
         </div>
       )}
 
@@ -77,7 +79,7 @@ export function UsageSummaryCard({ active }: { active?: boolean }) {
       )}
 
       {!loading && !error && aggregated.length === 0 && (
-        <p className="p-4 text-sm text-muted-foreground">暂无用量数据，完成一次对话后将开始累计。</p>
+        <p className="p-4 text-sm text-muted-foreground">{t("settings.usage.empty")}</p>
       )}
 
       {!loading && !error && aggregated.length > 0 && (
@@ -85,9 +87,9 @@ export function UsageSummaryCard({ active }: { active?: boolean }) {
           <table className="w-full min-w-[28rem] text-left text-sm">
             <thead className="border-b border-border bg-muted/50 text-xs text-muted-foreground">
               <tr>
-                <th className="px-3 py-2 font-medium">场景</th>
-                <th className="px-3 py-2 font-medium text-right">Token</th>
-                <th className="px-3 py-2 font-medium text-right">API 次数</th>
+                <th className="px-3 py-2 font-medium">{t("settings.usage.table.scene")}</th>
+                <th className="px-3 py-2 font-medium text-right">{t("settings.usage.table.token")}</th>
+                <th className="px-3 py-2 font-medium text-right">{t("settings.usage.table.apiCalls")}</th>
               </tr>
             </thead>
             <tbody>

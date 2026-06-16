@@ -1,4 +1,5 @@
 import type { LegacyToolMeta, Message, OpenAIToolCall, ToolKind } from "@/api/types";
+import i18n from "@/i18n";
 import { type ChatAttachment, type ChatMessage, type ToolPart, uid } from "./model";
 import { formatToolArgsPreview } from "./tool-args";
 
@@ -28,8 +29,12 @@ function compressionPreview(msg: Message): string {
   const before = Number(meta?.before_tokens ?? 0);
   const after = Number(meta?.after_tokens ?? 0);
   const body = (msg.content || "").trim();
-  const header = `【自动上下文压缩】mode=${mode}, tokens: ${before} -> ${after}`;
-  return body ? `${header}\n\n${body}` : `${header}\n本次未生成可展示摘要（已进行截断保留）。`;
+  const header = i18n.t("chat.compression.headerWithMeta", {
+    mode,
+    before,
+    after,
+  });
+  return body ? `${header}\n\n${body}` : `${header}\n${i18n.t("chat.compression.noSummaryTruncated")}`;
 }
 
 /** 去掉入库用的附件元数据行，气泡只展示用户正文（附件由芯片展示）。 */

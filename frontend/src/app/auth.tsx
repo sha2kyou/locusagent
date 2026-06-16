@@ -6,10 +6,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useTranslation } from "react-i18next";
 import { ApiError, setWorkspaceId } from "@/api/client";
 import { getMe } from "@/api/endpoints";
 import type { Me } from "@/api/types";
-import { AUTH_LOAD_FAILED } from "@/lib/agent-status-copy";
+import { getAuthLoadFailed } from "@/lib/agent-status-copy";
 import { Button } from "@/components/ui/button";
 
 interface AuthState {
@@ -28,6 +29,7 @@ export function useAuth() {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return next;
     } catch (e) {
       setMe(null);
-      setError(e instanceof ApiError ? e.message : AUTH_LOAD_FAILED);
+      setError(e instanceof ApiError ? e.message : getAuthLoadFailed());
       return null;
     } finally {
       setLoading(false);
@@ -67,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             void reload();
           }}
         >
-          重试
+          {t("auth.retry")}
         </Button>
       </div>
     );

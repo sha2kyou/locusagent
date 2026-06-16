@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import type { Skill } from "@/api/types";
 import { toastAction } from "@/lib/toast-copy";
 
 export function SkillsRoute() {
+  const { t } = useTranslation();
   const toast = useToast();
   const { confirm } = useDialogs();
   const [items, setItems] = useState<Skill[] | null>(null);
@@ -88,10 +90,10 @@ export function SkillsRoute() {
     try {
       if (editing) {
         await updateSkill(editing.name, { description: desc, body, triggers: triggerList });
-        toast(toastAction("已更新", editing.name, "技能"), "success");
+        toast(toastAction("updated", editing.name, "skill"), "success");
       } else {
         await createSkill({ name, description: desc, body, triggers: triggerList });
-        toast(toastAction("已添加", name, "技能"), "success");
+        toast(toastAction("added", name, "skill"), "success");
       }
       resetForm();
       await load();
@@ -103,12 +105,21 @@ export function SkillsRoute() {
   };
 
   const remove = async (s: Skill) => {
-    if (!(await confirm({ title: "删除技能", body: `删除「${s.name}」？`, danger: true, confirmText: "删除" }))) return;
+    if (
+      !(await confirm({
+        title: t("skills.form.deleteTitle"),
+        body: t("skills.form.deleteBody", { name: s.name }),
+        danger: true,
+        confirmText: t("common.actions.delete"),
+      }))
+    ) {
+      return;
+    }
     try {
       await deleteSkill(s.name);
       if (editing?.name === s.name) resetForm();
       await load();
-      toast(toastAction("已删除", s.name, "技能"), "success");
+      toast(toastAction("deleted", s.name, "skill"), "success");
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -116,12 +127,12 @@ export function SkillsRoute() {
 
   return (
     <PageContainer
-      title="技能"
-      subtitle="共享与私有技能管理"
+      title={t("skills.title")}
+      subtitle={t("skills.subtitle")}
       actions={
         items && (
           <Badge variant="outline">
-            共享 {counts.public} / 私有 {counts.private}
+            {t("skills.counts.shared", { count: counts.public })} / {t("skills.counts.private", { count: counts.private })}
           </Badge>
         )
       }
@@ -135,17 +146,17 @@ export function SkillsRoute() {
               if (value === "public" && editing) resetForm();
             }}
             options={[
-              { value: "public", label: "共享技能" },
-              { value: "private", label: "私有技能" },
+              { value: "public", label: t("skills.tabs.shared") },
+              { value: "private", label: t("skills.tabs.private") },
             ]}
           />
 
-          <SearchInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索技能…" />
+          <SearchInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("skills.searchPlaceholder")} />
 
           {items === null ? (
             <Loading />
           ) : filtered.length === 0 ? (
-            <Empty text={query ? "无匹配技能" : "暂无技能"} />
+            <Empty text={query ? t("skills.noMatch") : t("skills.empty")} />
           ) : (
             <div className="space-y-2">
               {filtered.map((s) => (
@@ -155,7 +166,7 @@ export function SkillsRoute() {
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{s.name}</span>
                         {s.origin === "auto_extract" && (
-                          <Badge variant="outline">自动提取</Badge>
+                          <Badge variant="outline">{t("skills.badge.autoExtract")}</Badge>
                         )}
                       </div>
                       {s.description && <p className={listItemDescriptionClass}>{s.description}</p>}
@@ -169,14 +180,14 @@ export function SkillsRoute() {
                     </div>
                     {s.source === "private" && (
                       <div className="flex shrink-0 gap-1">
-                        <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => startEdit(s)} aria-label="编辑"><Pencil /></Button>
-                        <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => remove(s)} aria-label="删除"><Trash2 /></Button>
+                        <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => startEdit(s)} aria-label={t("common.actions.edit")}><Pencil /></Button>
+                        <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => remove(s)} aria-label={t("common.actions.delete")}><Trash2 /></Button>
                       </div>
                     )}
                   </div>
-                  <CollapsibleSection summary="正文">
+                  <CollapsibleSection summary={t("common.actions.body")}>
                     <pre className="max-h-[40vh] overflow-y-auto whitespace-pre-wrap text-sm text-foreground">
-                      {s.body || "（无正文）"}
+                      {s.body || t("skills.badge.noBody")}
                     </pre>
                   </CollapsibleSection>
                 </ListCard>
@@ -187,7 +198,7 @@ export function SkillsRoute() {
           {tab === "private" && (
             <div ref={formRef}>
               <CollapsiblePanel
-                summary={editing ? `编辑技能：${editing.name}` : "添加技能"}
+                summary={editing ? t("skills.form.editSummary", { name: editing.name }) : t("skills.form.addTitle")}
                 defaultOpen={!!editing}
                 onOpenChange={(open) => {
                   if (!open) resetForm();
@@ -196,26 +207,26 @@ export function SkillsRoute() {
                 <div className="grid gap-3">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5">
-                      <Label>名称（唯一）</Label>
+                      <Label>{t("skills.fields.name")}</Label>
                       <Input value={name} disabled={!!editing} onChange={(e) => setName(e.target.value)} placeholder="skill-name" />
                     </div>
                     <div className="grid gap-1.5">
-                      <Label>描述</Label>
+                      <Label>{t("skills.fields.description")}</Label>
                       <Input value={desc} onChange={(e) => setDesc(e.target.value)} />
                     </div>
                   </div>
                   <div className="grid gap-1.5">
-                    <Label>触发词（逗号分隔，可选）</Label>
+                    <Label>{t("skills.fields.triggers")}</Label>
                     <Input value={triggers} onChange={(e) => setTriggers(e.target.value)} />
                   </div>
                   <div className="grid gap-1.5">
-                    <Label>正文（Markdown）</Label>
+                    <Label>{t("skills.fields.body")}</Label>
                     <Textarea rows={5} value={body} onChange={(e) => setBody(e.target.value)} />
                   </div>
                   <div className="flex gap-2">
                     <Button variant="primary" disabled={saving || !name.trim()} onClick={submit}>
                       {saving && <Loader2 className="size-4 animate-spin" />}
-                      {editing ? "保存" : "添加"}
+                      {editing ? t("common.actions.save") : t("common.actions.add")}
                     </Button>
                   </div>
                 </div>

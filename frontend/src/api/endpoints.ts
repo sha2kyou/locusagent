@@ -1,4 +1,5 @@
 import { ApiError, apiGet, apiSend, getWorkspaceId, type RequestOptions } from "./client";
+import i18n from "@/i18n";
 import type {
   ActiveRunResponse,
   AppConfig,
@@ -159,12 +160,12 @@ export function attachmentDownloadUrl(id: string): string {
 export async function downloadAttachment(id: string, filename: string): Promise<void> {
   const res = await fetch(attachmentDownloadUrl(id), { credentials: "same-origin" });
   if (res.status === 401) {
-    throw new ApiError("未登录", { status: 401, code: "unauthenticated" });
+    throw new ApiError(i18n.t("errors.unauthenticated"), { status: 401, code: "unauthenticated" });
   }
   if (!res.ok) {
     const ct = res.headers.get("content-type") || "";
     const data: unknown = ct.includes("json") ? await res.json().catch(() => null) : await res.text();
-    throw new ApiError(`下载失败 (${res.status})`, { status: res.status, data });
+    throw new ApiError(i18n.t("errors.downloadFailed", { status: res.status }), { status: res.status, data });
   }
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);

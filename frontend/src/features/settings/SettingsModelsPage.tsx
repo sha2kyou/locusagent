@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +10,7 @@ import { getAppConfig, putAppConfig } from "@/api/endpoints";
 import type { AppConfigUpdate } from "@/api/types";
 import { SettingsSection } from "./SettingsSection";
 import {
-  AUXILIARY_MODEL_FIELDS,
+  AUXILIARY_MODEL_FIELD_DEFS,
   auxiliaryModelsFromConfig,
   emptyAuxiliaryModels,
   hasAuxiliaryModels,
@@ -17,6 +18,7 @@ import {
 } from "./auxiliary-model-fields";
 
 export function SettingsModelsPage() {
+  const { t } = useTranslation();
   const toast = useToast();
 
   const [llmBaseUrl, setLlmBaseUrl] = useState("https://api.openai.com/v1");
@@ -62,7 +64,7 @@ export function SettingsModelsPage() {
         llm_model: llmModel.trim(),
         embedding_model: embeddingModel.trim(),
         ...Object.fromEntries(
-          AUXILIARY_MODEL_FIELDS.map(({ key }) => [key, auxiliaryModels[key].trim()]),
+          AUXILIARY_MODEL_FIELD_DEFS.map(({ key }) => [key, auxiliaryModels[key].trim()]),
         ),
       };
       if (llmApiKey.trim()) body.llm_api_key = llmApiKey.trim();
@@ -75,7 +77,7 @@ export function SettingsModelsPage() {
       setTavilyApiKey("");
       setJinaConfigured(next.tools.jina_api_key_configured);
       setJinaApiKey("");
-      toast("配置已保存", "success");
+      toast(t("settings.models.saved"), "success");
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
@@ -86,17 +88,12 @@ export function SettingsModelsPage() {
   return (
     <div className="space-y-5">
       <SettingsSection
-        title="对话模型（LLM）"
-        description={
-          <>
-            保存到本地 <code className="rounded bg-secondary px-1">~/.agentpod/settings.json</code>
-            。API Key 留空则保持已保存的值不变。
-          </>
-        }
+        title={t("settings.models.llm.title")}
+        description={t("settings.models.llm.description")}
       >
         <div className="grid max-w-xl gap-3">
           <div className="grid gap-1.5">
-            <Label>API Base URL</Label>
+            <Label>{t("settings.models.apiBaseUrl")}</Label>
             <Input
               value={llmBaseUrl}
               onChange={(e) => setLlmBaseUrl(e.target.value)}
@@ -104,19 +101,23 @@ export function SettingsModelsPage() {
             />
           </div>
           <div className="grid gap-1.5">
-            <Label>主模型</Label>
+            <Label>{t("settings.models.llm.primaryLabel")}</Label>
             <Input value={llmModel} onChange={(e) => setLlmModel(e.target.value)} placeholder="gpt-4o" />
           </div>
           <div className="grid gap-1.5">
             <div className="flex items-center gap-2">
-              <Label>API Key</Label>
-              {llmApiKeyConfigured ? <Badge variant="brand">已配置</Badge> : <Badge>未配置</Badge>}
+              <Label>{t("settings.models.apiKey")}</Label>
+              {llmApiKeyConfigured ? (
+                <Badge variant="brand">{t("settings.models.llm.configured")}</Badge>
+              ) : (
+                <Badge>{t("settings.models.llm.notConfigured")}</Badge>
+              )}
             </div>
             <Input
               type="password"
               value={llmApiKey}
               onChange={(e) => setLlmApiKey(e.target.value)}
-              placeholder={llmApiKeyConfigured ? "留空保持不变" : "sk-..."}
+              placeholder={llmApiKeyConfigured ? t("settings.models.llm.keepEmpty") : "sk-..."}
               autoComplete="off"
             />
           </div>
@@ -126,27 +127,31 @@ export function SettingsModelsPage() {
             onOpenChange={setAuxiliaryOpen}
             summary={
               <span className="flex items-center gap-2">
-                场景模型
+                {t("settings.models.auxiliary.title")}
                 {auxiliaryConfiguredCount > 0 ? (
-                  <Badge variant="brand">{auxiliaryConfiguredCount} 项已配置</Badge>
+                  <Badge variant="brand">
+                    {t("settings.models.auxiliary.configuredCount", { count: auxiliaryConfiguredCount })}
+                  </Badge>
                 ) : (
-                  <span className="text-xs font-normal text-muted-foreground">留空均回退主模型</span>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {t("settings.models.auxiliary.description")}
+                  </span>
                 )}
               </span>
             }
           >
             <div className="grid gap-3">
-              {AUXILIARY_MODEL_FIELDS.map(({ key, label, hint }) => (
+              {AUXILIARY_MODEL_FIELD_DEFS.map(({ key, labelKey, hintKey }) => (
                 <div key={key} className="grid gap-1.5">
-                  <Label>{label}</Label>
+                  <Label>{t(labelKey)}</Label>
                   <Input
                     value={auxiliaryModels[key]}
                     onChange={(e) =>
                       setAuxiliaryModels((prev) => ({ ...prev, [key]: e.target.value }))
                     }
-                    placeholder={llmModel || "与主模型相同"}
+                    placeholder={llmModel || "gpt-4o"}
                   />
-                  <p className="text-xs text-muted-foreground">{hint}</p>
+                  <p className="text-xs text-muted-foreground">{t(hintKey)}</p>
                 </div>
               ))}
             </div>
@@ -155,11 +160,11 @@ export function SettingsModelsPage() {
       </SettingsSection>
 
       <SettingsSection
-        title="向量嵌入（Embedding）"
-        description="本地 fastembed 小模型，用于记忆检索与语义搜索；与对话 LLM 无关，首次使用会自动下载。"
+        title={t("settings.models.embedding.title")}
+        description={t("settings.models.embedding.description")}
       >
         <div className="grid max-w-xl gap-1.5">
-          <Label>Embedding 模型</Label>
+          <Label>{t("settings.models.embedding.modelLabel")}</Label>
           <Input
             value={embeddingModel}
             onChange={(e) => setEmbeddingModel(e.target.value)}
@@ -169,33 +174,41 @@ export function SettingsModelsPage() {
       </SettingsSection>
 
       <SettingsSection
-        title="第三方工具"
-        description="可选。用于 Agent 的网络搜索与网页阅读，留空则对应工具不可用。"
+        title={t("settings.models.thirdParty.title")}
+        description={t("settings.models.thirdParty.description")}
       >
         <div className="grid max-w-xl gap-3">
           <div className="grid gap-1.5">
             <div className="flex items-center gap-2">
-              <Label>Tavily Key</Label>
-              {tavilyConfigured ? <Badge variant="brand">已配置</Badge> : null}
+              <Label>{t("settings.models.thirdPartyKeys.tavily")}</Label>
+              {tavilyConfigured ? <Badge variant="brand">{t("settings.models.llm.configured")}</Badge> : null}
             </div>
             <Input
               type="password"
               value={tavilyApiKey}
               onChange={(e) => setTavilyApiKey(e.target.value)}
-              placeholder={tavilyConfigured ? "留空保持不变" : "可选，网络搜索"}
+              placeholder={
+                tavilyConfigured
+                  ? t("settings.models.llm.keepEmpty")
+                  : t("settings.models.thirdPartyKeys.tavilyPlaceholder")
+              }
               autoComplete="off"
             />
           </div>
           <div className="grid gap-1.5">
             <div className="flex items-center gap-2">
-              <Label>Jina Key</Label>
-              {jinaConfigured ? <Badge variant="brand">已配置</Badge> : null}
+              <Label>{t("settings.models.thirdPartyKeys.jina")}</Label>
+              {jinaConfigured ? <Badge variant="brand">{t("settings.models.llm.configured")}</Badge> : null}
             </div>
             <Input
               type="password"
               value={jinaApiKey}
               onChange={(e) => setJinaApiKey(e.target.value)}
-              placeholder={jinaConfigured ? "留空保持不变" : "可选，网页阅读"}
+              placeholder={
+                jinaConfigured
+                  ? t("settings.models.llm.keepEmpty")
+                  : t("settings.models.thirdPartyKeys.jinaPlaceholder")
+              }
               autoComplete="off"
             />
           </div>
@@ -205,7 +218,7 @@ export function SettingsModelsPage() {
       <div>
         <Button variant="primary" disabled={saving} onClick={() => void save()}>
           {saving && <Loader2 className="size-4 animate-spin" />}
-          保存配置
+          {t("settings.models.save")}
         </Button>
       </div>
     </div>

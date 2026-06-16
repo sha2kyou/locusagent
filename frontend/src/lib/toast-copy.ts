@@ -1,18 +1,39 @@
+import i18n from "../i18n/index.ts";
+
 const DEFAULT_MAX = 48;
 
 export function truncateToastLabel(text: string, max = DEFAULT_MAX): string {
   const flat = text.trim().replace(/\s+/g, " ");
-  if (!flat) return "（未命名）";
+  if (!flat) return i18n.t("copy.toast.unnamed");
   if (flat.length <= max) return flat;
   return `${flat.slice(0, max - 1)}…`;
 }
 
-/** 例：已删除产物「线性代数公式」 */
-export function toastAction(
-  action: "已删除" | "已添加" | "已更新" | "已重连" | "已断开 OAuth" | "已开始运行",
-  name: string,
-  kind?: string,
-): string {
+export type ToastActionKey =
+  | "deleted"
+  | "added"
+  | "updated"
+  | "reconnected"
+  | "oauthDisconnected"
+  | "started";
+
+export type ToastKindKey =
+  | "session"
+  | "skill"
+  | "memory"
+  | "workspace"
+  | "category"
+  | "artifact"
+  | "scheduledTask"
+  | "envVar"
+  | "mcpService";
+
+export function toastAction(action: ToastActionKey, name: string, kind?: ToastKindKey): string {
   const label = truncateToastLabel(name);
-  return kind ? `${action}${kind}「${label}」` : `${action}「${label}」`;
+  const actionText = i18n.t(`toast.actions.${action}`);
+  if (kind) {
+    const kindText = i18n.t(`toast.kinds.${kind}`);
+    return i18n.t("toast.actions.withKind", { action: actionText, kind: kindText, name: label });
+  }
+  return i18n.t("toast.actions.withoutKind", { action: actionText, name: label });
 }

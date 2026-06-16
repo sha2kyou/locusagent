@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Plus, Trash2 } from "lucide-react";
 import type { SessionMeta } from "@/api/types";
 import { Button } from "@/components/ui/button";
@@ -21,11 +22,8 @@ import {
   secondarySidebarSkeletonWrapClass,
 } from "@/components/secondary-sidebar-styles";
 import { SESSION_LIST_GROUP_ORDER } from "@/lib/format-time";
+import { displaySessionTitle } from "@/lib/session-title";
 import { useTimeFormatters } from "@/lib/use-app-timezone";
-
-function sessionLabel(title: string): string {
-  return title.trim() || "新对话";
-}
 
 export function SessionSidebar({
   mobileOpen = false,
@@ -34,10 +32,13 @@ export function SessionSidebar({
   mobileOpen?: boolean;
   onClose?: () => void;
 }) {
+  const { t } = useTranslation();
   const { sessions, loadingSessions, hasMoreSessions, loadingMoreSessions, loadMoreSessions, currentId, query, setQuery, newSession, selectSession, deleteSession } = useChat();
   const { confirm } = useDialogs();
   const toast = useToast();
-  const { sessionListGroupLabel } = useTimeFormatters();
+  const { sessionListGroupKey } = useTimeFormatters();
+
+  const sessionLabel = (title: string) => displaySessionTitle(title, t);
 
   const handleSelect = (id: string) => {
     selectSession(id);
@@ -54,22 +55,22 @@ export function SessionSidebar({
     );
     const map = new Map<string, SessionMeta[]>();
     for (const s of filtered) {
-      const key = sessionListGroupLabel(s.updated_at || s.created_at);
+      const key = sessionListGroupKey(s.updated_at || s.created_at);
       (map.get(key) ?? map.set(key, []).get(key)!).push(s);
     }
     return SESSION_LIST_GROUP_ORDER.filter((k) => map.has(k)).map((k) => ({
-      label: k,
+      label: t(`time.sessionGroups.${k}`),
       items: map.get(k)!,
     }));
-  }, [sessions, query, sessionListGroupLabel]);
+  }, [sessions, query, sessionListGroupKey, t]);
 
   const onDelete = async (s: SessionMeta) => {
     const label = sessionLabel(s.title);
     const ok = await confirm({
-      title: "删除对话",
-      body: `确定删除「${label}」？此操作不可恢复。`,
+      title: t("chat.session.deleteTitle"),
+      body: t("chat.session.deleteBody", { label }),
       danger: true,
-      confirmText: "删除",
+      confirmText: t("common.actions.delete"),
     });
     if (!ok) return;
     try {
@@ -82,14 +83,14 @@ export function SessionSidebar({
   return (
     <SecondarySidebar mobileOpen={mobileOpen} mobileSide="right" onClose={onClose}>
       <SecondarySidebarHeader
-        title="对话"
+        title={t("chat.sidebar.title")}
         actions={
           <Button
             variant="ghost"
             size="icon-sm"
             onClick={handleNew}
-            title="新对话"
-            aria-label="新对话"
+            title={t("chat.sidebar.newSession")}
+            aria-label={t("chat.sidebar.newSession")}
           >
             <Plus className="size-4" />
           </Button>
@@ -98,7 +99,7 @@ export function SessionSidebar({
           <SearchInput
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索对话…"
+            placeholder={t("chat.sidebar.searchPlaceholder")}
           />
         }
       />
@@ -111,7 +112,7 @@ export function SessionSidebar({
             ))}
           </div>
         ) : groups.length === 0 ? (
-          <SidebarEmpty text={query ? "无匹配对话" : "暂无对话"} />
+          <SidebarEmpty text={query ? t("chat.sidebar.noMatch") : t("chat.sidebar.empty")} />
         ) : (
           <>
             {groups.map((g) => (
@@ -133,7 +134,7 @@ export function SessionSidebar({
                           onClick={() => {
                             void onDelete(s);
                           }}
-                          aria-label="删除"
+                          aria-label={t("common.actions.delete")}
                         >
                           <Trash2 />
                         </Button>
@@ -152,7 +153,7 @@ export function SessionSidebar({
                   onClick={() => void loadMoreSessions()}
                   disabled={loadingMoreSessions}
                 >
-                  {loadingMoreSessions ? "加载中…" : "加载更多"}
+                  {loadingMoreSessions ? t("common.loading") : t("chat.sidebar.loadMore")}
                 </Button>
               </div>
             )}

@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useTranslation } from "react-i18next";
 import { CheckCircle2, Info, X, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { floatingPanelClass } from "@/components/ui/surface-styles";
@@ -40,6 +41,7 @@ const icons: Record<ToastType, ReactNode> = {
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { t: tr } = useTranslation();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const timeoutIdsRef = useRef(new Map<number, number>());
 
@@ -74,22 +76,22 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={show}>
       {children}
       <div className="pointer-events-none fixed bottom-4 right-4 z-100 flex w-[min(22rem,calc(100vw-2rem))] flex-col gap-2">
-        {toasts.map((t) => (
+        {toasts.map((item) => (
           <div
-            key={t.id}
+            key={item.id}
             className={cn(
               "pointer-events-auto flex items-start gap-2.5 rounded-xl py-2.5 pl-3.5 pr-2 text-sm",
               floatingPanelClass,
             )}
           >
-            <span className="mt-0.5 shrink-0">{icons[t.type]}</span>
-            <span className="flex-1 line-clamp-2 break-words leading-snug">{t.message}</span>
+            <span className="mt-0.5 shrink-0">{icons[item.type]}</span>
+            <span className="flex-1 line-clamp-2 break-words leading-snug">{item.message}</span>
             <button
               type="button"
               className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-              onClick={() => removeToast(t.id)}
-              aria-label="关闭"
-              title="关闭"
+              onClick={() => removeToast(item.id)}
+              aria-label={tr("common.close")}
+              title={tr("common.close")}
             >
               <X className="size-3.5" />
             </button>

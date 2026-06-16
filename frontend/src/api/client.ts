@@ -1,5 +1,7 @@
 // 统一 fetch 封装：错误解析、JSON/文本自适应。
 
+import i18n from "@/i18n";
+
 export class ApiError extends Error {
   status: number;
   code?: string;
@@ -41,7 +43,7 @@ function parseApiError(status: number, data: unknown): ApiError {
   if (data && typeof data === "object" && "error" in data) {
     const err = (data as { error?: { code?: string; message?: string; detail?: unknown } }).error;
     if (err) {
-      return new ApiError(err.message || `请求失败 (${status})`, {
+      return new ApiError(err.message || i18n.t("errors.requestFailed", { status }), {
         status,
         code: err.code,
         detail: err.detail,
@@ -56,14 +58,14 @@ function parseApiError(status: number, data: unknown): ApiError {
       return new ApiError(detail, { status, detail, data });
     }
     if (Array.isArray(detail)) {
-      const msg = detail.map((d) => (d as { msg?: string })?.msg).filter(Boolean).join("；") || `请求失败 (${status})`;
+      const msg = detail.map((d) => (d as { msg?: string })?.msg).filter(Boolean).join("；") || i18n.t("errors.requestFailed", { status });
       return new ApiError(msg, { status, detail, data });
     }
   }
   if (typeof data === "string" && data) {
     return new ApiError(data, { status, data });
   }
-  return new ApiError(`请求失败 (${status})`, { status, data });
+  return new ApiError(i18n.t("errors.requestFailed", { status }), { status, data });
 }
 
 export interface RequestOptions extends RequestInit {
@@ -100,7 +102,7 @@ export async function api<T = unknown>(url: string, opts: RequestOptions = {}): 
     });
   } catch (e) {
     if (e instanceof DOMException && e.name === "TimeoutError") {
-      throw new ApiError("请求超时，请稍后重试", { status: 408, code: "timeout" });
+      throw new ApiError(i18n.t("errors.timeout"), { status: 408, code: "timeout" });
     }
     throw e;
   }

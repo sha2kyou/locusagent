@@ -100,6 +100,11 @@ pub fn hide_main_window(app: &AppHandle) {
 }
 
 #[tauri::command]
+pub fn desktop_get_system_locale() -> Option<String> {
+    sys_locale::get_locale()
+}
+
+#[tauri::command]
 pub fn desktop_get_prefs(state: State<PrefsState>) -> DesktopPrefs {
     state.0.lock().expect("prefs lock poisoned").clone()
 }

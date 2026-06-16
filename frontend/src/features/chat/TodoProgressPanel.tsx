@@ -1,4 +1,5 @@
 import { AlertCircle, Check, Circle, ListTodo, Loader2, Minus } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { CollapsibleMetaBlock } from "./CollapsibleMetaBlock";
 import type { TodoPlan, TodoStep, TodoStepStatus } from "./todo";
@@ -68,26 +69,32 @@ function TodoStepRow({ step, index }: { step: TodoStep; index: number }) {
   );
 }
 
-function planSummary(plan: TodoPlan): string {
+function planSummary(plan: TodoPlan, t: ReturnType<typeof useTranslation>["t"]): string {
   const doneCount = plan.steps.filter((s) => s.status === "done" || s.status === "skipped").length;
   const interruptedCount = plan.steps.filter((s) => s.status === "interrupted").length;
-  let text = `${doneCount}/${plan.steps.length} 步已完成`;
-  if (interruptedCount > 0) text += ` · ${interruptedCount} 步已中断`;
-  return text;
+  if (interruptedCount > 0) {
+    return t("chat.todo.summaryWithInterrupted", {
+      done: doneCount,
+      total: plan.steps.length,
+      interrupted: interruptedCount,
+    });
+  }
+  return t("chat.todo.summary", { done: doneCount, total: plan.steps.length });
 }
 
 export function TodoProgressPanel({ plan, active = false }: { plan: TodoPlan; active?: boolean }) {
+  const { t } = useTranslation();
   return (
     <CollapsibleMetaBlock
       blockId={plan.plan_id}
       active={active}
       lockWhenActive={false}
       title={plan.title}
-      activeTitle="任务进度"
+      activeTitle={t("chat.todo.activeTitle")}
       running={active}
       showRunningBadge
       icon={<ListTodo className="size-3.5" />}
-      preview={planSummary(plan)}
+      preview={planSummary(plan, t)}
       hidePreviewWhenOpen={false}
       className="border-brand/20 bg-brand/[0.035] ring-1 ring-inset ring-brand/10 shadow-sm"
     >

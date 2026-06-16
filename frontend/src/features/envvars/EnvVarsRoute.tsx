@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Eye, EyeOff, Loader2, Pencil, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { ReadyGate } from "@/components/ReadyGate";
@@ -16,6 +17,7 @@ import { EMBEDDING_LABEL } from "@/lib/embedding-labels";
 import { toastAction } from "@/lib/toast-copy";
 
 export function EnvVarsRoute() {
+  const { t } = useTranslation();
   const toast = useToast();
   const { confirm } = useDialogs();
   const [items, setItems] = useState<EnvVarEntry[] | null>(null);
@@ -72,10 +74,10 @@ export function EnvVarsRoute() {
           value: value.trim(),
           description: description.trim(),
         });
-        toast(toastAction("已更新", name.trim(), "环境变量"), "success");
+        toast(toastAction("updated", name.trim(), "envVar"), "success");
       } else {
         await createEnvVar({ name: name.trim(), value: value.trim(), description: description.trim() });
-        toast(toastAction("已添加", name.trim(), "环境变量"), "success");
+        toast(toastAction("added", name.trim(), "envVar"), "success");
       }
       reset();
       await load();
@@ -87,13 +89,22 @@ export function EnvVarsRoute() {
   };
 
   const remove = async (item: EnvVarEntry) => {
-    if (!(await confirm({ title: "删除环境变量", body: `确定删除「${item.name}」？`, danger: true, confirmText: "删除" }))) return;
+    if (
+      !(await confirm({
+        title: t("envVars.form.deleteTitle"),
+        body: t("envVars.form.deleteBody", { name: item.name }),
+        danger: true,
+        confirmText: t("common.actions.delete"),
+      }))
+    ) {
+      return;
+    }
     setSaving(true);
     try {
       await deleteEnvVar(item.id);
       if (editingId === item.id) reset();
       await load();
-      toast(toastAction("已删除", item.name, "环境变量"), "success");
+      toast(toastAction("deleted", item.name, "envVar"), "success");
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
@@ -114,22 +125,22 @@ export function EnvVarsRoute() {
 
   return (
     <PageContainer
-      title="环境变量"
-      subtitle="保存 KV 与描述，可用于密码等敏感配置"
-      actions={items ? <Badge variant="outline">共 {items.length} 条</Badge> : undefined}
+      title={t("envVars.title")}
+      subtitle={t("envVars.subtitle")}
+      actions={items ? <Badge variant="outline">{t("envVars.count", { count: items.length })}</Badge> : undefined}
     >
       <ReadyGate>
         <div className="space-y-4">
           <SearchInput
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索环境变量…"
+            placeholder={t("envVars.searchPlaceholder")}
           />
 
           {items === null ? (
             <Loading />
           ) : filtered.length === 0 ? (
-            <Empty text={query ? "无匹配环境变量" : "暂无环境变量"} />
+            <Empty text={query ? t("envVars.noMatch") : t("envVars.empty")} />
           ) : (
             <div className="space-y-2">
               {filtered.map((item) => {
@@ -147,11 +158,11 @@ export function EnvVarsRoute() {
                         ) : null}
                       </div>
                       <div className="flex shrink-0 gap-1">
-                        <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => startEdit(item)} aria-label="编辑"><Pencil /></Button>
-                        <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => remove(item)} aria-label="删除"><Trash2 /></Button>
+                        <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => startEdit(item)} aria-label={t("common.actions.edit")}><Pencil /></Button>
+                        <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => remove(item)} aria-label={t("common.actions.delete")}><Trash2 /></Button>
                       </div>
                     </div>
-                    <CollapsibleSection summary="值与描述">
+                    <CollapsibleSection summary={t("envVars.detail.valueAndDescription")}>
                       <div className="space-y-2">
                         <div className="flex items-start justify-between gap-2">
                           <p className="min-w-0 break-all text-sm text-foreground">
@@ -161,7 +172,7 @@ export function EnvVarsRoute() {
                             variant="ghost"
                             size="icon-sm"
                             onClick={() => setRevealed((s) => ({ ...s, [item.id]: !s[item.id] }))}
-                            aria-label={revealed[item.id] ? "隐藏值" : "显示值"}
+                            aria-label={revealed[item.id] ? t("envVars.detail.hideValue") : t("envVars.detail.showValue")}
                           >
                             {revealed[item.id] ? <EyeOff /> : <Eye />}
                           </Button>
@@ -169,7 +180,7 @@ export function EnvVarsRoute() {
                         {item.description ? (
                           <p className="text-xs text-muted-foreground">{item.description}</p>
                         ) : (
-                          <p className="text-xs text-muted-foreground">（无描述）</p>
+                          <p className="text-xs text-muted-foreground">{t("envVars.detail.noDescription")}</p>
                         )}
                       </div>
                     </CollapsibleSection>
@@ -181,7 +192,7 @@ export function EnvVarsRoute() {
 
           <div ref={formRef}>
             <CollapsiblePanel
-              summary={editingId ? "编辑环境变量" : "添加环境变量"}
+              summary={editingId ? t("envVars.form.editTitle") : t("envVars.form.addTitle")}
               defaultOpen={!!editingId}
               onOpenChange={(open) => {
                 if (!open) reset();
@@ -190,7 +201,7 @@ export function EnvVarsRoute() {
               <div className="grid gap-3">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="grid gap-1.5">
-                    <Label>Key（唯一）</Label>
+                    <Label>{t("envVars.fields.key")}</Label>
                     <Input value={name} disabled={!!editingId} onChange={(e) => setName(e.target.value)} placeholder="DB_PASSWORD" />
                   </div>
                   <div className="grid gap-1.5">
@@ -199,13 +210,13 @@ export function EnvVarsRoute() {
                   </div>
                 </div>
                 <div className="grid gap-1.5">
-                  <Label>描述（可选）</Label>
-                  <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="生产库密码" />
+                  <Label>{t("envVars.fields.description")}</Label>
+                  <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("envVars.fields.valuePlaceholder")} />
                 </div>
                 <div className="flex gap-2">
                   <Button variant="primary" onClick={submit} disabled={saving || !name.trim() || !value.trim()}>
                     {saving && <Loader2 className="size-4 animate-spin" />}
-                    {editingId ? "保存" : "添加"}
+                    {editingId ? t("common.actions.save") : t("common.actions.add")}
                   </Button>
                 </div>
               </div>

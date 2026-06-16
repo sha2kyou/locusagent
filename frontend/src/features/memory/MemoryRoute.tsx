@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ArrowDown, ArrowUp, Loader2, Pencil, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import { EMBEDDING_LABEL } from "@/lib/embedding-labels";
 import { toastAction } from "@/lib/toast-copy";
 
 export function MemoryRoute() {
+  const { t } = useTranslation();
   const toast = useToast();
   const { confirm } = useDialogs();
   const [items, setItems] = useState<MemoryEntry[] | null>(null);
@@ -90,10 +92,10 @@ export function MemoryRoute() {
     try {
       if (editing) {
         await updateMemory(editing.id, { content: text });
-        toast(toastAction("已更新", text, "记忆"), "success");
+        toast(toastAction("updated", text, "memory"), "success");
       } else {
         await createMemory({ content: text, anchor: tab });
-        toast(toastAction("已添加", text, "记忆"), "success");
+        toast(toastAction("added", text, "memory"), "success");
       }
       resetForm();
       await load();
@@ -115,12 +117,21 @@ export function MemoryRoute() {
   };
 
   const remove = async (m: MemoryEntry) => {
-    if (!(await confirm({ title: "删除记忆", body: `删除「记忆 #${m.id}」？`, danger: true, confirmText: "删除" }))) return;
+    if (
+      !(await confirm({
+        title: t("memory.form.deleteTitle"),
+        body: t("memory.form.deleteBody"),
+        danger: true,
+        confirmText: t("common.actions.delete"),
+      }))
+    ) {
+      return;
+    }
     try {
       await deleteMemory(m.id);
       if (editing?.id === m.id) resetForm();
       await load();
-      toast(toastAction("已删除", m.content, "记忆"), "success");
+      toast(toastAction("deleted", m.content, "memory"), "success");
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -128,12 +139,12 @@ export function MemoryRoute() {
 
   return (
     <PageContainer
-      title="记忆"
-      subtitle="长期与短期记忆管理"
+      title={t("memory.title")}
+      subtitle={t("memory.subtitle")}
       actions={
         items && (
           <Badge variant="outline">
-            长期 {counts.identity} / 短期 {counts.experience}
+            {t("memory.counts.long", { count: counts.identity })} / {t("memory.counts.short", { count: counts.experience })}
           </Badge>
         )
       }
@@ -144,17 +155,17 @@ export function MemoryRoute() {
             value={tab}
             onChange={setTab}
             options={[
-              { value: "identity", label: "长期记忆" },
-              { value: "experience", label: "短期记忆" },
+              { value: "identity", label: t("memory.tabs.long") },
+              { value: "experience", label: t("memory.tabs.short") },
             ]}
           />
 
-          <SearchInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索记忆…" />
+          <SearchInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("memory.searchPlaceholder")} />
 
           {items === null ? (
             <Loading />
           ) : filtered.length === 0 ? (
-            <Empty text={query ? "无匹配记忆" : "暂无记忆"} />
+            <Empty text={query ? t("memory.noMatch") : t("memory.empty")} />
           ) : (
             <div className="space-y-2">
               {filtered.map((m) => {
@@ -164,10 +175,10 @@ export function MemoryRoute() {
                     <div className="flex items-start justify-between gap-3 px-4 py-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">记忆 #{m.id}</span>
+                          <span className="font-medium">{t("memory.item.title", { id: m.id })}</span>
                           <Badge variant={emb.variant}>{emb.text}</Badge>
                           {m.origin === "auto_extract" && (
-                            <Badge variant="outline">自动提取</Badge>
+                            <Badge variant="outline">{t("memory.item.autoExtract")}</Badge>
                           )}
                         </div>
                         <p className={`${listItemDescriptionClass} max-w-[56ch] whitespace-pre-wrap`}>
@@ -175,18 +186,28 @@ export function MemoryRoute() {
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
-                        <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => move(m)} aria-label="切换分类">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className={listRowHoverActionsClass}
+                          onClick={() => move(m)}
+                          aria-label={
+                            m.anchor === "identity"
+                              ? t("memory.actions.moveToShort")
+                              : t("memory.actions.moveToLong")
+                          }
+                        >
                           {m.anchor === "identity" ? <ArrowDown /> : <ArrowUp />}
                         </Button>
-                        <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => startEdit(m)} aria-label="编辑">
+                        <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => startEdit(m)} aria-label={t("common.actions.edit")}>
                           <Pencil />
                         </Button>
-                        <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => remove(m)} aria-label="删除">
+                        <Button variant="ghost" size="icon-sm" className={listRowHoverActionsClass} onClick={() => remove(m)} aria-label={t("common.actions.delete")}>
                           <Trash2 />
                         </Button>
                       </div>
                     </div>
-                    <CollapsibleSection summary="详情">
+                    <CollapsibleSection summary={t("memory.item.details")}>
                       <pre className="max-h-[40vh] overflow-y-auto whitespace-pre-wrap text-sm text-foreground">
                         {m.content}
                       </pre>
@@ -199,7 +220,7 @@ export function MemoryRoute() {
 
           <div ref={formRef}>
             <CollapsiblePanel
-              summary={editing ? `编辑记忆 #${editing.id}` : "添加记忆"}
+              summary={editing ? t("memory.form.editSummary", { id: editing.id }) : t("memory.form.addTitle")}
               defaultOpen={!!editing}
               onOpenChange={(open) => {
                 if (!open) resetForm();
@@ -207,18 +228,18 @@ export function MemoryRoute() {
             >
               <div className="grid gap-3">
                 <div className="grid gap-1.5">
-                  <Label>内容</Label>
+                  <Label>{t("memory.fields.content")}</Label>
                   <Textarea
                     rows={5}
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
-                    placeholder="输入要记住的内容…"
+                    placeholder={t("memory.fields.contentPlaceholder")}
                   />
                 </div>
                 <div className="flex gap-2">
                   <Button variant="primary" disabled={saving || !content.trim()} onClick={submit}>
                     {saving && <Loader2 className="size-4 animate-spin" />}
-                    {editing ? "保存" : "添加"}
+                    {editing ? t("common.actions.save") : t("common.actions.add")}
                   </Button>
                 </div>
               </div>

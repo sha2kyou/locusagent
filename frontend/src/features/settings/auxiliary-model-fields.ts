@@ -1,41 +1,13 @@
-import type { AppConfig, AppConfigUpdate } from "@/api/types";
+import type { AppConfigUpdate } from "@/api/types";
 
-export const AUXILIARY_MODEL_FIELDS = [
-  {
-    key: "auxiliary_vision_model" as const,
-    label: "Vision 模型",
-    hint: "图片理解；留空则使用主模型",
-  },
-  {
-    key: "auxiliary_web_extract_model" as const,
-    label: "网页提取模型",
-    hint: "网页内容结构化提取；留空则使用主模型",
-  },
-  {
-    key: "auxiliary_compression_model" as const,
-    label: "上下文压缩模型",
-    hint: "长对话上下文合并；留空则使用主模型",
-  },
-  {
-    key: "auxiliary_title_generation_model" as const,
-    label: "标题生成模型",
-    hint: "会话标题自动生成；留空则使用主模型",
-  },
-  {
-    key: "auxiliary_approval_model" as const,
-    label: "安全检查模型",
-    hint: "敏感操作审批；留空则使用主模型",
-  },
-  {
-    key: "auxiliary_curator_model" as const,
-    label: "记忆策展模型",
-    hint: "长期记忆整理；留空则使用主模型",
-  },
-  {
-    key: "auxiliary_skill_reflect_model" as const,
-    label: "技能反思模型",
-    hint: "技能执行后反思；留空则使用主模型",
-  },
+export const AUXILIARY_MODEL_FIELD_DEFS = [
+  { key: "auxiliary_vision_model" as const, labelKey: "settings.models.auxiliary.fields.vision.label", hintKey: "settings.models.auxiliary.fields.vision.hint" },
+  { key: "auxiliary_web_extract_model" as const, labelKey: "settings.models.auxiliary.fields.webExtract.label", hintKey: "settings.models.auxiliary.fields.webExtract.hint" },
+  { key: "auxiliary_compression_model" as const, labelKey: "settings.models.auxiliary.fields.compression.label", hintKey: "settings.models.auxiliary.fields.compression.hint" },
+  { key: "auxiliary_title_generation_model" as const, labelKey: "settings.models.auxiliary.fields.titleGeneration.label", hintKey: "settings.models.auxiliary.fields.titleGeneration.hint" },
+  { key: "auxiliary_approval_model" as const, labelKey: "settings.models.auxiliary.fields.approval.label", hintKey: "settings.models.auxiliary.fields.approval.hint" },
+  { key: "auxiliary_curator_model" as const, labelKey: "settings.models.auxiliary.fields.curator.label", hintKey: "settings.models.auxiliary.fields.curator.hint" },
+  { key: "auxiliary_skill_reflect_model" as const, labelKey: "settings.models.auxiliary.fields.skillReflect.label", hintKey: "settings.models.auxiliary.fields.skillReflect.hint" },
 ] satisfies ReadonlyArray<{
   key: keyof Pick<
     AppConfigUpdate,
@@ -47,32 +19,33 @@ export const AUXILIARY_MODEL_FIELDS = [
     | "auxiliary_curator_model"
     | "auxiliary_skill_reflect_model"
   >;
-  label: string;
-  hint: string;
+  labelKey: string;
+  hintKey: string;
 }>;
 
-export type AuxiliaryModelValues = Record<(typeof AUXILIARY_MODEL_FIELDS)[number]["key"], string>;
+/** @deprecated use AUXILIARY_MODEL_FIELD_DEFS */
+export const AUXILIARY_MODEL_FIELDS = AUXILIARY_MODEL_FIELD_DEFS;
 
-export function emptyAuxiliaryModels(): AuxiliaryModelValues {
-  return {
-    auxiliary_vision_model: "",
-    auxiliary_web_extract_model: "",
-    auxiliary_compression_model: "",
-    auxiliary_title_generation_model: "",
-    auxiliary_approval_model: "",
-    auxiliary_curator_model: "",
-    auxiliary_skill_reflect_model: "",
-  };
-}
+export type AuxiliaryModelValues = Record<(typeof AUXILIARY_MODEL_FIELD_DEFS)[number]["key"], string>;
 
-export function auxiliaryModelsFromConfig(llm: AppConfig["llm"]): AuxiliaryModelValues {
-  const base = emptyAuxiliaryModels();
-  for (const field of AUXILIARY_MODEL_FIELDS) {
-    base[field.key] = llm[field.key] ?? "";
-  }
-  return base;
+export const emptyAuxiliaryModels = Object.fromEntries(
+  AUXILIARY_MODEL_FIELD_DEFS.map(({ key }) => [key, ""]),
+) as AuxiliaryModelValues;
+
+export function auxiliaryModelsFromConfig(llm: {
+  auxiliary_vision_model?: string;
+  auxiliary_web_extract_model?: string;
+  auxiliary_compression_model?: string;
+  auxiliary_title_generation_model?: string;
+  auxiliary_approval_model?: string;
+  auxiliary_curator_model?: string;
+  auxiliary_skill_reflect_model?: string;
+}): AuxiliaryModelValues {
+  return Object.fromEntries(
+    AUXILIARY_MODEL_FIELD_DEFS.map(({ key }) => [key, llm[key] ?? ""]),
+  ) as AuxiliaryModelValues;
 }
 
 export function hasAuxiliaryModels(values: AuxiliaryModelValues): boolean {
-  return Object.values(values).some((v) => v.trim().length > 0);
+  return Object.values(values).some((v) => v.trim());
 }

@@ -14,7 +14,7 @@ import {
   formatMessageTime,
   formatRelative,
   resolveAppTimeZone,
-  sessionListGroupLabel,
+  sessionListGroupKey,
   toDatetimeLocalInTimeZone,
 } from "@/lib/format-time";
 
@@ -70,7 +70,7 @@ export function useTimeFormatters() {
       formatFull: (iso: string) => formatFull(iso, timeZone),
       formatMessageTime: (iso: string) => formatMessageTime(iso, timeZone),
       formatDateTime: (iso: string | null | undefined) => formatDateTime(iso, timeZone),
-      sessionListGroupLabel: (iso: string, now?: Date) => sessionListGroupLabel(iso, timeZone, now),
+      sessionListGroupKey: (iso: string, now?: Date) => sessionListGroupKey(iso, timeZone, now),
       toDatetimeLocal: (iso: string | null) => toDatetimeLocalInTimeZone(iso, timeZone),
     }),
     [timeZone],

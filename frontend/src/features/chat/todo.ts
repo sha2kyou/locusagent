@@ -1,4 +1,5 @@
 import type { ChatPart } from "./model";
+import i18n from "../../i18n/index.ts";
 
 export type TodoStepStatus = "pending" | "in_progress" | "done" | "skipped" | "interrupted";
 
@@ -73,8 +74,6 @@ export function extractLatestTodoPlan(parts: ChatPart[]): TodoPlan | null {
   return latest;
 }
 
-const HISTORICAL_INTERRUPT_NOTE = "执行中断（新话题）";
-
 /** 历史轮次气泡内的 todo 快照不会随 interrupt 更新，展示时补齐中断状态。 */
 export function applyHistoricalTodoInterrupt(plan: TodoPlan): TodoPlan {
   let changed = false;
@@ -84,7 +83,7 @@ export function applyHistoricalTodoInterrupt(plan: TodoPlan): TodoPlan {
     return {
       ...step,
       status: "interrupted" as const,
-      note: step.note || HISTORICAL_INTERRUPT_NOTE,
+      note: step.note || i18n.t("chat.todo.interruptedNote"),
     };
   });
   if (!changed) return plan;

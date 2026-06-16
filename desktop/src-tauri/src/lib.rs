@@ -11,8 +11,8 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use desktop_prefs::{
-    desktop_get_prefs, desktop_set_prefs, load_prefs, install_window_close_handler, show_main_window,
-    sync_autostart, PrefsState,
+    desktop_get_prefs, desktop_get_system_locale, desktop_set_prefs, load_prefs,
+    install_window_close_handler, show_main_window, sync_autostart, PrefsState,
 };
 use tauri::{Manager, RunEvent};
 
@@ -29,7 +29,11 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
-        .invoke_handler(tauri::generate_handler![desktop_get_prefs, desktop_set_prefs])
+        .invoke_handler(tauri::generate_handler![
+            desktop_get_prefs,
+            desktop_get_system_locale,
+            desktop_set_prefs,
+        ])
         .setup(|app| {
             let prefs = load_prefs();
             if let Err(err) = sync_autostart(app.handle(), &prefs) {
