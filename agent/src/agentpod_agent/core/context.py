@@ -118,9 +118,9 @@ def truncate(
 
 
 _DISTILL_SYSTEM_PROMPT = (
-    "你是对话压缩器。把下面这段较早的对话/工具调用浓缩成要点摘要，"
-    "保留：用户目标、已确定的结论与决策、关键事实/数据、未完成事项。"
-    "丢弃寒暄与冗余。简体中文，分条，尽量精简。"
+    "You are a conversation compressor. Distill the earlier conversation/tool calls below into bullet highlights. "
+    "Keep: user goals, settled conclusions and decisions, key facts/data, open items. "
+    "Drop small talk and redundancy. English, bullet points, as concise as possible."
 )
 
 
@@ -135,7 +135,7 @@ async def _distill_messages(messages: list[dict[str, Any]], *, client, model: st
         if role == "context_summary":
             content = str(m.get("content") or "").strip()
             if content:
-                convo.append(f"[历史摘要] {content[:1200]}")
+                convo.append(f"[prior summary] {content[:1200]}")
             continue
         content = str(m.get("content") or "").strip()
         tool_calls = m.get("tool_calls") or []
@@ -147,7 +147,7 @@ async def _distill_messages(messages: list[dict[str, Any]], *, client, model: st
             ]
             names = [n for n in names if n]
             if names:
-                convo.append(f"[assistant 调用工具] {', '.join(names)}")
+                convo.append(f"[assistant tool calls] {', '.join(names)}")
         if content:
             convo.append(f"[{role}] {content[:800]}")
     text = "\n".join(convo)[:8000]
@@ -249,7 +249,7 @@ async def compress_with_report(
                 summary_msgs = [
                     {
                         "role": "system",
-                        "content": "## 历史对话摘要（更早的消息已压缩）\n" + summary_text,
+                        "content": "## Conversation summary (earlier messages compressed)\n" + summary_text,
                     }
                 ]
         except Exception as exc:

@@ -17,11 +17,11 @@ _AGENT_STEP_TRANSITIONS: dict[str, frozenset[str]] = {
     "interrupted": frozenset(),
 }
 
-INTERRUPT_NOTE_RESTART = "执行中断（服务重启）"
-INTERRUPT_NOTE_NEW_SESSION = "执行中断（已开新对话）"
-INTERRUPT_NOTE_NEW_TURN = "执行中断（新话题）"
+INTERRUPT_NOTE_RESTART = "Interrupted (service restart)"
+INTERRUPT_NOTE_NEW_SESSION = "Interrupted (new chat opened)"
+INTERRUPT_NOTE_NEW_TURN = "Interrupted (new topic)"
 
-COMPRESSION_TODO_INJECTION_MARKER = "[上下文压缩后保留的活跃任务列表]"
+COMPRESSION_TODO_INJECTION_MARKER = "[Active task list retained after context compression]"
 
 InterruptScope = Literal["in_progress", "active"]
 

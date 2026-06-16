@@ -20,10 +20,8 @@ import type {
   ScheduleKind,
   TimezoneConfig,
   LocaleConfig,
-  ActivityLogEntry,
   BackendLogs,
   UsageSummary,
-  ToolToggleOverview,
   WorkspaceItem,
 } from "./types";
 
@@ -74,14 +72,6 @@ export const getBackendLogs = (opts?: { lines?: number }, signal?: AbortSignal) 
   if (opts?.lines != null) params.set("lines", String(opts.lines));
   const q = params.toString();
   return apiGet<BackendLogs>(`/api/settings/backend-logs${q ? `?${q}` : ""}`, { signal });
-};
-
-export const getActivityLogs = (opts?: { limit?: number; after_id?: number }) => {
-  const params = new URLSearchParams();
-  if (opts?.limit != null) params.set("limit", String(opts.limit));
-  if (opts?.after_id != null) params.set("after_id", String(opts.after_id));
-  const q = params.toString();
-  return apiGet<{ items: ActivityLogEntry[] }>(`/api/settings/activity-logs${q ? `?${q}` : ""}`);
 };
 
 // ---- 定时任务 ----
@@ -226,16 +216,6 @@ export const getMcpOAuthAuthorizeUrl = (server: string, workspaceId: string) => 
   const params = new URLSearchParams({ server, workspace_id: workspaceId });
   return apiGet<{ authorize_url: string }>(`/api/oauth/mcp/authorize-url?${params.toString()}`);
 };
-
-// ---- 工具开关 ----
-export const listToolToggles = () => apiGet<ToolToggleOverview>("/api/workspace/tools");
-
-export const updateBuiltinToolToggle = (name: string, enabled: boolean) =>
-  apiSend<{ name: string; enabled: boolean }>(
-    `/api/workspace/tools/builtin/${encodeURIComponent(name)}`,
-    "PUT",
-    { enabled },
-  );
 
 // ---- 记忆 ----
 export const listMemory = (limit = 100) =>

@@ -28,52 +28,54 @@ log = get_logger("background_review")
 _REVIEW_ALLOWED_TOOLS = frozenset({"skill_view", "skill_manage", "memory"})
 
 _REVIEW_SYSTEM_PROMPT = (
-    "你是 AgentPod 的后台自我改进审查器。你会收到一段已完成的对话轨迹，"
-    "任务是根据对话判断是否需要更新长期记忆或私有技能库。"
-    "你只能调用 skill_view、skill_manage、memory。"
-    "共享与内置技能只读，不可修改；仅私有技能可创建、修补或删除。"
-    "默认结论应为「无需保存」——只有出现明确、可长期复用的信号时才写入。"
+    "You are AgentPod's background self-improvement reviewer. You receive a completed conversation "
+    "trajectory and decide whether to update long-term memory or the private skill library. "
+    "You may only call skill_view, skill_manage, memory. "
+    "Shared and built-in skills are read-only; only private skills may be created, patched, or deleted. "
+    "Default conclusion should be nothing to save—write only when there is a clear, long-reusable signal."
 )
 
 _MEMORY_REVIEW_PROMPT = (
-    "请审查上方对话，判断是否应将信息写入长期记忆。\n\n"
-    "仅当满足以下条件之一才写入：\n"
-    "1. 用户明确透露了稳定的身份、偏好或长期约束（非一次性任务描述）。\n"
-    "2. 用户明确表达了对你行为或工作方式的持续期望（如「以后都…」「默认…」）。\n\n"
-    "使用 memory(action=add|replace)：term=long_term 存稳定用户事实/偏好（长期记忆），"
-    "term=short_term 存持久操作笔记（短期记忆）。兼容 target=user/memory。"
-    "replace 时传入快照中的 id 与 content（完整新文本）；无 id 时可用 old_text。\n"
-    "不要保存：一次性问答、任务进度、临时数据、表格/文档内容摘要、应写入技能的工作流知识。"
-    "七天内会过时的信息不应写入记忆。\n"
-    "以陈述性事实书写记忆，不要写成给自己的指令。\n"
-    "若无明确长期价值，回复「无需保存。」并结束。"
+    "Review the conversation above and decide whether to write to long-term memory.\n\n"
+    "Write only if one of these holds:\n"
+    "1. The user explicitly shared stable identity, preferences, or long-term constraints (not a one-off task).\n"
+    "2. The user expressed ongoing expectations for your behavior or workflow (e.g. always..., by default...).\n\n"
+    "Use memory(action=add|replace): term=long_term for stable user facts/preferences (long-term memory), "
+    "term=short_term for persistent operational notes (short-term memory). "
+    "For replace, pass id and content from the snapshot (full new text); without id use old_text.\n"
+    "Do not save: one-off Q&A, task progress, temporary data, table/document summaries, workflow knowledge "
+    "that belongs in skills. Information stale within seven days should not go to memory.\n"
+    "Write memories as declarative facts, not instructions to yourself.\n"
+    "If there is no clear long-term value, reply Nothing to save. and stop."
 )
 
 _SKILL_REVIEW_PROMPT = (
-    "请审查上方对话，判断是否应更新私有技能库。\n\n"
-    "默认回复「无需保存。」——仅在出现以下明确信号时才 skill_manage：\n"
-    "  • 用户明确纠正了风格、语气、格式、冗长度或工作流（如「别…」「太啰嗦」「直接给答案」）。\n"
-    "  • 出现了可复用到同类任务的非平凡技巧，且用户未明确反对沉淀。\n"
-    "  • 通过 skill_view 查阅的私有技能被证明错误或不完整，且本会话已验证修正方案。\n\n"
-    "不要因「工具用得多」或「会话较长」就创建技能。\n"
-    "目标形态：类级别的私有技能，不要「一会话一技能」。\n"
-    "优先修补现有私有技能（先 skill_view）；无合适技能且确有长期复用价值时再创建。\n"
-    "受保护技能（禁止编辑）：内置与共享技能目录下的技能。\n"
-    "不要沉淀为技能：环境偶发失败、工具负面断言、一次性任务叙事、表格/文档解读结论。\n"
-    "会话顺利、无纠正且无经用户认可的可复用技巧时，必须回复「无需保存。」"
+    "Review the conversation above and decide whether to update the private skill library.\n\n"
+    "Default reply Nothing to save.—only skill_manage when these clear signals appear:\n"
+    "  • The user explicitly corrected style, tone, format, verbosity, or workflow (e.g. don't..., too verbose, just answer).\n"
+    "  • A non-trivial technique reusable across similar tasks appeared, and the user did not object to saving it.\n"
+    "  • A private skill read via skill_view was wrong or incomplete and this session validated a fix.\n\n"
+    "Do not create skills just because many tools were used or the session was long.\n"
+    "Target shape: class-level private skills, not one skill per session.\n"
+    "Prefer patching existing private skills (skill_view first); create only when none fit and reuse value is clear.\n"
+    "Protected skills (do not edit): skills under built-in and shared skill directories.\n"
+    "Do not save as skills: transient env failures, negative tool assertions, one-off task narratives, table/document conclusions.\n"
+    "When the session went smoothly with no corrections and no user-approved reusable technique, "
+    "you must reply Nothing to save."
 )
 
 _COMBINED_REVIEW_PROMPT = (
-    "请审查上方对话，判断是否更新记忆和/或私有技能。\n\n"
-    "默认「无需保存。」仅在信号明确时行动。\n\n"
-    "记忆：仅稳定用户事实/偏好/持续期望。跳过任务进度、文档内容、临时结论。\n"
-    "技能：仅用户纠正或可复用工作流技巧；不因工具密集而默认更新。共享与内置技能只读。\n\n"
-    "若无两个维度的明确更新，回复「无需保存。」并结束。"
+    "Review the conversation above and decide whether to update memory and/or private skills.\n\n"
+    "Default Nothing to save.—act only when signals are clear.\n\n"
+    "Memory: stable user facts/preferences/ongoing expectations only. Skip task progress, document content, temporary conclusions.\n"
+    "Skills: user corrections or reusable workflow techniques only; do not update by default for tool-heavy sessions. "
+    "Shared and built-in skills are read-only.\n\n"
+    "If neither dimension needs an update, reply Nothing to save. and stop."
 )
 
 _TOOL_RESTRICTION_NOTICE = (
-    "\n\n你只能调用 skill_view、skill_manage、memory。"
-    "其他工具不可用——请勿尝试。"
+    "\n\nYou may only call skill_view, skill_manage, memory. "
+    "Other tools are unavailable—do not attempt them."
 )
 
 _REVIEW_ACTION_TOOLS = frozenset({"memory", "skill_manage"})

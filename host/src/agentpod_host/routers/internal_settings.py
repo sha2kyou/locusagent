@@ -4,12 +4,17 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 
-from agentpod_shared.settings_store import get_app_timezone
+from agentpod_shared.settings_store import get_app_locale, get_app_timezone
 
 from ..auth.agent_internal import require_agent_internal
 from ..llm_models import ModelRole, resolve_model
 
 router = APIRouter(prefix="/internal/settings", tags=["internal-settings"])
+
+
+@router.get("/locale")
+async def agent_read_locale(_auth: None = Depends(require_agent_internal)) -> dict:
+    return {"locale": get_app_locale()}
 
 
 @router.get("/timezone")

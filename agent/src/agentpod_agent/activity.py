@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from agentpod_shared.activity_log import list_activity_logs, record_activity as _record_activity
+from agentpod_shared.activity_log import record_activity as _record_activity
 
 
 def record_activity(
@@ -35,4 +35,4 @@ def record_activity(
     )
 
 
-__all__ = ["record_activity", "list_activity_logs"]
+__all__ = ["record_activity"]

@@ -27,36 +27,21 @@ log = get_logger("memory")
 MEMORY_ANCHOR_LONG = "identity"
 MEMORY_ANCHOR_SHORT = "experience"
 
-_ANCHOR_ALIASES_LONG = frozenset(
-    {"identity", "user", "long_term", "long", "longterm", "长期", "长期记忆"}
-)
-_ANCHOR_ALIASES_SHORT = frozenset(
-    {"experience", "memory", "short_term", "short", "shortterm", "短期", "短期记忆"}
-)
+_MEMORY_TERMS = frozenset({"long_term", "short_term"})
 
 
-def resolve_memory_anchor_input(value: str | None, *, default: str = MEMORY_ANCHOR_SHORT) -> str:
-    """将 term/target/anchor 别名解析为 identity（长期）或 experience（短期）。"""
-    raw = str(value or "").strip().lower()
-    if not raw:
-        return _normalize_anchor(default)
-    if raw in _ANCHOR_ALIASES_LONG:
+def resolve_memory_anchor_input(value: str | None, *, default: str = "short_term") -> str:
+    """Map memory tool term (long_term / short_term) to stored anchor (identity / experience)."""
+    raw = str(value or default or "short_term").strip().lower()
+    if raw == "long_term":
         return MEMORY_ANCHOR_LONG
-    if raw in _ANCHOR_ALIASES_SHORT:
+    if raw == "short_term":
         return MEMORY_ANCHOR_SHORT
-    raise ValueError(
-        "term must be long_term or short_term "
-        "(aliases: user/memory, identity/experience)"
-    )
+    raise ValueError("term must be long_term or short_term")
 
 
 def memory_term_label(anchor: str | None) -> str:
-    raw = str(anchor or "").strip().lower()
-    if raw in _ANCHOR_ALIASES_LONG:
-        return "长期"
-    if raw in _ANCHOR_ALIASES_SHORT or not raw:
-        return "短期"
-    return "长期" if _normalize_anchor(anchor) == MEMORY_ANCHOR_LONG else "短期"
+    return "long-term" if _normalize_anchor(anchor) == MEMORY_ANCHOR_LONG else "short-term"
 
 
 def _normalize_anchor(anchor: str | None) -> str:

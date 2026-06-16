@@ -27,7 +27,7 @@ async def test_review_write_blocks_hard_secret():
     with patch("agentpod_agent.security.guard.get_settings", return_value=_guard_enabled_settings()):
         result = await review_write("-----BEGIN RSA PRIVATE KEY-----\nabc", kind="memory")
     assert not result.allowed
-    assert "私钥" in result.reason
+    assert "private key" in result.reason
 
 
 @pytest.mark.asyncio

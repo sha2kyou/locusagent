@@ -55,39 +55,39 @@ register_builtin(
         name="clarify",
         strict_schema=True,
         description=(
-            "用途：当需要澄清、反馈或决策时向用户发起单选提问。"
-            "必须提供 2–4 个互斥 choices，用户只能选其中一项；也可通过“其他”自由输入一项。"
-            "适用场景："
-            "- 任务不明确，需要用户选定一个方向。"
-            "- 需要任务后反馈（如“效果如何？”）。"
-            "- 决策涉及用户需要权衡的重要取舍。"
-            "不适用场景："
-            "- 需要用户同时选多项。"
-            "- 简单的是/否确认。"
-            "- 答案无法枚举为有限选项时（自行做合理默认，勿调用 clarify）。"
-            "- 低风险决策，最好自己做出合理默认选择。"
-            "参数："
-            "- question（必需）：简洁的澄清问题；不要把候选项写在 question 里。"
-            "- choices（必需）：2–4 个互斥候选项，用户单选其一。"
-            "- allow_other（必需）：是否允许“其他”自由输入；通常为 true。"
+            "Purpose: ask the user a single-select clarification when you need feedback or a decision. "
+            "Provide 2–4 mutually exclusive choices; the user picks one, or may enter a custom option via Other. "
+            "Use when: "
+            "- the task is ambiguous and the user must pick a direction; "
+            "- you need post-task feedback (e.g. how did it work?); "
+            "- the decision involves important tradeoffs for the user. "
+            "Do not use when: "
+            "- the user must select multiple items; "
+            "- a simple yes/no suffices; "
+            "- answers cannot be enumerated (pick a reasonable default instead); "
+            "- low-stakes decisions where you should decide yourself. "
+            "Parameters: "
+            "- question (required): concise question—do not list options in question; "
+            "- choices (required): 2–4 mutually exclusive options, single-select; "
+            "- allow_other (required): allow free-text Other; usually true."
         ),
         parameters={
             "type": "object",
             "properties": {
                 "question": {
                     "type": "string",
-                    "description": "向用户提出的澄清问题（不含候选项列表）",
+                    "description": "Clarification question for the user (no option list in question)",
                 },
                 "choices": {
                     "type": "array",
                     "items": {"type": "string"},
                     "minItems": 2,
                     "maxItems": 4,
-                    "description": "互斥候选项（2–4 个）；用户单选其一",
+                    "description": "Mutually exclusive options (2–4); user selects one",
                 },
                 "allow_other": {
                     "type": "boolean",
-                    "description": "是否允许“其他”自由输入；通常为 true",
+                    "description": "Whether to allow free-text Other; usually true",
                 },
             },
             "required": ["question", "choices", "allow_other"],

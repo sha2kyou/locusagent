@@ -154,8 +154,8 @@ class ToolCallGuardrailController:
                 action="block",
                 code="repeated_exact_failure_block",
                 message=(
-                    f"已阻止 {tool_name}：相同参数已连续失败 {exact_count} 次。"
-                    "请更换策略或说明阻塞原因，勿重复相同调用。"
+                    f"Blocked {tool_name}: same arguments failed {exact_count} times in a row. "
+                    "Change strategy or explain the blocker—do not repeat the same call."
                 ),
                 tool_name=tool_name,
                 count=exact_count,
@@ -171,8 +171,8 @@ class ToolCallGuardrailController:
                         action="block",
                         code="idempotent_no_progress_block",
                         message=(
-                            f"已阻止 {tool_name}：只读调用已连续返回相同结果 {repeat_count} 次。"
-                            "请使用已有结果或更换查询。"
+                            f"Blocked {tool_name}: read-only call returned the same result {repeat_count} times. "
+                            "Use existing results or change the query."
                         ),
                         tool_name=tool_name,
                         count=repeat_count,
@@ -207,8 +207,8 @@ class ToolCallGuardrailController:
                     action="halt",
                     code="same_tool_failure_halt",
                     message=(
-                        f"已停止工具循环：{tool_name} 本轮已连续失败 {same_count} 次。"
-                        "请改用其他工具或向用户说明阻塞。"
+                        f"Stopped tool loop: {tool_name} failed {same_count} times this turn. "
+                        "Try another tool or explain the blocker to the user."
                     ),
                     tool_name=tool_name,
                     count=same_count,
@@ -222,8 +222,8 @@ class ToolCallGuardrailController:
                     action="warn",
                     code="repeated_exact_failure_warning",
                     message=(
-                        f"{tool_name} 在相同参数下已连续失败 {exact_count} 次，疑似死循环；"
-                        "请先查看错误并调整参数或策略。"
+                        f"{tool_name} failed {exact_count} times with the same arguments—possible loop; "
+                        "read the error and adjust parameters or strategy first."
                     ),
                     tool_name=tool_name,
                     count=exact_count,
@@ -235,8 +235,8 @@ class ToolCallGuardrailController:
                     action="warn",
                     code="same_tool_failure_warning",
                     message=(
-                        f"{tool_name} 本轮已连续失败 {same_count} 次；"
-                        "请诊断错误后换用其他工具或参数，勿重复同一路径。"
+                        f"{tool_name} failed {same_count} times this turn; "
+                        "diagnose the error, then switch tools or arguments—do not repeat the same path."
                     ),
                     tool_name=tool_name,
                     count=same_count,
@@ -264,8 +264,8 @@ class ToolCallGuardrailController:
                 action="warn",
                 code="idempotent_no_progress_warning",
                 message=(
-                    f"{tool_name} 已连续 {repeat_count} 次返回相同结果；"
-                    "请直接使用已有信息或更换查询。"
+                    f"{tool_name} returned the same result {repeat_count} times in a row; "
+                    "use the information you already have or change the query."
                 ),
                 tool_name=tool_name,
                 count=repeat_count,
@@ -325,7 +325,7 @@ def guardrail_block_content(decision: ToolGuardrailDecision) -> str:
 def append_guardrail_guidance(result: str, decision: ToolGuardrailDecision) -> str:
     if decision.action not in {"warn", "halt"} or not decision.message:
         return result
-    label = "工具循环熔断" if decision.action == "halt" else "工具循环警告"
+    label = "Tool loop halt" if decision.action == "halt" else "Tool loop warning"
     return f"{result or ''}\n\n[{label}: {decision.message}]"
 
 

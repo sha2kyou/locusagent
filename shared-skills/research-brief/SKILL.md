@@ -1,66 +1,66 @@
 ---
 name: research-brief
-description: 围绕一个问题做信息调研与结构化摘要：整合已知事实、列出待核实项、区分观点与证据。适用于「帮我查一下」「调研」「对比几家」「整理背景」等非编程类信息任务。
+description: Research and structured summary around a question—integrate known facts, list items to verify, separate opinion from evidence. For non-coding info tasks like "look this up", "research", "compare options", "background".
 triggers:
-  - 调研
-  - 查一下
-  - 帮我了解
-  - 背景资料
-  - 对比
-  - 研究
-  - 信息整理
-  - 资料汇总
   - research
+  - look up
+  - help me understand
+  - background
+  - compare
+  - study
+  - compile info
+  - summarize sources
+  - research brief
 ---
 
 # Research Brief
 
-## 何时使用
+## When to use
 
-执行相关任务前先调用 `skill_view{name: "research-brief"}` 加载完整正文。
+Before related work, call `skill_view{name: "research-brief"}` to load the full body.
 
-适用于**需要把分散信息收成可读结论**的场景，例如：
-- 了解某个产品、政策、行业或人物背景
-- 对比多个方案、服务、路线的利弊
-- 为写作、决策、会议准备事实基础
-- 用户给出链接或附件，要求「总结要点」
+Use when **scattered information must become readable conclusions**, e.g.:
+- Background on a product, policy, industry, or person
+- Compare options, services, or approaches
+- Fact base for writing, decisions, or meetings
+- User gives links or attachments and asks for key points
 
-**不用于**：用户已给出完整答案只需润色（用 humanizer）；需要实时网页检索时先 `web_search` / `web_extract` 再本技能整理。
+**Not for**: polishing when the user already gave a full answer (humanizer); live web retrieval—use `web_search` / `web_extract` first, then this skill to organize.
 
-## 工作方式
+## Workflow
 
-1. **明确问题**：一句话复述用户真正想知道什么；范围模糊时用 `clarify`。
-2. **收集信息**：结合对话内容、`web_search`、`read_file`、用户附件；缺关键数据时说明缺口，不编造。
-3. **区分层级**：事实 / 合理推断 / 未证实说法 / 你的建议——分开写。
-4. **标注来源**：能指出来源的写明；无法核实的标「待核实」。
-5. **面向行动**：末尾给 2–4 条「若继续深入可做什么」或「决策时还需确认什么」。
+1. **Clarify the question**: one sentence on what the user really wants; use `clarify` if scope is fuzzy.
+2. **Gather**: conversation, `web_search`, `read_file`, user attachments; state gaps—do not fabricate.
+3. **Separate layers**: fact / reasonable inference / unverified claim / your recommendation.
+4. **Cite sources** where possible; mark unverified as "to confirm".
+5. **Action-oriented**: end with 2–4 "if you go deeper…" or "decide after confirming…".
 
-## 输出结构（默认）
+## Default output structure
 
 ```markdown
-## 问题
-（复述调研问题）
+## Question
+(restate the research question)
 
-## 结论摘要
-（3–5 句，先给答案方向）
+## Executive summary
+(3–5 sentences, answer direction first)
 
-## 要点
+## Key points
 - ...
 
-## 对比 / 利弊（如适用）
-| 维度 | A | B |
-|------|---|---|
+## Comparison / pros & cons (if applicable)
+| Dimension | A | B |
+|-----------|---|---|
 
-## 不确定与缺口
+## Uncertainty & gaps
 - ...
 
-## 建议下一步
+## Suggested next steps
 - ...
 ```
 
-长调研可分段输出；用户要求简短时只保留「结论摘要 + 要点」。
+Long research may be split; for "brief only" keep executive summary + key points.
 
-## 平台约定
+## Platform conventions
 
-- 默认对话内交付；用户明确要求保存时用 `artifact_save`。
-- 不替代专业法律、医疗、投资建议；涉及此类话题加一句边界说明。
+- Default: deliver in chat; `artifact_save` when user explicitly asks to save.
+- Not legal, medical, or investment advice—add a boundary line for those topics.

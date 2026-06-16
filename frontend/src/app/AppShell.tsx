@@ -13,7 +13,6 @@ import {
   KeyRound,
   Settings,
   Sparkles,
-  // Wrench,
 } from "lucide-react";
 import { DesktopWindowDragOverlay } from "@/app/DesktopTitlebarSpacer";
 import { desktopDragRegionProps } from "@/lib/desktop-app";
@@ -53,7 +52,6 @@ const NAV_PRIMARY: NavEntry[] = [{ to: "/chat", labelKey: "nav.chat", icon: Mess
 const NAV_CAPABILITIES: NavEntry[] = [
   { to: "/skills", labelKey: "nav.skills", icon: Sparkles },
   { to: "/mcp", labelKey: "nav.mcp", icon: Plug },
-  // { to: "/tools", labelKey: "nav.tools", icon: Wrench },
 ];
 const NAV_CONTEXT: NavEntry[] = [
   { to: "/memory", labelKey: "nav.memory", icon: Brain },

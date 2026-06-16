@@ -25,6 +25,51 @@ _MODEL_CACHE_TTL_SECONDS = 60.0
 _model_cache: dict[str, tuple[str, float]] = {}
 _model_cache_lock = asyncio.Lock()
 
+_LOCALE_CACHE_TTL_SECONDS = 60.0
+_locale_cache: tuple[str, float] | None = None
+_locale_cache_lock = asyncio.Lock()
+
+
+async def _fetch_locale_from_host() -> str:
+    base, headers = internal_base_and_headers()
+    url = f"{base}/internal/settings/locale"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(url, headers=headers)
+    if resp.status_code >= 400:
+        raise HostSettingsError(error_detail(resp))
+    data = resp.json()
+    if not isinstance(data, dict):
+        raise HostSettingsError("invalid host response")
+    locale = str(data.get("locale") or "").strip().lower()
+    if locale not in {"zh", "en"}:
+        raise HostSettingsError("missing or invalid locale in host response")
+    return locale
+
+
+async def get_locale(*, force_refresh: bool = False) -> str:
+    """Read Host app locale; 60s in-process cache."""
+    global _locale_cache
+    now = time.monotonic()
+    if not force_refresh and _locale_cache is not None:
+        locale, expires = _locale_cache
+        if now < expires:
+            return locale
+
+    async with _locale_cache_lock:
+        if not force_refresh and _locale_cache is not None:
+            locale, expires = _locale_cache
+            if time.monotonic() < expires:
+                return locale
+        try:
+            locale = await _fetch_locale_from_host()
+        except HostSettingsError as exc:
+            if _locale_cache is not None:
+                log.debug("locale_fetch_failed_use_stale", error=str(exc))
+                return _locale_cache[0]
+            return "en"
+        _locale_cache = (locale, time.monotonic() + _LOCALE_CACHE_TTL_SECONDS)
+        return locale
+
 
 async def _fetch_timezone_from_host() -> str:
     base, headers = internal_base_and_headers()

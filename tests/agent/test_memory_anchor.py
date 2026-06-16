@@ -1,4 +1,4 @@
-"""记忆 anchor / term 解析单元测试。"""
+"""Memory term (long_term / short_term) resolution tests."""
 
 from __future__ import annotations
 
@@ -17,12 +17,6 @@ from agentpod_agent.memory import (
     [
         ("long_term", MEMORY_ANCHOR_LONG),
         ("short_term", MEMORY_ANCHOR_SHORT),
-        ("user", MEMORY_ANCHOR_LONG),
-        ("memory", MEMORY_ANCHOR_SHORT),
-        ("identity", MEMORY_ANCHOR_LONG),
-        ("experience", MEMORY_ANCHOR_SHORT),
-        ("长期", MEMORY_ANCHOR_LONG),
-        ("短期", MEMORY_ANCHOR_SHORT),
         ("", MEMORY_ANCHOR_SHORT),
         (None, MEMORY_ANCHOR_SHORT),
     ],
@@ -31,18 +25,21 @@ def test_resolve_memory_anchor_input(raw: str | None, expected: str) -> None:
     assert resolve_memory_anchor_input(raw) == expected
 
 
-def test_resolve_memory_anchor_input_rejects_unknown() -> None:
+@pytest.mark.parametrize(
+    "raw",
+    ["user", "memory", "identity", "experience", "长期", "短期", "foobar"],
+)
+def test_resolve_memory_anchor_input_rejects_non_term(raw: str) -> None:
     with pytest.raises(ValueError, match="long_term or short_term"):
-        resolve_memory_anchor_input("foobar")
+        resolve_memory_anchor_input(raw)
 
 
 @pytest.mark.parametrize(
     ("anchor", "label"),
     [
-        ("identity", "长期"),
-        ("experience", "短期"),
-        ("user", "长期"),
-        (None, "短期"),
+        ("identity", "long-term"),
+        ("experience", "short-term"),
+        (None, "short-term"),
     ],
 )
 def test_memory_term_label(anchor: str | None, label: str) -> None:

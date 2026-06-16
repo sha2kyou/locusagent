@@ -34,11 +34,11 @@ def _safe_filename(name: str) -> str:
 async def _download_to_workspace(attachment_id: str, rel_path: str) -> ToolResult:
     row = await get_attachment_download(attachment_id)
     if row is None:
-        raise ToolError(f"附件不存在或无法读取: {attachment_id}")
+        raise ToolError(f"attachment missing or unreadable: {attachment_id}")
     name, mime, data = row
     max_bytes = max(1, int(get_settings().attachment_max_bytes))
     if len(data) > max_bytes:
-        raise ToolError(f"附件超过大小限制（{max_bytes} bytes）")
+        raise ToolError(f"attachment exceeds size limit ({max_bytes} bytes)")
 
     target_rel = rel_path or f"downloads/{attachment_id}_{_safe_filename(name)}"
     target = resolve_workspace_path(target_rel)
@@ -51,10 +51,10 @@ async def _download_to_workspace(attachment_id: str, rel_path: str) -> ToolResul
     try:
         written_rel, size = await run_in_thread(_write)
     except OSError as exc:
-        raise ToolError(f"写入失败: {exc}") from exc
+        raise ToolError(f"write failed: {exc}") from exc
 
     return ToolResult(
-        content=f"已下载到 workspace/{written_rel}（{size} bytes，{mime}）",
+        content=f"Downloaded to workspace/{written_rel} ({size} bytes, {mime})",
         metadata={
             "path": written_rel,
             "name": name,
@@ -67,63 +67,62 @@ async def _download_to_workspace(attachment_id: str, rel_path: str) -> ToolResul
 
 async def _deliver_to_chat(attachment_id: str) -> ToolResult:
     if not get_chat_session_id():
-        raise ToolError("deliver 需要活跃的对话会话")
+        raise ToolError("deliver requires an active chat session")
 
     detail = await get_attachment_detail(attachment_id)
     if detail is None:
-        raise ToolError(f"附件不存在: {attachment_id}")
+        raise ToolError(f"attachment not found: {attachment_id}")
 
-    att_name = str(detail.get("name") or "附件")
+    att_name = str(detail.get("name") or "attachment")
     return ToolResult(
-        content="已附加到当前回复，界面会显示下载标签。不要在正文中写已发送、文件名或任何链接。",
+        content="Attached to this reply; UI shows a download chip. Do not write sent, filename, or links in body.",
         metadata={"chat_attachment": {"id": attachment_id, "name": att_name}},
     )
 
 
 async def _attachments_tool(args: dict[str, Any]) -> ToolResult:
     action = pick_action(args)
-    attachment_id = pick_str(args, "id", "attachment_id")
+    attachment_id = pick_str(args, "id")
     if not attachment_id:
-        raise ToolError("缺少 id 参数（attachment id，如 att_xxx）")
+        raise ToolError("missing id parameter (attachment id, e.g. att_xxx)")
 
-    if action in {"get", "query", "head", "info"}:
+    if action == "get":
         detail = await get_attachment_detail(attachment_id)
         if detail is None:
-            raise ToolError(f"附件不存在: {attachment_id}")
+            raise ToolError(f"attachment not found: {attachment_id}")
         return ToolResult(
             content=_format_attachment_detail(detail),
             metadata={"attachment": detail},
         )
 
-    if action in {"download", "fetch", "save"}:
-        rel_path = pick_str(args, "path", "file_path")
+    if action == "download":
+        rel_path = pick_str(args, "path")
         return await _download_to_workspace(attachment_id, rel_path)
 
-    if action in {"deliver", "attach"}:
+    if action == "deliver":
         return await _deliver_to_chat(attachment_id)
 
     if action == "delete":
         deleted = await delete_attachment_by_id(attachment_id)
         if not deleted:
-            raise ToolError(f"附件不存在: {attachment_id}")
-        return ToolResult(content=f"已删除附件 {attachment_id}")
+            raise ToolError(f"attachment not found: {attachment_id}")
+        return ToolResult(content=f"Deleted attachment {attachment_id}")
 
-    raise ToolError(f"未知 action: {action}，支持 get / download / deliver / delete")
+    raise ToolError(f"unknown action: {action}; supported: get / download / deliver / delete")
 
 
 register_builtin(
     Tool(
         name="attachments",
         description=(
-            "查询、下载或删除本地附件（按 attachment id，如 att_xxx）。"
-            "适用于核对附件元数据、将附件落盘到 workspace/ 供 read_file 等工具处理，"
-            "或将已有附件交付给用户下载，或清理不再需要的文件。"
-            "动作：get（查询，别名 query/head/info）/ download（落盘到 workspace，别名 fetch/save）/"
-            "deliver（附加到当前回复供用户下载，别名 attach）/ delete。"
-            "get 返回元数据；文本含 textPreview，图片仅标注 imageAvailable。"
-            "download 默认写入 downloads/{id}_{文件名}，可用 path 指定 workspace 相对路径。"
-            "deliver 成功后不要在回复中提及文件名或链接。"
-            "delete 会移除数据库记录、消息关联，并在无引用时删除本地文件。"
+            "Query, download, or delete local attachments by id (e.g. att_xxx)."
+            "For metadata checks, saving to workspace/ for read_file, "
+            "delivering downloads to the user, or deleting unneeded files."
+            "Actions: get / download to workspace / deliver to this reply for user download / delete. "
+            "get returns metadata; text includes textPreview; images mark imageAvailable. "
+            "download defaults to downloads/{id}_{filename}; path sets workspace-relative target. "
+            "After deliver, do not mention filename or links in reply. "
+            "delete removes DB record, message links, and local file when unreferenced."
         ),
         parameters={
             "type": "object",
@@ -132,24 +131,18 @@ register_builtin(
                     "type": "string",
                     "enum": [
                         "get",
-                        "query",
-                        "head",
-                        "info",
                         "download",
-                        "fetch",
-                        "save",
                         "deliver",
-                        "attach",
                         "delete",
                     ],
                 },
                 "id": {
                     "type": "string",
-                    "description": "Attachment id（att_xxx），来自对话 [用户附件] 行或 get 结果。",
+                    "description": "Attachment id (att_xxx) from [user attachment] line in chat or get result.",
                 },
                 "path": {
                     "type": "string",
-                    "description": "download 时写入 workspace/ 的相对路径（默认 downloads/{id}_{文件名}）。",
+                    "description": "Relative workspace path for download (default downloads/{id}_{filename}).",
                 },
             },
             "required": ["action", "id"],

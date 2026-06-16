@@ -49,7 +49,7 @@ async def test_attachments_tool_unknown_action():
         await _attachments_tool({"action": "put", "id": "att_x"})
         assert False, "expected ToolError"
     except ToolError as exc:
-        assert "未知 action" in str(exc)
+        assert "unknown action" in str(exc)
 
 
 def test_safe_filename_strips_unsafe_chars():

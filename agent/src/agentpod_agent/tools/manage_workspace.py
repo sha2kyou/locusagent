@@ -21,9 +21,9 @@ register_builtin(
     Tool(
         name="manage_workspace",
         description=(
-            "工作区环境摘要（只读）。"
-            "返回技能、MCP、记忆、环境变量、定时任务、产物的条数与各自最近 5 条数据。"
-            "MCP 的增删改请用 mcp_manage；重连/刷新工具列表请用 mcp_refresh；其他资源 CRUD 走对应专用工具。"
+            "Read-only workspace environment summary."
+            "Returns counts and latest 5 items for skills, MCP, memory, env vars, scheduled tasks, artifacts."
+            "Use mcp_manage for MCP CRUD; mcp_refresh to reconnect/refresh tools; other resources use dedicated tools."
         ),
         parameters={
             "type": "object",

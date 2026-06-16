@@ -19,13 +19,13 @@ from .store import add_memory, count_memories, delete_memory, list_memories
 log = get_logger("memory_curator")
 
 _CURATE_SYSTEM_PROMPT = (
-    "你是记忆策展器。下面是一批长期记忆条目（可能有重复、过时或冗余）。"
-    "请合并同类、去除重复、丢弃明显过时或无长期价值的条目，输出更精简的一组记忆。\n"
-    "保留原则：用户稳定偏好、身份与约束优先；丢弃任务进度、合并请求或议题编号、一次性排障结论、"
-    "七天内会过时的状态描述。\n"
-    "每条只保留一种语义，用陈述句写事实（不是给自己的指令），简体中文，单条不超过 60 字。"
-    '输出严格 JSON：{"memories":["条目1","条目2"]}。'
-    "结果条数必须少于输入条数。"
+    "You are a memory curator. Below is a batch of long-term memory entries (may have duplicates, staleness, or redundancy). "
+    "Merge similar items, remove duplicates, discard clearly stale or low long-term value entries, and output a leaner set.\n"
+    "Keep: stable user preferences, identity, and constraints first; drop task progress, PR/issue numbers, one-off troubleshooting, "
+    "state descriptions stale within seven days.\n"
+    "Each entry one semantic fact, declarative sentences (not instructions to yourself), English, max 60 words per item. "
+    'Output strict JSON: {"memories":["entry1","entry2"]}. '
+    "Result count must be fewer than input count."
 )
 
 
@@ -62,7 +62,7 @@ async def maybe_curate_memories(*, model: str | None = None) -> int:
             model=chosen_model,
             messages=[
                 {"role": "system", "content": _CURATE_SYSTEM_PROMPT},
-                {"role": "user", "content": f"共 {len(items)} 条：\n{numbered}"},
+                {"role": "user", "content": f"{len(items)} entries:\n{numbered}"},
             ],
             temperature=0.1,
             retry_log_event="curator_disable_thinking_retry",

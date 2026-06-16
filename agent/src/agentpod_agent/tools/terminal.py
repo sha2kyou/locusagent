@@ -40,7 +40,7 @@ def _denylist() -> set[str]:
 
 async def _terminal(args: dict[str, Any]) -> ToolResult:
     if not _enabled():
-        raise ToolError("terminal 已禁用，请在 设置 → 工具 中开启")
+        raise ToolError("terminal disabled; enable it in Settings → Tools")
     cmd = str(args.get("command", "")).strip()
     if not cmd:
         raise ToolError("command is required")
@@ -56,7 +56,7 @@ async def _terminal(args: dict[str, Any]) -> ToolResult:
         raise ToolError("command must be a bare executable name, path is not allowed")
     wl = _whitelist()
     if not wl:
-        raise ToolError("terminal 白名单为空，请在 设置 → 工具 中配置允许执行的命令")
+        raise ToolError("terminal allowlist is empty; configure allowed commands in Settings → Tools")
     if head not in wl:
         raise ToolError(f"command '{head}' not in whitelist")
     if head in _denylist():
@@ -118,17 +118,16 @@ register_builtin(
     Tool(
         name="terminal",
         description=(
-            "执行 shell 命令。用于构建、安装、git、进程管理与脚本执行。"
-            "默认受设置中的 terminal 开关、白名单与禁止项约束，"
-            "并应用资源限制与超时进程组回收；"
-            "不用于文件读写/搜索（优先 read_file 与 search_files）。"
+            "Run shell commands for build, install, git, process management, scripts. "
+            "Subject to terminal enable flag, allow/deny lists, resource limits, timeout cleanup; "
+            "not for file read/search (prefer read_file and search_files)."
         ),
         parameters={
             "type": "object",
             "properties": {
-                "command": {"type": "string", "description": "要执行的 shell 命令"},
+                "command": {"type": "string", "description": "Shell command to run"},
                 "timeout": {"type": "number", "minimum": 0.1, "default": DEFAULT_TIMEOUT},
-                "workdir": {"type": "string", "description": "可选工作目录（默认 workspace 根目录）"},
+                "workdir": {"type": "string", "description": "Optional working directory (default workspace root)"},
             },
             "required": ["command"],
         },

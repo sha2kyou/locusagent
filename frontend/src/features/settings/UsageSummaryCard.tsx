@@ -111,3 +111,7 @@ export function UsageSummaryCard({ active }: { active?: boolean }) {
     </div>
   );
 }
+
+export function SettingsUsageRoute() {
+  return <UsageSummaryCard active />;
+}

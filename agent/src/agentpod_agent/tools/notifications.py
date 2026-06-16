@@ -74,7 +74,7 @@ async def _notification_query(args: dict[str, Any]) -> ToolResult:
 register_builtin(
     Tool(
         name="notification_query",
-        description="查询当前用户未读通知，可按关键词过滤，支持返回正文。",
+        description="Query unread notifications for the current user; optional keyword filter and body.",
         parameters={
             "type": "object",
             "properties": {
@@ -108,13 +108,13 @@ async def _notification_mark_read(args: dict[str, Any]) -> ToolResult:
 register_builtin(
     Tool(
         name="notification_mark_read",
-        description="按 id 将通知标记为已读。id 来自 notification_query。",
+        description="Mark notification read by id from notification_query.",
         parameters={
             "type": "object",
             "properties": {
                 "id": {
                     "type": "integer",
-                    "description": "通知 id（notification_query 返回的 #id）。",
+                    "description": "Notification id (#id from notification_query)."
                 },
             },
             "required": ["id"],

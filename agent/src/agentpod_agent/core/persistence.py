@@ -149,7 +149,7 @@ def _unreferenced_object_keys(c: Any, keys: list[str]) -> list[str]:
 def _to_attachment_meta_row(row: Any) -> dict[str, Any]:
     return {
         "id": str(row["id"]),
-        "name": str(row["name"] or "附件"),
+        "name": str(row["name"] or "attachment"),
         "kind": str(row["kind"] or "other"),
         "mimeType": str(row["mime_type"] or "application/octet-stream"),
         "objectKey": str(row["object_key"] or ""),
@@ -177,7 +177,7 @@ async def _hydrate_attachment(meta: dict[str, Any]) -> dict[str, Any]:
     if not object_key or not out["processable"]:
         if not object_key and out["processable"] and out["kind"] in {"text", "image"}:
             out["processable"] = False
-            out["unsupportedReason"] = "附件对象不存在"
+            out["unsupportedReason"] = "attachment object missing"
         return out
     try:
         data, _resolved_key = await resolve_attachment_bytes(
@@ -187,11 +187,11 @@ async def _hydrate_attachment(meta: dict[str, Any]) -> dict[str, Any]:
     except AttachmentStorageError as exc:
         log.warning("attachment_load_failed", attachment_id=out["id"], error=str(exc))
         out["processable"] = False
-        out["unsupportedReason"] = "附件读取失败"
+        out["unsupportedReason"] = "attachment read failed"
         return out
     if data is None:
         out["processable"] = False
-        out["unsupportedReason"] = "附件对象不存在"
+        out["unsupportedReason"] = "attachment object missing"
         return out
     if out["kind"] == "text":
         attachment_name = str(meta.get("name") or "")
@@ -227,10 +227,10 @@ def attachment_ids_signature(attachment_ids: list[str]) -> str:
 def _attachment_persisted_lines(attachments: list[dict[str, Any]]) -> list[str]:
     lines: list[str] = []
     for a in attachments:
-        name = str(a.get("name") or "附件")
+        name = str(a.get("name") or "attachment")
         kind = str(a.get("kind") or "other")
         aid = str(a.get("id") or "")
-        lines.append(f"[用户附件] {name} ({kind}, id={aid})")
+        lines.append(f"[user attachment] {name} ({kind}, id={aid})")
     return lines
 
 
@@ -285,7 +285,7 @@ def _compose_user_content_with_attachments(text: str, attachments: list[dict[str
 
     if has_image:
         parts: list[dict[str, Any]] = []
-        parts.append({"type": "text", "text": clean or "请结合附件内容回答。"})
+        parts.append({"type": "text", "text": clean or "Answer using the attached content."})
         image_index = 0
         for a in attachments:
             if a.get("kind") != "image" or not a.get("processable") or not a.get("imageDataUrl"):
@@ -294,30 +294,30 @@ def _compose_user_content_with_attachments(text: str, attachments: list[dict[str
             parts.append(
                 {
                     "type": "text",
-                    "text": f"[图片附件 {image_index}] name={a.get('name')}",
+                    "text": f"[image attachment {image_index}] name={a.get('name')}",
                 }
             )
             parts.append({"type": "image_url", "image_url": {"url": a["imageDataUrl"]}})
         if text_attachments:
             for i, a in enumerate(text_attachments, start=1):
                 parts.append(
-                    {"type": "text", "text": f"[附件 {i}] name={a.get('name')}\n{str(a.get('text') or '')}"}
+                    {"type": "text", "text": f"[attachment {i}] name={a.get('name')}\n{str(a.get('text') or '')}"}
                 )
         if unsupported:
-            names = ", ".join(str(a.get("name") or "附件") for a in unsupported)
-            parts.append({"type": "text", "text": f"另有不可解析附件：{names}。"})
+            names = ", ".join(str(a.get("name") or "attachment") for a in unsupported)
+            parts.append({"type": "text", "text": f"Additional unparseable attachments: {names}."})
         return parts
 
     text_parts: list[dict[str, Any]] = []
-    text_parts.append({"type": "text", "text": clean or "请结合附件内容回答。"})
+    text_parts.append({"type": "text", "text": clean or "Answer using the attached content."})
     if text_attachments:
         for i, a in enumerate(text_attachments, start=1):
             text_parts.append(
-                {"type": "text", "text": f"[附件 {i}] name={a.get('name')}\n{str(a.get('text') or '')}"}
+                {"type": "text", "text": f"[attachment {i}] name={a.get('name')}\n{str(a.get('text') or '')}"}
             )
     if unsupported:
-        names = ", ".join(str(a.get("name") or "附件") for a in unsupported)
-        text_parts.append({"type": "text", "text": f"用户还上传了不可解析附件：{names}。"})
+        names = ", ".join(str(a.get("name") or "attachment") for a in unsupported)
+        text_parts.append({"type": "text", "text": f"User also uploaded unparseable attachments: {names}."})
     return text_parts
 
 
@@ -330,16 +330,23 @@ def _is_openai_tool_calls(tool_calls: Any) -> bool:
 
 async def create_session(title: str | None = None, *, hidden: bool = False) -> str:
     from ..todos.store import interrupt_other_session_todos
+    from agentpod_shared.session_titles import default_session_title
+
+    from ..host_settings import get_locale
 
     sid = _new_session_id()
     if not hidden:
         await interrupt_other_session_todos(sid)
 
+    resolved_title = (title or "").strip()
+    if not resolved_title:
+        resolved_title = default_session_title(await get_locale())
+
     def _do() -> None:
         with conn_scope(load_vec=False) as c:
             c.execute(
                 "INSERT INTO sessions(id, title, hidden) VALUES(?, ?, ?)",
-                (sid, title or "新对话", 1 if hidden else 0),
+                (sid, resolved_title, 1 if hidden else 0),
             )
 
     await run_in_thread(_do)
@@ -633,7 +640,7 @@ async def _create_attachment_from_existing_hash(
     content_sha256: str,
     file_sha256: str,
 ) -> dict[str, Any] | None:
-    clean_name = (name or "附件").strip() or "附件"
+    clean_name = (name or "attachment").strip() or "attachment"
     clean_kind = str(kind or "other").strip() or "other"
 
     def _lookup() -> dict[str, Any] | None:
@@ -743,7 +750,7 @@ async def create_attachment(
         return reused
 
     attachment_id = _new_attachment_id()
-    clean_name = (name or "附件").strip() or "附件"
+    clean_name = (name or "attachment").strip() or "attachment"
     name = clean_name
     clean_mime = str(mime_type or "").strip() or "application/octet-stream"
     payload: bytes | None = None
@@ -1247,7 +1254,7 @@ async def persist_context_compression(
     if not archive_message_ids:
         return 0
     batch_id = f"cmp_{secrets.token_urlsafe(8)}"
-    body = summary_text.strip() or "（中间对话已归档；本次未生成可展示摘要）"
+    body = summary_text.strip() or "(middle conversation archived; no displayable summary generated)"
     meta = {
         "compression": {
             "mode": mode,
@@ -1327,7 +1334,7 @@ async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
                     out.append(
                         {
                             "role": "system",
-                            "content": "## 历史对话摘要（更早的消息已压缩）\n" + content,
+                            "content": "## Conversation summary (earlier messages compressed)\n" + content,
                             "id": msg_id,
                         }
                     )

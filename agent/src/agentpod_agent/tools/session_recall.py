@@ -4,12 +4,29 @@ from __future__ import annotations
 
 from typing import Any
 
+from agentpod_shared.session_titles import default_session_title, is_default_session_title
 from ..config import get_settings
 from ..db import conn_scope, run_in_thread
 from ..memory.embedder import EmbeddingUnavailable, embed_text
 from ..recall import fts_search
 from ..recall.pipeline import SHORT_QUERY_MAX_LEN, merge_hybrid_keys
 from .base import Tool, ToolError, ToolResult, register_builtin
+
+
+async def _user_locale() -> str:
+    from ..host_settings import get_locale
+
+    try:
+        return await get_locale()
+    except Exception:
+        return "en"
+
+
+def _session_title_label(stored: Any, *, locale: str) -> str:
+    t = str(stored or "").strip()
+    if is_default_session_title(t):
+        return default_session_title(locale)
+    return t
 
 
 def _clamp_int(v: Any, *, default: int, min_v: int, max_v: int) -> int:
@@ -64,10 +81,16 @@ async def _list_messages(session_id: str) -> list[dict[str, Any]]:
     return await run_in_thread(_do)
 
 
-def _message_from_row(row: dict[str, Any], *, query: str, score: float | None = None) -> dict[str, Any]:
+def _message_from_row(
+    row: dict[str, Any],
+    *,
+    query: str,
+    score: float | None = None,
+    locale: str = "en",
+) -> dict[str, Any]:
     return {
         "session_id": str(row.get("session_id") or ""),
-        "session_title": str(row.get("session_title") or "新对话"),
+        "session_title": _session_title_label(row.get("session_title"), locale=locale),
         "session_updated_at": row.get("session_updated_at"),
         "message_id": row.get("id"),
         "role": str(row.get("role") or ""),
@@ -83,6 +106,7 @@ async def _like_fallback_recall(
     *,
     scan_sessions: int,
     per_session_messages: int,
+    locale: str = "en",
 ) -> list[dict[str, Any]]:
     """短 query 或 hybrid 无命中时，LIKE 扫描最近会话。"""
     sessions = await _list_sessions(limit=scan_sessions)
@@ -92,7 +116,7 @@ async def _like_fallback_recall(
         sid = str(s.get("id") or "")
         if not sid:
             continue
-        title = str(s.get("title") or "新对话")
+        title = _session_title_label(s.get("title"), locale=locale)
         updated_at = s.get("updated_at")
         rows = await _list_messages(sid)
         for r in reversed(rows[-per_session_messages:]):
@@ -121,6 +145,7 @@ async def _like_fallback_recall(
                     },
                     query=query,
                     score=float(score),
+                    locale=locale,
                 )
             )
     hits.sort(
@@ -134,7 +159,7 @@ async def _like_fallback_recall(
     return hits[:top_k]
 
 
-async def _hybrid_message_recall(query: str, top_k: int) -> list[dict[str, Any]]:
+async def _hybrid_message_recall(query: str, top_k: int, *, locale: str = "en") -> list[dict[str, Any]]:
     k = max(1, top_k)
     fetch_k = k * 2
     max_distance = get_settings().recall_max_distance
@@ -214,12 +239,13 @@ async def _hybrid_message_recall(query: str, top_k: int) -> list[dict[str, Any]]
 
     rows = await run_in_thread(_fetch)
     return [
-        _message_from_row(row, query=query, score=scores.get(str(row.get("id")), 0.0))
+        _message_from_row(row, query=query, score=scores.get(str(row.get("id")), 0.0), locale=locale)
         for row in rows
     ]
 
 
 async def _session_recall(args: dict[str, Any]) -> ToolResult:
+    locale = await _user_locale()
     action = str(args.get("action", "recall") or "recall").strip().lower()
     if action == "sessions":
         limit = _clamp_int(args.get("limit"), default=20, min_v=1, max_v=100)
@@ -227,7 +253,7 @@ async def _session_recall(args: dict[str, Any]) -> ToolResult:
         if not sessions:
             return ToolResult(content="(no sessions)")
         lines = [
-            f"- {s.get('id')} | {s.get('title') or '新对话'} | {s.get('updated_at') or '-'}"
+            f"- {s.get('id')} | {_session_title_label(s.get('title'), locale=locale)} | {s.get('updated_at') or '-'}"
             for s in sessions
         ]
         return ToolResult(content="\n".join(lines), metadata={"items": sessions})
@@ -261,13 +287,14 @@ async def _session_recall(args: dict[str, Any]) -> ToolResult:
     scan_sessions = _clamp_int(args.get("scan_sessions"), default=20, min_v=1, max_v=100)
     per_session_messages = _clamp_int(args.get("per_session_messages"), default=80, min_v=1, max_v=500)
 
-    picked = await _hybrid_message_recall(query, top_k)
+    picked = await _hybrid_message_recall(query, top_k, locale=locale)
     if not picked and len(query) <= SHORT_QUERY_MAX_LEN:
         picked = await _like_fallback_recall(
             query,
             top_k,
             scan_sessions=scan_sessions,
             per_session_messages=per_session_messages,
+            locale=locale,
         )
 
     if not picked:
@@ -286,7 +313,7 @@ async def _session_recall(args: dict[str, Any]) -> ToolResult:
 register_builtin(
     Tool(
         name="session_recall",
-        description="历史会话召回：recall(RAG+FTS 混合检索) / sessions(列会话) / messages(查会话消息)。",
+        description="Past sessions: recall (RAG+FTS hybrid) / sessions (list) / messages (thread).",
         parameters={
             "type": "object",
             "properties": {

@@ -50,7 +50,7 @@ async def _session_search(args: dict[str, Any]) -> ToolResult:
 register_builtin(
     Tool(
         name="session_search",
-        description="跨会话检索历史消息，返回最相关命中及片段摘要。",
+        description="Search messages across sessions; returns top hits with snippets.",
         parameters={
             "type": "object",
             "properties": {

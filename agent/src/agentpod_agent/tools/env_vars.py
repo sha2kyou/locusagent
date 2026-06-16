@@ -22,13 +22,11 @@ async def _select_env_var_by_name(name: str) -> int:
     return int(matches[0]["id"])
 
 
-async def _resolve_env_var_id(args: dict[str, Any], *, for_delete: bool = False) -> int:
-    env_id = pick_int(args, "id", "env_id")
+async def _resolve_env_var_id(args: dict[str, Any]) -> int:
+    env_id = pick_int(args, "id")
     if env_id:
         return env_id
-    name = pick_str(args, "name", "key")
-    if not name and for_delete:
-        name = pick_str(args, "content", "text", "value")
+    name = pick_str(args, "name")
     if name:
         return await _select_env_var_by_name(name)
     raise ToolError("id or name is required (use id from list/recall, or exact variable name)")
@@ -36,12 +34,10 @@ async def _resolve_env_var_id(args: dict[str, Any], *, for_delete: bool = False)
 
 async def _env_vars_tool(args: dict[str, Any]) -> ToolResult:
     action = pick_action(args)
-    if action == "remove":
-        action = "delete"
 
     if action == "add":
-        name = pick_str(args, "name", "key")
-        value = pick_str(args, "value", "content", "text")
+        name = pick_str(args, "name")
+        value = pick_str(args, "value")
         description = pick_str(args, "description")
         if not name:
             raise ToolError("name is required for add")
@@ -57,8 +53,6 @@ async def _env_vars_tool(args: dict[str, Any]) -> ToolResult:
         env_id = await _resolve_env_var_id(args)
         name = args.get("name")
         value = args.get("value")
-        if value is None:
-            value = args.get("content")
         description = args.get("description")
         if name is None and value is None and description is None:
             raise ToolError("at least one of name, value, or description is required for update")
@@ -76,7 +70,7 @@ async def _env_vars_tool(args: dict[str, Any]) -> ToolResult:
         return ToolResult(content=f"env_var#{env_id} updated")
 
     if action == "delete":
-        env_id = await _resolve_env_var_id(args, for_delete=True)
+        env_id = await _resolve_env_var_id(args)
         ok = await delete_env_var(env_id)
         if not ok:
             raise ToolError(f"env_var#{env_id} not found")
@@ -120,18 +114,18 @@ register_builtin(
     Tool(
         name="env_vars",
         description=(
-            "管理工作区级环境变量知识库（名称/值/说明）并支持语义召回。"
-            "适用于保存和复用配置项、端点、非敏感运行参数与团队约定变量。"
-            "动作：add / update / delete / list / recall（remove 为 delete 别名）。"
-            "update/delete：优先传 list/recall 返回的 id；否则传精确 name。"
-            "当用户只是询问代码逻辑而非配置沉淀时，不应调用本工具。"
+            "Manage workspace env-var knowledge base (name/value/description) with semantic recall."
+            "For config keys, endpoints, non-secret runtime params, team conventions."
+            "Actions: add / update / delete / list / recall."
+            "For update/delete: prefer id from list/recall; else exact name. "
+            "Do not use when the user only asks about code logic, not config persistence."
         ),
         parameters={
             "type": "object",
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["add", "update", "delete", "remove", "list", "recall"],
+                    "enum": ["add", "update", "delete", "list", "recall"],
                 },
                 "id": {
                     "type": "integer",
@@ -143,7 +137,7 @@ register_builtin(
                 },
                 "value": {
                     "type": "string",
-                    "description": "Variable value (required for add). Alias: content.",
+                    "description": "Variable value (required for add).",
                 },
                 "description": {"type": "string", "description": "Human-readable note for the variable."},
                 "query": {"type": "string", "description": "Required for recall."},

@@ -212,9 +212,9 @@ async def _remove_mcp(args: dict[str, Any]) -> ToolResult:
 
 async def _mcp_manage(args: dict[str, Any]) -> ToolResult:
     action = pick_action(args)
-    if action in {"edit", "update"}:
+    if action == "update":
         return await _update_mcp(args)
-    if action in {"remove", "delete"}:
+    if action == "remove":
         return await _remove_mcp(args)
     if action == "add":
         return await _add_mcp(args)
@@ -224,7 +224,7 @@ async def _mcp_manage(args: dict[str, Any]) -> ToolResult:
 register_builtin(
     Tool(
         name="mcp_view",
-        description="列出当前工作区全部 MCP 服务、连接状态与暴露的工具数量。",
+        description="List all MCP servers in the workspace, connection status, and exposed tool counts.",
         parameters={
             "type": "object",
             "properties": {},
@@ -239,13 +239,13 @@ register_builtin(
     Tool(
         name="mcp_refresh",
         description=(
-            "重连指定 MCP 服务并同步工具列表（OAuth 完成后、连接异常或工具变更后使用）。"
-            "查询状态用 mcp_view；增删改配置用 mcp_manage。"
+            "Reconnect an MCP server and sync tools (after OAuth, connection errors, or tool changes)."
+            "Use mcp_view for status; mcp_manage for config CRUD."
         ),
         parameters={
             "type": "object",
             "properties": {
-                "name": {"type": "string", "description": "MCP 服务名（必填）。"},
+                "name": {"type": "string", "description": "MCP server name (required)."},
             },
             "required": ["name"],
             "additionalProperties": False,
@@ -259,44 +259,44 @@ register_builtin(
     Tool(
         name="mcp_manage",
         description=(
-            "管理 MCP 服务连接：add（新增）/ update（更新配置）/ remove（移除）。\n"
-            "查询用 mcp_view；重连/刷新工具列表用 mcp_refresh；不能创建/删除/切换 AgentPod 工作区。"
+            "Manage MCP connections: add / update / remove.\n"
+            "Query with mcp_view; reconnect/refresh with mcp_refresh; cannot create/delete/switch AgentPod workspaces."
         ),
         parameters={
             "type": "object",
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["add", "update", "remove", "edit", "delete"],
-                    "description": "操作类型。",
+                    "enum": ["add", "update", "remove"],
+                    "description": "Operation type.",
                 },
-                "name": {"type": "string", "description": "MCP 服务名（必填）。"},
-                "new_name": {"type": "string", "description": "update 时重命名（可选）。"},
+                "name": {"type": "string", "description": "MCP server name (required)."},
+                "new_name": {"type": "string", "description": "Rename on update (optional)."},
                 "transport": {
                     "type": "string",
                     "enum": ["stdio", "http"],
-                    "description": "传输方式，默认继承已有配置。",
+                    "description": "Transport; defaults to existing config.",
                 },
                 "command": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "stdio 启动命令（例如 ['npx', '-y', '@scope/server']）。",
+                    "description": "stdio launch command (e.g. ['npx', '-y', '@scope/server']).",
                 },
                 "args": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "stdio 附加参数。",
+                    "description": "stdio extra args.",
                 },
                 "env": {
                     "type": "object",
                     "additionalProperties": {"type": "string"},
-                    "description": "stdio 环境变量。",
+                    "description": "stdio env vars.",
                 },
-                "url": {"type": "string", "description": "http 服务地址。"},
+                "url": {"type": "string", "description": "HTTP server URL."},
                 "headers": {
                     "type": "object",
                     "additionalProperties": {"type": "string"},
-                    "description": "http 请求头（如 Authorization: Bearer xxx）。",
+                    "description": "HTTP headers (e.g. Authorization: Bearer xxx).",
                 },
             },
             "required": ["action", "name"],

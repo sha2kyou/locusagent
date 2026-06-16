@@ -55,7 +55,7 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
         raise ToolError("name is required")
 
     if action == "create":
-        body = pick_str(args, "body", "content", "text")
+        body = pick_str(args, "body")
         verdict = await review_write(f"{args.get('description', '')}\n\n{body}", kind="skill")
         if not verdict.allowed:
             raise ToolError(f"skill write blocked by guard: {verdict.reason}")
@@ -74,10 +74,8 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
         origin_label = " [auto_extract]" if skill.origin == ORIGIN_AUTO_EXTRACT else ""
         return ToolResult(content=f"skill '{name}' created{origin_label}")
 
-    if action in {"update", "edit"}:
+    if action == "update":
         body = args.get("body")
-        if body is None:
-            body = args.get("content")
         if body is not None:
             verdict = await review_write(str(body), kind="skill")
             if not verdict.allowed:
@@ -98,12 +96,8 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
         return ToolResult(content=f"skill '{name}' updated{origin_label}")
 
     if action == "patch":
-        old_string = pick_str(args, "old_string", "old_text")
+        old_string = pick_str(args, "old_string")
         new_string = args.get("new_string")
-        if new_string is None:
-            new_string = args.get("new_content")
-        if new_string is None:
-            new_string = args.get("content")
         replace_all = bool(args.get("replace_all", False))
         if not old_string:
             raise ToolError("old_string is required")
@@ -157,7 +151,7 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
 register_builtin(
     Tool(
         name="skill_view",
-        description="查看技能内容。name 为空时列出技能摘要；给定 name 时返回完整 SKILL.md 内容。",
+        description="View skill content. Empty name lists summaries; given name returns full SKILL.md.",
         parameters={
             "type": "object",
             "properties": {"name": {"type": "string", "default": ""}},
@@ -170,13 +164,13 @@ register_builtin(
     Tool(
         name="skill_manage",
         description=(
-            "管理私有技能：create / edit / patch / delete。"
-            "其中 patch 用于按 old_string/new_string 做定点替换。"
+            "Manage private skills: create / update / patch / delete."
+            "patch does targeted old_string/new_string replacement."
         ),
         parameters={
             "type": "object",
             "properties": {
-                "action": {"type": "string", "enum": ["create", "edit", "patch", "delete", "update"]},
+                "action": {"type": "string", "enum": ["create", "update", "patch", "delete"]},
                 "name": {"type": "string"},
                 "description": {"type": "string"},
                 "body": {"type": "string"},

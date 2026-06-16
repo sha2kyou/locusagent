@@ -34,4 +34,5 @@ desktop/node_modules/
 desktop/src-tauri/target/
 desktop/src-tauri/gen/
 desktop/src-tauri/resources/sidecar-venv/
+desktop/src-tauri/resources/shared-skills/
 sidecar/.venv/

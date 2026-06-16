@@ -85,7 +85,7 @@ async def _artifact_category_create(args: dict[str, Any]) -> ToolResult:
         existing_name = str(item.get("name") or "").strip()
         if existing_name and _normalize_category_name(existing_name) == _normalize_category_name(name):
             return ToolResult(
-                content=f"类目已存在：{existing_name}",
+                content=f"Category already exists: {existing_name}",
                 metadata={"category_id": item.get("id"), "category_name": existing_name, "created": False},
             )
 
@@ -103,10 +103,10 @@ async def _artifact_category_create(args: dict[str, Any]) -> ToolResult:
         choices = [s["name"] for s in similar]
         payload = {
             "question": (
-                f"准备创建新类目“{name}”，但它与已有类目相似。"
-                "请确认应复用已有类目，还是坚持创建新类目？"
+                f'About to create category "{name}", but it is similar to existing categories.'
+                "Confirm whether to reuse an existing category or insist on creating a new one."
             ),
-            "choices": choices + [f"坚持新建：{name}"],
+            "choices": choices + [f"Create new anyway: {name}"],
             "allow_other": False,
             "reason": "similar_category_detected",
             "candidate": name,
@@ -120,7 +120,7 @@ async def _artifact_category_create(args: dict[str, Any]) -> ToolResult:
     created = await create_category(name, description)
     created_name = str(created.get("name") or name)
     return ToolResult(
-        content=f"类目已创建：{created_name}",
+        content=f"Category created: {created_name}",
         metadata={"category_id": created.get("id"), "category_name": created_name, "created": True},
     )
 
@@ -168,9 +168,9 @@ async def _artifact_save(args: dict[str, Any]) -> ToolResult:
     art = await create_artifact(
         title=title, content=content, type=art_type, category_id=category_id
     )
-    suffix = f"（类目：{category}）"
+    suffix = f" (category: {category})"
     return ToolResult(
-        content=f"产物已保存：{title}{suffix}",
+        content=f"Artifact saved: {title}{suffix}",
         metadata={"artifact_id": art["id"], "category": category or None},
     )
 
@@ -339,14 +339,14 @@ register_builtin(
     Tool(
         name="artifact_category_create",
         description=(
-            "创建产物类目。"
-            "若与现有类目高度相似，必须先澄清目标（复用已有类目或坚持新建）再继续。"
+            "Create an artifact category. "
+            "If highly similar to an existing category, clarify first (reuse vs create new) before proceeding."
         ),
         parameters={
             "type": "object",
             "properties": {
-                "name": {"type": "string", "description": "要创建的类目名。"},
-                "description": {"type": "string", "description": "类目描述，可选。"},
+                "name": {"type": "string", "description": "Category name to create."},
+                "description": {"type": "string", "description": "Optional category description."},
             },
             "required": ["name"],
             "additionalProperties": False,
@@ -360,22 +360,22 @@ register_builtin(
     Tool(
         name="artifact_recall",
         description=(
-            "检索历史产物（报告/文案/代码草稿/可视化结果等）。"
-            "当用户要求“找回之前做过的内容”“基于上次产物继续修改”“对比历史版本”时优先调用。"
-            "输入 query 后返回候选产物（title/type/id/snippet），再由你基于 id 或标题继续处理。"
-            "若只是当前回合一次性输出且无需沉淀，不应调用本工具。"
+            "Search historical artifacts (reports, copy, code drafts, visualizations, etc.). "
+            "Prefer when the user asks to find prior work, continue from a saved artifact, or compare versions. "
+            "Returns candidates (title/type/id/snippet) for you to process by id or title. "
+            "Do not use for one-off turn output that does not need persistence."
         ),
         parameters={
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "检索关键词或自然语言意图（例如“上次的招聘海报文案”）。",
+                    "description": "Search keywords or natural-language intent (e.g. last recruiting poster copy).",
                 },
                 "top_k": {
                     "type": "integer",
                     "default": 5,
-                    "description": "返回候选数量上限（1-20）。数量越大，召回更全但噪音可能增加。",
+                    "description": "Max candidates (1-20). Higher recall may add noise.",
                 },
             },
             "required": ["query"],
@@ -390,30 +390,30 @@ register_builtin(
     Tool(
         name="artifact_save",
         description=(
-            "将本轮结果保存为可复用产物，供后续检索、复用与迭代。"
-            "适用于有“交付物”属性的输出：报告、方案、文案、脚本、页面片段等。"
-            "category 用于归档分类（如“内容”“报告”）；若不存在可先调用 artifact_category_create。"
-            "不用于临时解释或一次性对话回复。"
-            "保存完成后，在回复中简要确认保存结果即可，无需输出链接。"
+            "Save this turn's result as a reusable artifact for later recall and iteration. "
+            "For deliverable outputs: reports, plans, copy, scripts, page snippets, etc. "
+            "category archives by type (e.g. content, reports); call artifact_category_create if missing. "
+            "Not for temporary explanations or one-off chat replies. "
+            "After save, briefly confirm in reply—no links."
         ),
         parameters={
             "type": "object",
             "properties": {
-                "title": {"type": "string", "description": "产物标题，建议可被后续检索理解。"},
-                "content": {"type": "string", "description": "产物正文内容（将被持久化保存）。"},
+                "title": {"type": "string", "description": "Artifact title; should be searchable later."},
+                "content": {"type": "string", "description": "Artifact body (persisted)."},
                 "type": {
                     "type": "string",
                     "enum": ["markdown", "latex", "text"],
                     "description": (
-                        "渲染类型：markdown=Markdown；latex=LaTeX 公式（行内 $...$，块级 $$...$$）；"
-                        "text=纯文本（不渲染 Markdown/LaTeX）。"
-                        "markdown/text 保存时不校验 $ 符号；需公式渲染时用 latex。"
-                        "JSON 参数里反斜杠须双重转义（\\\\begin）。"
+                        "Render type: markdown=Markdown; latex=LaTeX (inline $...$, block $$...$$); "
+                        "text=plain (no Markdown/LaTeX rendering). "
+                        "markdown/text do not validate $; use latex for formulas. "
+                        "Escape backslashes twice in JSON (\\\\begin)."
                     ),
                 },
                 "category": {
                     "type": "string",
-                    "description": "归档类目名（如“内容”“报告”）。须已存在或先 artifact_category_create。",
+                    "description": "Archive category name (e.g. content, reports). Must exist or create via artifact_category_create.",
                 },
             },
             "required": ["title", "content", "category"],
@@ -427,21 +427,21 @@ register_builtin(
     Tool(
         name="artifact_update",
         description=(
-            "按 id 更新已有产物。id 来自 artifact_recall。"
-            "至少提供 title、content、category 之一；category 为类目名。"
+            "Update an artifact by id from artifact_recall. "
+            "Provide at least one of title, content, category (category is the category name)."
         ),
         parameters={
             "type": "object",
             "properties": {
                 "id": {
                     "type": "string",
-                    "description": "产物 id（artifact_recall 返回的 id=...）。",
+                    "description": "Artifact id (id=... from artifact_recall).",
                 },
-                "title": {"type": "string", "description": "新标题。"},
-                "content": {"type": "string", "description": "新正文。"},
+                "title": {"type": "string", "description": "New title."},
+                "content": {"type": "string", "description": "New body."},
                 "category": {
                     "type": "string",
-                    "description": "移动到的类目名（须已存在）。",
+                    "description": "Target category name (must exist).",
                 },
             },
             "required": ["id"],
@@ -455,13 +455,13 @@ register_builtin(
 register_builtin(
     Tool(
         name="artifact_delete",
-        description="按 id 删除产物。id 来自 artifact_recall。",
+        description="Delete artifact by id from artifact_recall.",
         parameters={
             "type": "object",
             "properties": {
                 "id": {
                     "type": "string",
-                    "description": "产物 id（artifact_recall 返回的 id=...）。",
+                    "description": "Artifact id (id=... from artifact_recall).",
                 },
             },
             "required": ["id"],
@@ -475,13 +475,13 @@ register_builtin(
 register_builtin(
     Tool(
         name="artifact_read",
-        description="按 id 读取产物全文。id 来自 artifact_recall 或 artifact_list。",
+        description="Read full artifact by id from artifact_recall or artifact_list.",
         parameters={
             "type": "object",
             "properties": {
                 "id": {
                     "type": "string",
-                    "description": "产物 id（artifact_recall / artifact_list 返回的 id=...）。",
+                    "description": "Artifact id (id=... from artifact_recall / artifact_list).",
                 },
             },
             "required": ["id"],
@@ -495,13 +495,13 @@ register_builtin(
 register_builtin(
     Tool(
         name="artifact_list",
-        description="按类目列出产物条目（id/title/type）。类目可用 category 名或 category_id。",
+        description="List artifacts by category (id/title/type). Use category name or category_id.",
         parameters={
             "type": "object",
             "properties": {
-                "category": {"type": "string", "description": "类目名。"},
-                "category_id": {"type": "string", "description": "类目 id。"},
-                "limit": {"type": "integer", "default": 50, "description": "返回条数上限（1-200）。"},
+                "category": {"type": "string", "description": "Category name."},
+                "category_id": {"type": "string", "description": "Category id."},
+                "limit": {"type": "integer", "default": 50, "description": "Max rows (1-200)."},
             },
             "additionalProperties": False,
         },
@@ -513,14 +513,14 @@ register_builtin(
 register_builtin(
     Tool(
         name="artifact_category_update",
-        description="更新产物类目名称或描述。按 category_id 或 category 定位。",
+        description="Update artifact category name or description by category_id or category.",
         parameters={
             "type": "object",
             "properties": {
-                "category_id": {"type": "string", "description": "类目 id。"},
-                "category": {"type": "string", "description": "类目名（id 未知时）。"},
-                "name": {"type": "string", "description": "新类目名。"},
-                "description": {"type": "string", "description": "新描述。"},
+                "category_id": {"type": "string", "description": "Category id."},
+                "category": {"type": "string", "description": "Category name when id unknown."},
+                "name": {"type": "string", "description": "New category name."},
+                "description": {"type": "string", "description": "New description."},
             },
             "additionalProperties": False,
         },
@@ -532,12 +532,12 @@ register_builtin(
 register_builtin(
     Tool(
         name="artifact_category_delete",
-        description="删除产物类目及其下全部产物。按 category_id 或 category 定位。",
+        description="Delete category and all its artifacts by category_id or category.",
         parameters={
             "type": "object",
             "properties": {
-                "category_id": {"type": "string", "description": "类目 id。"},
-                "category": {"type": "string", "description": "类目名（id 未知时）。"},
+                "category_id": {"type": "string", "description": "Category id."},
+                "category": {"type": "string", "description": "Category name when id unknown."},
             },
             "additionalProperties": False,
         },

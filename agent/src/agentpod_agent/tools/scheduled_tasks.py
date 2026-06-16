@@ -96,14 +96,10 @@ async def _resolve_task_id(args: dict[str, Any]) -> int:
 
 async def _scheduled_task_manage(args: dict[str, Any]) -> ToolResult:
     action = pick_action(args)
-    if action == "edit":
-        action = "update"
-    if action == "remove":
-        action = "delete"
 
     if action == "create":
         title = pick_str(args, "title")
-        prompt = pick_str(args, "prompt", "content", "text")
+        prompt = pick_str(args, "prompt")
         schedule_kind = str(args.get("schedule_kind", "")).strip().lower()
         enabled = bool(args.get("enabled", True))
         notify = bool(args.get("notify", True))
@@ -177,7 +173,7 @@ async def _scheduled_task_manage(args: dict[str, Any]) -> ToolResult:
 register_builtin(
     Tool(
         name="scheduled_task_view",
-        description="检索定时任务。可按 query 搜索标题/提示词/Cron/状态，返回任务列表与关键字段。",
+        description="Search scheduled tasks by title/prompt/cron/status; returns list and key fields.",
         parameters={
             "type": "object",
             "properties": {
@@ -196,11 +192,11 @@ register_builtin(
 register_builtin(
     Tool(
         name="scheduled_task_manage",
-        description="管理定时任务：create / update / delete（edit、remove 为别名）。update/delete 优先 id，否则精确 title。",
+        description="Manage scheduled tasks: create / update / delete. update/delete prefer id, else exact title.",
         parameters={
             "type": "object",
             "properties": {
-                "action": {"type": "string", "enum": ["create", "update", "delete", "edit", "remove"]},
+                "action": {"type": "string", "enum": ["create", "update", "delete"]},
                 "id": {"type": "integer", "description": "Task id from scheduled_task_view."},
                 "title": {"type": "string", "description": "Exact title lookup when id is omitted."},
                 "prompt": {"type": "string"},

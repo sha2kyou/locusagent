@@ -33,7 +33,7 @@ def test_cache_prefix_includes_version_and_context_delimiter():
 async def test_build_context_prompt_includes_workspace_summary(monkeypatch):
     async def _fake_summary(*, recent_limit: int = 5):
         assert recent_limit == 5
-        return "## 技能 (1)\n- demo [private]: test", {"skills": {"count": 1}}
+        return "## Skills (1)\n- demo [private]: test", {"skills": {"count": 1}}
 
     monkeypatch.setattr(
         "agentpod_agent.workspace_summary.build_workspace_summary",
@@ -42,9 +42,9 @@ async def test_build_context_prompt_includes_workspace_summary(monkeypatch):
     monkeypatch.setattr("agentpod_agent.workspace.get_workspace_id", lambda: "ws_0123456789abcdef0123")
 
     text = await build_context_prompt(session_id="sess_1")
-    assert "## 工作区上下文（ws_0123456789abcdef0123）" in text
-    assert "环境变量仅列名称" in text
-    assert "## 技能 (1)" in text
+    assert "## Workspace context (ws_0123456789abcdef0123)" in text
+    assert "env var names only" in text or "names and descriptions only" in text
+    assert "## Skills (1)" in text
 
 
 def test_assemble_system_prompt_joins_three_tiers():

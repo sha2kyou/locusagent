@@ -128,23 +128,24 @@ _MODEL_TOKEN_LIMITS_SORTED: tuple[tuple[str, int], ...] = tuple(
 )
 DEFAULT_TOKEN_LIMIT = 256_000
 _TOOL_ROUND_LIMIT_NOTICE = (
-    "【强制收尾】工具调用轮次已达上限。禁止再调用任何工具（含 tool/mcp/skill/memory）。"
-    "你必须立即输出面向用户的中文正文总结：已完成的工作、当前能给出的结论、"
-    "因轮次限制未能完成的部分，以及用户可采取的下一步。"
-    "禁止返回空回复，禁止仅输出占位符。"
+    "[Forced wrap-up] Tool-call rounds reached the limit. Do not call any more tools (including tool/mcp/skill/memory). "
+    "You must immediately output a user-facing summary: work completed, conclusions you can give now, "
+    "what could not finish due to round limits, and suggested next steps for the user. "
+    "Do not return an empty reply or placeholders only."
 )
 _TOOL_ROUND_LIMIT_FALLBACK = (
-    "工具调用次数已达上限，无法继续执行更多步骤。"
-    "请根据上文工具结果与对话内容自行归纳；若信息不足，请缩小任务范围或说明优先完成哪一部分后重试。"
+    "Tool-call limit reached; no further steps can run. "
+    "Summarize from prior tool results and conversation; if information is insufficient, "
+    "narrow the task scope or say which part to prioritize on retry."
 )
 _ARTIFACT_SAVE_LOOP_NOTICE = (
-    "你刚完成过一次 artifact_save。请停止继续调用 artifact_save，"
-    "直接给用户简短确认结果即可，无需输出链接。"
+    "You just completed an artifact_save. Stop calling artifact_save again; "
+    "give the user a brief confirmation only—no links."
 )
 _TOOL_GUARDRAIL_HALT_NOTICE = (
-    "【强制收尾】工具循环护栏已触发：同一工具路径重复失败或无进展。"
-    "禁止再调用工具。你必须输出面向用户的中文正文总结：已知结论、阻塞原因、"
-    "已尝试过的路径，以及建议的下一步。禁止返回空回复。"
+    "[Forced wrap-up] Tool loop guardrail triggered: repeated failure or no progress on the same tool path. "
+    "Do not call more tools. Output a user-facing summary: known conclusions, blocker cause, "
+    "paths already tried, and suggested next steps. Do not return an empty reply."
 )
 
 
@@ -486,7 +487,7 @@ async def _finalize_without_tools(
             model=model,
             working_messages=working_messages,
             extra=extra,
-            notice=notice + "\n再次强调：禁止 tool_calls，只输出用户可见正文。",
+            notice=notice + "\nReminder: no tool_calls—user-visible body text only.",
         )
         completion = await client.chat.completions.create(**retry_kwargs)
         schedule_openai_usage(
@@ -513,12 +514,12 @@ def _compression_preview(
 ) -> str:
     if summary_text:
         return (
-            f"【自动上下文压缩】mode={mode}, tokens: {before_tokens} -> {after_tokens}\n\n"
+            f"[Auto context compression] mode={mode}, tokens: {before_tokens} -> {after_tokens}\n\n"
             f"{summary_text}"
         )
     return (
-        f"【自动上下文压缩】mode={mode}, tokens: {before_tokens} -> {after_tokens}\n"
-        "本次未生成可展示摘要（已进行截断保留）。"
+        f"[Auto context compression] mode={mode}, tokens: {before_tokens} -> {after_tokens}\n"
+        "No displayable summary this time (truncation retained)."
     )
 
 
@@ -564,7 +565,7 @@ async def _persist_compression_if_needed(
         return
     for m in working:
         content = str(m.get("content") or "")
-        if m.get("role") == "system" and "历史对话摘要" in content:
+        if m.get("role") == "system" and "Conversation summary" in content:
             m["id"] = summary_id
             break
 
@@ -730,13 +731,13 @@ async def run_chat_loop(
                     session_id=session_id,
                     usage_scenario=usage_scenario,
                     notice=_ARTIFACT_SAVE_LOOP_NOTICE,
-                    fallback_text="已保存。",
+                    fallback_text="Saved.",
                 )
                 total_tokens += more_tokens
                 working.append(final_msg)
                 return (
                     LoopResult(
-                        final_text=final_text or "已保存。",
+                        final_text=final_text or "Saved.",
                         rounds=round_idx,
                         total_tokens=total_tokens,
                         tool_calls_made=tool_calls_made,
@@ -1077,7 +1078,7 @@ async def run_chat_loop_stream(
                     extra=extra,
                     session_id=session_id,
                     notice=_ARTIFACT_SAVE_LOOP_NOTICE,
-                    fallback_text="已保存。",
+                    fallback_text="Saved.",
                 )
                 total_tokens += more_tokens
                 working.append(final_msg)

@@ -140,7 +140,7 @@ register_builtin(
     Tool(
         name="web_search",
         description=(
-            "网页搜索，返回标题/URL/摘要。优先经平台内部代理；不可用时降级 DuckDuckGo。"
+            "Web search returning title/URL/snippet. Uses internal proxy first; falls back to DuckDuckGo."
         ),
         parameters={
             "type": "object",
@@ -158,10 +158,10 @@ register_builtin(
     Tool(
         name="web_extract",
         description=(
-            "经 Jina Reader 提取网页 URL 正文（Markdown），返回 results 列表"
-            "（每项含 url/title/content/error）。单次调用最多 5 个 URL。"
-            "超过 5 个时在同轮发出多个 web_extract tool_call（并行执行），"
-            "不要分多轮 ReAct 逐个等待。"
+            "Extract page body via Jina Reader (Markdown); returns results list"
+            "(each with url/title/content/error). Max 5 URLs per call."
+            "For more than 5, emit multiple web_extract tool_calls in parallel in the same turn,"
+            "Do not wait one URL per ReAct turn."
         ),
         parameters={
             "type": "object",
@@ -170,7 +170,7 @@ register_builtin(
                     "type": "array",
                     "items": {"type": "string"},
                     "maxItems": 5,
-                    "description": "要提取的 URL 列表（最多 5 个）",
+                    "description": "URLs to extract (max 5)",
                 }
             },
             "required": ["urls"],

@@ -27,13 +27,13 @@ async def _session_delete(args: dict[str, Any]) -> ToolResult:
 register_builtin(
     Tool(
         name="session_delete",
-        description="按 session_id 删除历史会话及其消息。id 来自 session_recall / session_search。",
+        description="Delete a session and its messages by session_id from session_recall / session_search.",
         parameters={
             "type": "object",
             "properties": {
                 "session_id": {
                     "type": "string",
-                    "description": "会话 id（session_recall 返回的 session_id）。",
+                    "description": "Session id from session_recall."
                 },
             },
             "required": ["session_id"],

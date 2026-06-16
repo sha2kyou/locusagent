@@ -1,56 +1,55 @@
 ---
 name: explain-clearly
-description: 用清晰、分层的语言解释复杂概念、流程或争议话题，适配听众水平（外行/业务/技术）。适用于「这是什么」「用简单的话解释」「给孩子/老板/客户讲明白」。
+description: Explain complex concepts, processes, or debated topics in clear, layered language matched to the audience (layperson / business / technical). Use for "what is this", "explain simply", "explain to a child/boss/client".
 triggers:
-  - 解释
-  - 通俗
-  - 简单说说
-  - 是什么意思
-  - 讲明白
-  - 科普
-  - 入门
-  - 小白
+  - explain
+  - plain language
+  - simply
+  - what does it mean
+  - make it clear
+  - primer
+  - beginner
   - ELI5
-  - 怎么说清楚
+  - how to say it clearly
 ---
 
 # Explain Clearly
 
-## 何时使用
+## When to use
 
-执行相关任务前先调用 `skill_view{name: "explain-clearly"}` 加载完整正文。
+Before related work, call `skill_view{name: "explain-clearly"}` to load the full body.
 
-适用于**理解型**任务，例如：
-- 解释术语、原理、政策、产品功能
-- 把专业内容改写成目标受众能懂的版本
-- 回答「为什么」「怎么运作的」
-- 学习辅导：分步讲透一个概念（非代写作业）
+Use for **understanding** tasks, e.g.:
+- Explain terms, principles, policies, product features
+- Rewrite specialist content for a target audience
+- Answer "why" and "how it works"
+- Tutoring: step through a concept (not doing homework for the user)
 
-**不用于**：需要最新事实的调研（先 research-brief / web_search）；去除 AI 写作痕迹（humanizer）。
+**Not for**: research needing fresh facts (use research-brief / web_search first); removing AI writing tone (humanizer).
 
-## 原则
+## Principles
 
-1. **先对齐听众**：外行 / 业务决策者 / 有基础的学习者——决定比喻深度与术语量。
-2. **结构**：一句话定义 → 为什么重要 → 怎么运作（分步或类比）→ 常见误解 → 小结。
-3. **比喻要准确**：类比帮助直觉，末尾说明类比局限。
-4. **避免假精确**：不懂的标「通常认为…」；不编造数据。
-5. **长度匹配场景**：口头汇报用短段；自学可用小标题展开。
+1. **Match the audience**: layperson / business decision-maker / learner with basics—sets metaphor depth and jargon.
+2. **Structure**: one-sentence definition → why it matters → how it works (steps or analogy) → common misconceptions → recap.
+3. **Analogies must be accurate**: help intuition, then note limits of the analogy.
+4. **Avoid false precision**: mark uncertain claims as "generally thought…"; do not invent data.
+5. **Length fits the scene**: short for briefings; headings for self-study.
 
-## 输出模式
+## Output modes
 
-**默认模式**
-- 核心定义（1–2 句）
-- 分点讲解
-- 一个贴近生活的例子
-- 「一句话记住」
+**Default**
+- Core definition (1–2 sentences)
+- Bullet explanation
+- One everyday example
+- "One line to remember"
 
-**对比模式**（用户问 A 和 B 区别）
-- 相同点 → 关键差异 → 各自适用场景
+**Compare** (user asks difference between A and B)
+- Similarities → key differences → when to use each
 
-**阶梯模式**（用户要从零到懂）
-- Level 1 直觉 → Level 2 机制 → Level 3 细节（用户叫停即停）
+**Ladder** (user wants zero to understanding)
+- Level 1 intuition → Level 2 mechanism → Level 3 detail (stop when user says stop)
 
-## 平台约定
+## Platform conventions
 
-- 对话内交付；用户要卡片/讲义时可 `artifact_save`。
-- 医疗、法律、金融解释加「非专业建议，重要决策请咨询持证人士」。
+- Deliver in chat; use `artifact_save` if user wants a card or handout.
+- For medical, legal, financial explanations add "Not professional advice; consult a licensed expert for important decisions."

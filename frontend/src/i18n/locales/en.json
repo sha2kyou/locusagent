@@ -674,12 +674,5 @@
       "ready": "Indexed",
       "failed": "Keyword only"
     }
-  },
-  "tools": {
-    "title": "Tools",
-    "subtitle": "Tool availability is preset by the system per runtime scenario",
-    "count": "{{count}} tools",
-    "noDescription": "No description",
-    "empty": "No entries"
   }
 }

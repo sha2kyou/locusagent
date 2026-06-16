@@ -159,18 +159,6 @@ export interface McpInput {
   url?: string;
 }
 
-export interface ToolToggleItem {
-  name: string;
-  description?: string;
-  source?: "private" | "public";
-  transport?: "stdio" | "http";
-  enabled: boolean;
-}
-
-export interface ToolToggleOverview {
-  builtin_tools: ToolToggleItem[];
-}
-
 export type MemoryAnchor = "identity" | "experience";
 
 export interface MemoryEntry {
@@ -281,17 +269,6 @@ export interface UsageSummary {
 export interface BackendLogs {
   lines: string[];
   path: string;
-}
-
-export interface ActivityLogEntry {
-  id: number;
-  ts: string;
-  category: string;
-  action: string;
-  message: string;
-  workspace_id?: string | null;
-  level: "info" | "warn" | "error" | string;
-  detail?: Record<string, unknown> | null;
 }
 
 export type ScheduleKind = "once" | "cron";

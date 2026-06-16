@@ -674,12 +674,5 @@
       "ready": "已索引",
       "failed": "仅关键词"
     }
-  },
-  "tools": {
-    "title": "工具",
-    "subtitle": "工具可用性由系统按运行场景预设",
-    "count": "工具 {{count}}",
-    "noDescription": "暂无说明",
-    "empty": "暂无条目"
   }
 }

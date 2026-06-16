@@ -23,7 +23,7 @@ async def _get_current_user(_args: dict) -> ToolResult:
         "workspace_id": get_workspace_id(),
         "timezone": timezone,
         "data_dir": str(workspace_data_dir()),
-        "note": "不返回模型配置或 API Key 等凭据。",
+        "note": "Does not return model config or API keys.",
     }
     return ToolResult(
         content=json.dumps(payload, ensure_ascii=False, indent=2),
@@ -35,9 +35,9 @@ register_builtin(
     Tool(
         name="get_current_user",
         description=(
-            "获取当前会话的运行环境与基础上下文（工作区、用户时区、数据目录等）。"
-            "适用于诊断环境确认场景。"
-            "不用于读取业务数据，也不返回敏感凭据或模型配置。"
+            "Runtime environment and basic context for the current session (workspace, user timezone, data dirs, etc.)."
+            "For environment diagnostics."
+            "Not for business data; does not return credentials or model config."
         ),
         parameters={
             "type": "object",

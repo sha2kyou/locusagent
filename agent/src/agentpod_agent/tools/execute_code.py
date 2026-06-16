@@ -85,17 +85,17 @@ register_builtin(
     Tool(
         name="execute_code",
         description=(
-            "执行代码片段（当前支持 Python）。默认在 workspace 下运行；若存在 .venv，优先使用 .venv/bin/python。"
-            "执行进程受资源限制与超时进程组回收约束。"
+            "Run a code snippet (Python). Runs under workspace; uses .venv/bin/python if present."
+            "Subject to resource limits and timeout process-group cleanup."
         ),
         parameters={
             "type": "object",
             "properties": {
                 "language": {"type": "string", "enum": ["python"], "default": "python"},
-                "code": {"type": "string", "description": "要执行的代码"},
-                "stdin": {"type": "string", "description": "可选标准输入"},
+                "code": {"type": "string", "description": "Code to execute"},
+                "stdin": {"type": "string", "description": "Optional stdin"},
                 "timeout": {"type": "number", "minimum": 0.1, "default": DEFAULT_TIMEOUT},
-                "workdir": {"type": "string", "description": "可选相对 workspace 的工作目录"},
+                "workdir": {"type": "string", "description": "Optional path relative to workspace"},
             },
             "required": ["code"],
             "additionalProperties": False,

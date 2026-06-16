@@ -1,11 +1,16 @@
 import type { TFunction } from "i18next";
 
-/** 与后端 persistence / session_title 一致的默认会话标题 */
-export const BACKEND_DEFAULT_SESSION_TITLE = "新对话";
+/** Stored defaults from backend (zh/en); must stay in sync with agentpod_shared.session_titles */
+export const BACKEND_DEFAULT_SESSION_TITLES = ["新对话", "New chat"] as const;
+
+/** @deprecated use BACKEND_DEFAULT_SESSION_TITLES */
+export const BACKEND_DEFAULT_SESSION_TITLE = BACKEND_DEFAULT_SESSION_TITLES[0];
+
+const DEFAULT_TITLE_SET = new Set<string>(BACKEND_DEFAULT_SESSION_TITLES);
 
 export function isBackendDefaultSessionTitle(title: string | null | undefined): boolean {
   const trimmed = (title ?? "").trim();
-  return !trimmed || trimmed === BACKEND_DEFAULT_SESSION_TITLE;
+  return !trimmed || DEFAULT_TITLE_SET.has(trimmed);
 }
 
 export function displaySessionTitle(title: string, t: TFunction): string {

@@ -8,9 +8,9 @@ from ..core.completion_limits import MIN_AUXILIARY_COMPLETION_TOKENS
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 _DISTILL_SYSTEM_PROMPT = (
-    "你是对话压缩器。把输入内容浓缩成要点摘要，"
-    "保留：用户目标、已确定结论、关键事实/数据、未完成事项。"
-    "丢弃寒暄与重复。简体中文，分条，尽量精简。"
+    "You are a conversation compressor. Distill input into bullet highlights. "
+    "Keep: user goals, settled conclusions, key facts/data, open items. "
+    "Drop small talk and repetition. English, bullets, concise."
 )
 
 
@@ -55,18 +55,18 @@ register_builtin(
     Tool(
         name="summarize",
         description=(
-            "对长文本进行摘要压缩，输出可继续执行任务的要点。"
-            "适用于上下文过长、信息冗余、需要在继续前先做阶段总结。"
-            "触发后结果会作为工具输出展示在前端消息流。"
+            "Summarize/compress long text into points to continue the task."
+            "When context is too long or redundant and you need a stage summary first."
+            "Output appears as tool result in the chat stream."
         ),
         parameters={
             "type": "object",
             "properties": {
-                "text": {"type": "string", "description": "需要蒸馏的原始文本内容。"},
+                "text": {"type": "string", "description": "Raw text to distill."},
                 "max_tokens": {
                     "type": "integer",
                     "default": MIN_AUXILIARY_COMPLETION_TOKENS,
-                    "description": "摘要 completion 预算下限 4096（含推理模型 thinking）。",
+                    "description": "Min summary completion budget 4096 (includes reasoning model thinking).",
                 },
             },
             "required": ["text"],

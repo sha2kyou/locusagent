@@ -7,6 +7,7 @@ import re
 from typing import Any
 
 from ..logging import get_logger
+from agentpod_shared.session_titles import is_default_session_title
 from .auxiliary_completion import create_chat_completion
 from .llm import get_llm_client
 from .openai_fields import openai_completion_text
@@ -26,19 +27,18 @@ _EDGE_PUNCT_RE = re.compile(
 )
 
 _TITLE_SYSTEM_PROMPT = (
-    "根据用户消息（以及可选的助手回复），生成一个会话标题。\n"
-    "必须遵守：\n"
-    "1. 只输出标题，不要任何解释、前缀、后缀或标点\n"
-    "2. 中文为主，必要时可含英文/数字\n"
-    "3. 长度 4~12 个字\n"
-    "4. 用名词短语概括任务主题，不要复述用户原句\n"
-    "5. 若仅有用户消息，按用户意图概括主题"
+    "From the user message (and optional assistant reply), generate a session title.\n"
+    "Rules:\n"
+    "1. Output only the title—no explanation, prefix, suffix, or punctuation\n"
+    "2. Match the user's language; English or mixed with numbers is fine when appropriate\n"
+    "3. Length 4–12 words or characters (whichever fits the language)\n"
+    "4. Noun phrase summarizing the task theme; do not parrot the user's sentence\n"
+    "5. If only the user message is present, infer the topic from intent"
 )
 
 
 def _is_default_title(title: str | None) -> bool:
-    t = (title or "").strip()
-    return not t or t == "新对话"
+    return is_default_session_title(title)
 
 
 def _message_text(content: Any) -> str:
@@ -99,13 +99,13 @@ def _fallback_title_from_query(query: str) -> str:
     if len(text) >= _TITLE_MIN_LEN:
         return text
     if text:
-        combined = f"关于{text}"
+        combined = f"About {text}"
     else:
-        combined = "会话主题"
+        combined = "Session topic"
     if len(combined) > _TITLE_MAX_LEN:
         combined = combined[:_TITLE_MAX_LEN]
     if len(combined) < _TITLE_MIN_LEN:
-        combined = (combined + "的对话")[:_TITLE_MAX_LEN]
+        combined = (combined + " chat")[:_TITLE_MAX_LEN]
     return combined
 
 
@@ -162,7 +162,7 @@ async def maybe_generate_and_update_session_title(
         {"role": "system", "content": _TITLE_SYSTEM_PROMPT},
         {
             "role": "user",
-            "content": f"用户：{query[:500]}\n助手：{(assistant_text or '')[:800]}",
+            "content": f"User: {query[:500]}\nAssistant: {(assistant_text or '')[:800]}",
         },
     ]
     try:

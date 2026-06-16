@@ -1,58 +1,57 @@
 ---
 name: spreadsheet-data
-description: 解读表格与 Excel/CSV 数据：趋势、对比、异常、汇总与可视化建议。适用于用户上传表格、询问数据含义、做摘要或需要图表展示结论的场景。
+description: Interpret tables and Excel/CSV data—trends, comparisons, anomalies, rollups, and chart suggestions. When users upload spreadsheets, ask what data means, want summaries, or need conclusions visualized.
 triggers:
-  - 表格
+  - spreadsheet
   - Excel
   - xlsx
-  - 数据解读
-  - 分析数据
-  - 趋势
-  - 汇总
-  - 透视
-  - 这列什么意思
-  - 帮我看看数
+  - interpret data
+  - analyze data
+  - trend
+  - pivot
+  - what does this column mean
+  - look at these numbers
 ---
 
 # Spreadsheet Data
 
-## 何时使用
+## When to use
 
-执行相关任务前先调用 `skill_view{name: "spreadsheet-data"}` 加载完整正文。
+Before related work, call `skill_view{name: "spreadsheet-data"}` to load the full body.
 
-适用于**从表格中提取结论**的场景，例如：
-- 用户上传 `.xlsx` / `.csv` 或粘贴表格
-- 「帮我看看这份数据」「哪个增长最快」「有没有异常」
-- 需要对比、排名、占比、趋势描述
-- 需要文字化描述趋势或对比结论
+Use when **drawing conclusions from tables**, e.g.:
+- User uploads `.xlsx` / `.csv` or pastes a table
+- "Look at this data", "what grew fastest", "any anomalies"
+- Compare, rank, share, or describe trends
+- Narrate trends or comparisons in prose
 
-**不用于**：纯格式转换、写 Excel 公式、数据库 ETL（除非用户只要解读结果）。
+**Not for**: pure format conversion, Excel formulas, database ETL (unless user only wants interpretation).
 
-## 工作方式
+## Workflow
 
-1. **先拿到数据**：读用户附件、粘贴内容，或 `read_file` 工作区 CSV；Excel 附件由系统解析为文本后出现在对话中。
-2. **确认列含义**：表头不清时列出假设，或 `clarify` 关键字段含义。
-3. **先摘要后细节**：总行数/列数 → 关键指标 → 发现 → 建议。
-4. **数字要谨慎**：只基于可见数据计算；注明单位、时间范围；不臆造缺失列。
-5. **可视化**：用户需要「画出来」时，用文字描述结论；确需交付物时用 `artifact_save`（如 markdown 表格或说明）。
+1. **Get data**: user attachment, paste, or `read_file` on workspace CSV; Excel attachments are parsed to text in chat.
+2. **Confirm columns**: if headers are unclear, state assumptions or `clarify` key fields.
+3. **Summary before detail**: row/column count → key metrics → findings → recommendations.
+4. **Numbers carefully**: compute only from visible data; note units and time range; do not invent missing columns.
+5. **Visualization**: describe charts in words when asked; use `artifact_save` for deliverables (markdown table or notes).
 
-## 输出结构（默认）
+## Default output structure
 
 ```markdown
-## 数据概览
-（行/列、时间范围、粒度）
+## Data overview
+(rows/columns, time range, granularity)
 
-## 主要发现
+## Main findings
 - ...
 
-## 异常或需注意
+## Anomalies or watch items
 - ...
 
-## 建议（可选）
-- 进一步分析 / 图表类型建议
+## Recommendations (optional)
+- further analysis / chart type suggestions
 ```
 
-## 平台约定
+## Platform conventions
 
-- 默认对话内交付；大表结论可 `artifact_save`。
-- 不将一次性表格结论写入长期 memory（后台 review 亦不应沉淀）。
+- Default: deliver in chat; `artifact_save` for large-table conclusions.
+- Do not write one-off table conclusions to long-term memory (background review should not persist them either).

@@ -17,9 +17,6 @@ import { ChatRoute } from "@/routes/ChatRoute";
 const SkillsRoute = lazy(() =>
   import("@/features/skills/SkillsRoute").then((m) => ({ default: m.SkillsRoute })),
 );
-const ToolsRoute = lazy(() =>
-  import("@/features/tools/ToolsRoute").then((m) => ({ default: m.ToolsRoute })),
-);
 const McpRoute = lazy(() => import("@/features/mcp/McpRoute").then((m) => ({ default: m.McpRoute })));
 const WorkspacesRoute = lazy(() =>
   import("@/features/workspaces/WorkspacesRoute").then((m) => ({ default: m.WorkspacesRoute })),
@@ -46,7 +43,7 @@ const SettingsModelsPage = lazy(() =>
   import("@/features/settings/SettingsModelsPage").then((m) => ({ default: m.SettingsModelsPage })),
 );
 const SettingsUsagePage = lazy(() =>
-  import("@/features/settings/SettingsUsagePage").then((m) => ({ default: m.SettingsUsagePage })),
+  import("@/features/settings/UsageSummaryCard").then((m) => ({ default: m.SettingsUsageRoute })),
 );
 const SettingsToolsPage = lazy(() =>
   import("@/features/settings/SettingsToolsPage").then((m) => ({ default: m.SettingsToolsPage })),
@@ -78,7 +75,6 @@ const shellChildren = [
   { path: "chat/:sessionId", element: <ChatRoute /> },
   { path: "chat", element: <ChatRoute /> },
   { path: "workspaces", element: <WorkspacesRoute /> },
-  { path: "tools", element: <ToolsRoute /> },
   { path: "skills", element: <SkillsRoute /> },
   { path: "mcp", element: <McpRoute /> },
   { path: "memory", element: <MemoryRoute /> },

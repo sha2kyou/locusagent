@@ -126,7 +126,7 @@ class ChatRequest(BaseModel):
 async def _ensure_session(req: ChatRequest) -> tuple[str, bool]:
     if req.session_id:
         return req.session_id, False
-    sid = await create_session(title="新对话")
+    sid = await create_session()
     return sid, True
 
 

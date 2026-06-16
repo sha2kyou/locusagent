@@ -247,13 +247,13 @@ register_builtin(
     Tool(
         name="read_file",
         description=(
-            "读取工作区文本文件，返回 `行号|内容`，支持 offset/limit 分页。"
-            "用于替代在 terminal 里用 cat/head/tail 读文件。"
+            "Read a workspace text file; returns `line|content` with offset/limit paging."
+            "Prefer over cat/head/tail in terminal."
         ),
         parameters={
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "相对 workspace 的路径"},
+                "path": {"type": "string", "description": "Path relative to workspace"},
                 "offset": {"type": "integer", "minimum": 1, "default": 1},
                 "limit": {"type": "integer", "minimum": 1, "default": 500},
             },
@@ -268,8 +268,8 @@ register_builtin(
     Tool(
         name="search_files",
         description=(
-            "在工作区内搜索内容或文件名。"
-            "target=content 时按正则搜内容；target=files 时按 glob 找文件。"
+            "Search file content or names within the workspace."
+            "target=content: regex search; target=files: glob files."
         ),
         parameters={
             "type": "object",
@@ -297,16 +297,16 @@ register_builtin(
     Tool(
         name="write_file",
         description=(
-            "写入工作区文件。支持覆盖写入或追加写入；默认自动创建父目录。"
-            "路径必须位于 workspace 内。"
+            "Write a workspace file. Overwrite or append; creates parent dirs by default."
+            "Path must be under workspace."
         ),
         parameters={
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "相对 workspace 的目标文件路径"},
-                "file_path": {"type": "string", "description": "path 的别名（兼容）。"},
-                "content": {"type": "string", "description": "写入内容"},
-                "file_content": {"type": "string", "description": "content 的别名（兼容）。"},
+                "path": {"type": "string", "description": "Target file path relative to workspace"},
+                "file_path": {"type": "string", "description": "Alias for path."},
+                "content": {"type": "string", "description": "Content to write"},
+                "file_content": {"type": "string", "description": "Alias for content."},
                 "append": {"type": "boolean", "default": False},
                 "create_dirs": {"type": "boolean", "default": True},
             },
@@ -320,16 +320,16 @@ register_builtin(
     Tool(
         name="patch",
         description=(
-            "对工作区文件做定点文本替换。默认仅替换一次；replace_all=true 时替换全部匹配。"
-            "路径必须位于 workspace 内。"
+            "Targeted text replace in a workspace file. One match by default; replace_all=true for all."
+            "Path must be under workspace."
         ),
         parameters={
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "相对 workspace 的目标文件路径"},
-                "file_path": {"type": "string", "description": "path 的别名（兼容）。"},
-                "old_string": {"type": "string", "description": "待替换原文本"},
-                "new_string": {"type": "string", "description": "替换后文本；可为空字符串表示删除"},
+                "path": {"type": "string", "description": "Target file path relative to workspace"},
+                "file_path": {"type": "string", "description": "Alias for path."},
+                "old_string": {"type": "string", "description": "Text to find"},
+                "new_string": {"type": "string", "description": "Replacement text; empty string deletes"},
                 "replace_all": {"type": "boolean", "default": False},
             },
             "required": ["old_string", "new_string"],
@@ -342,12 +342,12 @@ register_builtin(
 register_builtin(
     Tool(
         name="delete_file",
-        description="删除工作区内的文件。路径必须位于 workspace 内，不支持删除目录。",
+        description="Delete a file under workspace. Directories not supported.",
         parameters={
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "相对 workspace 的目标文件路径"},
-                "file_path": {"type": "string", "description": "path 的别名（兼容）。"},
+                "path": {"type": "string", "description": "Target file path relative to workspace"},
+                "file_path": {"type": "string", "description": "Alias for path."},
             },
             "required": ["path"],
         },
