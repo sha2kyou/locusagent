@@ -6,37 +6,6 @@ cd "$ROOT_DIR"
 
 python3 "$ROOT_DIR/scripts/sync-version.py"
 
-usage() {
-  cat <<'EOF'
-Usage:
-  ./rebuild.sh
-      Build macOS desktop app (default). Same as ./rebuild.sh desktop.
-
-  ./rebuild.sh desktop
-      Build macOS desktop app (bundle venv + SPA + Tauri .app / .dmg).
-      Copies release artifacts to dist/ at repo root.
-
-  ./rebuild.sh sidecar
-      Create/update sidecar venv only (editable, for dev — no .app rebuild).
-
-  ./rebuild.sh desktop --fresh-venv
-      Force full rebuild of bundled Python venv (slow; default is incremental).
-EOF
-}
-
-setup_sidecar_venv() {
-  local venv="$ROOT_DIR/sidecar/.venv"
-  if [[ ! -d "$venv" ]]; then
-    python3 -m venv "$venv"
-  fi
-  # shellcheck disable=SC1091
-  source "$venv/bin/activate"
-  echo "==> sidecar dev venv: install dependencies"
-  pip install -U pip
-  pip install -e "$ROOT_DIR/shared" -e "$ROOT_DIR/host" -e "$ROOT_DIR/agent" -e "$ROOT_DIR/sidecar"
-  pip install pytest pytest-asyncio httpx
-}
-
 setup_bundle_resources() {
   local bundle_root="$ROOT_DIR/desktop/src-tauri/resources"
   local bundle_venv="$bundle_root/sidecar-venv"
@@ -134,61 +103,42 @@ publish_desktop_artifacts() {
   fi
 }
 
-rebuild_desktop() {
-  local fresh_venv=0
-  for arg in "$@"; do
-    case "$arg" in
-      --fresh-venv) fresh_venv=1 ;;
-    esac
-  done
+fresh_venv=0
+for arg in "$@"; do
+  case "$arg" in
+    --fresh-venv) fresh_venv=1 ;;
+    *)
+      echo "error: unknown option: $arg" >&2
+      echo "usage: ./rebuild.sh [--fresh-venv]" >&2
+      exit 1
+      ;;
+  esac
+done
 
-  setup_bundle_resources "$fresh_venv"
+setup_bundle_resources "$fresh_venv"
 
-  if ! command -v cargo >/dev/null 2>&1; then
-    echo "error: Rust toolchain not found (cargo). Install from https://rustup.rs or: brew install rust"
-    exit 1
-  fi
-
-  echo "==> build desktop frontend (frontend/dist-desktop)"
-  cd "$ROOT_DIR/frontend"
-  if [[ ! -d node_modules ]]; then
-    npm install
-  fi
-  npm run build:desktop
-
-  echo "==> build AgentPod.app (Tauri, cargo may take a few minutes)"
-  "$ROOT_DIR/scripts/prepare-desktop-resources.sh"
-  cd "$ROOT_DIR/desktop"
-  if [[ ! -d node_modules ]]; then
-    npm install
-  fi
-  npm run build
-
-  if [[ -d "$ROOT_DIR/desktop/src-tauri/target/release/bundle/macos/AgentPod.app" ]]; then
-    repackage_dmg
-  fi
-
-  publish_desktop_artifacts
-}
-
-cmd="${1:-desktop}"
-if [[ "$cmd" == "--fresh-venv" ]]; then
-  rebuild_desktop --fresh-venv
-  exit 0
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "error: Rust toolchain not found (cargo). Install from https://rustup.rs or: brew install rust"
+  exit 1
 fi
-if [[ $# -gt 0 ]]; then
-  shift
+
+echo "==> build desktop frontend (frontend/dist-desktop)"
+cd "$ROOT_DIR/frontend"
+if [[ ! -d node_modules ]]; then
+  npm install
 fi
-case "$cmd" in
-  sidecar)
-    setup_sidecar_venv
-    echo "==> sidecar venv ready: sidecar/.venv"
-    ;;
-  desktop)
-    rebuild_desktop "$@"
-    ;;
-  *)
-    usage
-    exit 1
-    ;;
-esac
+npm run build:desktop
+
+echo "==> build AgentPod.app (Tauri, cargo may take a few minutes)"
+"$ROOT_DIR/scripts/prepare-desktop-resources.sh"
+cd "$ROOT_DIR/desktop"
+if [[ ! -d node_modules ]]; then
+  npm install
+fi
+npm run build
+
+if [[ -d "$ROOT_DIR/desktop/src-tauri/target/release/bundle/macos/AgentPod.app" ]]; then
+  repackage_dmg
+fi
+
+publish_desktop_artifacts

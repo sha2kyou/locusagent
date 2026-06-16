@@ -34,7 +34,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Build desktop app
-        run: ./rebuild.sh desktop --fresh-venv
+        run: ./rebuild.sh --fresh-venv
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7

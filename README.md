@@ -79,8 +79,7 @@ Artifacts are copied to `dist/` (`AgentPod.app` and `AgentPod_<version>_macos-ar
 Other commands:
 
 ```bash
-./rebuild.sh sidecar          # editable dev venv only (sidecar/.venv)
-./rebuild.sh desktop --fresh-venv   # force rebuild bundled Python (slow)
+./rebuild.sh --fresh-venv   # force rebuild bundled Python (slow)
 python3 scripts/sync-version.py     # sync VERSION → all manifests
 ```
 
@@ -94,8 +93,6 @@ From the repo root:
 uv sync --group dev
 uv run agentpod-serve
 ```
-
-Or use `./rebuild.sh sidecar` and run `agentpod-serve` from `sidecar/.venv`.
 
 The process binds to `http://127.0.0.1:21223` and uses `~/.agentpod/` for data.
 
