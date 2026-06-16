@@ -1,6 +1,6 @@
 [project]
 name = "agentpod-agent"
-version = "0.1.18"
+version = "0.1.19"
 description = "AgentPod agent: per-user container with chat loop, tools, skills, MCP, memory"
 license = "Apache-2.0"
 requires-python = ">=3.11"

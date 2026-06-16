@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { Input, Label } from "@/components/ui/field";
+import { Input, Label, Select } from "@/components/ui/field";
 import { SegmentControl } from "@/components/ui/segment-control";
 import { useToast } from "@/components/ui/toast";
 import { useTheme, type ThemePreference } from "@/app/theme";
@@ -10,7 +10,8 @@ import { useRefreshAppTimezone, useAppTimezone } from "@/lib/use-app-timezone";
 import { putTimezoneConfig } from "@/api/endpoints";
 import { getDesktopPrefs, isDesktopPrefsAvailable, setDesktopPrefs } from "@/lib/desktop-prefs";
 import { isDesktopPrefsPartialSaveError } from "@/lib/desktop-prefs-errors";
-import { setAppLocale, SUPPORTED_LOCALES, type AppLocale } from "@/i18n";
+import { persistAppLocale } from "@/lib/app-locale";
+import { SUPPORTED_LOCALES, type AppLocale } from "@/i18n";
 import { SettingsSection } from "./SettingsSection";
 
 const TIMEZONE_OPTIONS = [
@@ -35,6 +36,7 @@ export function SettingsGeneralPage() {
   const [runInBackground, setRunInBackground] = useState(false);
   const [launchAtLogin, setLaunchAtLogin] = useState(false);
   const [desktopPrefsSaving, setDesktopPrefsSaving] = useState(false);
+  const [localeSaving, setLocaleSaving] = useState(false);
   const desktopPrefsAvailable = isDesktopPrefsAvailable();
 
   const themeOptions = useMemo(
@@ -56,6 +58,19 @@ export function SettingsGeneralPage() {
   );
 
   const appLocale: AppLocale = i18n.language === "en" ? "en" : "zh";
+
+  const changeLocale = async (locale: AppLocale) => {
+    if (locale === appLocale || localeSaving) return;
+    setLocaleSaving(true);
+    try {
+      await persistAppLocale(locale);
+      toast(t("settings.general.language.saved"), "success");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setLocaleSaving(false);
+    }
+  };
 
   useEffect(() => {
     setTimezone(appTimeZone);
@@ -118,13 +133,18 @@ export function SettingsGeneralPage() {
         title={t("settings.general.language.title")}
         description={t("settings.general.language.description")}
       >
-        <SegmentControl
+        <Select
           value={appLocale}
-          onChange={(locale) => setAppLocale(locale as AppLocale)}
-          options={languageOptions}
-          className="w-full max-w-md"
-          optionClassName="flex-1 text-center"
-        />
+          disabled={localeSaving}
+          onChange={(e) => void changeLocale(e.target.value as AppLocale)}
+          className="max-w-md"
+        >
+          {languageOptions.map(({ value, label }) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </Select>
       </SettingsSection>
 
       <SettingsSection

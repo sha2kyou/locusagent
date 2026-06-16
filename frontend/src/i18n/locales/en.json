@@ -56,7 +56,8 @@
       "language": {
         "title": "Language",
         "description": "Display language. Takes effect immediately.",
-        "options": { "zh": "简体中文", "en": "English" }
+        "options": { "zh": "简体中文", "en": "English" },
+        "saved": "Language saved"
       },
       "theme": {
         "title": "Theme",

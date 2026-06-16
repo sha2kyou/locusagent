@@ -196,6 +196,10 @@ export interface TimezoneConfig {
   timezone: string;
 }
 
+export interface LocaleConfig {
+  locale: string;
+}
+
 export interface AppConfig {
   llm: {
     base_url: string;
@@ -223,6 +227,7 @@ export interface AppConfig {
   };
   app: {
     timezone: string;
+    locale: string;
   };
 }
 
@@ -241,6 +246,7 @@ export interface AppConfigUpdate {
   jina_api_key?: string;
   embedding_model?: string;
   timezone?: string;
+  locale?: string;
   enable_terminal?: boolean;
   terminal_whitelist?: string;
   terminal_denylist?: string;

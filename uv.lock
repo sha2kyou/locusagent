@@ -19,7 +19,7 @@ members = [
 
 [[package]]
 name = "agentpod-agent"
-version = "0.1.18"
+version = "0.1.19"
 source = { editable = "agent" }
 dependencies = [
     { name = "agentpod-shared" },
@@ -62,7 +62,7 @@ requires-dist = [
 
 [[package]]
 name = "agentpod-host"
-version = "0.1.18"
+version = "0.1.19"
 source = { editable = "host" }
 dependencies = [
     { name = "agentpod-shared" },
@@ -103,7 +103,7 @@ requires-dist = [
 
 [[package]]
 name = "agentpod-shared"
-version = "0.1.18"
+version = "0.1.19"
 source = { editable = "shared" }
 dependencies = [
     { name = "cryptography" },
@@ -122,7 +122,7 @@ requires-dist = [
 
 [[package]]
 name = "agentpod-sidecar"
-version = "0.1.18"
+version = "0.1.19"
 source = { editable = "sidecar" }
 dependencies = [
     { name = "agentpod-agent" },
@@ -141,7 +141,7 @@ requires-dist = [
 
 [[package]]
 name = "agentpod-workspace"
-version = "0.1.18"
+version = "0.1.19"
 source = { virtual = "." }
 
 [package.dev-dependencies]

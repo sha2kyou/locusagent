@@ -58,6 +58,7 @@ class SecretsSection(BaseModel):
 
 class AppSection(BaseModel):
     timezone: str = "UTC"
+    locale: str = "en"
     public_base_url: str = "http://127.0.0.1:21223"
     mcp_oauth_redirect_uri: str = "http://127.0.0.1:21223/api/oauth/mcp/callback"
 
@@ -241,6 +242,32 @@ def set_app_timezone(timezone: str) -> SettingsDocument:
     return doc
 
 
+APP_LOCALES = frozenset({"zh", "en"})
+
+
+def validate_app_locale(locale: str) -> str:
+    value = (locale or "").strip().lower()
+    if value not in APP_LOCALES:
+        raise ValueError(f"invalid locale: {locale}")
+    return value
+
+
+def get_app_locale(doc: SettingsDocument | None = None) -> str:
+    d = doc or load_settings_document()
+    try:
+        return validate_app_locale(d.app.locale)
+    except ValueError:
+        return "en"
+
+
+def set_app_locale(locale: str) -> SettingsDocument:
+    doc = load_settings_document()
+    doc.app.locale = validate_app_locale(locale)
+    save_settings_document(doc)
+    clear_settings_cache()
+    return doc
+
+
 def reload_runtime_config() -> None:
     """保存 settings.json 后刷新进程内配置缓存。"""
     clear_settings_cache()
@@ -293,6 +320,7 @@ def app_config_for_api(doc: SettingsDocument | None = None) -> dict[str, Any]:
         },
         "app": {
             "timezone": get_app_timezone(d),
+            "locale": get_app_locale(d),
         },
     }
 

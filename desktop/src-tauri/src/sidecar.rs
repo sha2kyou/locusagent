@@ -113,7 +113,7 @@ fn bundled_python(app: &AppHandle) -> Option<PathBuf> {
 
 fn bundled_agent_doc(app: &AppHandle) -> Option<PathBuf> {
     app.path()
-        .resolve("AGENT.md", BaseDirectory::Resource)
+        .resolve("AGENTPOD.md", BaseDirectory::Resource)
         .ok()
         .filter(|p| p.is_file())
 }

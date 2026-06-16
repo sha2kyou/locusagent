@@ -21,6 +21,7 @@
   },
   "app": {
     "timezone": "UTC",
+    "locale": "en",
     "public_base_url": "http://127.0.0.1:21223"
   }
 }

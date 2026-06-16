@@ -145,7 +145,7 @@ See `shared/settings.example.json` for an annotated example of host settings.
 
 | Doc | Audience |
 |-----|----------|
-| [AGENT.md](./AGENT.md) | In-app AI agent — platform capabilities, tools, and user-facing conventions (Chinese) |
+| [docs/AGENTPOD.md](./docs/AGENTPOD.md) | In-app AI agent — platform capabilities, tools, and user-facing conventions (Chinese) |
 | [cliff.toml](./cliff.toml) + GitHub Releases | Changelog generated on tagged releases |
 
 ## License

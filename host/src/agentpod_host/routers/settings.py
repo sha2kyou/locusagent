@@ -12,9 +12,12 @@ from pydantic import BaseModel, Field
 from agentpod_shared.settings_store import (
     app_config_for_api,
     apply_app_config_update,
+    get_app_locale,
     get_app_timezone,
     reload_runtime_config,
+    set_app_locale,
     set_app_timezone,
+    validate_app_locale,
 )
 from agentpod_shared.activity_log import list_activity_logs, record_activity
 
@@ -33,8 +36,17 @@ class TimezoneConfigOut(BaseModel):
     timezone: str
 
 
+class LocaleConfigIn(BaseModel):
+    locale: str = Field(..., min_length=2, max_length=8)
+
+
+class LocaleConfigOut(BaseModel):
+    locale: str
+
+
 class AppSectionOut(BaseModel):
     timezone: str
+    locale: str
 
 
 class LlmConfigOut(BaseModel):
@@ -108,6 +120,7 @@ class AppConfigIn(BaseModel):
     jina_api_key: str | None = Field(default=None, max_length=512)
     embedding_model: str | None = Field(default=None, max_length=256)
     timezone: str | None = Field(default=None, max_length=64)
+    locale: str | None = Field(default=None, max_length=8)
     enable_terminal: bool | None = None
     terminal_whitelist: str | None = Field(default=None, max_length=2048)
     terminal_denylist: str | None = Field(default=None, max_length=2048)
@@ -171,6 +184,28 @@ async def save_timezone(
     return TimezoneConfigOut(timezone=tz)
 
 
+@router.get("/locale", response_model=LocaleConfigOut)
+async def read_locale(ctx: AuthContext = Depends(require_session)) -> LocaleConfigOut:
+    _ = ctx
+    return LocaleConfigOut(locale=get_app_locale())
+
+
+@router.put("/locale", response_model=LocaleConfigOut)
+async def save_locale(
+    payload: LocaleConfigIn,
+    ctx: AuthContext = Depends(require_session),
+) -> LocaleConfigOut:
+    _ = ctx
+    try:
+        locale = validate_app_locale(payload.locale)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    set_app_locale(locale)
+    record_activity("settings", "locale_save", f"语言已保存：{locale}")
+    return LocaleConfigOut(locale=locale)
+
+
 @router.get("/app-config", response_model=AppConfigOut)
 async def read_app_config(ctx: AuthContext = Depends(require_session)) -> AppConfigOut:
     _ = ctx
@@ -196,6 +231,12 @@ async def save_app_config(
         except ValueError as exc:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
+    if payload.locale is not None:
+        try:
+            validate_app_locale(payload.locale)
+        except ValueError as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
     doc = apply_app_config_update(
         llm_base_url=payload.llm_base_url,
         llm_api_key=payload.llm_api_key,
@@ -216,6 +257,8 @@ async def save_app_config(
     )
     if payload.timezone is not None:
         doc = set_app_timezone(validate_timezone(payload.timezone))
+    if payload.locale is not None:
+        doc = set_app_locale(validate_app_locale(payload.locale))
     reload_runtime_config()
 
     if payload.timezone is not None:

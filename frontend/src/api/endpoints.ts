@@ -19,6 +19,7 @@ import type {
   ScheduledTask,
   ScheduleKind,
   TimezoneConfig,
+  LocaleConfig,
   ActivityLogEntry,
   BackendLogs,
   UsageSummary,
@@ -57,6 +58,11 @@ export const getTimezoneConfig = () => apiGet<TimezoneConfig>("/api/settings/tim
 
 export const putTimezoneConfig = (body: { timezone: string }) =>
   apiSend<TimezoneConfig>("/api/settings/timezone", "PUT", body);
+
+export const getLocaleConfig = () => apiGet<LocaleConfig>("/api/settings/locale");
+
+export const putLocaleConfig = (body: { locale: string }) =>
+  apiSend<LocaleConfig>("/api/settings/locale", "PUT", body);
 
 export const getAppConfig = () => apiGet<AppConfig>("/api/settings/app-config");
 

@@ -1,6 +1,6 @@
 [project]
 name = "agentpod-shared"
-version = "0.1.18"
+version = "0.1.19"
 description = "AgentPod shared: settings, local storage, embeddings, memory cache"
 license = "Apache-2.0"
 requires-python = ">=3.11"

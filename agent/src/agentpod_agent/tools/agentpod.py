@@ -25,24 +25,26 @@ def _resolve_agent_doc_path() -> Path | None:
         if path.is_file():
             return path
 
+    repo_root = Path(__file__).resolve().parents[4]
+    doc = repo_root / "docs" / "AGENTPOD.md"
+    if doc.is_file():
+        return doc
+
+    skills = shared_skills_dir()
+    if skills is not None:
+        bundled = skills.parent / "AGENTPOD.md"
+        if bundled.is_file():
+            return bundled
+
     override_readme = os.environ.get("AGENTPOD_README_PATH", "").strip()
     if override_readme:
         path = Path(override_readme)
         if path.is_file():
             return path
 
-    repo_root = Path(__file__).resolve().parents[4]
-    for name in ("AGENT.md", "README.md"):
-        candidate = repo_root / name
-        if candidate.is_file():
-            return candidate
-
-    skills = shared_skills_dir()
-    if skills is not None:
-        for name in ("AGENT.md", "README.md"):
-            bundled = skills.parent / name
-            if bundled.is_file():
-                return bundled
+    readme = repo_root / "README.md"
+    if readme.is_file():
+        return readme
 
     return None
 
