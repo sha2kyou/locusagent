@@ -54,12 +54,8 @@ jobs:
         with:
           enable-cache: true
 
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-
       - name: Install standalone Python 3.11
-        run: uv python install 3.11
+        run: uv python install 3.11 --reinstall
 
       - uses: actions/setup-node@v6
         with:

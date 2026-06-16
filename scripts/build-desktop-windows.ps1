@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 $RootDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $RootDir
 
-python scripts/sync-version.py
+uv run python scripts/sync-version.py
 
 $Version = (Get-Content VERSION -Raw).Trim()
 $BundleRoot = Join-Path $RootDir "desktop/src-tauri/resources"
@@ -26,26 +26,10 @@ function Setup-BundleResources {
             Remove-Item -Recurse -Force $BundleVenv
         }
 
-        uv python install 3.11 | Out-Null
-
-        $installDir = if ($env:UV_PYTHON_INSTALL_DIR) {
-            $env:UV_PYTHON_INSTALL_DIR
-        } else {
-            Join-Path $env:LOCALAPPDATA "uv/python"
-        }
-
-        $standalone = Get-ChildItem -Path $installDir -Directory |
-            Where-Object { $_.Name -match "^cpython-3\.11.*pc-windows-msvc" } |
-            Sort-Object Name |
-            Select-Object -Last 1
-
-        if (-not $standalone -or -not (Test-Path (Join-Path $standalone.FullName "python.exe"))) {
-            throw "uv managed python 3.11 (x64) not found under $installDir"
-        }
-
-        Write-Host "==> copy standalone python from $($standalone.FullName)"
+        $standaloneRoot = & (Join-Path $PSScriptRoot "resolve-standalone-python.ps1")
+        Write-Host "==> copy standalone python from $standaloneRoot"
         New-Item -ItemType Directory -Force -Path $BundleVenv | Out-Null
-        Copy-Item -Path (Join-Path $standalone.FullName "*") -Destination $BundleVenv -Recurse -Force
+        Copy-Item -Path (Join-Path $standaloneRoot "*") -Destination $BundleVenv -Recurse -Force
     } else {
         Write-Host "==> refresh bundled sidecar python (incremental)"
     }
