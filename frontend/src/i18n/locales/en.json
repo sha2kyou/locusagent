@@ -118,7 +118,7 @@
       "apiKey": "API Key",
       "thirdPartyKeys": {
         "tavily": "Tavily Key",
-        "jina": "Jina Key",
+        "jina": "Jina AI Key",
         "tavilyPlaceholder": "Optional, web search",
         "jinaPlaceholder": "Optional, page reading"
       },

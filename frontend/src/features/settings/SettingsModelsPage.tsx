@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { ExternalLink, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
@@ -16,6 +16,67 @@ import {
   hasAuxiliaryModels,
   type AuxiliaryModelValues,
 } from "./auxiliary-model-fields";
+
+const THIRD_PARTY_KEY_FIELDS = [
+  {
+    id: "tavily",
+    href: "https://app.tavily.com/home",
+    labelKey: "settings.models.thirdPartyKeys.tavily",
+    placeholderKey: "settings.models.thirdPartyKeys.tavilyPlaceholder",
+  },
+  {
+    id: "jina",
+    href: "https://jina.ai/api-dashboard/",
+    labelKey: "settings.models.thirdPartyKeys.jina",
+    placeholderKey: "settings.models.thirdPartyKeys.jinaPlaceholder",
+  },
+] as const;
+
+type ThirdPartyKeyFieldProps = {
+  href: string;
+  label: string;
+  placeholder: string;
+  configured: boolean;
+  configuredLabel: string;
+  keepEmptyLabel: string;
+  value: string;
+  onChange: Dispatch<SetStateAction<string>>;
+};
+
+function ThirdPartyKeyField({
+  href,
+  label,
+  placeholder,
+  configured,
+  configuredLabel,
+  keepEmptyLabel,
+  value,
+  onChange,
+}: ThirdPartyKeyFieldProps) {
+  return (
+    <div className="grid gap-1.5">
+      <div className="flex items-center gap-2">
+        <Label>
+          <a
+            href={href}
+            className="inline-flex items-center gap-1 text-foreground transition-colors hover:text-brand"
+          >
+            {label}
+            <ExternalLink className="size-3 opacity-50" />
+          </a>
+        </Label>
+        {configured ? <Badge variant="brand">{configuredLabel}</Badge> : null}
+      </div>
+      <Input
+        type="password"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={configured ? keepEmptyLabel : placeholder}
+        autoComplete="off"
+      />
+    </div>
+  );
+}
 
 export function SettingsModelsPage() {
   const { t } = useTranslation();
@@ -178,40 +239,24 @@ export function SettingsModelsPage() {
         description={t("settings.models.thirdParty.description")}
       >
         <div className="grid max-w-xl gap-3">
-          <div className="grid gap-1.5">
-            <div className="flex items-center gap-2">
-              <Label>{t("settings.models.thirdPartyKeys.tavily")}</Label>
-              {tavilyConfigured ? <Badge variant="brand">{t("settings.models.llm.configured")}</Badge> : null}
-            </div>
-            <Input
-              type="password"
-              value={tavilyApiKey}
-              onChange={(e) => setTavilyApiKey(e.target.value)}
-              placeholder={
-                tavilyConfigured
-                  ? t("settings.models.llm.keepEmpty")
-                  : t("settings.models.thirdPartyKeys.tavilyPlaceholder")
-              }
-              autoComplete="off"
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <div className="flex items-center gap-2">
-              <Label>{t("settings.models.thirdPartyKeys.jina")}</Label>
-              {jinaConfigured ? <Badge variant="brand">{t("settings.models.llm.configured")}</Badge> : null}
-            </div>
-            <Input
-              type="password"
-              value={jinaApiKey}
-              onChange={(e) => setJinaApiKey(e.target.value)}
-              placeholder={
-                jinaConfigured
-                  ? t("settings.models.llm.keepEmpty")
-                  : t("settings.models.thirdPartyKeys.jinaPlaceholder")
-              }
-              autoComplete="off"
-            />
-          </div>
+          {THIRD_PARTY_KEY_FIELDS.map(({ id, href, labelKey, placeholderKey }) => {
+            const configured = id === "tavily" ? tavilyConfigured : jinaConfigured;
+            const value = id === "tavily" ? tavilyApiKey : jinaApiKey;
+            const onChange = id === "tavily" ? setTavilyApiKey : setJinaApiKey;
+            return (
+              <ThirdPartyKeyField
+                key={id}
+                href={href}
+                label={t(labelKey)}
+                placeholder={t(placeholderKey)}
+                configured={configured}
+                configuredLabel={t("settings.models.llm.configured")}
+                keepEmptyLabel={t("settings.models.llm.keepEmpty")}
+                value={value}
+                onChange={onChange}
+              />
+            );
+          })}
         </div>
       </SettingsSection>
 
