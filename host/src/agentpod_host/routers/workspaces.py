@@ -11,9 +11,12 @@ from ..db import Workspace, get_session
 from agentpod_shared.workspace_ids import generate_workspace_id
 from agentpod_shared.activity_log import record_activity
 from ..workspaces import (
+    copy_mcp_oauth_credentials,
+    copy_workspace_on_disk,
     ensure_default_workspace,
     normalize_workspace_description,
     normalize_workspace_name,
+    suggest_workspace_copy_name,
 )
 
 router = APIRouter(prefix="/api/workspaces", tags=["workspaces"])
@@ -27,6 +30,10 @@ class WorkspaceCreateIn(BaseModel):
 class WorkspaceUpdateIn(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=25)
     description: str | None = Field(default=None, max_length=200)
+
+
+class WorkspaceCopyIn(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=25)
 
 
 @router.get("")
@@ -117,6 +124,75 @@ async def set_default_workspace(
         await session.flush()
     record_activity("workspace", "default", f"已切换默认工作区", workspace_id=workspace_id)
     return {"default_workspace_id": workspace_id}
+
+
+@router.post("/{workspace_id}/copy", status_code=201)
+async def copy_workspace(
+    workspace_id: str,
+    payload: WorkspaceCopyIn | None = None,
+    ctx: AuthContext = Depends(require_session),
+) -> dict:
+    _ = ctx
+    body = payload or WorkspaceCopyIn()
+    async with get_session() as session:
+        await ensure_default_workspace(session)
+        source = (
+            await session.execute(select(Workspace).where(Workspace.id == workspace_id))
+        ).scalar_one_or_none()
+        if source is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="workspace not found")
+
+        new_id = generate_workspace_id()
+        while True:
+            exists = (
+                await session.execute(select(Workspace.id).where(Workspace.id == new_id))
+            ).first()
+            if not exists:
+                break
+            new_id = generate_workspace_id()
+
+        name = (
+            normalize_workspace_name(body.name)
+            if body.name
+            else suggest_workspace_copy_name(source.name)
+        )
+        try:
+            copy_workspace_on_disk(source.id, new_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail="workspace has no agent data yet",
+            ) from exc
+        except FileExistsError as exc:
+            raise HTTPException(status.HTTP_409_CONFLICT, detail="target path exists") from exc
+
+        row = Workspace(
+            id=new_id,
+            name=name,
+            description=source.description,
+            is_default=False,
+        )
+        session.add(row)
+        await session.flush()
+        await copy_mcp_oauth_credentials(session, source_id=source.id, target_id=new_id)
+        await session.refresh(row)
+
+    record_activity(
+        "workspace",
+        "copy",
+        f"已复制工作区「{source.name}」→「{row.name}」",
+        workspace_id=row.id,
+    )
+    return {
+        "item": {
+            "id": row.id,
+            "name": row.name,
+            "description": row.description,
+            "is_default": bool(row.is_default),
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
+        }
+    }
 
 
 @router.put("/{workspace_id}")

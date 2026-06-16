@@ -468,7 +468,13 @@
     "actions": {
       "switch": "Switch to this workspace",
       "edit": "Edit workspace",
+      "copy": "Copy workspace",
       "delete": "Delete workspace"
+    },
+    "copyNameSuffix": " Copy",
+    "copyConfirm": {
+      "title": "Copy workspace",
+      "body": "Copy \"{{name}}\"? Memory, Skills, MCP and other settings will be kept, but chat history will not."
     },
     "deleteConfirm": {
       "title": "Delete workspace",

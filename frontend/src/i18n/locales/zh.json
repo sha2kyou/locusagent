@@ -468,7 +468,13 @@
     "actions": {
       "switch": "切换到该工作区",
       "edit": "编辑工作区",
+      "copy": "复制工作区",
       "delete": "删除工作区"
+    },
+    "copyNameSuffix": " 副本",
+    "copyConfirm": {
+      "title": "复制工作区",
+      "body": "复制「{{name}}」？将保留记忆、Skill、MCP 等配置，但不包含对话记录。"
     },
     "deleteConfirm": {
       "title": "删除工作区",

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Check, Copy, Loader2, Pencil, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { ReadyGate } from "@/components/ReadyGate";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Empty, listItemDescriptionClass, listRowHoverActionsClass, Loading } fr
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import {
+  copyWorkspace,
   createWorkspace,
   deleteWorkspace,
   listWorkspaces,
@@ -34,6 +35,7 @@ export function WorkspacesRoute() {
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<WorkspaceItem | null>(null);
   const [saving, setSaving] = useState(false);
+  const [copyingId, setCopyingId] = useState<string | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
 
   const currentWorkspaceId = me?.current_workspace_id || "";
@@ -134,6 +136,32 @@ export function WorkspacesRoute() {
     requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
+  const buildCopyName = (sourceName: string) => {
+    const suffix = t("workspaces.copyNameSuffix");
+    const maxBase = 25 - suffix.length;
+    const base = sourceName.trim().slice(0, Math.max(1, maxBase)).trimEnd();
+    return `${base}${suffix}`;
+  };
+
+  const duplicate = async (workspace: WorkspaceItem) => {
+    const ok = await confirm({
+      title: t("workspaces.copyConfirm.title"),
+      body: t("workspaces.copyConfirm.body", { name: workspace.name }),
+      confirmText: t("workspaces.actions.copy"),
+    });
+    if (!ok) return;
+    setCopyingId(workspace.id);
+    try {
+      const res = await copyWorkspace(workspace.id, { name: buildCopyName(workspace.name) });
+      toast(toastAction("added", res.item.name, "workspace"), "success");
+      await load();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setCopyingId(null);
+    }
+  };
+
   return (
     <PageContainer title={t("workspaces.title")} subtitle={t("workspaces.subtitle")}>
       <ReadyGate>
@@ -183,6 +211,23 @@ export function WorkspacesRoute() {
                           onClick={() => startEdit(w)}
                         >
                           <Pencil className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className={listRowHoverActionsClass}
+                          title={t("workspaces.actions.copy")}
+                          aria-label={t("workspaces.actions.copy")}
+                          disabled={copyingId === w.id}
+                          onClick={() => {
+                            void duplicate(w);
+                          }}
+                        >
+                          {copyingId === w.id ? (
+                            <Loader2 className="size-4 animate-spin" />
+                          ) : (
+                            <Copy className="size-4" />
+                          )}
                         </Button>
                         {!w.is_default && (
                           <Button

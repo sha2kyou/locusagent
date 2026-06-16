@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import sqlite3
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from fastapi import Request
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .db import Workspace, get_session
+from .db import McpOauthCredential, Workspace, get_session
 
 
 def normalize_workspace_name(name: str | None) -> str:
@@ -26,6 +27,83 @@ def normalize_workspace_name(name: str | None) -> str:
 def normalize_workspace_description(description: str | None) -> str:
     value = (description or "").strip()
     return value[:200]
+
+
+_COPY_SUFFIX = " 副本"
+
+_CONVERSATION_TABLES = (
+    "message_attachments",
+    "messages",
+    "attachments",
+    "runs",
+    "session_todos",
+    "sessions",
+)
+
+
+def suggest_workspace_copy_name(source_name: str) -> str:
+    suffix = _COPY_SUFFIX
+    max_base = 25 - len(suffix)
+    if max_base < 1:
+        return suffix.strip()[:25]
+    base = source_name.strip()[:max_base].rstrip()
+    return f"{base}{suffix}" if base else suffix.strip()[:25]
+
+
+def _strip_conversation_data(db_path: Path) -> None:
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        existing = {
+            str(row[0])
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        for table in _CONVERSATION_TABLES:
+            if table in existing:
+                conn.execute(f"DELETE FROM {table}")
+        if "messages_fts" in existing:
+            conn.execute("DELETE FROM messages_fts")
+        conn.commit()
+        conn.execute("VACUUM")
+    finally:
+        conn.close()
+
+
+def copy_workspace_on_disk(source_id: str, target_id: str) -> None:
+    src = _workspaces_root() / source_id
+    dst = _workspaces_root() / target_id
+    if not (src / "agent.sqlite").is_file():
+        raise FileNotFoundError(f"workspace data not found: {source_id}")
+    if dst.exists():
+        raise FileExistsError(f"workspace already exists: {target_id}")
+    shutil.copytree(src, dst)
+    _strip_conversation_data(dst / "agent.sqlite")
+
+
+async def copy_mcp_oauth_credentials(
+    session: AsyncSession,
+    *,
+    source_id: str,
+    target_id: str,
+) -> None:
+    rows = (
+        await session.execute(
+            select(McpOauthCredential).where(McpOauthCredential.workspace_id == source_id)
+        )
+    ).scalars().all()
+    for row in rows:
+        session.add(
+            McpOauthCredential(
+                workspace_id=target_id,
+                server_name=row.server_name,
+                server_url=row.server_url,
+                tokens_enc=row.tokens_enc,
+                client_info_enc=row.client_info_enc,
+            )
+        )
+    await session.flush()
 
 
 def requested_workspace_id(request: Request) -> str | None:

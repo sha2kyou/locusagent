@@ -43,6 +43,13 @@ export const updateWorkspace = (id: string, body: { name?: string; description?:
 export const deleteWorkspace = (id: string) =>
   apiSend<{ deleted: boolean }>(`/api/workspaces/${encodeURIComponent(id)}`, "DELETE");
 
+export const copyWorkspace = (id: string, body?: { name?: string }) =>
+  apiSend<{ item: WorkspaceItem }>(
+    `/api/workspaces/${encodeURIComponent(id)}/copy`,
+    "POST",
+    body ?? {},
+  );
+
 // ---- 设置 ----
 export const getUsageSummary = () => apiGet<UsageSummary>("/api/settings/usage-summary");
 
