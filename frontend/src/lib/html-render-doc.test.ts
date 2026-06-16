@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { buildHtmlRenderSrcDoc, ECHARTS_VENDOR_PATH } from "./html-render-doc.ts";
 
@@ -17,22 +18,24 @@ const SAMPLE = `<!doctype html>
 </html>`;
 
 describe("buildHtmlRenderSrcDoc", () => {
-  it("injects local vendor loader with CDN fallback and polling init", () => {
+  it("bootstraps inline echarts with vendor + CDN in one script", () => {
     const doc = buildHtmlRenderSrcDoc(SAMPLE, ORIGIN);
-    // local vendor is referenced in the loader
     assert.match(doc, new RegExp(`s\\.src='${ORIGIN}${ECHARTS_VENDOR_PATH.replace(/\./g, "\\.")}'`));
-    // CDN fallback is present
     assert.match(doc, /cdn\.jsdelivr\.net\/npm\/echarts/);
-    // init code is wrapped in polling (go() + setInterval pattern)
-    assert.match(doc, /function go\(\)[\s\S]*echarts\.init[\s\S]*setInterval/);
+    assert.match(doc, /var INIT=function\(\)[\s\S]*echarts\.init/);
+    assert.doesNotMatch(doc, /DOMContentLoaded/);
     assert.ok(doc.includes('id="chart"'));
   });
 
-  it("unwraps DOMContentLoaded and waits for async echarts", () => {
+  it("unwraps DOMContentLoaded with nested handlers (real agent output)", () => {
     const html = SAMPLE.replace(
       "<script>",
       `<script>
 document.addEventListener('DOMContentLoaded', function() {`,
+    ).replace(
+      "chart.setOption({ series: [{ type: 'bar', data: [1, 2, 3] }] });",
+      `chart.setOption({ series: [{ type: 'bar', data: [1, 2, 3] }] });
+  window.addEventListener('resize', function() { chart.resize(); });`,
     ).replace(
       "</script>",
       `});
@@ -40,18 +43,30 @@ document.addEventListener('DOMContentLoaded', function() {`,
     );
     const doc = buildHtmlRenderSrcDoc(html, ORIGIN);
     assert.doesNotMatch(doc, /DOMContentLoaded/);
-    assert.match(doc, /function go\(\)[\s\S]*echarts\.init[\s\S]*setInterval/);
+    assert.match(doc, /var INIT=function\(\)[\s\S]*echarts\.init[\s\S]*resize/);
   });
 
-  it("strips legacy CDN echarts script tags and replaces with local loader", () => {
+  it("handles saved session html (msg804)", () => {
+    let raw = "";
+    try {
+      raw = readFileSync("/tmp/msg804.txt", "utf8");
+    } catch {
+      return;
+    }
+    const html = raw.replace(/^\[HTML_RENDER\]\n?/, "").replace(/\n?\[\/HTML_RENDER\]$/, "");
+    const doc = buildHtmlRenderSrcDoc(html, ORIGIN);
+    assert.doesNotMatch(doc, /DOMContentLoaded/);
+    assert.match(doc, /var INIT=function\(\)/);
+    assert.match(doc, /__apodDiag/);
+  });
+
+  it("strips legacy CDN echarts script tags and replaces with bootstrap", () => {
     const html = SAMPLE.replace(
       "</head>",
       '<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script></head>',
     );
     const doc = buildHtmlRenderSrcDoc(html, ORIGIN);
-    // stripped CDN tag should not appear as a <script src> tag anymore
     assert.doesNotMatch(doc, /<script[^>]*src=["'][^"']*cdn\.jsdelivr\.net[^"']*["'][^>]*>/);
-    // local vendor is referenced
     assert.match(doc, new RegExp(`${ORIGIN}${ECHARTS_VENDOR_PATH.replace(/\./g, "\\.")}`));
   });
 });

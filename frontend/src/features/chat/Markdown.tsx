@@ -274,6 +274,7 @@ export function HtmlRender({ html }: { html: string }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [copied, setCopied] = useState(false);
   const [height, setHeight] = useState(320);
+  const [diag, setDiag] = useState<string | null>(null);
 
   const doc = useMemo(
     () => buildHtmlRenderSrcDoc(html, window.location.origin),
@@ -281,12 +282,35 @@ export function HtmlRender({ html }: { html: string }) {
   );
 
   useEffect(() => {
+    setDiag(null);
+  }, [html]);
+
+  useEffect(() => {
     const onMsg = (e: MessageEvent) => {
       if (e.source !== ref.current?.contentWindow) return;
-      const h = (e.data as { __apodHeight?: number } | null)?.__apodHeight;
-      if (typeof h === "number" && h > 0) {
+      const data = e.data as {
+        __apodHeight?: number;
+        __apodDiag?: number;
+        phase?: string;
+        message?: string;
+        echarts?: string;
+        canvas?: number;
+        chartEl?: boolean;
+        bodyH?: number;
+      } | null;
+      if (!data) return;
+      if (typeof data.__apodHeight === "number" && data.__apodHeight > 0) {
         const max = Math.round(window.innerHeight * 0.8);
-        setHeight(Math.min(Math.max(Math.ceil(h), 160), max));
+        setHeight(Math.min(Math.max(Math.ceil(data.__apodHeight), 160), max));
+      }
+      if (data.__apodDiag) {
+        const line = `[${data.phase}] echarts=${data.echarts ?? "?"} canvas=${data.canvas ?? "?"} chartEl=${data.chartEl ?? "?"}${data.message ? ` | ${data.message}` : ""}`;
+        console.warn("[apod-html-render]", line);
+        if (data.phase === "error" || data.phase === "reject" || data.phase === "timeout") {
+          setDiag(line);
+        } else if (data.phase === "snap" && data.echarts === "undefined" && (data.canvas ?? 0) === 0) {
+          setDiag(line);
+        }
       }
     };
     window.addEventListener("message", onMsg);
@@ -349,6 +373,11 @@ export function HtmlRender({ html }: { html: string }) {
         className="w-full bg-white transition-[height] duration-150"
         srcDoc={doc}
       />
+      {diag ? (
+        <div className="border-t border-destructive/30 bg-destructive/5 px-3 py-2 font-mono text-[11px] text-destructive">
+          {diag}
+        </div>
+      ) : null}
     </div>
   );
 }

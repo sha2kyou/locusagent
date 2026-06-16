@@ -12,6 +12,12 @@ const HEIGHT_REPORTER =
   "ipt>(function(){function r(){try{var h=Math.max(document.documentElement.scrollHeight,document.body?document.body.scrollHeight:0);parent.postMessage({__apodHeight:h},'*')}catch(e){}}window.addEventListener('load',r);window.addEventListener('resize',r);if(window.ResizeObserver){try{new ResizeObserver(r).observe(document.documentElement)}catch(e){}}setTimeout(r,200);setTimeout(r,800)})();</scr" +
   "ipt>";
 
+/** 捕获 iframe 内错误与渲染状态，postMessage 到父页面（sandbox 无 allow-same-origin 时父页无法读 iframe DOM） */
+const DIAG_REPORTER =
+  "<scr" +
+  "ipt>(function(){function send(p){try{parent.postMessage(Object.assign({__apodDiag:1},p),'*')}catch(e){}}function snap(){send({phase:'snap',echarts:typeof echarts,canvas:document.querySelectorAll('canvas').length,chartEl:!!document.getElementById('chart'),bodyH:document.body?document.body.offsetHeight:0})}window.addEventListener('error',function(e){send({phase:'error',message:e.message,source:e.filename,line:e.lineno})});window.addEventListener('unhandledrejection',function(e){send({phase:'reject',message:String(e.reason)})});setTimeout(snap,500);setTimeout(snap,2000);setTimeout(snap,5000);setTimeout(function(){if(typeof echarts==='undefined')send({phase:'timeout',message:'echarts still undefined after 5s'})},5000)})();</scr" +
+  "ipt>";
+
 function buildIframeCsp(origin: string): string {
   return (
     "default-src 'none'; " +
@@ -30,47 +36,67 @@ function stripEchartsScripts(html: string): string {
 
 const ECHARTS_CDN = `https://cdn.jsdelivr.net/npm/echarts@${ECHARTS_VERSION}/dist/echarts.min.js`;
 
-/** 剥掉 Agent 常见的 DOMContentLoaded / load 包裹，避免与异步注入的 ECharts 发生时序竞争 */
+const READY_OPEN_RE =
+  /^(?:document|window)\.addEventListener\s*\(\s*['"](?:DOMContentLoaded|load)['"]\s*,\s*(?:function\s*\(\s*\)\s*|\(\s*\)\s*=>\s*)\{/;
+
+/** 按花括号深度剥掉 DOMContentLoaded / load 外层包裹（兼容嵌套 function） */
 function unwrapReadyWrapper(content: string): string {
-  const trimmed = content.trim();
-  const m = trimmed.match(
-    /^(?:document|window)\.addEventListener\s*\(\s*['"](?:DOMContentLoaded|load)['"]\s*,\s*function\s*\(\s*\)\s*\{([\s\S]*)\}\s*\)\s*;?\s*$/,
-  );
-  return m ? m[1].trim() : trimmed;
+  let trimmed = content.trim();
+  for (let depth = 0; depth < 3; depth++) {
+    const m = trimmed.match(READY_OPEN_RE);
+    if (!m) break;
+    const start = m[0].length;
+    let braces = 1;
+    let i = start;
+    while (i < trimmed.length && braces > 0) {
+      if (trimmed[i] === "{") braces++;
+      else if (trimmed[i] === "}") braces--;
+      i++;
+    }
+    if (braces !== 0) break;
+    const rest = trimmed.slice(i).trim();
+    if (!/^\)\s*;?\s*$/.test(rest)) break;
+    trimmed = trimmed.slice(start, i - 1).trim();
+  }
+  return trimmed;
 }
 
 /**
- * 将内联 echarts 初始化改为轮询等待 echarts 可用后执行。
- * ECharts 由 injectEchartsScript 异步注入，不能再依赖 DOMContentLoaded / load。
+ * 将含 echarts 的内联脚本替换为：加载 vendor（失败回退 CDN）→ 轮询就绪 → 直接执行初始化。
+ * 全部在一个 script 块内完成，避免 head/body 异步时序与 DOMContentLoaded 竞争。
  */
-function deferInlineEchartsScripts(html: string): string {
-  return html.replace(INLINE_SCRIPT_RE, (full, attrs, content) => {
+function bootstrapInlineEchartsScripts(html: string, origin: string): string {
+  const local = `${origin}${ECHARTS_VENDOR_PATH}`;
+  const cdn = ECHARTS_CDN;
+  let replaced = false;
+  const out = html.replace(INLINE_SCRIPT_RE, (full, attrs, content) => {
     if (!ECHARTS_USAGE_RE.test(content)) return full;
+    if (/\bfunction\s+loadCdn\b/.test(content) && /\bfunction\s+run\b/.test(content)) return full;
+    replaced = true;
     const inner = unwrapReadyWrapper(content);
     return (
       `<script${attrs}>!function(){` +
-      `function go(){${inner}}` +
-      `if(typeof echarts!=='undefined'){go()}` +
-      `else{var t=setInterval(function(){if(typeof echarts!=='undefined'){clearInterval(t);go()}},50);` +
-      `setTimeout(function(){clearInterval(t)},30000)}` +
-      `}();</` +
+      `var done=false;var INIT=function(){${inner}};` +
+      `function run(){if(done)return true;if(typeof echarts!=='undefined'){done=true;INIT();return true}return false}` +
+      `function loadCdn(){var s=document.createElement('script');s.src='${cdn}';s.onload=function(){run()};document.head.appendChild(s)}` +
+      `function boot(){var s=document.createElement('script');s.src='${local}';` +
+      `s.onload=function(){if(!run())loadCdn()};s.onerror=loadCdn;document.head.appendChild(s)}` +
+      `if(!run()){boot();var t=setInterval(function(){if(run())clearInterval(t)},50);setTimeout(function(){clearInterval(t)},30000)}}();</` +
       `script>`
     );
   });
+  return replaced ? out : html;
 }
 
-/**
- * 注入 ECharts 加载器：优先本地 vendor，onload 后检测 echarts 是否可用；
- * 若本地返回非 JS 内容（如 index.html SPA fallback）或加载失败，则回退到 CDN。
- */
+/** 无内联 echarts 脚本时，在 head 注入加载器 */
 function injectEchartsScript(html: string, origin: string): string {
   if (!ECHARTS_USAGE_RE.test(html)) return html;
+  if (/\bfunction\s+boot\b/.test(html) || /\bfunction\s+loadCdn\b/.test(html)) return html;
   const local = `${origin}${ECHARTS_VENDOR_PATH}`;
   const cdn = ECHARTS_CDN;
   const tag =
     `<scr` +
-    `ipt>!function(){` +
-    `function loadCdn(){var s=document.createElement('script');s.src='${cdn}';document.head.appendChild(s)}` +
+    `ipt>!function(){function loadCdn(){var s=document.createElement('script');s.src='${cdn}';document.head.appendChild(s)}` +
     `var s=document.createElement('script');s.src='${local}';` +
     `s.onload=function(){if(typeof echarts==='undefined')loadCdn()};` +
     `s.onerror=loadCdn;` +
@@ -83,12 +109,12 @@ function injectEchartsScript(html: string, origin: string): string {
 /** 为 [HTML_RENDER] iframe 生成 srcdoc：注入本地 ECharts、CSP 与高度上报脚本 */
 export function buildHtmlRenderSrcDoc(html: string, origin: string): string {
   let out = stripEchartsScripts(html);
-  out = deferInlineEchartsScripts(out);
+  out = bootstrapInlineEchartsScripts(out, origin);
   out = injectEchartsScript(out, origin);
   const meta = `<meta http-equiv="Content-Security-Policy" content="${buildIframeCsp(origin)}">`;
   out = /<\/head>/i.test(out) ? out.replace(/<\/head>/i, meta + "</head>") : meta + out;
   out = /<\/body>/i.test(out)
-    ? out.replace(/<\/body>/i, HEIGHT_REPORTER + "</body>")
-    : out + HEIGHT_REPORTER;
+    ? out.replace(/<\/body>/i, DIAG_REPORTER + HEIGHT_REPORTER + "</body>")
+    : out + DIAG_REPORTER + HEIGHT_REPORTER;
   return out;
 }
