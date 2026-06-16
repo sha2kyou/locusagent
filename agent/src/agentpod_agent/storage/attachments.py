@@ -1,6 +1,9 @@
-"""Attachment storage via Host proxy (no S3 credentials in container)."""
+"""Object storage helpers for large binary payloads."""
 
 from __future__ import annotations
+
+import re
+from pathlib import PurePath
 
 import httpx
 
@@ -12,6 +15,9 @@ from ..logging import get_logger
 log = get_logger("attachment_storage")
 
 TIMEOUT = httpx.Timeout(connect=5.0, read=60.0, write=60.0, pool=5.0)
+
+_ATTACHMENT_ID_RE = re.compile(r"^att_[\w-]+$")
+_FILE_EXT_RE = re.compile(r"^\.[A-Za-z0-9._-]+$")
 
 
 class AttachmentStorageError(RuntimeError):
@@ -27,7 +33,23 @@ def blob_object_key(content_sha256: str) -> str:
     digest = content_sha256.strip().lower()
     if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
         raise AttachmentStorageError("invalid content sha256 for blob key")
-    return f"attachments/{get_workspace_id()}/blobs/{digest}"
+    return f"{get_workspace_id()}/blobs/{digest}"
+
+
+def file_object_key(attachment_id: str, filename: str) -> str:
+    """用户上传原文件：{workspace}/files/{att_xxx}{原后缀}。"""
+    aid = str(attachment_id or "").strip()
+    if not _ATTACHMENT_ID_RE.fullmatch(aid):
+        raise AttachmentStorageError("invalid attachment id for file key")
+    ext = PurePath(str(filename or "")).suffix
+    if ext and not _FILE_EXT_RE.fullmatch(ext):
+        ext = ""
+    return f"{get_workspace_id()}/files/{aid}{ext}"
+
+
+def legacy_blob_object_key(content_sha256: str) -> str:
+    """旧版 key 带 attachments/ 前缀（与 data_dir/attachments 根目录重复）。"""
+    return f"attachments/{blob_object_key(content_sha256)}"
 
 
 def upload_was_skipped(uploaded: dict[str, str | bool]) -> bool:
@@ -70,15 +92,21 @@ async def resolve_attachment_bytes(
         data = await _fetch_object(key)
         if data is not None:
             return data, key
+    if "/files/" in key:
+        return None, None
     digest = str(content_sha256 or "").strip().lower()
     if not digest:
         return None, None
     canonical = blob_object_key(digest)
-    if canonical == key:
-        return None, None
-    data = await _fetch_object(canonical)
-    if data is not None:
-        return data, canonical
+    if canonical != key:
+        data = await _fetch_object(canonical)
+        if data is not None:
+            return data, canonical
+    legacy = legacy_blob_object_key(digest)
+    if legacy != key:
+        data = await _fetch_object(legacy)
+        if data is not None:
+            return data, legacy
     return None, None
 
 
@@ -91,16 +119,10 @@ async def load_attachment_bytes(
     return data
 
 
-async def save_attachment_bytes(
-    *,
-    content_sha256: str,
-    mime_type: str,
-    data: bytes,
-) -> dict[str, str | bool]:
+async def _put_object(*, object_key: str, mime_type: str, data: bytes) -> dict[str, str | bool]:
     await _ensure_bucket()
-    key = blob_object_key(content_sha256)
     base, headers = internal_base_and_headers(workspace_id=get_workspace_id())
-    headers["X-Object-Key"] = key
+    headers["X-Object-Key"] = object_key
     headers["Content-Type"] = mime_type
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
         resp = await client.put(f"{base}/internal/attachments/objects", headers=headers, content=data)
@@ -110,10 +132,29 @@ async def save_attachment_bytes(
     if not isinstance(body, dict):
         raise AttachmentStorageError("invalid host response")
     return {
-        "object_key": str(body.get("object_key") or key),
+        "object_key": str(body.get("object_key") or object_key),
         "etag": str(body.get("etag") or ""),
         "skipped": bool(body.get("skipped")),
     }
+
+
+async def save_attachment_bytes(
+    *,
+    content_sha256: str,
+    mime_type: str,
+    data: bytes,
+) -> dict[str, str | bool]:
+    key = blob_object_key(content_sha256)
+    return await _put_object(object_key=key, mime_type=mime_type, data=data)
+
+
+async def save_attachment_file(
+    *,
+    object_key: str,
+    mime_type: str,
+    data: bytes,
+) -> dict[str, str | bool]:
+    return await _put_object(object_key=object_key, mime_type=mime_type, data=data)
 
 
 async def delete_attachment_objects(object_keys: list[str]) -> None:

@@ -24,7 +24,7 @@ import { ApiError, getWorkspaceId, setWorkspaceId } from "@/api/client";
 import type { ChatChunk } from "@/api/types";
 import { streamChatCompletion, streamActiveRun } from "@/api/stream";
 import { formatStreamRetryToast, userMessageFromContainerError } from "@/lib/agent-status-copy";
-import { sha256HexBytes, sha256HexText, bytesToBase64 } from "@/lib/file-digest";
+import { sha256HexBytes, bytesToBase64 } from "@/lib/file-digest";
 import { toastAction } from "@/lib/toast-copy";
 import { displaySessionTitle, isBackendDefaultSessionTitle } from "@/lib/session-title";
 import { useToast } from "@/components/ui/toast";
@@ -112,22 +112,8 @@ export function useChat() {
 const PAGE_SIZE = 10;
 const DEFAULT_MAX_FILE_SIZE = 25 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENTS = 1;
-const MAX_ATTACHMENT_CHARS = 16000;
 const ATTACHMENT_UPLOAD_TIMEOUT_BASE_MS = 60_000;
 const ATTACHMENT_UPLOAD_TIMEOUT_MAX_MS = 180_000;
-const IMAGE_LIKE_EXTS = [
-  ".png",
-  ".jpg",
-  ".jpeg",
-  ".webp",
-  ".gif",
-  ".bmp",
-  ".svg",
-  ".heic",
-  ".heif",
-  ".tif",
-  ".tiff",
-];
 type ChatRequestContent =
   | string
   | ({ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } })[];
@@ -216,7 +202,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const abortRef = useRef<AbortController | null>(null);
   const pollTokenRef = useRef(0);
   const pendingAttachmentsRef = useRef<PendingAttachment[]>([]);
-  const addPendingFilesChainRef = useRef<Promise<void>>(Promise.resolve());
+  const attachmentUploadBusyRef = useRef(false);
+  const uploadWatchdogRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
   const titlePollTimerRef = useRef<number | null>(null);
   const prevUrlSessionRef = useRef<string | null | undefined>(undefined);
@@ -966,75 +953,46 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const removePendingAttachment = (id: string) => {
     setPendingAttachments((prev) => prev.filter((item) => item.id !== id));
+    endAttachmentUpload();
   };
 
   const clearPendingAttachments = () => {
     setPendingAttachments([]);
   };
 
-  const pendingHasDigest = (digest: string) =>
-    pendingAttachmentsRef.current.some((item) => item.contentSha256 === digest);
-
-  const createAttachmentDeduped = async (opts: {
-    sessionId: string | null;
-    name: string;
-    sizeBytes: number;
-    kind: "text" | "image" | "other";
-    mimeType?: string;
-    contentSha256?: string;
-    fileSha256?: string;
-    uploadTimeoutMs: number;
-    fullBody: () => {
-      session_id?: string | null;
-      name: string;
-      size_bytes: number;
-      kind: "text" | "image" | "other";
-      mime_type?: string;
-      text_content?: string;
-      image_data_url?: string;
-      file_data_base64?: string;
-      processable: boolean;
-      unsupported_reason?: string;
-      truncated: boolean;
-    };
-  }) => {
-    const hashLookupMs = 15_000;
-    if (opts.contentSha256 || opts.fileSha256) {
-      try {
-        return await apiCreateAttachment(
-          {
-            session_id: opts.sessionId,
-            name: opts.name,
-            size_bytes: opts.sizeBytes,
-            kind: opts.kind,
-            mime_type: opts.mimeType,
-            content_sha256: opts.contentSha256,
-            file_sha256: opts.fileSha256,
-            processable: true,
-            truncated: false,
-          },
-          { timeoutMs: hashLookupMs },
-        );
-      } catch (e) {
-        if (!(e instanceof ApiError && e.code === "attachment_not_found")) {
-          throw e;
-        }
-      }
+  const clearUploadWatchdog = () => {
+    if (uploadWatchdogRef.current !== null) {
+      window.clearTimeout(uploadWatchdogRef.current);
+      uploadWatchdogRef.current = null;
     }
-    return await apiCreateAttachment(opts.fullBody(), { timeoutMs: opts.uploadTimeoutMs });
+  };
+
+  const beginAttachmentUpload = () => {
+    attachmentUploadBusyRef.current = true;
+    clearUploadWatchdog();
+    setIsAddingAttachment(true);
+    uploadWatchdogRef.current = window.setTimeout(() => {
+      attachmentUploadBusyRef.current = false;
+      setIsAddingAttachment(false);
+      uploadWatchdogRef.current = null;
+    }, ATTACHMENT_UPLOAD_TIMEOUT_MAX_MS + 10_000);
+  };
+
+  const endAttachmentUpload = () => {
+    attachmentUploadBusyRef.current = false;
+    clearUploadWatchdog();
+    setIsAddingAttachment(false);
   };
 
   const processPendingFiles = async (files: FileList | File[]) => {
     const maxFileSize = normalizeAttachmentMaxBytes(me?.attachment_max_bytes);
-    const current = pendingAttachmentsRef.current;
-    const remain = MAX_TOTAL_ATTACHMENTS - current.length;
     const selected = Array.from(files).slice(0, 1);
     if (selected.length === 0) return;
     if (Array.from(files).length > 1) {
       toast(t("chat.attachment.oneAtATime"), "info");
     }
     const next: PendingAttachment[] = [];
-    setIsAddingAttachment(true);
+    beginAttachmentUpload();
     try {
       for (const file of selected) {
         if (file.size > maxFileSize) {
@@ -1044,189 +1002,62 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const uploadTimeoutMs = attachmentUploadTimeoutMs(file.size);
         try {
           await yieldToMainThread();
-          if (isProcessableTextFile(file)) {
-            const raw = await file.text();
-            const normalized = raw.replace(/\r\n/g, "\n");
-            const truncated = normalized.length > MAX_ATTACHMENT_CHARS;
-            const textContent = truncated
-              ? `${normalized.slice(0, MAX_ATTACHMENT_CHARS)}\n${t("chat.attachment.fileTruncatedSuffix")}`
-              : normalized;
-            const contentSha256 = await sha256HexText(textContent);
-            if (pendingHasDigest(contentSha256)) {
-              toast(t("chat.attachment.duplicate"), "info");
-              continue;
-            }
-            const created = await createAttachmentDeduped({
-              sessionId: currentIdRef.current,
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          const mimeType =
+            file.type || guessMimeTypeByName(file.name) || "application/octet-stream";
+          const created = await apiCreateAttachment(
+            {
+              session_id: currentIdRef.current,
               name: file.name,
-              sizeBytes: file.size,
-              kind: "text",
-              mimeType: file.type || "text/plain",
-              contentSha256,
-              uploadTimeoutMs,
-              fullBody: () => ({
-                session_id: currentIdRef.current,
-                name: file.name,
-                size_bytes: file.size,
-                kind: "text",
-                mime_type: file.type || "text/plain",
-                text_content: textContent,
-                processable: true,
-                truncated,
-              }),
-            });
-            if (created.reused) {
-              toast(t("chat.attachment.reused"), "info");
-            }
-            next.push({
-              id: uid("f"),
-              attachmentId: created.id,
-              name: created.name,
-              size: file.size,
-              kind: "text",
-              text: created.text,
-              contentSha256,
-              processable: created.processable,
-              truncated: !!created.truncated,
-            });
-          } else if (isOfficeDocumentFile(file)) {
-            const bytes = new Uint8Array(await file.arrayBuffer());
-            const fileSha256 = await sha256HexBytes(bytes);
-            if (pendingHasDigest(fileSha256)) {
-              toast(t("chat.attachment.duplicate"), "info");
-              continue;
-            }
-            const officeMime = file.type || guessOfficeMimeType(file.name);
-            const created = await createAttachmentDeduped({
-              sessionId: currentIdRef.current,
-              name: file.name,
-              sizeBytes: file.size,
-              kind: "text",
-              mimeType: officeMime,
-              fileSha256,
-              uploadTimeoutMs,
-              fullBody: () => ({
-                session_id: currentIdRef.current,
-                name: file.name,
-                size_bytes: file.size,
-                kind: "text",
-                mime_type: officeMime,
-                file_data_base64: bytesToBase64(bytes),
-                processable: true,
-                truncated: false,
-              }),
-            });
-            if (created.reused) {
-              toast(t("chat.attachment.reused"), "info");
-            }
-            if (!created.processable) {
-              toast(created.unsupportedReason ?? t("chat.attachment.documentUnparseable"), "info");
-            }
-            next.push({
-              id: uid("f"),
-              attachmentId: created.id,
-              name: created.name,
-              size: file.size,
-              kind: "text",
-              text: created.text,
-              contentSha256: fileSha256,
-              processable: created.processable,
-              unsupportedReason: created.unsupportedReason,
-              truncated: !!created.truncated,
-            });
-          } else if (isImageLikeFile(file)) {
-            const bytes = new Uint8Array(await file.arrayBuffer());
-            const contentSha256 = await sha256HexBytes(bytes);
-            if (pendingHasDigest(contentSha256)) {
-              toast(t("chat.attachment.duplicate"), "info");
-              continue;
-            }
-            const mimeType =
-              file.type || guessMimeTypeByName(file.name) || "application/octet-stream";
-            const created = await createAttachmentDeduped({
-              sessionId: currentIdRef.current,
-              name: file.name,
-              sizeBytes: file.size,
-              kind: "image",
-              mimeType,
-              contentSha256,
-              fileSha256: contentSha256,
-              uploadTimeoutMs,
-              fullBody: () => ({
-                session_id: currentIdRef.current,
-                name: file.name,
-                size_bytes: file.size,
-                kind: "image",
-                mime_type: mimeType,
-                image_data_url: `data:${mimeType};base64,${bytesToBase64(bytes)}`,
-                processable: true,
-                truncated: false,
-              }),
-            });
-            if (created.reused) {
-              toast(t("chat.attachment.reused"), "info");
-            }
-            if (!created.processable) {
-              toast(created.unsupportedReason ?? t("chat.attachment.imageUnparseable"), "info");
-            }
-            next.push({
-              id: uid("f"),
-              attachmentId: created.id,
-              name: created.name,
-              size: file.size,
-              kind: "image",
-              mimeType: created.mimeType,
-              contentSha256,
-              processable: created.processable,
-              unsupportedReason: created.unsupportedReason,
-              truncated: false,
-            });
-          } else {
-            const created = await apiCreateAttachment(
-              {
-                session_id: currentIdRef.current,
-                name: file.name,
-                size_bytes: file.size,
-                kind: "other",
-                mime_type: file.type || undefined,
-                processable: false,
-                unsupported_reason: t("chat.attachment.supportedTypes"),
-                truncated: false,
-              },
-              { timeoutMs: uploadTimeoutMs },
-            );
-            next.push({
-              id: uid("f"),
-              attachmentId: created.id,
-              name: created.name,
-              size: file.size,
+              size_bytes: file.size,
               kind: "other",
+              mime_type: mimeType,
+              file_data_base64: bytesToBase64(bytes),
               processable: false,
-              unsupportedReason:
-                created.unsupportedReason ??
-                t("chat.attachment.supportedTypes"),
               truncated: false,
-            });
-          }
-        } catch {
-          toast(t("chat.attachment.readFailedRetry", { file: file.name }), "error");
+            },
+            { timeoutMs: uploadTimeoutMs },
+          );
+          next.push({
+            id: uid("f"),
+            attachmentId: created.id,
+            name: created.name,
+            size: file.size,
+            kind: created.kind,
+            mimeType: created.mimeType,
+            text: created.text,
+            contentSha256: await sha256HexBytes(bytes),
+            processable: created.processable,
+            unsupportedReason: created.unsupportedReason,
+            truncated: !!created.truncated,
+          });
+        } catch (err) {
+          const message =
+            err instanceof ApiError
+              ? err.message
+              : err instanceof Error
+                ? err.message
+                : t("chat.attachment.readFailedRetry", { file: file.name });
+          toast(message, "error");
         }
       }
       if (next.length > 0) {
-        if (remain <= 0) {
+        if (pendingAttachmentsRef.current.length > 0) {
           toast(t("chat.attachment.replaced"), "info");
         }
         setPendingAttachments(next);
       }
     } finally {
-      setIsAddingAttachment(false);
+      endAttachmentUpload();
     }
   };
 
-  const addPendingFiles = (files: FileList | File[]) => {
-    const task = addPendingFilesChainRef.current.then(() => processPendingFiles(files));
-    addPendingFilesChainRef.current = task.catch(() => {});
-    return task;
+  const addPendingFiles = async (files: FileList | File[]) => {
+    if (attachmentUploadBusyRef.current) {
+      toast(t("chat.composer.attachmentProcessing"), "info");
+      return;
+    }
+    await processPendingFiles(files);
   };
 
   const runtime = useExternalStoreRuntime({
@@ -1360,75 +1191,6 @@ function normalizeAttachmentMaxBytes(value: number | null | undefined): number {
     return Math.floor(n);
   }
   return DEFAULT_MAX_FILE_SIZE;
-}
-
-function isProcessableTextFile(file: File): boolean {
-  if (file.type.startsWith("text/")) return true;
-  const lower = file.name.toLowerCase();
-  const textExts = [
-    ".txt",
-    ".md",
-    ".markdown",
-    ".json",
-    ".yaml",
-    ".yml",
-    ".toml",
-    ".ini",
-    ".cfg",
-    ".conf",
-    ".csv",
-    ".log",
-    ".xml",
-    ".html",
-    ".css",
-    ".js",
-    ".jsx",
-    ".ts",
-    ".tsx",
-    ".py",
-    ".java",
-    ".go",
-    ".rs",
-    ".c",
-    ".cc",
-    ".cpp",
-    ".h",
-    ".hpp",
-    ".sh",
-    ".sql",
-  ];
-  return textExts.some((ext) => lower.endsWith(ext));
-}
-
-function isOfficeDocumentFile(file: File): boolean {
-  const lower = file.name.toLowerCase();
-  if (lower.endsWith(".xlsx") || lower.endsWith(".xlsm") || lower.endsWith(".docx")) return true;
-  const mime = (file.type || "").split(";", 1)[0].trim().toLowerCase();
-  return (
-    mime === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-    mime === "application/vnd.ms-excel.sheet.macroenabled.12" ||
-    mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-  );
-}
-
-function guessOfficeMimeType(name: string): string {
-  const lower = name.toLowerCase();
-  if (lower.endsWith(".docx")) {
-    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-  }
-  if (lower.endsWith(".xlsm")) {
-    return "application/vnd.ms-excel.sheet.macroenabled.12";
-  }
-  if (lower.endsWith(".xlsx")) {
-    return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-  }
-  return "application/octet-stream";
-}
-
-function isImageLikeFile(file: File): boolean {
-  if (file.type.startsWith("image/")) return true;
-  const lower = file.name.toLowerCase();
-  return IMAGE_LIKE_EXTS.some((ext) => lower.endsWith(ext));
 }
 
 function guessMimeTypeByName(name: string): string | undefined {

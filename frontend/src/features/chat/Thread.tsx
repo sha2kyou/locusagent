@@ -176,10 +176,18 @@ function Composer() {
   };
 
   const onPickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    e.currentTarget.value = "";
-    if (!files || files.length === 0) return;
-    void addPendingFiles(files);
+    const input = e.currentTarget;
+    const selected = input.files ? Array.from(input.files) : [];
+    input.value = "";
+    if (selected.length === 0) return;
+    void addPendingFiles(selected);
+  };
+
+  const openFilePicker = () => {
+    const input = fileInputRef.current;
+    if (!input || isAddingAttachment) return;
+    input.value = "";
+    input.click();
   };
 
   return (
@@ -239,7 +247,9 @@ function Composer() {
             >
               <Paperclip className="size-3 shrink-0" />
               <span className="max-w-56 truncate">{file.name}</span>
-              {!file.processable ? <span className="text-warning">{t("chat.attachment.unparseable")}</span> : null}
+              {!showsUnparseableBadge({ attachmentId: file.attachmentId, kind: file.kind, processable: file.processable }) ? null : (
+                <span className="text-warning">{t("chat.attachment.unparseable")}</span>
+              )}
               <button
                 type="button"
                 onClick={() => removePendingAttachment(file.id)}
@@ -266,7 +276,7 @@ function Composer() {
         <button
           type="button"
           disabled={isAddingAttachment}
-          onClick={() => fileInputRef.current?.click()}
+          onClick={openFilePicker}
           className="mb-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           aria-label={t("chat.composer.addAttachment")}
           title={isAddingAttachment ? t("chat.composer.attachmentProcessing") : t("chat.composer.addAttachment")}
@@ -357,11 +367,33 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+function isAttachmentDownloadable(meta: {
+  id?: string;
+  attachmentId?: string;
+  kind: string;
+  processable: boolean;
+}): boolean {
+  const aid = String(meta.id ?? meta.attachmentId ?? "");
+  if (!aid.startsWith("att_")) return false;
+  return meta.kind === "other" || (meta.kind === "image" && !meta.processable);
+}
+
+function showsUnparseableBadge(meta: {
+  id?: string;
+  attachmentId?: string;
+  kind: string;
+  processable: boolean;
+}): boolean {
+  if (meta.processable) return false;
+  return !isAttachmentDownloadable(meta);
+}
+
 function isServerDownloadable(file: ChatAttachment): boolean {
-  return file.kind === "other" && !file.processable && file.id.startsWith("att_");
+  return isAttachmentDownloadable(file);
 }
 
 function attachmentDescription(file: ChatAttachment, t: (key: string) => string): string {
+  if (isServerDownloadable(file)) return t("chat.attachment.generic");
   if (!file.processable) return t("chat.attachment.unparseable");
   if (file.kind === "text") return file.truncated ? t("chat.attachment.textTruncated") : t("chat.attachment.text");
   if (file.kind === "image") return t("chat.attachment.image");
@@ -450,9 +482,9 @@ function MessageAttachmentChips({
             <Paperclip className="size-3" />
           )}
           <span className="max-w-56 truncate">{file.name}</span>
-          {!file.processable && !isServerDownloadable(file) ? (
+          {!showsUnparseableBadge(file) ? null : (
             <span className="text-warning">{t("chat.attachment.unparseable")}</span>
-          ) : null}
+          )}
         </button>
       ))}
     </div>

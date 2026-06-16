@@ -28,18 +28,34 @@ from ..storage import (
 router = APIRouter(prefix="/internal/attachments", tags=["attachments-proxy"])
 log = get_logger("attachments_proxy")
 
-_KEY_PREFIX = "attachments/"
 _BLOB_SHA256_RE = re.compile(r"^[a-f0-9]{64}$")
+_FILE_OBJECT_RE = re.compile(r"^att_[\w-]+(?:\.[A-Za-z0-9._-]+)?$")
+
+
+def _validate_file_put_key(*, object_key: str, workspace_id: str) -> None:
+    _validate_object_key(object_key=object_key, workspace_id=workspace_id)
+    ws = workspace_id.strip()
+    prefix = f"{ws}/files/"
+    if not object_key.startswith(prefix):
+        raise HTTPException(status_code=400, detail="invalid file object key prefix")
+    tail = object_key[len(prefix) :]
+    if not _FILE_OBJECT_RE.fullmatch(tail):
+        raise HTTPException(status_code=400, detail="invalid file object key name")
+
+
+def _is_file_object_key(object_key: str, workspace_id: str) -> bool:
+    ws = workspace_id.strip()
+    return bool(ws) and object_key.startswith(f"{ws}/files/")
 
 
 def _validate_blob_put_key(*, object_key: str, workspace_id: str) -> str:
     _validate_object_key(object_key=object_key, workspace_id=workspace_id)
     ws = workspace_id.strip()
-    prefix = f"{_KEY_PREFIX}{ws}/blobs/"
+    prefix = f"{ws}/blobs/"
     if not object_key.startswith(prefix):
         raise HTTPException(
             status_code=400,
-            detail="PUT requires content-addressed blob key attachments/{workspace}/blobs/{sha256}",
+            detail="PUT requires content-addressed blob key {workspace}/blobs/{sha256}",
         )
     digest = object_key[len(prefix) :]
     if not _BLOB_SHA256_RE.fullmatch(digest):
@@ -75,8 +91,9 @@ def _validate_object_key(*, object_key: str, workspace_id: str) -> None:
     ws = workspace_id.strip()
     if not key or not ws:
         raise HTTPException(status_code=400, detail="object_key and workspace required")
-    expected = f"{_KEY_PREFIX}{ws}/"
-    if not key.startswith(expected) or ".." in key:
+    expected = f"{ws}/"
+    legacy = f"attachments/{ws}/"
+    if ".." in key or not (key.startswith(expected) or key.startswith(legacy)):
         raise HTTPException(status_code=403, detail="object_key not allowed for workspace")
 
 
@@ -124,8 +141,11 @@ async def attachments_put(
     if len(data) > max_bytes:
         raise HTTPException(status_code=413, detail=f"object exceeds {max_bytes} bytes")
     key = x_object_key.strip()
-    expected_digest = _validate_blob_put_key(object_key=key, workspace_id=x_workspace_id)
-    _assert_body_matches_key_digest(data=data, expected_digest=expected_digest)
+    if _is_file_object_key(key, ws):
+        _validate_file_put_key(object_key=key, workspace_id=x_workspace_id)
+    else:
+        expected_digest = _validate_blob_put_key(object_key=key, workspace_id=x_workspace_id)
+        _assert_body_matches_key_digest(data=data, expected_digest=expected_digest)
     try:
         existing = head_object(key)
         if existing is not None:

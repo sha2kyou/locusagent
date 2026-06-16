@@ -5,6 +5,7 @@ import pytest
 from agentpod_agent.storage.attachments import (
     AttachmentStorageError,
     blob_object_key,
+    file_object_key,
     upload_was_skipped,
 )
 
@@ -24,7 +25,18 @@ def test_blob_object_key_format(monkeypatch):
         lambda: "ws_0123456789abcdef0123",
     )
     digest = "b" * 64
-    assert blob_object_key(digest) == f"attachments/ws_0123456789abcdef0123/blobs/{digest}"
+    assert blob_object_key(digest) == f"ws_0123456789abcdef0123/blobs/{digest}"
+
+
+def test_file_object_key_format(monkeypatch):
+    monkeypatch.setattr(
+        "agentpod_agent.storage.attachments.get_workspace_id",
+        lambda: "ws_0123456789abcdef0123",
+    )
+    assert (
+        file_object_key("att_abc123", "rules.sidescript")
+        == "ws_0123456789abcdef0123/files/att_abc123.sidescript"
+    )
 
 
 def test_upload_was_skipped():

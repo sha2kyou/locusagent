@@ -72,16 +72,23 @@ async def test_create_attachment_rejects_invalid_base64() -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_attachment_office_parse_failure_skips_blob(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_create_attachment_office_parse_failure_stores_raw_blob(monkeypatch: pytest.MonkeyPatch) -> None:
     uploads: list[dict] = []
 
-    async def _fake_save(**kwargs: object) -> dict:
+    async def _fake_save_file(**kwargs: object) -> dict:
         uploads.append(dict(kwargs))
-        return {"object_key": "test/key", "etag": "etag", "skipped": False}
+        return {"object_key": str(kwargs["object_key"]), "etag": "etag", "skipped": False}
+
+    async def _fake_resolve(_object_key: str, *, content_sha256: str | None = None):
+        return b"PK\x03\x04\xff\xfe\xfd", _object_key
 
     monkeypatch.setattr(
-        "agentpod_agent.core.persistence.save_attachment_bytes",
-        _fake_save,
+        "agentpod_agent.core.persistence.save_attachment_file",
+        _fake_save_file,
+    )
+    monkeypatch.setattr(
+        "agentpod_agent.core.persistence.resolve_attachment_bytes",
+        _fake_resolve,
     )
 
     item = await create_attachment(
@@ -92,38 +99,38 @@ async def test_create_attachment_office_parse_failure_skips_blob(monkeypatch: py
         size_bytes=4,
         text_content=None,
         image_data_url=None,
-        file_data_base64=base64.b64encode(b"fake").decode("ascii"),
+        file_data_base64=base64.b64encode(b"PK\x03\x04\xff\xfe\xfd").decode("ascii"),
         processable=True,
         unsupported_reason=None,
         truncated=False,
     )
 
-    assert uploads == []
+    assert len(uploads) == 1
+    assert uploads[0]["object_key"].endswith(".xlsx")
+    assert "/files/att_" in uploads[0]["object_key"]
     assert item["processable"] is False
-    assert item["unsupportedReason"]
+    assert item["kind"] == "other"
 
 
 @pytest.mark.asyncio
-async def test_create_attachment_office_stores_extracted_text(monkeypatch: pytest.MonkeyPatch) -> None:
-    from agentpod_agent.core.attachment_documents import OFFICE_EXTRACTED_MIME
-
+async def test_create_attachment_office_stores_original_file(monkeypatch: pytest.MonkeyPatch) -> None:
     uploads: list[dict] = []
     stored: dict[str, bytes] = {}
 
-    async def _fake_save(**kwargs: object) -> dict:
+    async def _fake_save_file(**kwargs: object) -> dict:
         payload = dict(kwargs)
         uploads.append(payload)
         data = payload["data"]
         assert isinstance(data, bytes)
         stored["data"] = data
-        return {"object_key": "blobs/ab/cd/test", "etag": "etag", "skipped": False}
+        return {"object_key": str(payload["object_key"]), "etag": "etag", "skipped": False}
 
     async def _fake_resolve(_object_key: str, *, content_sha256: str | None = None) -> tuple[bytes | None, str | None]:
         return stored.get("data"), _object_key
 
     monkeypatch.setattr(
-        "agentpod_agent.core.persistence.save_attachment_bytes",
-        _fake_save,
+        "agentpod_agent.core.persistence.save_attachment_file",
+        _fake_save_file,
     )
     monkeypatch.setattr(
         "agentpod_agent.core.persistence.resolve_attachment_bytes",
@@ -145,7 +152,8 @@ async def test_create_attachment_office_stores_extracted_text(monkeypatch: pytes
     )
 
     assert len(uploads) == 1
-    assert uploads[0]["mime_type"] == OFFICE_EXTRACTED_MIME
+    assert uploads[0]["object_key"].endswith(".xlsx")
+    assert "/files/att_" in uploads[0]["object_key"]
     assert item["processable"] is True
 
 

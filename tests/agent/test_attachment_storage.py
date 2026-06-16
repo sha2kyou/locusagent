@@ -34,7 +34,7 @@ def test_accept_webp():
 
 def test_find_existing_blob_by_sha256():
     digest = "d" * 64
-    canonical = f"attachments/ws1/blobs/{digest}"
+    canonical = f"ws1/blobs/{digest}"
 
     class FakeCursor:
         def __init__(self) -> None:

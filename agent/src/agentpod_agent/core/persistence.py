@@ -22,12 +22,15 @@ from .attachment_documents import (
     has_office_filename,
 )
 from .attachment_images import validate_processable_image
+from .attachment_sniff import MAX_TEXT_EXTRACT_CHARS, classify_uploaded_bytes, is_likely_utf8_text
 from ..storage import (
     AttachmentStorageError,
     blob_object_key,
     delete_attachment_objects,
+    file_object_key,
     resolve_attachment_bytes,
     save_attachment_bytes,
+    save_attachment_file,
     upload_was_skipped,
 )
 
@@ -174,8 +177,8 @@ async def _hydrate_attachment(meta: dict[str, Any]) -> dict[str, Any]:
     }
     object_key = str(meta.get("objectKey") or "")
     content_sha256 = str(meta.get("sha256") or "")
-    if not object_key or not out["processable"]:
-        if not object_key and out["processable"] and out["kind"] in {"text", "image"}:
+    if not object_key:
+        if out["processable"] and out["kind"] in {"text", "image"}:
             out["processable"] = False
             out["unsupportedReason"] = "attachment object missing"
         return out
@@ -193,6 +196,20 @@ async def _hydrate_attachment(meta: dict[str, Any]) -> dict[str, Any]:
         out["processable"] = False
         out["unsupportedReason"] = "attachment object missing"
         return out
+
+    if out["kind"] == "other" and is_likely_utf8_text(data):
+        text = data.decode("utf-8", errors="replace")
+        if text.strip():
+            out["kind"] = "text"
+            out["processable"] = True
+            out["unsupportedReason"] = None
+            if len(text) > MAX_TEXT_EXTRACT_CHARS:
+                out["text"] = f"{text[:MAX_TEXT_EXTRACT_CHARS]}\n...（文档过长，已截断）"
+                out["truncated"] = True
+            else:
+                out["text"] = text
+            return out
+
     if out["kind"] == "text":
         attachment_name = str(meta.get("name") or "")
         attachment_mime = str(out["mimeType"])
@@ -214,7 +231,7 @@ async def _hydrate_attachment(meta: dict[str, Any]) -> dict[str, Any]:
                 out["text"] = text
         else:
             out["text"] = data.decode("utf-8", errors="replace")
-    elif out["kind"] == "image":
+    elif out["kind"] == "image" and out["processable"]:
         out["imageDataUrl"] = _encode_data_url(str(out["mimeType"]), data)
     return out
 
@@ -274,6 +291,22 @@ def _load_message_attachments_map(c: Any, message_ids: list[int]) -> dict[int, l
     return out
 
 
+def _unsupported_attachment_hint_lines(attachments: list[dict[str, Any]]) -> list[str]:
+    lines: list[str] = []
+    for a in attachments:
+        name = str(a.get("name") or "attachment")
+        kind = str(a.get("kind") or "other")
+        aid = str(a.get("id") or "").strip()
+        if aid:
+            lines.append(
+                f"[user attachment] {name} ({kind}, id={aid}) "
+                "— not inlined; use attachments tool to download and process."
+            )
+        else:
+            lines.append(f"[user attachment] {name} ({kind}) — not inlined.")
+    return lines
+
+
 def _compose_user_content_with_attachments(text: str, attachments: list[dict[str, Any]]) -> Any:
     clean = text.strip()
     if not attachments:
@@ -304,8 +337,8 @@ def _compose_user_content_with_attachments(text: str, attachments: list[dict[str
                     {"type": "text", "text": f"[attachment {i}] name={a.get('name')}\n{str(a.get('text') or '')}"}
                 )
         if unsupported:
-            names = ", ".join(str(a.get("name") or "attachment") for a in unsupported)
-            parts.append({"type": "text", "text": f"Additional unparseable attachments: {names}."})
+            for line in _unsupported_attachment_hint_lines(unsupported):
+                parts.append({"type": "text", "text": line})
         return parts
 
     text_parts: list[dict[str, Any]] = []
@@ -316,8 +349,8 @@ def _compose_user_content_with_attachments(text: str, attachments: list[dict[str
                 {"type": "text", "text": f"[attachment {i}] name={a.get('name')}\n{str(a.get('text') or '')}"}
             )
     if unsupported:
-        names = ", ".join(str(a.get("name") or "attachment") for a in unsupported)
-        text_parts.append({"type": "text", "text": f"User also uploaded unparseable attachments: {names}."})
+        for line in _unsupported_attachment_hint_lines(unsupported):
+            text_parts.append({"type": "text", "text": line})
     return text_parts
 
 
@@ -748,6 +781,8 @@ async def create_attachment(
         if reused is None:
             raise ValueError("attachment hash not found")
         return reused
+    if not has_payload and size_bytes > 0:
+        raise ValueError("attachment content required")
 
     attachment_id = _new_attachment_id()
     clean_name = (name or "attachment").strip() or "attachment"
@@ -755,6 +790,7 @@ async def create_attachment(
     clean_mime = str(mime_type or "").strip() or "application/octet-stream"
     payload: bytes | None = None
     stored_file_sha256 = file_hint if has_payload and file_hint else ""
+    store_as_original_file = False
 
     if file_data_base64:
         import base64
@@ -769,26 +805,21 @@ async def create_attachment(
         if len(raw) > max_bytes:
             raise ValueError(f"file exceeds attachment limit ({max_bytes} bytes)")
         stored_file_sha256 = hashlib.sha256(raw).hexdigest()
-        extracted, doc_trunc, err = await run_in_thread(
-            extract_document_text,
-            raw,
+        classified = await run_in_thread(
+            classify_uploaded_bytes,
+            data=raw,
             name=clean_name,
             mime_type=clean_mime,
         )
-        if err:
-            kind = "other"
-            processable = False
-            unsupported_reason = err
-            truncated = False
-            payload = None
-        else:
-            kind = "text"
-            processable = True
-            unsupported_reason = None
-            truncated = bool(truncated or doc_trunc)
-            text_content = extracted
-            payload = extracted.encode("utf-8")
-            clean_mime = OFFICE_EXTRACTED_MIME
+        kind = classified.kind
+        processable = classified.processable
+        payload = classified.raw
+        clean_mime = classified.mime_type
+        unsupported_reason = classified.unsupported_reason
+        truncated = bool(classified.truncated)
+        store_as_original_file = True
+        if classified.text_content is not None:
+            text_content = classified.text_content
     elif kind == "text":
         payload = (text_content or "").encode("utf-8")
         if not mime_type:
@@ -812,10 +843,41 @@ async def create_attachment(
     uploaded_new_object = False
     if payload is not None:
         content_sha256 = hashlib.sha256(payload).hexdigest()
-        if not stored_file_sha256 and kind == "image":
+        if not stored_file_sha256:
             stored_file_sha256 = content_sha256
-        store_blob = processable or kind != "image"
-        if store_blob:
+
+        if store_as_original_file:
+            object_key = file_object_key(attachment_id, name)
+
+            def _lookup_file_template() -> dict[str, Any] | None:
+                with conn_scope(load_vec=False) as c:
+                    return _find_attachment_template_by_file_sha256(c, stored_file_sha256)
+
+            template = await run_in_thread(_lookup_file_template)
+            if template and str(template.get("object_key") or ""):
+                object_key = str(template["object_key"])
+                object_etag = str(template.get("object_etag") or "")
+                log.info(
+                    "attachment_file_reused",
+                    attachment_id=attachment_id,
+                    sha256=stored_file_sha256[:12],
+                    object_key=object_key,
+                )
+            else:
+                try:
+                    uploaded = await save_attachment_file(
+                        object_key=object_key,
+                        mime_type=clean_mime,
+                        data=payload,
+                    )
+                    object_key = str(uploaded["object_key"])
+                    object_etag = str(uploaded["etag"])
+                    uploaded_new_object = not upload_was_skipped(uploaded)
+                except AttachmentStorageError as exc:
+                    raise RuntimeError(f"attachment storage upload failed: {exc}") from exc
+        else:
+            if kind == "image" and not stored_file_sha256:
+                stored_file_sha256 = content_sha256
             canonical_key = blob_object_key(content_sha256)
 
             def _lookup_existing() -> tuple[str, str] | None:
