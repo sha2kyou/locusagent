@@ -167,9 +167,16 @@ async def test_create_attachment_reuses_hash_without_payload(monkeypatch: pytest
         uploads.append(dict(kwargs))
         return {"object_key": "blobs/test", "etag": "etag", "skipped": False}
 
+    async def _fake_resolve(_object_key: str, *, content_sha256: str | None = None) -> tuple[bytes, str]:
+        return b"hey", _object_key
+
     monkeypatch.setattr(
         "agentpod_agent.core.persistence.save_attachment_bytes",
         _fake_save,
+    )
+    monkeypatch.setattr(
+        "agentpod_agent.core.persistence.resolve_attachment_bytes",
+        _fake_resolve,
     )
 
     first = await create_attachment(

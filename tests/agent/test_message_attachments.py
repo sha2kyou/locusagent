@@ -17,7 +17,7 @@ def test_build_persisted_user_message_text_includes_attachment_names() -> None:
         attachments=attachments,
         attachment_ids=["att_abc"],
     )
-    assert "[用户附件] screenshot.png (image, id=att_abc)" in text
+    assert "[user attachment] screenshot.png (image, id=att_abc)" in text
     assert "[attachment_ids:" in text
 
 

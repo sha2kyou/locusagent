@@ -29,5 +29,5 @@ def test_finalize_request_kwargs_disables_tools():
     assert kwargs["messages"][-1]["content"] == _TOOL_ROUND_LIMIT_NOTICE
 
 
-def test_tool_round_limit_fallback_is_user_visible_chinese():
-    assert "工具调用" in _TOOL_ROUND_LIMIT_FALLBACK
+def test_tool_round_limit_fallback_is_user_visible_english():
+    assert "Tool-call limit" in _TOOL_ROUND_LIMIT_FALLBACK
