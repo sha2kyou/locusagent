@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -6,31 +6,17 @@ import remarkMath from "remark-math";
 import rehypeHighlight from "rehype-highlight";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
-import {
-  Brain,
-  Check,
-  Code2,
-  Copy,
-  ExternalLink,
-  Expand,
-  Loader2,
-  WrapText,
-} from "lucide-react";
+import { Brain, Check, Copy, WrapText } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { openExternalUrl } from "@/lib/open-external";
 import { normalizeLatexInput } from "@/lib/latex-normalize";
-import { buildHtmlRenderSrcDoc } from "@/lib/html-render-doc";
 import { CollapsibleMetaBlock } from "./CollapsibleMetaBlock";
 
 interface Segment {
-  kind: "md" | "thinking" | "html" | "html-pending";
+  kind: "md" | "thinking";
   content: string;
 }
 
-const HTML_OPEN = "[HTML_RENDER]";
-
 const THINKING_RE = /<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi;
-const HTML_RE = /\[HTML_RENDER\]([\s\S]*?)\[\/HTML_RENDER\]/gi;
 
 /** 切出 thinking 折叠块 */
 function splitThinking(input: string): Segment[] {
@@ -47,40 +33,7 @@ function splitThinking(input: string): Segment[] {
   return out;
 }
 
-/** 切出已闭合的 HTML 块，并对流式中未闭合的开标记产出占位 */
-function splitHtml(input: string): Segment[] {
-  const out: Segment[] = [];
-  let last = 0;
-  HTML_RE.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = HTML_RE.exec(input)) !== null) {
-    if (m.index > last) out.push({ kind: "md", content: input.slice(last, m.index) });
-    out.push({ kind: "html", content: m[1] });
-    last = m.index + m[0].length;
-  }
-  const tail = input.slice(last);
-  const openIdx = tail.indexOf(HTML_OPEN);
-  if (openIdx >= 0) {
-    // 仅有开标记、尚无闭标记：流式生成中 → 占位
-    if (openIdx > 0) out.push({ kind: "md", content: tail.slice(0, openIdx) });
-    out.push({ kind: "html-pending", content: "" });
-  } else if (tail.length) {
-    out.push({ kind: "md", content: tail });
-  }
-  return out;
-}
-
-/** 把文本切成普通 markdown / thinking 折叠块 / HTML 渲染块 */
-function segment(text: string): Segment[] {
-  const segs: Segment[] = [];
-  for (const s of splitThinking(text)) {
-    if (s.kind === "md") segs.push(...splitHtml(s.content));
-    else segs.push(s);
-  }
-  return segs.filter((s) => s.content.trim().length > 0 || s.kind !== "md");
-}
-
-/** 轻量字符串 hash，用作渲染 key，避免段顺序变化导致 iframe 重载 */
+/** 轻量字符串 hash，用作渲染 key */
 function hashString(s: string): string {
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
@@ -88,7 +41,7 @@ function hashString(s: string): string {
 }
 
 export const Markdown = memo(function Markdown({ text, enableMath = true }: { text: string; enableMath?: boolean }) {
-  const segs = segment(text);
+  const segs = splitThinking(text).filter((s) => s.content.trim().length > 0 || s.kind !== "md");
   return (
     <div className="apod-prose">
       {segs.map((s, i) => {
@@ -100,8 +53,6 @@ export const Markdown = memo(function Markdown({ text, enableMath = true }: { te
               content={s.content}
             />
           );
-        if (s.kind === "html") return <HtmlRender key={`h-${hashString(s.content)}`} html={s.content} />;
-        if (s.kind === "html-pending") return <HtmlPending key="h-pending" />;
         return <MarkdownBlock key={`m-${i}`} text={s.content} enableMath={enableMath} />;
       })}
     </div>
@@ -142,7 +93,7 @@ function MarkdownBlock({ text, enableMath = true }: { text: string; enableMath?:
   );
 }
 
-/** 无 thinking/HTML 分段，用于用户气泡等纯 Markdown+公式场景 */
+/** 无 thinking 分段，用于用户气泡等纯 Markdown+公式场景 */
 export function ProseMarkdown({
   text,
   className,
@@ -251,133 +202,5 @@ export function ThinkingBlock({
         <MarkdownBlock text={content} />
       </div>
     </CollapsibleMetaBlock>
-  );
-}
-
-function HtmlPending() {
-  const { t } = useTranslation();
-  return (
-    <div className="my-3 overflow-hidden rounded-lg border border-border">
-      <div className="flex items-center gap-2 border-b border-border bg-surface-2/60 px-3 py-1.5 text-xs text-muted-foreground">
-        <Loader2 className="size-3.5 animate-spin" /> {t("chat.markdown.vizGenerating")}
-      </div>
-      <div className="space-y-2 p-4">
-        <div className="h-3 w-1/3 animate-pulse rounded bg-muted-foreground/15" />
-        <div className="h-40 w-full animate-pulse rounded bg-muted-foreground/10" />
-      </div>
-    </div>
-  );
-}
-
-export function HtmlRender({ html }: { html: string }) {
-  const { t } = useTranslation();
-  const ref = useRef<HTMLIFrameElement>(null);
-  const [copied, setCopied] = useState(false);
-  const [height, setHeight] = useState(320);
-  const [diag, setDiag] = useState<string | null>(null);
-
-  const doc = useMemo(
-    () => buildHtmlRenderSrcDoc(html, window.location.origin),
-    [html],
-  );
-
-  useEffect(() => {
-    setDiag(null);
-  }, [html]);
-
-  useEffect(() => {
-    const onMsg = (e: MessageEvent) => {
-      if (e.source !== ref.current?.contentWindow) return;
-      const data = e.data as {
-        __apodHeight?: number;
-        __apodDiag?: number;
-        phase?: string;
-        message?: string;
-        echarts?: string;
-        canvas?: number;
-        chartEl?: boolean;
-        bodyH?: number;
-      } | null;
-      if (!data) return;
-      if (typeof data.__apodHeight === "number" && data.__apodHeight > 0) {
-        const max = Math.round(window.innerHeight * 0.8);
-        setHeight(Math.min(Math.max(Math.ceil(data.__apodHeight), 160), max));
-      }
-      if (data.__apodDiag) {
-        const line = `[${data.phase}] echarts=${data.echarts ?? "?"} canvas=${data.canvas ?? "?"} chartEl=${data.chartEl ?? "?"}${data.message ? ` | ${data.message}` : ""}`;
-        console.warn("[apod-html-render]", line);
-        if (data.phase === "error" || data.phase === "reject" || data.phase === "timeout") {
-          setDiag(line);
-        } else if (data.phase === "snap" && data.echarts === "undefined" && (data.canvas ?? 0) === 0) {
-          setDiag(line);
-        }
-      }
-    };
-    window.addEventListener("message", onMsg);
-    return () => window.removeEventListener("message", onMsg);
-  }, []);
-
-  const copy = () => {
-    void navigator.clipboard.writeText(html);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
-  const openNew = () => {
-    const doc = buildHtmlRenderSrcDoc(html, window.location.origin);
-    const url = URL.createObjectURL(new Blob([doc], { type: "text/html;charset=utf-8" }));
-    void openExternalUrl(url);
-    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  };
-  const fullscreen = () => void ref.current?.requestFullscreen?.();
-
-  if (!html.trim()) {
-    return (
-      <div className="my-3 rounded-lg border border-border bg-surface/40 px-3 py-4 text-center text-xs text-muted-foreground">
-        {t("chat.markdown.vizEmpty")}
-      </div>
-    );
-  }
-
-  const tools: Array<{ key: string; icon: ReactNode; label: string; onClick: () => void }> = [
-    { key: "full", icon: <Expand className="size-3.5" />, label: t("chat.markdown.fullscreen"), onClick: fullscreen },
-    { key: "open", icon: <ExternalLink className="size-3.5" />, label: t("chat.markdown.openInNewWindow"), onClick: openNew },
-    { key: "copy", icon: copied ? <Check className="size-3.5 text-success" /> : <Code2 className="size-3.5" />, label: t("chat.markdown.copySource"), onClick: copy },
-  ];
-
-  return (
-    <div className="my-3 overflow-hidden rounded-lg border border-border">
-      <div className="flex items-center justify-between border-b border-border bg-surface-2/60 px-3 py-1.5 text-xs text-muted-foreground">
-        <span>{t("chat.markdown.htmlPreview")}</span>
-        <div className="flex items-center gap-0.5">
-          {tools.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={t.onClick}
-              className="inline-flex size-6 items-center justify-center rounded transition hover:text-foreground"
-              aria-label={t.label}
-              title={t.label}
-            >
-              {t.icon}
-            </button>
-          ))}
-        </div>
-      </div>
-      <iframe
-        ref={ref}
-        title="html-render"
-        sandbox="allow-scripts"
-        referrerPolicy="no-referrer"
-        allowFullScreen
-        style={{ height }}
-        className="w-full bg-white transition-[height] duration-150"
-        srcDoc={doc}
-      />
-      {diag ? (
-        <div className="border-t border-destructive/30 bg-destructive/5 px-3 py-2 font-mono text-[11px] text-destructive">
-          {diag}
-        </div>
-      ) : null}
-    </div>
   );
 }

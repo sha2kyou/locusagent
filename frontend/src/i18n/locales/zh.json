@@ -351,13 +351,7 @@
       "wrapOn": "自动换行",
       "wrapOff": "取消换行",
       "copyCode": "复制代码",
-      "copy": "复制",
-      "vizGenerating": "正在生成可视化…",
-      "vizEmpty": "无可渲染内容",
-      "fullscreen": "全屏",
-      "openInNewWindow": "新窗口打开",
-      "copySource": "复制源码",
-      "htmlPreview": "HTML 预览"
+      "copy": "复制"
     },
     "compression": {
       "header": "【自动上下文压缩】",

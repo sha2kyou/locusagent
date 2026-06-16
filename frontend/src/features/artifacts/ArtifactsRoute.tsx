@@ -39,7 +39,6 @@ const LazyArtifactBody = lazy(() =>
 const EXPORT_FORMAT: Record<ArtifactType, { ext: string; mime: string }> = {
   markdown: { ext: "md", mime: "text/markdown" },
   latex: { ext: "md", mime: "text/markdown" },
-  html: { ext: "html", mime: "text/html" },
   text: { ext: "txt", mime: "text/plain" },
 };
 
@@ -333,13 +332,11 @@ function ArtifactsPage({ categoryId }: { categoryId?: string }) {
     ? currentCategory?.description?.trim() || t("artifacts.subtitle.category")
     : t("artifacts.subtitle.default");
   const exportOriginalLabel = selected
-    ? selected.type === "html"
-      ? "HTML"
-      : selected.type === "latex"
-        ? "LaTeX"
-        : selected.type === "markdown"
-          ? "Markdown"
-          : "Text"
+    ? selected.type === "latex"
+      ? "LaTeX"
+      : selected.type === "markdown"
+        ? "Markdown"
+        : "Text"
     : t("artifacts.export.originalType");
 
   const catName = (id: string | null) =>

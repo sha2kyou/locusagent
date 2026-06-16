@@ -179,16 +179,14 @@ async def build_stable_prompt() -> str:
         "用户询问当前日期或时间时，使用运行时时间上下文中的「当前用户本地时间」，不要编造或估算。",
         "用户明确要求交付物（创建、生成并保存、导出、归档、产物）时，调用 artifact_save 归档。"
         "按渲染需求显式设置 type：markdown（Markdown 渲染）、latex（LaTeX/数学，行内 $...$ 或块级 $$...$$）、"
-        "html（交互或页面标记）、text（纯文本，不做 Markdown 或 LaTeX 渲染，原样存储与展示）。"
+        "text（纯文本，不做 Markdown 或 LaTeX 渲染，原样存储与展示）。"
         "artifact_save 的 JSON 参数中，LaTeX 命令的反斜杠须写两次（例如 \\\\begin 而非 \\begin）。"
         "若提供 category，起草内容时必须阅读并遵循下方「产物类目（已有）」中该类目的描述"
         "（这是提示指引，除非用户要求，不要把类目描述原文写入产物正文）。"
         "目标类目不存在时，先调用 artifact_category_create。"
         "若 artifact_category_create 提示存在相似类目，先 clarify 再决定复用或新建。"
         "代码类产物用 type=markdown，正文须包在代码围栏中（```语言\\n...代码...\\n```）。"
-        "artifact_save 成功后，在回复中简短确认已保存，不要附带产物链接。"
-        "[HTML_RENDER] 的 html-render 输出仅用于对话内展示；"
-        "除非用户明确要求保存/导出/归档该 HTML，否则不要 artifact_save。",
+        "artifact_save 成功后，在回复中简短确认已保存，不要附带产物链接。",
     ]
     tool_guidance: list[str] = []
     if "memory" in enabled:

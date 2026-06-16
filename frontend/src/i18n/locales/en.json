@@ -351,13 +351,7 @@
       "wrapOn": "Wrap lines",
       "wrapOff": "No wrap",
       "copyCode": "Copy code",
-      "copy": "Copy",
-      "vizGenerating": "Generating visualization…",
-      "vizEmpty": "Nothing to render",
-      "fullscreen": "Fullscreen",
-      "openInNewWindow": "Open in new window",
-      "copySource": "Copy source",
-      "htmlPreview": "HTML preview"
+      "copy": "Copy"
     },
     "compression": {
       "header": "[Auto context compression]",

@@ -26,13 +26,12 @@ from ..artifacts import (
 from .args import pick_str
 from .base import Tool, ToolError, ToolResult, register_builtin
 
-_HTML_RENDER_RE = re.compile(r"\[HTML_RENDER\]([\s\S]*?)\[/HTML_RENDER\]", re.IGNORECASE)
 _LATEX_RE = re.compile(r"\$\$[\s\S]+?\$\$|\$[^$\n]+\$")
 _CATEGORY_SIMILARITY_THRESHOLD = 0.82
 
 
 def _prepare_artifact_content(content: str, art_type: str) -> str:
-    """text/html 原样存储；latex/markdown 才做 LaTeX 转义修复。"""
+    """text 原样存储；latex/markdown 才做 LaTeX 转义修复。"""
     if art_type in ("latex", "markdown"):
         return normalize_latex_input(content)
     return content
@@ -136,11 +135,8 @@ async def _artifact_save(args: dict[str, Any]) -> ToolResult:
     if not content.strip():
         raise ToolError("content is required")
 
-    # content 可带 [HTML_RENDER] 包裹：剥离标记后按 html 类型保存
-    m = _HTML_RENDER_RE.search(content)
-    if m:
-        content = m.group(1).strip()
-        art_type = "html"
+    if art_type == "html":
+        raise ToolError("type=html is not supported; use markdown or text")
 
     content = _prepare_artifact_content(content, art_type)
 
@@ -221,9 +217,6 @@ async def _artifact_update(args: dict[str, Any]) -> ToolResult:
         content = str(args.get("content", ""))
         if not content.strip():
             raise ToolError("content must be non-empty when provided")
-        m = _HTML_RENDER_RE.search(content)
-        if m:
-            content = m.group(1).strip()
         existing = await get_artifact(artifact_id)
         art_type = str((existing or {}).get("type") or "markdown").strip().lower() or "markdown"
         content = _prepare_artifact_content(content, art_type)
@@ -410,10 +403,10 @@ register_builtin(
                 "content": {"type": "string", "description": "产物正文内容（将被持久化保存）。"},
                 "type": {
                     "type": "string",
-                    "enum": ["markdown", "latex", "html", "text"],
+                    "enum": ["markdown", "latex", "text"],
                     "description": (
                         "渲染类型：markdown=Markdown；latex=LaTeX 公式（行内 $...$，块级 $$...$$）；"
-                        "html=HTML 页面；text=纯文本（不渲染 Markdown/LaTeX）。"
+                        "text=纯文本（不渲染 Markdown/LaTeX）。"
                         "markdown/text 保存时不校验 $ 符号；需公式渲染时用 latex。"
                         "JSON 参数里反斜杠须双重转义（\\\\begin）。"
                     ),

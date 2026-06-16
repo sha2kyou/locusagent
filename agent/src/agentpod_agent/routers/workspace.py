@@ -712,7 +712,7 @@ class CategoryUpdateIn(BaseModel):
 class ArtifactIn(BaseModel):
     title: str
     content: str
-    type: Literal["markdown", "latex", "html", "text"] = "markdown"
+    type: Literal["markdown", "latex", "text"] = "markdown"
     category_id: str
 
 

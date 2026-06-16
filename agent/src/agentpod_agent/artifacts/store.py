@@ -147,7 +147,7 @@ async def delete_category(category_id: str) -> bool:
     return await run_in_thread(_do)
 
 
-_ALLOWED_TYPES = {"html", "latex", "markdown", "text"}
+_ALLOWED_TYPES = {"latex", "markdown", "text"}
 
 
 def _normalize_type(value: str | None) -> str:
