@@ -15,15 +15,27 @@ pub struct DesktopPrefs {
 
 pub struct PrefsState(pub Mutex<DesktopPrefs>);
 
+fn default_agentpod_home() -> PathBuf {
+    #[cfg(windows)]
+    {
+        std::env::var("USERPROFILE")
+            .map(PathBuf::from)
+            .unwrap_or_default()
+            .join(".agentpod")
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_default()
+            .join(".agentpod")
+    }
+}
+
 fn prefs_file() -> PathBuf {
     let home = std::env::var("AGENTPOD_HOME")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            std::env::var("HOME")
-                .map(PathBuf::from)
-                .unwrap_or_default()
-                .join(".agentpod")
-        });
+        .unwrap_or_else(default_agentpod_home);
     home.join("desktop.prefs.json")
 }
 

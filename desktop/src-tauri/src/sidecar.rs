@@ -19,15 +19,27 @@ pub fn backend_url() -> String {
     format!("http://127.0.0.1:{BACKEND_PORT}")
 }
 
+fn default_agentpod_home() -> PathBuf {
+    #[cfg(windows)]
+    {
+        std::env::var("USERPROFILE")
+            .map(PathBuf::from)
+            .unwrap_or_default()
+            .join(".agentpod")
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_default()
+            .join(".agentpod")
+    }
+}
+
 fn agentpod_home() -> PathBuf {
     std::env::var("AGENTPOD_HOME")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            std::env::var("HOME")
-                .map(PathBuf::from)
-                .unwrap_or_default()
-                .join(".agentpod")
-        })
+        .unwrap_or_else(default_agentpod_home)
 }
 
 fn backend_log_path() -> PathBuf {
@@ -74,11 +86,21 @@ fn repo_root() -> PathBuf {
 }
 
 fn bundled_python(app: &AppHandle) -> Option<PathBuf> {
-    for name in ["python3.11", "python3", "python"] {
-        let Ok(path) = app
-            .path()
-            .resolve(format!("sidecar-venv/bin/{name}"), BaseDirectory::Resource)
-        else {
+    #[cfg(windows)]
+    let rel_paths = [
+        "sidecar-venv/python.exe",
+        "sidecar-venv/Scripts/python.exe",
+        "sidecar-venv/python3.exe",
+    ];
+    #[cfg(not(windows))]
+    let rel_paths = [
+        "sidecar-venv/bin/python3.11",
+        "sidecar-venv/bin/python3",
+        "sidecar-venv/bin/python",
+    ];
+
+    for rel in rel_paths {
+        let Ok(path) = app.path().resolve(rel, BaseDirectory::Resource) else {
             continue;
         };
         if path.is_file() {
@@ -109,6 +131,9 @@ fn dev_python(root: &Path) -> Option<PathBuf> {
             return Some(path);
         }
     }
+    #[cfg(windows)]
+    let venv_py = root.join("sidecar/.venv/Scripts/python.exe");
+    #[cfg(not(windows))]
     let venv_py = root.join("sidecar/.venv/bin/python");
     if venv_py.is_file() {
         return Some(venv_py);
@@ -124,7 +149,11 @@ fn python_executable(app: &AppHandle) -> (PathBuf, Option<PathBuf>, Option<PathB
     if let Some(py) = dev_python(&root) {
         return (py, Some(root.join("sidecar")), None);
     }
-    (PathBuf::from("python3"), Some(root.join("sidecar")), None)
+    #[cfg(windows)]
+    let fallback = PathBuf::from("python");
+    #[cfg(not(windows))]
+    let fallback = PathBuf::from("python3");
+    (fallback, Some(root.join("sidecar")), None)
 }
 
 pub fn spawn_backend(app: &AppHandle) -> std::io::Result<Child> {

@@ -20,12 +20,15 @@ static BACKEND_CHILD: Mutex<Option<std::process::Child>> = Mutex::new(None);
 
 pub fn run() {
     tauri::Builder::default()
-        .plugin(
-            tauri_plugin_autostart::Builder::new()
-                .app_name("AgentPod")
-                .macos_launcher(tauri_plugin_autostart::MacosLauncher::AppleScript)
-                .build(),
-        )
+        .plugin({
+            let mut autostart = tauri_plugin_autostart::Builder::new().app_name("AgentPod");
+            #[cfg(target_os = "macos")]
+            {
+                autostart = autostart
+                    .macos_launcher(tauri_plugin_autostart::MacosLauncher::AppleScript);
+            }
+            autostart.build()
+        })
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())

@@ -31,14 +31,26 @@ pub fn create_main_window(app: &App) -> tauri::Result<()> {
     let handle = app.handle().clone();
     let app_url: url::Url = app_origin().parse().expect("app url");
 
-    WebviewWindowBuilder::new(app, "main", WebviewUrl::External(app_url))
+    let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(app_url))
         .title("AgentPod")
         .inner_size(1280.0, 840.0)
-        .resizable(true)
-        .decorations(true)
-        .title_bar_style(TitleBarStyle::Overlay)
-        .hidden_title(true)
-        .traffic_light_position(LogicalPosition::new(16.0, 20.0))
+        .resizable(true);
+
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder
+            .decorations(true)
+            .title_bar_style(TitleBarStyle::Overlay)
+            .hidden_title(true)
+            .traffic_light_position(LogicalPosition::new(16.0, 20.0));
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        builder = builder.decorations(true);
+    }
+
+    builder
         .on_navigation({
             let handle = handle.clone();
             move |url| {

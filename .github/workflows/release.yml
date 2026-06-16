@@ -39,23 +39,71 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: AgentPod-${{ github.ref_name }}
+          name: AgentPod-${{ github.ref_name }}-macos
           path: dist/AgentPod_*.dmg
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Windows app
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install standalone Python 3.11
+        run: uv python install 3.11
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            desktop/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Build desktop app
+        shell: pwsh
+        run: ./scripts/build-desktop-windows.ps1 -FreshVenv
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: AgentPod-${{ github.ref_name }}-windows
+          path: dist/AgentPod_*_windows-x64.exe
           if-no-files-found: error
 
   release:
     name: Release
-    needs: build-macos
+    needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Download artifact
+      - name: Download macOS artifact
         uses: actions/download-artifact@v8
         with:
-          name: AgentPod-${{ github.ref_name }}
+          name: AgentPod-${{ github.ref_name }}-macos
+          path: artifacts/macos
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: AgentPod-${{ github.ref_name }}-windows
+          path: artifacts/windows
 
       - name: Generate release notes
         uses: orhun/git-cliff-action@v4
@@ -68,7 +116,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          files: AgentPod_*.dmg
+          files: |
+            artifacts/macos/AgentPod_*.dmg
+            artifacts/windows/AgentPod_*_windows-x64.exe
           body_path: RELEASE_NOTES.md
           fail_on_unmatched_files: true
 
@@ -93,7 +143,7 @@ jobs:
         if: ${{ steps.token.outputs.run_update == 'true' }}
         uses: actions/download-artifact@v8
         with:
-          name: AgentPod-${{ github.ref_name }}
+          name: AgentPod-${{ github.ref_name }}-macos
 
       - name: Compute version and SHA256
         if: ${{ steps.token.outputs.run_update == 'true' }}
