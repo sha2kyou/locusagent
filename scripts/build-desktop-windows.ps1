@@ -67,6 +67,12 @@ function Setup-BundleResources {
         Write-Host "==> copy standalone python from $standaloneRoot"
         New-Item -ItemType Directory -Force -Path $BundleVenv | Out-Null
         Copy-Item -Path (Join-Path $standaloneRoot "*") -Destination $BundleVenv -Recurse -Force
+        foreach ($required in @("python.exe", "Lib", "python311.dll")) {
+            $path = Join-Path $BundleVenv $required
+            if (-not (Test-Path $path)) {
+                throw "bundled python incomplete after copy, missing: $required"
+            }
+        }
     } else {
         Write-Host "==> refresh bundled sidecar python (incremental)"
     }
