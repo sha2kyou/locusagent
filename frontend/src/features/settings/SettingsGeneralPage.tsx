@@ -127,6 +127,19 @@ export function SettingsGeneralPage() {
         />
       </SettingsSection>
 
+      <SettingsSection
+        title={t("settings.general.theme.title")}
+        description={t("settings.general.theme.description")}
+      >
+        <SegmentControl
+          value={themePreference}
+          onChange={setThemePreference}
+          options={themeOptions}
+          className="w-full max-w-md"
+          optionClassName="flex-1 text-center"
+        />
+      </SettingsSection>
+
       {desktopPrefsAvailable && (
         <SettingsSection
           title={t("settings.general.menubar.title")}
@@ -174,19 +187,6 @@ export function SettingsGeneralPage() {
           </div>
         </SettingsSection>
       )}
-
-      <SettingsSection
-        title={t("settings.general.theme.title")}
-        description={t("settings.general.theme.description")}
-      >
-        <SegmentControl
-          value={themePreference}
-          onChange={setThemePreference}
-          options={themeOptions}
-          className="w-full max-w-md"
-          optionClassName="flex-1 text-center"
-        />
-      </SettingsSection>
 
       <SettingsSection title={t("settings.general.timezone.label")}>
         <div className="grid max-w-md gap-3">
