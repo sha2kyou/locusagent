@@ -56,16 +56,18 @@ triggers:
 
 ### 1）优先自包含
 - 优先内联 CSS 与最小必要 JS。
-- 非用户明确要求时，不依赖项目本地静态资源。
-- 需要外部库时优先使用固定版本 CDN。
+- ECharts 由平台从本地静态资源自动注入，**不要在 HTML 中写 `<script src="...echarts...">`**。
+- 非 ECharts 的外部库：仅在用户明确要求时使用，并优先固定版本 CDN。
 - HTML 渲染背景色必须为纯白色（`#ffffff`），不得使用深色或透明背景。
 
 ### 2）图表默认使用 ECharts
 
 用户请求图表时，若未指定其他库，默认使用 ECharts。
 
-默认 CDN：
-- `https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js`
+平台约定：
+- 版本：`5.5.1`（打包在应用内 `public/vendor/echarts-5.5.1.min.js`）
+- 前端渲染 `[HTML_RENDER]` 时会自动注入脚本；Agent 只需直接调用 `echarts.init(...)` 等 API
+- 不要手写 ECharts `<script>` 标签（含历史 CDN 写法也会被剥离）
 
 图表容器约定：
 - 设定最小高度（`>= 320px`）
@@ -133,6 +135,6 @@ triggers:
 完成前确认：
 - 标记协议正确。
 - HTML 完整、可独立运行。
-- 使用 ECharts 时固定版本。
+- 使用 ECharts 时不要包含 script 标签（由平台注入）。
 - 不含敏感信息与危险行为。
 - 在窄宽度对话区仍可读。

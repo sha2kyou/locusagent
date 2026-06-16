@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { openExternalUrl } from "@/lib/open-external";
 import { normalizeLatexInput } from "@/lib/latex-normalize";
+import { buildHtmlRenderSrcDoc } from "@/lib/html-render-doc";
 import { CollapsibleMetaBlock } from "./CollapsibleMetaBlock";
 
 interface Segment {
@@ -253,30 +254,6 @@ export function ThinkingBlock({
   );
 }
 
-// 沙箱内容安全策略：阻断非 https 资源与跨源 same-origin 访问，inline 用于内联 echarts 初始化
-const IFRAME_CSP =
-  "default-src 'none'; " +
-  "script-src 'unsafe-inline' 'unsafe-eval' https:; " +
-  "style-src 'unsafe-inline' https:; " +
-  "img-src data: blob: https:; " +
-  "font-src data: https:; " +
-  "connect-src https:; " +
-  "base-uri 'none'; form-action 'none'";
-
-// 高度上报脚本：sandbox 无 allow-same-origin，父窗口通过 postMessage 读取内容高度
-const HEIGHT_REPORTER =
-  "<scr" +
-  "ipt>(function(){function r(){try{var h=Math.max(document.documentElement.scrollHeight,document.body?document.body.scrollHeight:0);parent.postMessage({__apodHeight:h},'*')}catch(e){}}window.addEventListener('load',r);window.addEventListener('resize',r);if(window.ResizeObserver){try{new ResizeObserver(r).observe(document.documentElement)}catch(e){}}setTimeout(r,200);setTimeout(r,800)})();</scr" +
-  "ipt>";
-
-function buildSrcDoc(html: string): string {
-  const meta = `<meta http-equiv="Content-Security-Policy" content="${IFRAME_CSP}">`;
-  let out = html;
-  out = /<\/head>/i.test(out) ? out.replace(/<\/head>/i, meta + "</head>") : meta + out;
-  out = /<\/body>/i.test(out) ? out.replace(/<\/body>/i, HEIGHT_REPORTER + "</body>") : out + HEIGHT_REPORTER;
-  return out;
-}
-
 function HtmlPending() {
   const { t } = useTranslation();
   return (
@@ -298,7 +275,10 @@ export function HtmlRender({ html }: { html: string }) {
   const [copied, setCopied] = useState(false);
   const [height, setHeight] = useState(320);
 
-  const doc = useMemo(() => buildSrcDoc(html), [html]);
+  const doc = useMemo(
+    () => buildHtmlRenderSrcDoc(html, window.location.origin),
+    [html],
+  );
 
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
@@ -319,8 +299,10 @@ export function HtmlRender({ html }: { html: string }) {
     setTimeout(() => setCopied(false), 1500);
   };
   const openNew = () => {
-    const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
-    void openExternalUrl(dataUrl);
+    const doc = buildHtmlRenderSrcDoc(html, window.location.origin);
+    const url = URL.createObjectURL(new Blob([doc], { type: "text/html;charset=utf-8" }));
+    void openExternalUrl(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
   const fullscreen = () => void ref.current?.requestFullscreen?.();
 

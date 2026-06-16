@@ -34,6 +34,7 @@ fn default_agentpod_home() -> PathBuf {
 
 fn prefs_file() -> PathBuf {
     let home = std::env::var("AGENTPOD_HOME")
+        .ok()
         .map(PathBuf::from)
         .unwrap_or_else(default_agentpod_home);
     home.join("desktop.prefs.json")
