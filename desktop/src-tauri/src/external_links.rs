@@ -1,9 +1,11 @@
 //! 拦截 webview 内外链，统一在系统默认浏览器打开。
 
 use tauri::{
-    App, LogicalPosition, TitleBarStyle, WebviewUrl,
+    App, WebviewUrl,
     webview::{NewWindowResponse, WebviewWindowBuilder},
 };
+#[cfg(target_os = "macos")]
+use tauri::{LogicalPosition, TitleBarStyle};
 use tauri_plugin_opener::OpenerExt;
 
 use crate::sidecar;

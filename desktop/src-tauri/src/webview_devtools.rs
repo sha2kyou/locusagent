@@ -8,24 +8,27 @@ pub fn initial_webview_devtools_enabled() -> bool {
     app_settings::devtools_enabled()
 }
 
+#[cfg(target_os = "macos")]
 fn set_webview_inspector_enabled(window: &WebviewWindow, enabled: bool) -> Result<(), String> {
     window
         .with_webview(move |platform| {
-            #[cfg(target_os = "macos")]
-            {
-                use objc2_foundation::{ns_string, NSNumber, NSObjectNSKeyValueCoding};
-                use objc2_web_kit::WKWebView;
+            use objc2_foundation::{ns_string, NSNumber, NSObjectNSKeyValueCoding};
+            use objc2_web_kit::WKWebView;
 
-                unsafe {
-                    let view: &WKWebView = &*platform.inner().cast();
-                    view.setInspectable(enabled);
-                    let prefs = view.configuration().preferences();
-                    let value = NSNumber::new_bool(enabled);
-                    prefs.setValue_forKey(Some(&value), ns_string!("developerExtrasEnabled"));
-                }
+            unsafe {
+                let view: &WKWebView = &*platform.inner().cast();
+                view.setInspectable(enabled);
+                let prefs = view.configuration().preferences();
+                let value = NSNumber::new_bool(enabled);
+                prefs.setValue_forKey(Some(&value), ns_string!("developerExtrasEnabled"));
             }
         })
         .map_err(|e| e.to_string())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn set_webview_inspector_enabled(_window: &WebviewWindow, _enabled: bool) -> Result<(), String> {
+    Ok(())
 }
 
 pub fn sync_devtools_runtime(app: &AppHandle) -> Result<(), String> {

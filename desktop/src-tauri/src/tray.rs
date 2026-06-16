@@ -24,7 +24,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     let menu = Menu::with_items(app, &[&show, &hide, &quit]).map_err(|e| e.to_string())?;
 
-    let builder = TrayIconBuilder::new()
+    let mut builder = TrayIconBuilder::new()
         .menu(&menu)
         .tooltip("AgentPod")
         .show_menu_on_left_click(false);
@@ -40,7 +40,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), String> {
     }
 
     let app_menu = app.clone();
-    let tray = builder
+    let _tray = builder
         .on_menu_event(move |_tray, event| match event.id().as_ref() {
             MENU_SHOW => show_main_window(&app_menu),
             MENU_HIDE => hide_main_window(&app_menu),
@@ -63,7 +63,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
 
     #[cfg(target_os = "macos")]
-    menu_bar_icon::apply_menu_bar_icon(&tray)?;
+    menu_bar_icon::apply_menu_bar_icon(&_tray)?;
 
     Ok(())
 }
