@@ -12,6 +12,19 @@ $Version = (Get-Content VERSION -Raw).Trim()
 $BundleRoot = Join-Path $RootDir "desktop/src-tauri/resources"
 $BundleVenv = Join-Path $BundleRoot "sidecar-venv"
 
+function Assert-LastExitCode {
+    param([string]$Step)
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Step failed with exit code $LASTEXITCODE"
+    }
+}
+
+function Remove-ExternallyManagedMarker {
+    param([string]$Root)
+    Get-ChildItem -Path $Root -Recurse -File -Filter "EXTERNALLY-MANAGED" -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+}
+
 function Setup-BundleResources {
     param([bool]$Fresh)
 
@@ -36,13 +49,17 @@ function Setup-BundleResources {
 
     $py = Join-Path $BundleVenv "python.exe"
 
+    Remove-ExternallyManagedMarker -Root $BundleVenv
+
     & $py -m ensurepip --upgrade 2>$null
     & $py -m pip install -U pip
+    Assert-LastExitCode "pip upgrade"
     & $py -m pip install --no-cache-dir `
         (Join-Path $RootDir "shared") `
         (Join-Path $RootDir "host") `
         (Join-Path $RootDir "agent") `
         (Join-Path $RootDir "sidecar")
+    Assert-LastExitCode "pip install sidecar packages"
 
     Write-Host "==> prune bundle python (drop pip tooling, bytecode cache)"
     & $py -m pip uninstall -y pip setuptools wheel 2>$null
@@ -52,6 +69,7 @@ function Setup-BundleResources {
 
     Write-Host "==> verify bundled sidecar import"
     & $py -c "import agentpod, agentpod_host, agentpod_agent, agentpod_shared"
+    Assert-LastExitCode "bundled sidecar import"
 
     Write-Host "==> copy shared-skills into bundle resources"
     $skillsDest = Join-Path $BundleRoot "shared-skills"
