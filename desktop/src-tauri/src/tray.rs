@@ -24,20 +24,20 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     let menu = Menu::with_items(app, &[&show, &hide, &quit]).map_err(|e| e.to_string())?;
 
-    let mut builder = TrayIconBuilder::new()
+    let builder = TrayIconBuilder::new()
         .menu(&menu)
         .tooltip("AgentPod")
         .show_menu_on_left_click(false);
 
     // 非 macOS 仍用应用图标；macOS 菜单栏图标单独用 SF Symbol（见 menu_bar_icon.rs）。
     #[cfg(not(target_os = "macos"))]
-    {
+    let builder = {
         let icon = app
             .default_window_icon()
             .cloned()
             .ok_or_else(|| "application icon missing".to_string())?;
-        builder = builder.icon(icon);
-    }
+        builder.icon(icon)
+    };
 
     let app_menu = app.clone();
     let _tray = builder
