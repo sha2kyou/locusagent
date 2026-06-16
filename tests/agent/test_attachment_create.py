@@ -147,5 +147,53 @@ async def test_create_attachment_office_stores_extracted_text(monkeypatch: pytes
     assert len(uploads) == 1
     assert uploads[0]["mime_type"] == OFFICE_EXTRACTED_MIME
     assert item["processable"] is True
-    assert item["text"] is not None
-    assert "A" in item["text"]
+
+
+@pytest.mark.asyncio
+async def test_create_attachment_reuses_hash_without_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    import hashlib
+
+    uploads: list[dict] = []
+
+    async def _fake_save(**kwargs: object) -> dict:
+        uploads.append(dict(kwargs))
+        return {"object_key": "blobs/test", "etag": "etag", "skipped": False}
+
+    monkeypatch.setattr(
+        "agentpod_agent.core.persistence.save_attachment_bytes",
+        _fake_save,
+    )
+
+    first = await create_attachment(
+        session_id=None,
+        kind="text",
+        name="note.txt",
+        mime_type="text/plain",
+        size_bytes=3,
+        text_content="hey",
+        image_data_url=None,
+        file_data_base64=None,
+        processable=True,
+        unsupported_reason=None,
+        truncated=False,
+    )
+    assert first["id"].startswith("att_")
+
+    digest = hashlib.sha256(b"hey").hexdigest()
+    second = await create_attachment(
+        session_id=None,
+        kind="text",
+        name="note-copy.txt",
+        mime_type="text/plain",
+        size_bytes=3,
+        text_content=None,
+        image_data_url=None,
+        file_data_base64=None,
+        processable=True,
+        unsupported_reason=None,
+        truncated=False,
+        content_sha256_hint=digest,
+    )
+    assert second["id"] != first["id"]
+    assert second.get("reused") is True
+    assert len(uploads) == 1

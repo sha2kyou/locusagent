@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS attachments (
 CREATE INDEX IF NOT EXISTS idx_attachments_session ON attachments(session_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_attachments_sha256 ON attachments(sha256, kind);
 
+
 CREATE TABLE IF NOT EXISTS message_attachments (
     message_id       INTEGER NOT NULL,
     attachment_id    TEXT NOT NULL,
@@ -388,6 +389,12 @@ def _ensure_sessions_hidden_column(c: sqlite3.Connection) -> None:
         log.info("sessions_hidden_column_added")
 
 
+def _ensure_attachments_file_sha256_column(c: sqlite3.Connection) -> None:
+    if not _column_exists(c, "attachments", "file_sha256"):
+        c.execute("ALTER TABLE attachments ADD COLUMN file_sha256 TEXT")
+        log.info("attachments_file_sha256_column_added")
+
+
 def _ensure_sessions_review_state_column(c: sqlite3.Connection) -> None:
     if not _column_exists(c, "sessions", "review_state"):
         c.execute("ALTER TABLE sessions ADD COLUMN review_state TEXT")
@@ -407,6 +414,10 @@ def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_attachments_sha256 ON attachments(sha256, kind)"
         )
         _ensure_memory_origin_column(c)
+        _ensure_attachments_file_sha256_column(c)
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_attachments_file_sha256 ON attachments(file_sha256)"
+        )
         _ensure_sessions_hidden_column(c)
         _ensure_sessions_review_state_column(c)
         if _table_exists(c, "artifacts"):

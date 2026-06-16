@@ -23,7 +23,7 @@ import { ApiError, getWorkspaceId, setWorkspaceId } from "@/api/client";
 import type { ChatChunk } from "@/api/types";
 import { streamChatCompletion, streamActiveRun } from "@/api/stream";
 import { formatStreamRetryToast, userMessageFromContainerError } from "@/lib/agent-status-copy";
-import { sha256HexFile, sha256HexText } from "@/lib/file-digest";
+import { sha256HexBytes, sha256HexText, bytesToBase64 } from "@/lib/file-digest";
 import { toastAction } from "@/lib/toast-copy";
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/app/auth";
@@ -84,6 +84,7 @@ interface ChatContextValue {
   canRegenerate: boolean;
   messageAttachments: Record<string, ChatAttachment[]>;
   pendingAttachments: PendingAttachment[];
+  isAddingAttachment: boolean;
   addPendingFiles: (files: FileList | File[]) => Promise<void>;
   removePendingAttachment: (id: string) => void;
   clearPendingAttachments: () => void;
@@ -111,6 +112,8 @@ const PAGE_SIZE = 10;
 const DEFAULT_MAX_FILE_SIZE = 25 * 1024 * 1024;
 const MAX_TOTAL_ATTACHMENTS = 1;
 const MAX_ATTACHMENT_CHARS = 16000;
+const ATTACHMENT_UPLOAD_TIMEOUT_BASE_MS = 60_000;
+const ATTACHMENT_UPLOAD_TIMEOUT_MAX_MS = 180_000;
 const IMAGE_LIKE_EXTS = [
   ".png",
   ".jpg",
@@ -192,6 +195,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  const [isAddingAttachment, setIsAddingAttachment] = useState(false);
   const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([]);
   const messageQueueRef = useRef<QueuedMessage[]>([]);
   const isRunningRef = useRef(false);
@@ -210,6 +214,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const abortRef = useRef<AbortController | null>(null);
   const pollTokenRef = useRef(0);
   const pendingAttachmentsRef = useRef<PendingAttachment[]>([]);
+  const addPendingFilesChainRef = useRef<Promise<void>>(Promise.resolve());
   const mountedRef = useRef(true);
   const titlePollTimerRef = useRef<number | null>(null);
   const prevUrlSessionRef = useRef<string | null | undefined>(undefined);
@@ -968,7 +973,56 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const pendingHasDigest = (digest: string) =>
     pendingAttachmentsRef.current.some((item) => item.contentSha256 === digest);
 
-  const addPendingFiles = async (files: FileList | File[]) => {
+  const createAttachmentDeduped = async (opts: {
+    sessionId: string | null;
+    name: string;
+    sizeBytes: number;
+    kind: "text" | "image" | "other";
+    mimeType?: string;
+    contentSha256?: string;
+    fileSha256?: string;
+    uploadTimeoutMs: number;
+    fullBody: () => {
+      session_id?: string | null;
+      name: string;
+      size_bytes: number;
+      kind: "text" | "image" | "other";
+      mime_type?: string;
+      text_content?: string;
+      image_data_url?: string;
+      file_data_base64?: string;
+      processable: boolean;
+      unsupported_reason?: string;
+      truncated: boolean;
+    };
+  }) => {
+    const hashLookupMs = 15_000;
+    if (opts.contentSha256 || opts.fileSha256) {
+      try {
+        return await apiCreateAttachment(
+          {
+            session_id: opts.sessionId,
+            name: opts.name,
+            size_bytes: opts.sizeBytes,
+            kind: opts.kind,
+            mime_type: opts.mimeType,
+            content_sha256: opts.contentSha256,
+            file_sha256: opts.fileSha256,
+            processable: true,
+            truncated: false,
+          },
+          { timeoutMs: hashLookupMs },
+        );
+      } catch (e) {
+        if (!(e instanceof ApiError && e.code === "attachment_not_found")) {
+          throw e;
+        }
+      }
+    }
+    return await apiCreateAttachment(opts.fullBody(), { timeoutMs: opts.uploadTimeoutMs });
+  };
+
+  const processPendingFiles = async (files: FileList | File[]) => {
     const maxFileSize = normalizeAttachmentMaxBytes(me?.attachment_max_bytes);
     const current = pendingAttachmentsRef.current;
     const remain = MAX_TOTAL_ATTACHMENTS - current.length;
@@ -978,142 +1032,199 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       toast("一次仅支持添加 1 个附件", "info");
     }
     const next: PendingAttachment[] = [];
-    for (const file of selected) {
-      if (file.size > maxFileSize) {
-        toast(`${file.name} 超过 ${formatBytes(maxFileSize)}，已跳过`, "error");
-        continue;
-      }
-      try {
-        if (isProcessableTextFile(file)) {
-          const raw = await file.text();
-          const normalized = raw.replace(/\r\n/g, "\n");
-          const truncated = normalized.length > MAX_ATTACHMENT_CHARS;
-          const textContent = truncated
-            ? `${normalized.slice(0, MAX_ATTACHMENT_CHARS)}\n...（文件过长，已截断）`
-            : normalized;
-          const contentSha256 = await sha256HexText(textContent);
-          if (pendingHasDigest(contentSha256)) {
-            toast("相同文件已添加", "info");
-            continue;
-          }
-          const created = await apiCreateAttachment({
-            session_id: currentIdRef.current,
-            name: file.name,
-            size_bytes: file.size,
-            kind: "text",
-            mime_type: file.type || "text/plain",
-            text_content: textContent,
-            processable: true,
-            truncated,
-          });
-          next.push({
-            id: uid("f"),
-            attachmentId: created.id,
-            name: created.name,
-            size: file.size,
-            kind: "text",
-            text: created.text,
-            contentSha256,
-            processable: created.processable,
-            truncated: !!created.truncated,
-          });
-        } else if (isOfficeDocumentFile(file)) {
-          const contentSha256 = await sha256HexFile(file);
-          if (pendingHasDigest(contentSha256)) {
-            toast("相同文件已添加", "info");
-            continue;
-          }
-          const fileDataBase64 = await fileToBase64(file);
-          const created = await apiCreateAttachment({
-            session_id: currentIdRef.current,
-            name: file.name,
-            size_bytes: file.size,
-            kind: "text",
-            mime_type: file.type || guessOfficeMimeType(file.name),
-            file_data_base64: fileDataBase64,
-            processable: true,
-            truncated: false,
-          });
-          if (!created.processable) {
-            toast(created.unsupportedReason ?? "该文档无法解析", "info");
-          }
-          next.push({
-            id: uid("f"),
-            attachmentId: created.id,
-            name: created.name,
-            size: file.size,
-            kind: "text",
-            text: created.text,
-            contentSha256,
-            processable: created.processable,
-            unsupportedReason: created.unsupportedReason,
-            truncated: !!created.truncated,
-          });
-        } else if (isImageLikeFile(file)) {
-          const contentSha256 = await sha256HexFile(file);
-          if (pendingHasDigest(contentSha256)) {
-            toast("相同文件已添加", "info");
-            continue;
-          }
-          const imageDataUrl = await fileToDataUrl(file);
-          const created = await apiCreateAttachment({
-            session_id: currentIdRef.current,
-            name: file.name,
-            size_bytes: file.size,
-            kind: "image",
-            mime_type: file.type || guessMimeTypeByName(file.name) || "application/octet-stream",
-            image_data_url: imageDataUrl,
-            processable: true,
-            truncated: false,
-          });
-          if (!created.processable) {
-            toast(created.unsupportedReason ?? "该图片格式不可解析", "info");
-          }
-          next.push({
-            id: uid("f"),
-            attachmentId: created.id,
-            name: created.name,
-            size: file.size,
-            kind: "image",
-            mimeType: created.mimeType,
-            imageDataUrl: created.processable ? created.imageDataUrl : undefined,
-            contentSha256,
-            processable: created.processable,
-            unsupportedReason: created.unsupportedReason,
-            truncated: false,
-          });
-        } else {
-          const created = await apiCreateAttachment({
-            session_id: currentIdRef.current,
-            name: file.name,
-            size_bytes: file.size,
-            kind: "other",
-            mime_type: file.type || undefined,
-            processable: false,
-            unsupported_reason: "当前支持文本、图片、Excel（.xlsx）与 Word（.docx）附件",
-            truncated: false,
-          });
-          next.push({
-            id: uid("f"),
-            attachmentId: created.id,
-            name: created.name,
-            size: file.size,
-            kind: "other",
-            processable: false,
-            unsupportedReason: created.unsupportedReason ?? "当前支持文本、图片、Excel（.xlsx）与 Word（.docx）附件",
-            truncated: false,
-          });
+    setIsAddingAttachment(true);
+    try {
+      for (const file of selected) {
+        if (file.size > maxFileSize) {
+          toast(`${file.name} 超过 ${formatBytes(maxFileSize)}，已跳过`, "error");
+          continue;
         }
-      } catch {
-        toast(`${file.name} 读取失败，请重试`, "error");
+        const uploadTimeoutMs = attachmentUploadTimeoutMs(file.size);
+        try {
+          await yieldToMainThread();
+          if (isProcessableTextFile(file)) {
+            const raw = await file.text();
+            const normalized = raw.replace(/\r\n/g, "\n");
+            const truncated = normalized.length > MAX_ATTACHMENT_CHARS;
+            const textContent = truncated
+              ? `${normalized.slice(0, MAX_ATTACHMENT_CHARS)}\n...（文件过长，已截断）`
+              : normalized;
+            const contentSha256 = await sha256HexText(textContent);
+            if (pendingHasDigest(contentSha256)) {
+              toast("相同文件已添加", "info");
+              continue;
+            }
+            const created = await createAttachmentDeduped({
+              sessionId: currentIdRef.current,
+              name: file.name,
+              sizeBytes: file.size,
+              kind: "text",
+              mimeType: file.type || "text/plain",
+              contentSha256,
+              uploadTimeoutMs,
+              fullBody: () => ({
+                session_id: currentIdRef.current,
+                name: file.name,
+                size_bytes: file.size,
+                kind: "text",
+                mime_type: file.type || "text/plain",
+                text_content: textContent,
+                processable: true,
+                truncated,
+              }),
+            });
+            if (created.reused) {
+              toast("已复用已有附件", "info");
+            }
+            next.push({
+              id: uid("f"),
+              attachmentId: created.id,
+              name: created.name,
+              size: file.size,
+              kind: "text",
+              text: created.text,
+              contentSha256,
+              processable: created.processable,
+              truncated: !!created.truncated,
+            });
+          } else if (isOfficeDocumentFile(file)) {
+            const bytes = new Uint8Array(await file.arrayBuffer());
+            const fileSha256 = await sha256HexBytes(bytes);
+            if (pendingHasDigest(fileSha256)) {
+              toast("相同文件已添加", "info");
+              continue;
+            }
+            const officeMime = file.type || guessOfficeMimeType(file.name);
+            const created = await createAttachmentDeduped({
+              sessionId: currentIdRef.current,
+              name: file.name,
+              sizeBytes: file.size,
+              kind: "text",
+              mimeType: officeMime,
+              fileSha256,
+              uploadTimeoutMs,
+              fullBody: () => ({
+                session_id: currentIdRef.current,
+                name: file.name,
+                size_bytes: file.size,
+                kind: "text",
+                mime_type: officeMime,
+                file_data_base64: bytesToBase64(bytes),
+                processable: true,
+                truncated: false,
+              }),
+            });
+            if (created.reused) {
+              toast("已复用已有附件", "info");
+            }
+            if (!created.processable) {
+              toast(created.unsupportedReason ?? "该文档无法解析", "info");
+            }
+            next.push({
+              id: uid("f"),
+              attachmentId: created.id,
+              name: created.name,
+              size: file.size,
+              kind: "text",
+              text: created.text,
+              contentSha256: fileSha256,
+              processable: created.processable,
+              unsupportedReason: created.unsupportedReason,
+              truncated: !!created.truncated,
+            });
+          } else if (isImageLikeFile(file)) {
+            const bytes = new Uint8Array(await file.arrayBuffer());
+            const contentSha256 = await sha256HexBytes(bytes);
+            if (pendingHasDigest(contentSha256)) {
+              toast("相同文件已添加", "info");
+              continue;
+            }
+            const mimeType =
+              file.type || guessMimeTypeByName(file.name) || "application/octet-stream";
+            const created = await createAttachmentDeduped({
+              sessionId: currentIdRef.current,
+              name: file.name,
+              sizeBytes: file.size,
+              kind: "image",
+              mimeType,
+              contentSha256,
+              fileSha256: contentSha256,
+              uploadTimeoutMs,
+              fullBody: () => ({
+                session_id: currentIdRef.current,
+                name: file.name,
+                size_bytes: file.size,
+                kind: "image",
+                mime_type: mimeType,
+                image_data_url: `data:${mimeType};base64,${bytesToBase64(bytes)}`,
+                processable: true,
+                truncated: false,
+              }),
+            });
+            if (created.reused) {
+              toast("已复用已有附件", "info");
+            }
+            if (!created.processable) {
+              toast(created.unsupportedReason ?? "该图片格式不可解析", "info");
+            }
+            next.push({
+              id: uid("f"),
+              attachmentId: created.id,
+              name: created.name,
+              size: file.size,
+              kind: "image",
+              mimeType: created.mimeType,
+              contentSha256,
+              processable: created.processable,
+              unsupportedReason: created.unsupportedReason,
+              truncated: false,
+            });
+          } else {
+            const created = await apiCreateAttachment(
+              {
+                session_id: currentIdRef.current,
+                name: file.name,
+                size_bytes: file.size,
+                kind: "other",
+                mime_type: file.type || undefined,
+                processable: false,
+                unsupported_reason: "当前支持文本、图片、Excel（.xlsx）与 Word（.docx）附件",
+                truncated: false,
+              },
+              { timeoutMs: uploadTimeoutMs },
+            );
+            next.push({
+              id: uid("f"),
+              attachmentId: created.id,
+              name: created.name,
+              size: file.size,
+              kind: "other",
+              processable: false,
+              unsupportedReason:
+                created.unsupportedReason ??
+                "当前支持文本、图片、Excel（.xlsx）与 Word（.docx）附件",
+              truncated: false,
+            });
+          }
+        } catch {
+          toast(`${file.name} 读取失败，请重试`, "error");
+        }
       }
-    }
-    if (next.length > 0) {
-      if (remain <= 0) {
-        toast("已替换为新附件", "info");
+      if (next.length > 0) {
+        if (remain <= 0) {
+          toast("已替换为新附件", "info");
+        }
+        setPendingAttachments(next);
       }
-      setPendingAttachments(next);
+    } finally {
+      setIsAddingAttachment(false);
     }
+  };
+
+  const addPendingFiles = (files: FileList | File[]) => {
+    const task = addPendingFilesChainRef.current.then(() => processPendingFiles(files));
+    addPendingFilesChainRef.current = task.catch(() => {});
+    return task;
   };
 
   const runtime = useExternalStoreRuntime({
@@ -1156,6 +1267,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         canRegenerate: !isRunning && messages.some((m) => m.role === "user"),
         messageAttachments,
         pendingAttachments,
+        isAddingAttachment,
         addPendingFiles,
         removePendingAttachment,
         clearPendingAttachments,
@@ -1217,11 +1329,21 @@ function buildDisplayAttachments(attachments: PendingAttachment[]): ChatAttachme
     kind: file.kind,
     mimeType: file.mimeType,
     text: file.kind === "text" ? file.text : undefined,
-    imageDataUrl: file.kind === "image" ? file.imageDataUrl : undefined,
     processable: file.processable,
     unsupportedReason: file.unsupportedReason,
     truncated: file.truncated,
   }));
+}
+
+function attachmentUploadTimeoutMs(sizeBytes: number): number {
+  const extra = Math.ceil(sizeBytes / (100 * 1024)) * 1000;
+  return Math.min(ATTACHMENT_UPLOAD_TIMEOUT_MAX_MS, ATTACHMENT_UPLOAD_TIMEOUT_BASE_MS + extra);
+}
+
+function yieldToMainThread(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
 }
 
 function formatBytes(size: number): string {
@@ -1315,41 +1437,4 @@ function guessMimeTypeByName(name: string): string | undefined {
   if (lower.endsWith(".gif")) return "image/gif";
   if (lower.endsWith(".bmp")) return "image/bmp";
   return undefined;
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      if (typeof result !== "string" || !result.startsWith("data:")) {
-        reject(new Error("invalid file reader result"));
-        return;
-      }
-      const comma = result.indexOf(",");
-      if (comma < 0) {
-        reject(new Error("invalid data url"));
-        return;
-      }
-      resolve(result.slice(comma + 1));
-    };
-    reader.onerror = () => reject(reader.error ?? new Error("file reader failed"));
-    reader.readAsDataURL(file);
-  });
-}
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      if (typeof result === "string" && result.startsWith("data:")) {
-        resolve(result);
-        return;
-      }
-      reject(new Error("invalid file reader result"));
-    };
-    reader.onerror = () => reject(reader.error ?? new Error("file reader failed"));
-    reader.readAsDataURL(file);
-  });
 }

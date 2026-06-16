@@ -1,4 +1,4 @@
-import { ApiError, apiGet, apiSend, getWorkspaceId } from "./client";
+import { ApiError, apiGet, apiSend, getWorkspaceId, type RequestOptions } from "./client";
 import type {
   ActiveRunResponse,
   AppConfig,
@@ -117,19 +117,25 @@ export const cancelRun = (id: string) =>
 export const deleteSession = (id: string) =>
   apiSend<{ deleted: boolean }>(`/api/workspace/sessions/${encodeURIComponent(id)}`, "DELETE");
 
-export const createAttachment = (body: {
-  session_id?: string | null;
-  name: string;
-  size_bytes: number;
-  kind: "text" | "image" | "other";
-  mime_type?: string;
-  text_content?: string;
-  image_data_url?: string;
-  file_data_base64?: string;
-  processable: boolean;
-  unsupported_reason?: string;
-  truncated: boolean;
-}) => apiSend<{
+export const createAttachment = (
+  body: {
+    session_id?: string | null;
+    name: string;
+    size_bytes: number;
+    kind: "text" | "image" | "other";
+    mime_type?: string;
+    text_content?: string;
+    image_data_url?: string;
+    file_data_base64?: string;
+    content_sha256?: string;
+    file_sha256?: string;
+    processable: boolean;
+    unsupported_reason?: string;
+    truncated: boolean;
+  },
+  opts?: RequestOptions,
+) =>
+  apiSend<{
   id: string;
   name: string;
   kind: "text" | "image" | "other";
@@ -139,7 +145,8 @@ export const createAttachment = (body: {
   processable: boolean;
   unsupportedReason?: string;
   truncated?: boolean;
-}>("/api/workspace/attachments", "POST", body);
+  reused?: boolean;
+}>("/api/workspace/attachments", "POST", body, opts);
 
 export function attachmentDownloadUrl(id: string): string {
   const workspaceId = getWorkspaceId();

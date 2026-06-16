@@ -128,6 +128,8 @@ class AttachmentCreateIn(BaseModel):
     text_content: str | None = None
     image_data_url: str | None = None
     file_data_base64: str | None = None
+    content_sha256: str | None = None
+    file_sha256: str | None = None
     processable: bool = True
     unsupported_reason: str | None = None
     truncated: bool = False
@@ -592,8 +594,12 @@ async def workspace_create_attachment(payload: AttachmentCreateIn) -> dict:
             processable=bool(payload.processable),
             unsupported_reason=payload.unsupported_reason,
             truncated=bool(payload.truncated),
+            content_sha256_hint=payload.content_sha256,
+            file_sha256_hint=payload.file_sha256,
         )
     except ValueError as exc:
+        if str(exc) == "attachment hash not found":
+            raise WsError("attachment_not_found", str(exc), status_code=404) from exc
         raise WsError("attachment_invalid", str(exc), status_code=400) from exc
     return item
 

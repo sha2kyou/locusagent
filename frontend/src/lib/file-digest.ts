@@ -14,3 +14,13 @@ export async function sha256HexFile(file: File): Promise<string> {
 export async function sha256HexText(text: string): Promise<string> {
   return sha256HexBytes(new TextEncoder().encode(text));
 }
+
+/** Base64 without data-URL prefix; chunked to avoid call-stack limits on large files. */
+export function bytesToBase64(bytes: Uint8Array): string {
+  const chunk = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}

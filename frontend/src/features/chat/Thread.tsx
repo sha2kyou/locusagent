@@ -24,7 +24,7 @@ import { extractLatestTodoPlan, applyHistoricalTodoInterrupt, isTodoTool, type T
 import { TodoProgressPanel } from "./TodoProgressPanel";
 import { useChat } from "./ChatProvider";
 import type { ChatAttachment } from "./model";
-import { downloadAttachment } from "@/api/endpoints";
+import { downloadAttachment, attachmentDownloadUrl } from "@/api/endpoints";
 import { Drawer } from "@/components/ui/drawer";
 import { formatFull, formatMessageTime } from "@/lib/format-time";
 
@@ -109,6 +109,7 @@ function Composer() {
   const aui = useAui();
   const toast = useToast();
   const {
+    isAddingAttachment,
     addPendingFiles,
     isRunning,
     pendingAttachments,
@@ -176,11 +177,11 @@ function Composer() {
     }
   };
 
-  const onPickFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onPickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || files.length === 0) return;
-    await addPendingFiles(files);
     e.currentTarget.value = "";
+    if (!files || files.length === 0) return;
+    void addPendingFiles(files);
   };
 
   return (
@@ -266,12 +267,13 @@ function Composer() {
         {/* 附件按钮：移至左侧 */}
         <button
           type="button"
+          disabled={isAddingAttachment}
           onClick={() => fileInputRef.current?.click()}
-          className="mb-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          className="mb-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           aria-label="添加附件"
-          title="添加附件"
+          title={isAddingAttachment ? "附件处理中…" : "添加附件"}
         >
-          <Paperclip className="size-4" />
+          <Paperclip className={cn("size-4", isAddingAttachment && "animate-pulse")} />
         </button>
 
         <ComposerPrimitive.Input
@@ -367,10 +369,19 @@ function attachmentDescription(file: ChatAttachment): string {
   return "附件";
 }
 
+function attachmentImageSrc(file: ChatAttachment): string | null {
+  if (file.kind !== "image") return null;
+  if (typeof file.imageDataUrl === "string" && file.imageDataUrl.length > 0) {
+    return file.imageDataUrl;
+  }
+  if (file.id.startsWith("att_")) return attachmentDownloadUrl(file.id);
+  return null;
+}
+
 function canExportAttachment(file: ChatAttachment | null): boolean {
   if (!file) return false;
   if (file.kind === "text") return typeof file.text === "string";
-  if (file.kind === "image") return typeof file.imageDataUrl === "string" && file.imageDataUrl.length > 0;
+  if (file.kind === "image") return attachmentImageSrc(file) !== null;
   return false;
 }
 
@@ -382,9 +393,14 @@ function exportInlineAttachment(file: ChatAttachment): boolean {
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
     return true;
   }
-  if (file.kind === "image" && file.imageDataUrl) {
-    triggerDownload(file.imageDataUrl, file.name || "attachment");
-    return true;
+  if (file.kind === "image") {
+    const src = attachmentImageSrc(file);
+    if (!src) return false;
+    if (src.startsWith("data:")) {
+      triggerDownload(src, file.name || "attachment");
+      return true;
+    }
+    return false;
   }
   return false;
 }
@@ -477,6 +493,12 @@ function AttachmentDrawer({
           disabled={!canExportAttachment(file)}
           onClick={() => {
             if (!file) return;
+            if (file.kind === "image" && attachmentImageSrc(file) && !attachmentImageSrc(file)!.startsWith("data:")) {
+              void downloadAttachment(file.id, file.name).catch((err: unknown) => {
+                toast(err instanceof Error ? err.message : "下载失败", "error");
+              });
+              return;
+            }
             const exported = exportInlineAttachment(file);
             if (!exported) {
               toast("当前附件暂不支持导出", "info");
@@ -496,10 +518,10 @@ function AttachmentDrawer({
               {file.text || "（空文件）"}
             </pre>
           ) : file.processable && file.kind === "image" ? (
-            file.imageDataUrl ? (
+            attachmentImageSrc(file) ? (
               <div className="max-h-[65vh] overflow-auto rounded-md bg-surface-2 p-2">
                 <img
-                  src={file.imageDataUrl}
+                  src={attachmentImageSrc(file)!}
                   alt={file.name}
                   className="mx-auto max-h-[60vh] w-auto max-w-full rounded object-contain"
                 />

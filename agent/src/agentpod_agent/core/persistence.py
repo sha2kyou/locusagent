@@ -7,6 +7,7 @@ import base64
 import binascii
 import hashlib
 import json
+import re
 import secrets
 from typing import Any
 
@@ -31,6 +32,8 @@ from ..storage import (
 )
 
 log = get_logger("persistence")
+
+_SHA256_HEX_RE = re.compile(r"^[a-f0-9]{64}$")
 
 _session_locks: dict[str, asyncio.Lock] = {}
 _locks_guard = asyncio.Lock()
@@ -95,6 +98,35 @@ def _find_existing_blob(
     if not key:
         return None
     return key, str(row["object_etag"] or "")
+
+
+def _normalize_sha256_hex(value: str | None) -> str:
+    digest = str(value or "").strip().lower()
+    if not _SHA256_HEX_RE.fullmatch(digest):
+        return ""
+    return digest
+
+
+def _find_attachment_template_by_file_sha256(c: Any, file_sha256: str) -> dict[str, Any] | None:
+    row = c.execute(
+        "SELECT kind, mime_type, object_key, object_etag, sha256, processable, "
+        "unsupported_reason, truncated FROM attachments "
+        "WHERE file_sha256 = ? AND object_key IS NOT NULL AND object_key != '' "
+        "ORDER BY created_at DESC LIMIT 1",
+        (file_sha256,),
+    ).fetchone()
+    return dict(row) if row is not None else None
+
+
+def _find_attachment_template_by_content_sha256(c: Any, *, sha256: str, kind: str) -> dict[str, Any] | None:
+    row = c.execute(
+        "SELECT kind, mime_type, object_key, object_etag, sha256, processable, "
+        "unsupported_reason, truncated FROM attachments "
+        "WHERE sha256 = ? AND kind = ? AND object_key IS NOT NULL AND object_key != '' "
+        "ORDER BY created_at DESC LIMIT 1",
+        (sha256, kind),
+    ).fetchone()
+    return dict(row) if row is not None else None
 
 
 def _unreferenced_object_keys(c: Any, keys: list[str]) -> list[str]:
@@ -591,6 +623,88 @@ async def append_message(
     return message_id
 
 
+async def _create_attachment_from_existing_hash(
+    *,
+    session_id: str | None,
+    kind: str,
+    name: str,
+    size_bytes: int,
+    mime_type: str | None,
+    content_sha256: str,
+    file_sha256: str,
+) -> dict[str, Any] | None:
+    clean_name = (name or "附件").strip() or "附件"
+    clean_kind = str(kind or "other").strip() or "other"
+
+    def _lookup() -> dict[str, Any] | None:
+        with conn_scope(load_vec=False) as c:
+            template: dict[str, Any] | None = None
+            if file_sha256:
+                template = _find_attachment_template_by_file_sha256(c, file_sha256)
+            if template is None and content_sha256:
+                template = _find_attachment_template_by_content_sha256(
+                    c,
+                    sha256=content_sha256,
+                    kind=clean_kind,
+                )
+            return template
+
+    template = await run_in_thread(_lookup)
+    if template is None:
+        return None
+
+    attachment_id = _new_attachment_id()
+    template_kind = str(template["kind"] or clean_kind)
+    template_mime = str(template["mime_type"] or mime_type or "application/octet-stream")
+    object_key = str(template["object_key"] or "")
+    object_etag = str(template["object_etag"] or "")
+    payload_sha256 = str(template["sha256"] or content_sha256 or "")
+    processable = bool(int(template["processable"] or 0))
+    unsupported_reason = template["unsupported_reason"]
+    truncated = bool(int(template["truncated"] or 0))
+    stored_file_sha256 = file_sha256 or ""
+
+    def _do() -> dict[str, Any]:
+        with conn_scope(load_vec=False) as c:
+            c.execute(
+                "INSERT INTO attachments("
+                "id, session_id, kind, name, mime_type, size_bytes, object_key, object_etag, sha256, "
+                "file_sha256, processable, unsupported_reason, truncated"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    attachment_id,
+                    session_id,
+                    template_kind,
+                    clean_name,
+                    template_mime,
+                    max(0, int(size_bytes or 0)),
+                    object_key,
+                    object_etag,
+                    payload_sha256,
+                    stored_file_sha256 or None,
+                    1 if processable else 0,
+                    unsupported_reason,
+                    1 if truncated else 0,
+                ),
+            )
+            row = c.execute(
+                "SELECT id, name, kind, mime_type, object_key, object_etag, sha256, processable, "
+                "unsupported_reason, truncated FROM attachments WHERE id = ?",
+                (attachment_id,),
+            ).fetchone()
+            return _to_attachment_meta_row(row)
+
+    meta = await run_in_thread(_do)
+    log.info(
+        "attachment_hash_reused",
+        attachment_id=attachment_id,
+        sha256=(payload_sha256 or file_sha256)[:12],
+    )
+    hydrated = await _hydrate_attachment(meta)
+    hydrated["reused"] = True
+    return hydrated
+
+
 async def create_attachment(
     *,
     session_id: str | None,
@@ -604,12 +718,36 @@ async def create_attachment(
     processable: bool,
     unsupported_reason: str | None,
     truncated: bool,
+    content_sha256_hint: str | None = None,
+    file_sha256_hint: str | None = None,
 ) -> dict[str, Any]:
+    content_hint = _normalize_sha256_hex(content_sha256_hint)
+    file_hint = _normalize_sha256_hex(file_sha256_hint)
+    has_payload = bool(
+        str(file_data_base64 or "").strip()
+        or str(text_content or "").strip()
+        or str(image_data_url or "").strip()
+    )
+    if not has_payload and (content_hint or file_hint):
+        reused = await _create_attachment_from_existing_hash(
+            session_id=session_id,
+            kind=kind,
+            name=name,
+            size_bytes=size_bytes,
+            mime_type=mime_type,
+            content_sha256=content_hint,
+            file_sha256=file_hint,
+        )
+        if reused is None:
+            raise ValueError("attachment hash not found")
+        return reused
+
     attachment_id = _new_attachment_id()
     clean_name = (name or "附件").strip() or "附件"
     name = clean_name
     clean_mime = str(mime_type or "").strip() or "application/octet-stream"
     payload: bytes | None = None
+    stored_file_sha256 = file_hint if has_payload and file_hint else ""
 
     if file_data_base64:
         import base64
@@ -623,6 +761,7 @@ async def create_attachment(
         max_bytes = max(1, int(get_settings().attachment_max_bytes))
         if len(raw) > max_bytes:
             raise ValueError(f"file exceeds attachment limit ({max_bytes} bytes)")
+        stored_file_sha256 = hashlib.sha256(raw).hexdigest()
         extracted, doc_trunc, err = await run_in_thread(
             extract_document_text,
             raw,
@@ -666,6 +805,8 @@ async def create_attachment(
     uploaded_new_object = False
     if payload is not None:
         content_sha256 = hashlib.sha256(payload).hexdigest()
+        if not stored_file_sha256 and kind == "image":
+            stored_file_sha256 = content_sha256
         store_blob = processable or kind != "image"
         if store_blob:
             canonical_key = blob_object_key(content_sha256)
@@ -713,8 +854,8 @@ async def create_attachment(
             c.execute(
                 "INSERT INTO attachments("
                 "id, session_id, kind, name, mime_type, size_bytes, object_key, object_etag, sha256, "
-                "processable, unsupported_reason, truncated"
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "file_sha256, processable, unsupported_reason, truncated"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     attachment_id,
                     session_id,
@@ -725,6 +866,7 @@ async def create_attachment(
                     object_key,
                     object_etag,
                     content_sha256,
+                    stored_file_sha256 or None,
                     1 if processable else 0,
                     unsupported_reason,
                     1 if truncated else 0,
@@ -750,7 +892,9 @@ async def create_attachment(
             if orphan_keys:
                 await delete_attachment_objects(orphan_keys)
         raise
-    return await _hydrate_attachment(meta)
+    hydrated = await _hydrate_attachment(meta)
+    hydrated["reused"] = bool(content_sha256 and object_key and not uploaded_new_object)
+    return hydrated
 
 
 async def create_binary_attachment(
