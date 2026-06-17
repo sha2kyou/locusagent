@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import base64
+import mimetypes
 from dataclasses import dataclass
 from pathlib import Path
 
 from .store import get_skill
 
 MAX_SKILL_FILE_BYTES = 512 * 1024
+PREVIEW_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg", ".ico"}
 
 
 @dataclass(slots=True)
@@ -18,6 +21,24 @@ class SkillFileEntry:
 
     def to_dict(self) -> dict:
         return {"path": self.path, "is_dir": self.is_dir, "size": self.size}
+
+
+@dataclass(slots=True)
+class SkillFilePreview:
+    path: str
+    kind: str
+    content: str | None = None
+    content_base64: str | None = None
+    mime_type: str | None = None
+
+    def to_dict(self) -> dict:
+        return {
+            "path": self.path,
+            "kind": self.kind,
+            "content": self.content,
+            "content_base64": self.content_base64,
+            "mime_type": self.mime_type,
+        }
 
 
 def _is_hidden(part: str) -> bool:
@@ -70,6 +91,13 @@ def list_skill_files(name: str) -> list[SkillFileEntry]:
 
 
 def read_skill_file(name: str, relative_path: str) -> str:
+    preview = read_skill_file_preview(name, relative_path)
+    if preview.kind != "text" or preview.content is None:
+        raise ValueError("binary file cannot be displayed as text")
+    return preview.content
+
+
+def read_skill_file_preview(name: str, relative_path: str) -> SkillFilePreview:
     path = resolve_skill_file(name, relative_path)
     if path.is_dir():
         raise IsADirectoryError(f"not a file: {relative_path}")
@@ -78,13 +106,26 @@ def read_skill_file(name: str, relative_path: str) -> str:
     size = path.stat().st_size
     if size > MAX_SKILL_FILE_BYTES:
         raise ValueError(f"file too large (> {MAX_SKILL_FILE_BYTES} bytes)")
+
+    suffix = path.suffix.lower()
+    if suffix in PREVIEW_IMAGE_SUFFIXES:
+        data = path.read_bytes()
+        mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        return SkillFilePreview(
+            path=relative_path,
+            kind="binary",
+            content_base64=base64.b64encode(data).decode("ascii"),
+            mime_type=mime,
+        )
+
     data = path.read_bytes()
     if b"\x00" in data[:8192]:
         raise ValueError("binary file cannot be displayed as text")
     try:
-        return data.decode("utf-8")
+        text = data.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise ValueError("file is not valid UTF-8 text") from exc
+    return SkillFilePreview(path=relative_path, kind="text", content=text)
 
 
 def format_skill_file_tree(name: str) -> str:

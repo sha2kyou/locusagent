@@ -92,6 +92,7 @@ from ..skills import (
     list_skill_files,
     list_skills,
     read_skill_file,
+    read_skill_file_preview,
     update_skill,
 )
 from ..tool_settings import (
@@ -191,14 +192,14 @@ async def workspace_get_skill_file(name: str, path: str = Query(..., min_length=
     if s is None:
         raise WsError("skill_not_found", "skill not found", status_code=404)
     try:
-        content = await run_in_thread(read_skill_file, name, path)
+        preview = await run_in_thread(read_skill_file_preview, name, path)
     except FileNotFoundError as exc:
         raise WsError("skill_file_not_found", str(exc), status_code=404) from exc
     except IsADirectoryError as exc:
         raise WsError("skill_file_invalid", str(exc), status_code=400) from exc
     except ValueError as exc:
         raise WsError("skill_file_invalid", str(exc), status_code=400) from exc
-    return {"path": path, "content": content}
+    return preview.to_dict()
 
 
 @router.post("/skills/install", status_code=201)

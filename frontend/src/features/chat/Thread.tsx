@@ -19,6 +19,7 @@ import {
   getAgentComposerPlaceholder,
 } from "@/lib/agent-status-copy";
 import { Markdown, ThinkingBlock } from "./Markdown";
+import { FilePreview } from "@/components/FilePreview";
 import type { ChatMessage } from "./model";
 import { ToolPartView } from "./ToolEvent";
 import { extractLatestTodoPlan, applyHistoricalTodoInterrupt, isTodoTool, type TodoPlan } from "./todo";
@@ -550,32 +551,26 @@ function AttachmentDrawer({
       }
     >
       {file ? (
-        <div className="space-y-4">
-          {file.processable && file.kind === "text" ? (
-            <pre className="max-h-[65vh] overflow-auto whitespace-pre-wrap rounded-md bg-surface-2 p-3 font-mono text-xs text-foreground">
-              {file.text || t("chat.attachment.emptyFile")}
-            </pre>
-          ) : file.processable && file.kind === "image" ? (
-            attachmentImageSrc(file) ? (
-              <div className="max-h-[65vh] overflow-auto rounded-md bg-surface-2 p-2">
-                <img
-                  src={attachmentImageSrc(file)!}
-                  alt={file.name}
-                  className="mx-auto max-h-[60vh] w-auto max-w-full rounded object-contain"
-                />
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">{t("chat.attachment.imageMissingData")}</p>
-            )
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              {file.processable
-                ? t("chat.attachment.previewUnsupported")
-                : file.unsupportedReason || t("chat.attachment.parseUnsupported")}
-            </p>
-          )}
-          {file.truncated ? <p className="text-xs text-warning">{t("chat.attachment.truncatedDisplay")}</p> : null}
-        </div>
+        file.processable ? (
+          <FilePreview
+            filename={file.name}
+            content={file.kind === "text" ? file.text : undefined}
+            imageSrc={file.kind === "image" ? attachmentImageSrc(file) : undefined}
+            mimeType={file.mimeType}
+            emptyText={t("chat.attachment.emptyFile")}
+            unsupportedText={
+              file.kind === "image" && !attachmentImageSrc(file)
+                ? t("chat.attachment.imageMissingData")
+                : t("chat.attachment.previewUnsupported")
+            }
+            truncated={file.truncated}
+            truncatedText={t("chat.attachment.truncatedDisplay")}
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {file.unsupportedReason || t("chat.attachment.parseUnsupported")}
+          </p>
+        )
       ) : null}
     </Drawer>
   );

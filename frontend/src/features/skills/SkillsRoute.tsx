@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
+import { FilePreview } from "@/components/FilePreview";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
 import { FileTree } from "@/components/ui/file-tree";
@@ -16,7 +17,7 @@ import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
 import { createSkill, deleteSkill, getSkillFile, installSkill, listSkillFiles, listSkills, updateSkill } from "@/api/endpoints";
-import type { Skill, SkillFileEntry } from "@/api/types";
+import type { Skill, SkillFileContent, SkillFileEntry } from "@/api/types";
 import { toastAction } from "@/lib/toast-copy";
 import { buildFileTree, collectDirPaths } from "@/lib/skill-file-tree";
 
@@ -26,7 +27,7 @@ function SkillFilesPanel({ skill }: { skill: Skill }) {
   const [files, setFiles] = useState<SkillFileEntry[] | null>(null);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [content, setContent] = useState<string | null>(null);
+  const [preview, setPreview] = useState<SkillFileContent | null>(null);
   const [loadingContent, setLoadingContent] = useState(false);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
 
@@ -63,28 +64,30 @@ function SkillFilesPanel({ skill }: { skill: Skill }) {
 
   useEffect(() => {
     setSelectedPath(null);
-    setContent(null);
+    setPreview(null);
   }, [skill.name]);
 
   const closeDrawer = () => {
     setSelectedPath(null);
-    setContent(null);
+    setPreview(null);
   };
 
   const openFile = async (path: string) => {
     setSelectedPath(path);
     if (path === "SKILL.md") {
       setLoadingContent(false);
-      setContent(skill.body || "");
+      setPreview({ path, kind: "text", content: skill.body || "" });
       return;
     }
     setLoadingContent(true);
+    setPreview(null);
     try {
-      const { content: text } = await getSkillFile(skill.name, path);
-      setContent(text);
+      const data = await getSkillFile(skill.name, path);
+      setPreview(data);
     } catch (e) {
       toast((e as Error).message, "error");
-      setContent(null);
+      setPreview(null);
+      setSelectedPath(null);
     } finally {
       setLoadingContent(false);
     }
@@ -121,9 +124,16 @@ function SkillFilesPanel({ skill }: { skill: Skill }) {
       >
         {loadingContent ? (
           <Loading />
-        ) : (
-          <pre className="whitespace-pre-wrap font-mono text-sm text-foreground">{content ?? t("skills.badge.noBody")}</pre>
-        )}
+        ) : selectedPath ? (
+          <FilePreview
+            filename={selectedPath}
+            content={preview?.content}
+            contentBase64={preview?.content_base64}
+            mimeType={preview?.mime_type}
+            emptyText={t("skills.badge.noBody")}
+            unsupportedText={t("chat.attachment.previewUnsupported")}
+          />
+        ) : null}
       </Drawer>
     </>
   );
@@ -323,12 +333,7 @@ export function SkillsRoute() {
                       </div>
                     )}
                   </div>
-                  <CollapsibleSection summary={t("common.actions.body")}>
-                    <pre className="max-h-[40vh] overflow-y-auto whitespace-pre-wrap text-sm text-foreground">
-                      {s.body || t("skills.badge.noBody")}
-                    </pre>
-                  </CollapsibleSection>
-                  {s.source === "private" && <SkillFilesPanel skill={s} />}
+                  <SkillFilesPanel skill={s} />
                 </ListCard>
               ))}
             </div>

@@ -11,6 +11,7 @@ from agentpod_agent.skills import (
     delete_skill,
     list_skill_files,
     read_skill_file,
+    read_skill_file_preview,
     resolve_skill_file,
 )
 from agentpod_agent.skills.fs import format_skill_file_tree
@@ -58,6 +59,18 @@ def test_read_skill_file_returns_text() -> None:
     _create_demo_skill()
     text = read_skill_file("demo-skill", "references/guide.md")
     assert "Step one." in text
+
+
+def test_read_skill_file_preview_image() -> None:
+    _create_demo_skill()
+    root = resolve_skill_file("demo-skill", "SKILL.md").parent
+    png = root / "assets" / "logo.png"
+    png.parent.mkdir(parents=True, exist_ok=True)
+    png.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
+    preview = read_skill_file_preview("demo-skill", "assets/logo.png")
+    assert preview.kind == "binary"
+    assert preview.content_base64
+    assert preview.mime_type == "image/png"
 
 
 def test_resolve_skill_file_rejects_traversal() -> None:

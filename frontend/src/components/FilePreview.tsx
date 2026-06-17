@@ -1,0 +1,117 @@
+import { ProseMarkdown } from "@/features/chat/Markdown";
+import {
+  buildDataUrl,
+  filePreviewKind,
+  highlightLanguage,
+  type FilePreviewKind,
+} from "@/lib/file-preview";
+import { cn } from "@/lib/utils";
+
+export interface FilePreviewProps {
+  filename: string;
+  content?: string | null;
+  contentBase64?: string | null;
+  mimeType?: string | null;
+  /** 显式图片地址（附件 data URL 等），优先于 contentBase64 */
+  imageSrc?: string | null;
+  emptyText?: string;
+  unsupportedText?: string;
+  truncated?: boolean;
+  truncatedText?: string;
+  className?: string;
+}
+
+function resolveImageSrc(props: FilePreviewProps): string | null {
+  if (props.imageSrc) return props.imageSrc;
+  if (props.contentBase64 && props.mimeType) {
+    return buildDataUrl(props.mimeType, props.contentBase64);
+  }
+  return null;
+}
+
+function PlainTextBlock({ content, className }: { content: string; className?: string }) {
+  return (
+    <pre
+      className={cn(
+        "whitespace-pre-wrap rounded-md bg-surface-2 p-3 font-mono text-xs text-foreground",
+        className,
+      )}
+    >
+      {content}
+    </pre>
+  );
+}
+
+function CodePreview({ filename, content }: { filename: string; content: string }) {
+  const lang = highlightLanguage(filename);
+  return <ProseMarkdown text={`\`\`\`${lang}\n${content}\n\`\`\``} enableMath={false} />;
+}
+
+function ImagePreview({ src, alt }: { src: string; alt: string }) {
+  return (
+    <div className="rounded-md bg-surface-2 p-2">
+      <img src={src} alt={alt} className="mx-auto w-auto max-w-full rounded object-contain" />
+    </div>
+  );
+}
+
+function renderByKind(kind: FilePreviewKind, props: FilePreviewProps, content: string, imageSrc: string | null) {
+  switch (kind) {
+    case "markdown":
+      return <ProseMarkdown text={content} />;
+    case "code":
+      return <CodePreview filename={props.filename} content={content} />;
+    case "image":
+      return imageSrc ? (
+        <ImagePreview src={imageSrc} alt={props.filename} />
+      ) : (
+        <p className="text-sm text-muted-foreground">{props.unsupportedText ?? "Preview not available."}</p>
+      );
+    case "text":
+      return <PlainTextBlock content={content} />;
+    default:
+      return (
+        <p className="text-sm text-muted-foreground">{props.unsupportedText ?? "Preview not supported for this file type."}</p>
+      );
+  }
+}
+
+export function FilePreview({
+  filename,
+  content,
+  contentBase64,
+  mimeType,
+  imageSrc: imageSrcProp,
+  emptyText = "Empty file.",
+  unsupportedText,
+  truncated,
+  truncatedText,
+  className,
+}: FilePreviewProps) {
+  const kind = filePreviewKind(filename, mimeType);
+  const imageSrc = resolveImageSrc({
+    filename,
+    content,
+    contentBase64,
+    mimeType,
+    imageSrc: imageSrcProp,
+  });
+  const text = content ?? "";
+
+  return (
+    <div className={cn("space-y-3", className)}>
+      {kind === "image" ? (
+        imageSrc ? (
+          <ImagePreview src={imageSrc} alt={filename} />
+        ) : (
+          <p className="text-sm text-muted-foreground">{unsupportedText ?? emptyText}</p>
+        )
+      ) : !text.trim() ? (
+        <p className="text-sm text-muted-foreground">{emptyText}</p>
+      ) : (
+        renderByKind(kind, { filename, content, contentBase64, mimeType, imageSrc: imageSrcProp, emptyText, unsupportedText }, text, imageSrc)
+      )}
+      {truncated && truncatedText ? <p className="text-xs text-warning">{truncatedText}</p> : null}
+    </div>
+  );
+}

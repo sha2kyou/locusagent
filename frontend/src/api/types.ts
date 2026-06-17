@@ -128,6 +128,14 @@ export interface SkillFileEntry {
   size: number | null;
 }
 
+export interface SkillFileContent {
+  path: string;
+  kind: "text" | "binary";
+  content?: string | null;
+  content_base64?: string | null;
+  mime_type?: string | null;
+}
+
 export interface SkillInstallResult {
   name: string;
   description: string;

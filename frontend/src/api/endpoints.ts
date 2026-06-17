@@ -16,6 +16,7 @@ import type {
   NotificationEntry,
   SessionMeta,
   Skill,
+  SkillFileContent,
   SkillFileEntry,
   SkillInstallResult,
   ScheduledTask,
@@ -205,7 +206,7 @@ export const listSkillFiles = (name: string) =>
   apiGet<{ items: SkillFileEntry[] }>(`/api/workspace/skills/${encodeURIComponent(name)}/files`);
 
 export const getSkillFile = (name: string, path: string) =>
-  apiGet<{ path: string; content: string }>(
+  apiGet<SkillFileContent>(
     `/api/workspace/skills/${encodeURIComponent(name)}/file?path=${encodeURIComponent(path)}`,
   );
 

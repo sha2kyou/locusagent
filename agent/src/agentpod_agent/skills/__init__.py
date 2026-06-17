@@ -2,9 +2,11 @@
 
 from .fs import (
     SkillFileEntry,
+    SkillFilePreview,
     format_skill_file_tree,
     list_skill_files,
     read_skill_file,
+    read_skill_file_preview,
     resolve_skill_file,
     skill_root,
 )
@@ -16,6 +18,7 @@ __all__ = [
     "InstallResult",
     "Skill",
     "SkillFileEntry",
+    "SkillFilePreview",
     "SkillMdAnalysis",
     "analyze_skill_md",
     "create_skill",
@@ -28,6 +31,7 @@ __all__ = [
     "load_all_skills",
     "parse_install_source",
     "read_skill_file",
+    "read_skill_file_preview",
     "resolve_skill_file",
     "skill_root",
     "update_skill",
