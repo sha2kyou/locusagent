@@ -16,13 +16,26 @@ PROXY_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH"]
 
 
 @router.api_route("/skills", methods=PROXY_METHODS)
+@router.api_route("/skills/install", methods=["POST"])
+@router.api_route("/skills/{name}/files", methods=["GET"])
+@router.api_route("/skills/{name}/file", methods=["GET"])
 @router.api_route("/skills/{name}", methods=PROXY_METHODS)
 async def proxy_skills(
     request: Request,
     ctx: AuthContext = Depends(require_session),
     name: str | None = None,
 ):
-    target = f"/workspace/skills/{name}" if name else "/workspace/skills"
+    path = request.url.path.rstrip("/")
+    if path.endswith("/install"):
+        target = "/workspace/skills/install"
+    elif name and path.endswith("/files"):
+        target = f"/workspace/skills/{name}/files"
+    elif name and path.endswith("/file"):
+        target = f"/workspace/skills/{name}/file"
+    elif name:
+        target = f"/workspace/skills/{name}"
+    else:
+        target = "/workspace/skills"
     return await proxy_to_agent(request, target)
 
 

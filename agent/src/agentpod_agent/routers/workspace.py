@@ -11,6 +11,7 @@ import uuid
 from typing import Literal
 from urllib.parse import quote
 
+import httpx
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
@@ -87,7 +88,10 @@ from ..skills import (
     create_skill,
     delete_skill,
     get_skill,
+    install_skill_from_url,
+    list_skill_files,
     list_skills,
+    read_skill_file,
     update_skill,
 )
 from ..tool_settings import (
@@ -141,6 +145,12 @@ class SkillUpdateIn(BaseModel):
     triggers: list[str] | None = None
 
 
+class SkillInstallIn(BaseModel):
+    url: str
+    path: str | None = None
+    overwrite: bool = False
+
+
 @router.get("/skills")
 async def workspace_list_skills() -> dict:
     skills = await run_in_thread(list_skills)
@@ -161,6 +171,53 @@ async def workspace_get_skill(name: str) -> dict:
     if s is None:
         raise WsError("skill_not_found", "skill not found", status_code=404)
     return s.to_dict()
+
+
+@router.get("/skills/{name}/files")
+async def workspace_list_skill_files(name: str) -> dict:
+    s = await run_in_thread(get_skill, name)
+    if s is None:
+        raise WsError("skill_not_found", "skill not found", status_code=404)
+    try:
+        files = await run_in_thread(list_skill_files, name)
+    except FileNotFoundError as exc:
+        raise WsError("skill_not_found", str(exc), status_code=404) from exc
+    return {"items": [entry.to_dict() for entry in files]}
+
+
+@router.get("/skills/{name}/file")
+async def workspace_get_skill_file(name: str, path: str = Query(..., min_length=1)) -> dict:
+    s = await run_in_thread(get_skill, name)
+    if s is None:
+        raise WsError("skill_not_found", "skill not found", status_code=404)
+    try:
+        content = await run_in_thread(read_skill_file, name, path)
+    except FileNotFoundError as exc:
+        raise WsError("skill_file_not_found", str(exc), status_code=404) from exc
+    except IsADirectoryError as exc:
+        raise WsError("skill_file_invalid", str(exc), status_code=400) from exc
+    except ValueError as exc:
+        raise WsError("skill_file_invalid", str(exc), status_code=400) from exc
+    return {"path": path, "content": content}
+
+
+@router.post("/skills/install", status_code=201)
+async def workspace_install_skill(payload: SkillInstallIn) -> dict:
+    try:
+        result = await run_in_thread(
+            install_skill_from_url,
+            payload.url,
+            subpath=payload.path,
+            overwrite=payload.overwrite,
+        )
+    except FileExistsError as exc:
+        raise WsError("skill_exists", str(exc), status_code=409) from exc
+    except ValueError as exc:
+        raise WsError("skill_install_invalid", str(exc), status_code=400) from exc
+    except httpx.HTTPError as exc:
+        raise WsError("skill_install_failed", f"download failed: {exc}", status_code=502) from exc
+    record_activity("skill", "install", f"已安装技能「{result.name}」")
+    return result.to_dict()
 
 
 @router.post("/skills", status_code=201)

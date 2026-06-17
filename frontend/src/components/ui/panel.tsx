@@ -44,20 +44,29 @@ export function CollapsibleSection({
   summary,
   children,
   defaultOpen = false,
+  onOpenChange,
 }: {
   summary: ReactNode;
   children: ReactNode;
   defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   useEffect(() => {
     if (defaultOpen) setOpen(true);
   }, [defaultOpen]);
+  const toggle = () => {
+    setOpen((v) => {
+      const next = !v;
+      onOpenChange?.(next);
+      return next;
+    });
+  };
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         className="flex w-full items-center justify-between border-t border-border px-4 py-2.5 text-left"
       >
         {typeof summary === "string" ? (

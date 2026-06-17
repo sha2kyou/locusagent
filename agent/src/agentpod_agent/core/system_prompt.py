@@ -46,7 +46,10 @@ MEMORY_GUIDANCE = (
 
 SKILLS_GUIDANCE = (
     "A compact skill catalog is listed below. When a skill is relevant, call skill_view{name} to "
-    "load the full body on demand; do not guess its contents. "
+    "load the full SKILL.md on demand; do not guess its contents. "
+    "For references/, scripts/, or assets/ files listed in the skill, call "
+    "skill_view{name, file_path} to load them progressively. "
+    "To install a skill from GitHub, a zip URL, or a direct SKILL.md link into the workspace, use skill_install. "
     "Only private skills may be modified via skill_manage; shared and built-in skills are read-only."
 )
 
@@ -207,7 +210,7 @@ async def build_stable_prompt() -> str:
         tool_guidance.append(MEMORY_GUIDANCE)
     if "session_search" in enabled or "session_recall" in enabled:
         tool_guidance.append(SESSION_SEARCH_GUIDANCE)
-    if "skill_view" in enabled or "skill_manage" in enabled:
+    if "skill_view" in enabled or "skill_manage" in enabled or "skill_install" in enabled:
         tool_guidance.append(SKILLS_GUIDANCE)
     if "artifact_save" in enabled:
         tool_guidance.append(ARTIFACT_GUIDANCE)

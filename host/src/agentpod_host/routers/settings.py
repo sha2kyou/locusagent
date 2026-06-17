@@ -12,8 +12,10 @@ from pydantic import BaseModel, Field
 from agentpod_shared.settings_store import (
     app_config_for_api,
     apply_app_config_update,
+    export_settings_document,
     get_app_locale,
     get_app_timezone,
+    import_settings_document,
     reload_runtime_config,
     set_app_locale,
     set_app_timezone,
@@ -272,4 +274,29 @@ async def save_app_config(
         await recalc_task_schedules()
 
     record_activity("settings", "app_config_save", "App config saved")
+    return AppConfigOut.model_validate(app_config_for_api(doc))
+
+
+@router.get("/export")
+async def export_settings(ctx: AuthContext = Depends(require_session)) -> dict:
+    _ = ctx
+    return export_settings_document()
+
+
+@router.post("/import", response_model=AppConfigOut)
+async def import_settings(
+    payload: dict,
+    ctx: AuthContext = Depends(require_session),
+) -> AppConfigOut:
+    _ = ctx
+    if not isinstance(payload, dict):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="invalid settings document")
+    try:
+        doc = import_settings_document(payload)
+    except Exception as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f"invalid settings: {exc}") from exc
+
+    reload_runtime_config()
+    await recalc_task_schedules()
+    record_activity("settings", "settings_import", "Settings imported from file")
     return AppConfigOut.model_validate(app_config_for_api(doc))

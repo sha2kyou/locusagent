@@ -3,19 +3,131 @@ import { useTranslation } from "react-i18next";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
+import { FileTree } from "@/components/ui/file-tree";
 import { Input, Label, Textarea } from "@/components/ui/field";
 import { SearchInput } from "@/components/ui/search-input";
 import { Badge } from "@/components/ui/badge";
 import { CollapsiblePanel, CollapsibleSection, ListCard } from "@/components/ui/panel";
+import { Drawer } from "@/components/ui/drawer";
 import { SegmentControl } from "@/components/ui/segment-control";
 import { Empty, listItemDescriptionClass, listRowHoverActionsClass, Loading } from "@/components/ui/list-state";
 import { Tag } from "@/components/ui/tag";
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
-import { createSkill, deleteSkill, listSkills, updateSkill } from "@/api/endpoints";
-import type { Skill } from "@/api/types";
+import { createSkill, deleteSkill, getSkillFile, installSkill, listSkillFiles, listSkills, updateSkill } from "@/api/endpoints";
+import type { Skill, SkillFileEntry } from "@/api/types";
 import { toastAction } from "@/lib/toast-copy";
+import { buildFileTree, collectDirPaths } from "@/lib/skill-file-tree";
+
+function SkillFilesPanel({ skill }: { skill: Skill }) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const [files, setFiles] = useState<SkillFileEntry[] | null>(null);
+  const [loadingFiles, setLoadingFiles] = useState(false);
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [content, setContent] = useState<string | null>(null);
+  const [loadingContent, setLoadingContent] = useState(false);
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+
+  const tree = useMemo(() => buildFileTree(files ?? []), [files]);
+
+  useEffect(() => {
+    if (tree.length > 0) {
+      setExpandedPaths(collectDirPaths(tree));
+    }
+  }, [tree]);
+
+  const toggleDir = (path: string) => {
+    setExpandedPaths((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  };
+
+  const loadFiles = async () => {
+    if (files !== null || loadingFiles) return;
+    setLoadingFiles(true);
+    try {
+      const { items } = await listSkillFiles(skill.name);
+      setFiles(items);
+    } catch (e) {
+      toast((e as Error).message, "error");
+      setFiles([]);
+    } finally {
+      setLoadingFiles(false);
+    }
+  };
+
+  useEffect(() => {
+    setSelectedPath(null);
+    setContent(null);
+  }, [skill.name]);
+
+  const closeDrawer = () => {
+    setSelectedPath(null);
+    setContent(null);
+  };
+
+  const openFile = async (path: string) => {
+    setSelectedPath(path);
+    if (path === "SKILL.md") {
+      setLoadingContent(false);
+      setContent(skill.body || "");
+      return;
+    }
+    setLoadingContent(true);
+    try {
+      const { content: text } = await getSkillFile(skill.name, path);
+      setContent(text);
+    } catch (e) {
+      toast((e as Error).message, "error");
+      setContent(null);
+    } finally {
+      setLoadingContent(false);
+    }
+  };
+
+  return (
+    <>
+      <CollapsibleSection summary={t("skills.files.title")} onOpenChange={(open) => open && void loadFiles()}>
+        {loadingFiles ? (
+          <Loading />
+        ) : tree.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("skills.files.empty")}</p>
+        ) : (
+          <FileTree
+            nodes={tree}
+            selectedPath={selectedPath}
+            expandedPaths={expandedPaths}
+            onToggleDir={toggleDir}
+            onSelectFile={(path) => void openFile(path)}
+          />
+        )}
+      </CollapsibleSection>
+
+      <Drawer
+        open={!!selectedPath}
+        onClose={closeDrawer}
+        title={selectedPath?.split("/").pop()}
+        description={selectedPath ?? undefined}
+        actions={
+          selectedPath && selectedPath !== "SKILL.md" ? (
+            <Badge variant="outline">{t("skills.files.readOnly")}</Badge>
+          ) : undefined
+        }
+      >
+        {loadingContent ? (
+          <Loading />
+        ) : (
+          <pre className="whitespace-pre-wrap font-mono text-sm text-foreground">{content ?? t("skills.badge.noBody")}</pre>
+        )}
+      </Drawer>
+    </>
+  );
+}
 
 export function SkillsRoute() {
   const { t } = useTranslation();
@@ -30,6 +142,10 @@ export function SkillsRoute() {
   const [triggers, setTriggers] = useState("");
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
+  const [installUrl, setInstallUrl] = useState("");
+  const [installPath, setInstallPath] = useState("");
+  const [installOverwrite, setInstallOverwrite] = useState(false);
+  const [installing, setInstalling] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
 
   const load = async () => {
@@ -125,6 +241,28 @@ export function SkillsRoute() {
     }
   };
 
+  const submitInstall = async () => {
+    const url = installUrl.trim();
+    if (!url) return;
+    setInstalling(true);
+    try {
+      const result = await installSkill({
+        url,
+        path: installPath.trim() || undefined,
+        overwrite: installOverwrite,
+      });
+      setInstallUrl("");
+      setInstallPath("");
+      setInstallOverwrite(false);
+      await load();
+      toast(toastAction("added", result.name, "skill"), "success");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setInstalling(false);
+    }
+  };
+
   return (
     <PageContainer
       title={t("skills.title")}
@@ -190,13 +328,53 @@ export function SkillsRoute() {
                       {s.body || t("skills.badge.noBody")}
                     </pre>
                   </CollapsibleSection>
+                  {s.source === "private" && <SkillFilesPanel skill={s} />}
                 </ListCard>
               ))}
             </div>
           )}
 
           {tab === "private" && (
-            <div ref={formRef}>
+            <div ref={formRef} className="space-y-4">
+              <CollapsiblePanel
+                summary={t("skills.install.title")}
+                defaultOpen={false}
+              >
+                <p className="mb-3 text-sm text-muted-foreground">{t("skills.install.summary")}</p>
+                <div className="grid gap-3">
+                  <div className="grid gap-1.5">
+                    <Label>{t("skills.install.url")}</Label>
+                    <Input
+                      value={installUrl}
+                      onChange={(e) => setInstallUrl(e.target.value)}
+                      placeholder={t("skills.install.urlPlaceholder")}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label>{t("skills.install.path")}</Label>
+                    <Input
+                      value={installPath}
+                      onChange={(e) => setInstallPath(e.target.value)}
+                      placeholder={t("skills.install.pathPlaceholder")}
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={installOverwrite}
+                      onChange={(e) => setInstallOverwrite(e.target.checked)}
+                    />
+                    {t("skills.install.overwrite")}
+                  </label>
+                  <div>
+                    <Button variant="primary" disabled={installing || !installUrl.trim()} onClick={submitInstall}>
+                      {installing && <Loader2 className="size-4 animate-spin" />}
+                      {t("skills.install.submit")}
+                    </Button>
+                  </div>
+                </div>
+              </CollapsiblePanel>
+
               <CollapsiblePanel
                 summary={editing ? t("skills.form.editSummary", { name: editing.name }) : t("skills.form.addTitle")}
                 defaultOpen={!!editing}

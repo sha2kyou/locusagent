@@ -22,7 +22,7 @@ Later the product became a **local desktop app** (macOS and Windows). Host and A
 
 - **Local & private** — Conversations, memory, and workspace files stay on your machine. No cloud account required beyond your LLM provider API key.
 - **Tool-native agent loop** — File I/O, sandboxed code execution, controlled terminal commands, web search/extract, and file delivery from a single chat UI.
-- **Skills** — Reusable instruction packs (built-in, shared, and user-defined) loaded on demand for specialized workflows.
+- **Skills** — Reusable instruction packs: built-in (read-only), plus per-workspace user Skills you can author or install from GitHub/zip URLs.
 - **MCP** — Plug in Model Context Protocol servers for calendars, databases, APIs, and other external systems.
 - **Memory** — Long-term facts/preferences and short-term notes that persist across sessions, scoped per workspace.
 - **Artifacts** — Save deliverables into categorized libraries and recall them later.
@@ -165,7 +165,8 @@ npm run dev              # Tauri window → devUrl http://127.0.0.1:21223
 | `<home>/.agentpod/host.sqlite` | Host metadata (workspace registry, etc.) |
 | `<home>/.agentpod/workspaces/<id>/agent.sqlite` | Sessions, messages, memory, runs for that workspace |
 | `<home>/.agentpod/workspaces/<id>/workspace/` | Workspace files the agent can read and write |
-| `<home>/.agentpod/skills/` | User Skills synced from the app |
+| `<home>/.agentpod/skills/` | Built-in Skills mirror (refreshed from the app on launch; read-only) |
+| `<home>/.agentpod/workspaces/<id>/skills/` | Per-workspace user Skills (create in UI, `skill_install`, or agent `skill_manage`) |
 
 `<home>` is `~` on macOS/Linux and `%USERPROFILE%` on Windows. Override with the `AGENTPOD_HOME` environment variable.
 

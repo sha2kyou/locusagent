@@ -1,16 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Download, Loader2, Upload } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/field";
 import { SegmentControl } from "@/components/ui/segment-control";
 import { useToast } from "@/components/ui/toast";
+import { useDialogs } from "@/components/ui/dialogs";
 import { useTheme, type ThemePreference } from "@/app/theme";
 import { useRefreshAppTimezone, useAppTimezone } from "@/lib/use-app-timezone";
-import { putTimezoneConfig } from "@/api/endpoints";
+import { putTimezoneConfig, exportSettings, importSettings } from "@/api/endpoints";
 import { getDesktopPrefs, isDesktopPrefsAvailable, setDesktopPrefs } from "@/lib/desktop-prefs";
 import { isDesktopPrefsPartialSaveError } from "@/lib/desktop-prefs-errors";
 import { persistAppLocale } from "@/lib/app-locale";
+import { applyDesktopDevtoolsSettings } from "@/lib/desktop-devtools";
+import { isDesktopApp } from "@/lib/desktop-app";
 import { SUPPORTED_LOCALES, type AppLocale } from "@/i18n";
 import { SettingsSection } from "./SettingsSection";
 
@@ -28,6 +31,8 @@ const TIMEZONE_OPTIONS = [
 export function SettingsGeneralPage() {
   const { t, i18n } = useTranslation();
   const toast = useToast();
+  const dialogs = useDialogs();
+  const importInputRef = useRef<HTMLInputElement>(null);
   const { preference: themePreference, setPreference: setThemePreference } = useTheme();
   const appTimeZone = useAppTimezone();
   const refreshAppTimeZone = useRefreshAppTimezone();
@@ -37,6 +42,8 @@ export function SettingsGeneralPage() {
   const [launchAtLogin, setLaunchAtLogin] = useState(false);
   const [desktopPrefsSaving, setDesktopPrefsSaving] = useState(false);
   const [localeSaving, setLocaleSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
   const desktopPrefsAvailable = isDesktopPrefsAvailable();
 
   const themeOptions = useMemo(
@@ -124,6 +131,78 @@ export function SettingsGeneralPage() {
       }
     } finally {
       setDesktopPrefsSaving(false);
+    }
+  };
+
+  const downloadSettingsFile = (data: Record<string, unknown>) => {
+    const blob = new Blob([JSON.stringify(data, null, 2) + "\n"], {
+      type: "application/json;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "settings.json";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const data = await exportSettings();
+      downloadSettingsFile(data);
+      toast(t("settings.general.configExport.exported"), "success");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleImportFile = async (file: File) => {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(await file.text());
+    } catch {
+      toast(t("settings.general.configImport.invalidJson"), "error");
+      return;
+    }
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      toast(t("settings.general.configImport.invalidFormat"), "error");
+      return;
+    }
+
+    const firstConfirmed = await dialogs.confirm({
+      title: t("settings.general.configImport.confirmTitle"),
+      body: t("settings.general.configImport.confirmBody", { filename: file.name }),
+      confirmText: t("settings.general.configImport.continueAction"),
+      danger: true,
+    });
+    if (!firstConfirmed) return;
+
+    const finalConfirmed = await dialogs.confirm({
+      title: t("settings.general.configImport.finalConfirmTitle"),
+      body: t("settings.general.configImport.finalConfirmBody"),
+      confirmText: t("settings.general.configImport.confirmAction"),
+      danger: true,
+    });
+    if (!finalConfirmed) return;
+
+    setImporting(true);
+    try {
+      const next = await importSettings(raw as Record<string, unknown>);
+      setTimezone(next.app.timezone);
+      await refreshAppTimeZone();
+      await persistAppLocale(next.app.locale === "en" ? "en" : "zh");
+      if (isDesktopApp()) {
+        await applyDesktopDevtoolsSettings();
+      }
+      toast(t("settings.general.configImport.imported"), "success");
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setImporting(false);
+      if (importInputRef.current) importInputRef.current.value = "";
     }
   };
 
@@ -230,6 +309,36 @@ export function SettingsGeneralPage() {
               {t("common.actions.save")}
             </Button>
           </div>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection
+        title={t("settings.general.configExport.title")}
+        description={t("settings.general.configExport.description")}
+      >
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" disabled={exporting || importing} onClick={() => void handleExport()}>
+            {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+            {t("common.actions.export")}
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={exporting || importing}
+            onClick={() => importInputRef.current?.click()}
+          >
+            {importing ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+            {t("settings.general.configImport.action")}
+          </Button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleImportFile(file);
+            }}
+          />
         </div>
       </SettingsSection>
     </div>

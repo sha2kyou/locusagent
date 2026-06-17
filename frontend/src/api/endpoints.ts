@@ -16,6 +16,8 @@ import type {
   NotificationEntry,
   SessionMeta,
   Skill,
+  SkillFileEntry,
+  SkillInstallResult,
   ScheduledTask,
   ScheduleKind,
   TimezoneConfig,
@@ -73,6 +75,11 @@ export const getBackendLogs = (opts?: { lines?: number }, signal?: AbortSignal) 
   const q = params.toString();
   return apiGet<BackendLogs>(`/api/settings/backend-logs${q ? `?${q}` : ""}`, { signal });
 };
+
+export const exportSettings = () => apiGet<Record<string, unknown>>("/api/settings/export");
+
+export const importSettings = (body: Record<string, unknown>) =>
+  apiSend<AppConfig>("/api/settings/import", "POST", body);
 
 // ---- 定时任务 ----
 export const listScheduledTasks = () => apiGet<{ items: ScheduledTask[] }>("/api/scheduled-tasks");
@@ -193,6 +200,17 @@ export const updateSkill = (name: string, body: { description: string; body: str
 
 export const deleteSkill = (name: string) =>
   apiSend<{ deleted: boolean }>(`/api/workspace/skills/${encodeURIComponent(name)}`, "DELETE");
+
+export const listSkillFiles = (name: string) =>
+  apiGet<{ items: SkillFileEntry[] }>(`/api/workspace/skills/${encodeURIComponent(name)}/files`);
+
+export const getSkillFile = (name: string, path: string) =>
+  apiGet<{ path: string; content: string }>(
+    `/api/workspace/skills/${encodeURIComponent(name)}/file?path=${encodeURIComponent(path)}`,
+  );
+
+export const installSkill = (body: { url: string; path?: string; overwrite?: boolean }) =>
+  apiSend<SkillInstallResult>("/api/workspace/skills/install", "POST", body);
 
 // ---- MCP ----
 export const listMcp = (opts?: { sync?: boolean }) =>

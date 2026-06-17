@@ -1,6 +1,6 @@
 [package]
 name = "agentpod-desktop"
-version = "0.1.19"
+version = "0.1.20"
 description = "AgentPod macOS desktop shell"
 authors = ["AgentPod"]
 license = "Apache-2.0"

@@ -87,6 +87,23 @@
         "label": "时区",
         "save": "保存时区",
         "saved": "时区已保存：{{tz}}"
+      },
+      "configExport": {
+        "title": "配置文件",
+        "description": "导出或导入完整 settings.json，含 API 密钥与 secrets，用于备份或迁移。",
+        "exported": "配置文件已导出"
+      },
+      "configImport": {
+        "action": "导入",
+        "confirmTitle": "导入配置文件",
+        "confirmBody": "将用「{{filename}}」完全覆盖当前 settings.json，现有配置不可恢复。",
+        "continueAction": "继续",
+        "finalConfirmTitle": "最后确认",
+        "finalConfirmBody": "此操作将立即覆盖全部设置（含 API 密钥与 secrets），且无法撤销。确定导入？",
+        "confirmAction": "导入并覆盖",
+        "imported": "配置文件已导入",
+        "invalidJson": "无法解析 JSON 文件",
+        "invalidFormat": "文件格式无效，需为 settings.json 对象"
       }
     },
     "models": {
@@ -362,9 +379,9 @@
   },
   "skills": {
     "title": "技能",
-    "subtitle": "共享与私有技能管理",
-    "counts": { "shared": "共享 {{count}}", "private": "私有 {{count}}" },
-    "tabs": { "shared": "共享技能", "private": "私有技能" },
+    "subtitle": "内置共享技能与我的技能管理",
+    "counts": { "shared": "共享 {{count}}", "private": "我的 {{count}}" },
+    "tabs": { "shared": "共享技能", "private": "我的技能" },
     "searchPlaceholder": "搜索技能…",
     "noMatch": "无匹配技能",
     "empty": "暂无技能",
@@ -381,6 +398,21 @@
       "description": "描述",
       "triggers": "触发词（逗号分隔）",
       "body": "正文（Markdown）"
+    },
+    "files": {
+      "title": "目录文件",
+      "empty": "该技能目录下暂无文件",
+      "readOnly": "只读"
+    },
+    "install": {
+      "title": "从 URL 安装",
+      "summary": "安装 GitHub / zip / SKILL.md 链接到当前工作区",
+      "url": "链接",
+      "urlPlaceholder": "https://github.com/… 或 zip / SKILL.md 链接",
+      "path": "子路径（可选）",
+      "pathPlaceholder": "monorepo 内 skill 目录，如 skills/pdf",
+      "overwrite": "覆盖同名技能",
+      "submit": "安装"
     }
   },
   "mcp": {

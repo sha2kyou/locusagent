@@ -276,6 +276,20 @@ def set_app_locale(locale: str) -> SettingsDocument:
     return doc
 
 
+def export_settings_document() -> dict[str, Any]:
+    """导出完整 settings.json 内容（含 secrets），用于备份与迁移。"""
+    doc = load_settings_document()
+    return doc.model_dump(mode="json")
+
+
+def import_settings_document(raw: dict[str, Any]) -> SettingsDocument:
+    """用导入内容完全覆盖当前 settings.json。"""
+    doc = SettingsDocument.model_validate(raw if isinstance(raw, dict) else {})
+    save_settings_document(doc)
+    clear_settings_cache()
+    return _ensure_secrets(doc)
+
+
 def reload_runtime_config() -> None:
     """保存 settings.json 后刷新进程内配置缓存。"""
     clear_settings_cache()

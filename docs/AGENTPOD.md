@@ -42,8 +42,10 @@ First-time users must configure an LLM API key and main model under **Settings â
 - `session_delete`: delete sessions (use carefully, match user intent).
 
 ### Skills
-- `skill_view`: load full skill instructions before executing.
-- `skill_manage`: modify **private user** skills only.
+- Built-in Skills ship with the app and are mirrored to `<home>/.agentpod/skills/` (read-only). User Skills live under `<home>/.agentpod/workspaces/<id>/skills/` (editable; may include `references/`, `scripts/`, etc.).
+- `skill_view`: load `SKILL.md` or a file under the skill directory (`file_path`) before executing.
+- `skill_install`: install a skill package from a GitHub / zip / `SKILL.md` URL into the **current workspace** user Skills directory.
+- `skill_manage`: create / update / patch / delete **workspace user** Skills only (not built-in).
 
 ### Artifacts
 - `artifact_save` / `artifact_read` / `artifact_list` / `artifact_update` / `artifact_delete` / `artifact_recall`: archived deliverables.

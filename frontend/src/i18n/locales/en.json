@@ -87,6 +87,23 @@
         "label": "Timezone",
         "save": "Save timezone",
         "saved": "Timezone saved: {{tz}}"
+      },
+      "configExport": {
+        "title": "Configuration file",
+        "description": "Export or import the full settings.json, including API keys and secrets, for backup or migration.",
+        "exported": "Configuration exported"
+      },
+      "configImport": {
+        "action": "Import",
+        "confirmTitle": "Import configuration",
+        "confirmBody": "「{{filename}}」 will completely overwrite the current settings.json. Existing settings cannot be recovered.",
+        "continueAction": "Continue",
+        "finalConfirmTitle": "Final confirmation",
+        "finalConfirmBody": "This will immediately overwrite all settings (including API keys and secrets) and cannot be undone. Import now?",
+        "confirmAction": "Import and overwrite",
+        "imported": "Configuration imported",
+        "invalidJson": "Could not parse JSON file",
+        "invalidFormat": "Invalid format: expected a settings.json object"
       }
     },
     "models": {
@@ -362,9 +379,9 @@
   },
   "skills": {
     "title": "Skills",
-    "subtitle": "Shared and private skill management",
-    "counts": { "shared": "Shared {{count}}", "private": "Private {{count}}" },
-    "tabs": { "shared": "Shared skills", "private": "Private skills" },
+    "subtitle": "Built-in shared skills and my workspace skills",
+    "counts": { "shared": "Shared {{count}}", "private": "My {{count}}" },
+    "tabs": { "shared": "Shared skills", "private": "My skills" },
     "searchPlaceholder": "Search skills…",
     "noMatch": "No matching skills",
     "empty": "No skills yet",
@@ -381,6 +398,21 @@
       "description": "Description",
       "triggers": "Triggers (comma-separated)",
       "body": "Body (Markdown)"
+    },
+    "files": {
+      "title": "Files",
+      "empty": "No files in this skill directory",
+      "readOnly": "Read-only"
+    },
+    "install": {
+      "title": "Install from URL",
+      "summary": "Install a GitHub / zip / SKILL.md link into this workspace",
+      "url": "URL",
+      "urlPlaceholder": "https://github.com/… or zip / SKILL.md link",
+      "path": "Subpath (optional)",
+      "pathPlaceholder": "Skill directory in a monorepo, e.g. skills/pdf",
+      "overwrite": "Overwrite existing skill with the same name",
+      "submit": "Install"
     }
   },
   "mcp": {

@@ -122,6 +122,20 @@ export interface Skill {
   enabled?: boolean;
 }
 
+export interface SkillFileEntry {
+  path: string;
+  is_dir: boolean;
+  size: number | null;
+}
+
+export interface SkillInstallResult {
+  name: string;
+  description: string;
+  source_url: string;
+  install_path: string;
+  file_count: number;
+}
+
 export interface McpTool {
   name: string;
   full_name: string;

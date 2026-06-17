@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
+
 from ..core.write_origin import ORIGIN_AUTO_EXTRACT, ORIGIN_MANUAL, is_auto_extract_write
 from ..db import run_in_thread
 from ..security import review_write
@@ -11,8 +13,11 @@ from ..skills import (
     Skill,
     create_skill,
     delete_skill,
+    format_skill_file_tree,
     get_skill,
+    install_skill_from_url,
     list_skills,
+    read_skill_file,
     update_skill,
 )
 from ..tool_settings import is_skill_enabled
@@ -22,6 +27,7 @@ from .base import Tool, ToolError, ToolResult, register_builtin
 
 async def _skill_view(args: dict[str, Any]) -> ToolResult:
     name = str(args.get("name", "")).strip()
+    file_path = pick_str(args, "file_path", "path")
 
     if not name:
         skills = await run_in_thread(list_skills)
@@ -41,9 +47,25 @@ async def _skill_view(args: dict[str, Any]) -> ToolResult:
     s = await run_in_thread(get_skill, name)
     if s is None:
         raise ToolError(f"skill not found: {name}")
+
+    if file_path:
+        try:
+            content = await run_in_thread(read_skill_file, name, file_path)
+        except FileNotFoundError as exc:
+            raise ToolError(str(exc)) from exc
+        except IsADirectoryError as exc:
+            raise ToolError(str(exc)) from exc
+        except ValueError as exc:
+            raise ToolError(str(exc)) from exc
+        return ToolResult(
+            content=f"# {name}/{file_path}\n\n{content}",
+            metadata={"skill": name, "file_path": file_path},
+        )
+
     origin_note = f", origin={s.origin}" if s.origin == ORIGIN_AUTO_EXTRACT else ""
+    file_tree = await run_in_thread(format_skill_file_tree, name)
     return ToolResult(
-        content=f"# {s.name} [{s.source}{origin_note}]\n{s.description}\n\n{s.body}",
+        content=f"# {s.name} [{s.source}{origin_note}]\n{s.description}\n\n{s.body}{file_tree}",
         metadata={"skill": s.to_dict()},
     )
 
@@ -148,13 +170,53 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
     raise ToolError(f"unknown action: {action}")
 
 
+async def _skill_install(args: dict[str, Any]) -> ToolResult:
+    url = pick_str(args, "url", "source")
+    if not url:
+        raise ToolError("url is required")
+    subpath = pick_str(args, "path", "subpath") or None
+    overwrite = bool(args.get("overwrite", False))
+    try:
+        result = await run_in_thread(
+            install_skill_from_url,
+            url,
+            subpath=subpath,
+            overwrite=overwrite,
+        )
+    except FileExistsError as exc:
+        raise ToolError(str(exc)) from exc
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise ToolError(f"download failed: {exc}") from exc
+    return ToolResult(
+        content=(
+            f"skill '{result.name}' installed ({result.file_count} files)\n"
+            f"description: {result.description or '(none)'}\n"
+            f"path: {result.install_path}"
+        ),
+        metadata=result.to_dict(),
+    )
+
+
 register_builtin(
     Tool(
         name="skill_view",
-        description="View skill content. Empty name lists summaries; given name returns full SKILL.md.",
+        description=(
+            "View skill content. Empty name lists summaries. "
+            "Given name returns full SKILL.md; optional file_path loads a file under the skill directory "
+            "(e.g. references/guide.md, scripts/run.sh)."
+        ),
         parameters={
             "type": "object",
-            "properties": {"name": {"type": "string", "default": ""}},
+            "properties": {
+                "name": {"type": "string", "default": ""},
+                "file_path": {
+                    "type": "string",
+                    "description": "Relative path within the skill directory. Alias: path.",
+                },
+                "path": {"type": "string", "description": "Alias for file_path."},
+            },
         },
         handler=_skill_view,
     )
@@ -182,5 +244,37 @@ register_builtin(
             "required": ["action", "name"],
         },
         handler=_skill_manage,
+    )
+)
+
+register_builtin(
+    Tool(
+        name="skill_install",
+        description=(
+            "Install a skill from a URL into the current workspace skills/ directory "
+            "(full directory with references/, scripts/, etc.). "
+            "Supports GitHub repo/tree/blob links (github:owner/repo optional), zip archives, "
+            "and direct SKILL.md URLs. Use path when the repo contains multiple skills."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "GitHub link, zip URL, or direct SKILL.md URL.",
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Subpath within the repo/archive to the skill directory or SKILL.md.",
+                },
+                "overwrite": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Replace an already installed skill with the same name.",
+                },
+            },
+            "required": ["url"],
+        },
+        handler=_skill_install,
     )
 )
