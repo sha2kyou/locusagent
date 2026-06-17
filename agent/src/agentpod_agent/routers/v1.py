@@ -199,14 +199,11 @@ async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, 
     if latest_user is None:
         raise ValueError("missing user message")
     new_user_content, persisted_user_text, user_query_text, attachment_ids = latest_user
-    user_mid: int | None = None
-    is_regenerate = False
 
     if req.session_id:
         last_db_user = await get_last_user_message(sid)
         if not attachment_ids and last_db_user == user_query_text:
             # 同一句重发即"重新生成 / 失败重试"：先清掉上一轮(可能中断的)助手输出再重跑
-            is_regenerate = True
             await truncate_after_last_user(sid)
             await delete_session_todos(sid)
         else:
@@ -229,18 +226,6 @@ async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, 
         schedule_session_title_generation(sid, user_query=user_query)
 
     await begin_user_turn(sid)
-
-    from ..hooks import emit_post_user_submit
-
-    await emit_post_user_submit(
-        session_id=sid,
-        user_message=user_query,
-        user_message_id=user_mid if (user_mid or 0) > 0 else None,
-        attachment_ids=attachment_ids or None,
-        submit_source="chat",
-        is_regenerate=is_regenerate,
-        workspace_id=get_workspace_id(),
-    )
 
     system_prompt = await _get_or_create_system_prompt(sid)
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]

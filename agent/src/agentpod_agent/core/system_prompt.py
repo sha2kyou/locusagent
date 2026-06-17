@@ -54,14 +54,6 @@ SKILLS_GUIDANCE = (
     "Only private skills may be modified via skill_manage; shared and built-in skills are read-only."
 )
 
-HOOKS_GUIDANCE = (
-    "Workspace lifecycle hooks live under hooks/<name>/hook.py (not inside skills). "
-    "Use hook_view to list or read hooks; hook_manage to create, update, patch, delete, enable, or disable. "
-    "Each hook.py must define register(ctx) and may call ctx.register_post_user_submit(callback) "
-    "to run code after each user message is accepted, before the LLM loop. "
-    "Callbacks receive submit_source (chat or scheduled); source is a legacy alias."
-)
-
 SESSION_SEARCH_GUIDANCE = (
     "When the user mentions past conversations or conclusions not in the memory snapshot, "
     "use session_recall or session_search first—do not guess."
@@ -221,8 +213,6 @@ async def build_stable_prompt() -> str:
         tool_guidance.append(SESSION_SEARCH_GUIDANCE)
     if "skill_view" in enabled or "skill_manage" in enabled or "skill_install" in enabled:
         tool_guidance.append(SKILLS_GUIDANCE)
-    if "hook_view" in enabled or "hook_manage" in enabled:
-        tool_guidance.append(HOOKS_GUIDANCE)
     if "artifact_save" in enabled:
         tool_guidance.append(ARTIFACT_GUIDANCE)
     if tool_guidance:

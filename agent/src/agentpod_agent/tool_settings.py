@@ -14,14 +14,12 @@ from .workspace import workspace_data_dir
 class ToolSettings:
     builtin_tools: dict[str, bool] = field(default_factory=dict)
     skills: dict[str, bool] = field(default_factory=dict)
-    hooks: dict[str, bool] = field(default_factory=dict)
     mcp_servers: dict[str, bool] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
             "builtin_tools": dict(self.builtin_tools),
             "skills": dict(self.skills),
-            "hooks": dict(self.hooks),
             "mcp_servers": dict(self.mcp_servers),
         }
 
@@ -38,7 +36,6 @@ def load_tool_settings() -> ToolSettings:
     return ToolSettings(
         builtin_tools=_normalize(raw.get("builtin_tools")),
         skills=_normalize(raw.get("skills")),
-        hooks=_normalize(raw.get("hooks")),
         mcp_servers=_normalize(raw.get("mcp_servers")),
     )
 
@@ -64,35 +61,9 @@ def is_skill_enabled(name: str) -> bool:
     return data.skills.get(name, True)
 
 
-def is_hook_enabled(name: str) -> bool:
-    data = load_tool_settings()
-    return data.hooks.get(name, True)
-
-
-def set_hook_enabled(name: str, enabled: bool) -> ToolSettings:
-    from .hooks.store import list_hooks
-
-    if name not in list_hooks():
-        raise ValueError(f"hook not found: {name}")
-    data = load_tool_settings()
-    data.hooks[name] = bool(enabled)
-    save_tool_settings(data)
-    from .hooks.loader import reload_workspace_hooks
-
-    reload_workspace_hooks()
-    return data
-
-
 def is_mcp_server_enabled(name: str) -> bool:
     data = load_tool_settings()
     return data.mcp_servers.get(name, True)
-
-
-def set_mcp_server_enabled(name: str, enabled: bool) -> ToolSettings:
-    data = load_tool_settings()
-    data.mcp_servers[name] = bool(enabled)
-    save_tool_settings(data)
-    return data
 
 
 def _normalize(value: object) -> dict[str, bool]:

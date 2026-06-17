@@ -95,14 +95,10 @@ from ..skills import (
     read_skill_file_preview,
     update_skill,
 )
-from ..hooks import list_post_user_submit_hooks
-from ..hooks.store import list_hooks, read_hook
 from ..tool_settings import (
-    is_hook_enabled,
     is_mcp_server_enabled,
     is_skill_enabled,
     set_builtin_tool_enabled,
-    set_hook_enabled,
 )
 from ..tools import registry as tool_registry
 from ..workspace import get_workspace_id
@@ -277,51 +273,6 @@ async def workspace_delete_skill(name: str) -> dict:
         raise WsError("skill_not_found", "private skill not found", status_code=404)
     record_activity("skill", "delete", f"已删除技能「{name}」")
     return {"deleted": True}
-
-
-@router.get("/hooks")
-async def workspace_list_hooks() -> dict:
-    hooks = await run_in_thread(list_hooks)
-    active = {entry["hook_name"] for entry in list_post_user_submit_hooks() if entry["hook_name"]}
-    return {
-        "items": [
-            {
-                "name": hook_name,
-                "enabled": is_hook_enabled(hook_name),
-                "loaded": hook_name in active,
-            }
-            for hook_name in hooks
-        ]
-    }
-
-
-@router.get("/hooks/{name}")
-async def workspace_get_hook(name: str) -> dict:
-    try:
-        content = await run_in_thread(read_hook, name)
-    except FileNotFoundError as exc:
-        raise WsError("hook_not_found", str(exc), status_code=404) from exc
-    active = {entry["hook_name"] for entry in list_post_user_submit_hooks() if entry["hook_name"]}
-    return {
-        "name": name,
-        "enabled": is_hook_enabled(name),
-        "loaded": name in active,
-        "content": content,
-    }
-
-
-@router.put("/hooks/{name}")
-async def workspace_toggle_hook(name: str, payload: ToolToggleIn) -> dict:
-    try:
-        await run_in_thread(set_hook_enabled, name, payload.enabled)
-    except ValueError as exc:
-        raise WsError("hook_not_found", str(exc), status_code=404) from exc
-    record_activity(
-        "hook",
-        "toggle",
-        f"Hook「{name}」已{'启用' if payload.enabled else '禁用'}",
-    )
-    return {"name": name, "enabled": payload.enabled}
 
 
 class MCPIn(BaseModel):
