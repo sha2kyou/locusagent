@@ -129,18 +129,6 @@ async def _run_callback(callback: HookCallback, event_name: str, **kwargs: Any) 
             callback=callback_name,
             error=str(exc),
         )
-    else:
-        user_message = kwargs.get("user_message")
-        log.info(
-            "hook_callback_fired",
-            hook_event=event_name,
-            hook=hook_name or None,
-            callback=callback_name,
-            session_id=kwargs.get("session_id"),
-            submit_source=kwargs.get("submit_source"),
-            is_regenerate=kwargs.get("is_regenerate"),
-            user_message_len=len(user_message) if isinstance(user_message, str) else None,
-        )
 
 
 async def invoke_hook(hook_name: str, **kwargs: Any) -> None:

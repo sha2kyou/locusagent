@@ -6,7 +6,6 @@ from typing import Any
 
 from ..db import run_in_thread
 from ..hooks import list_post_user_submit_hooks
-from ..hooks.catalog import format_hook_events_catalog, format_hook_events_summary
 from ..hooks.loader import reload_workspace_hooks
 from ..hooks.store import (
     create_hook,
@@ -25,15 +24,14 @@ async def _hook_view(args: dict[str, Any]) -> ToolResult:
     name = str(args.get("name", "")).strip()
     if not name:
         hooks = await run_in_thread(list_hooks)
-        lines = ["## Supported hook events", format_hook_events_catalog(), "", "## Installed hooks"]
         if not hooks:
-            lines.append("(no hooks installed)")
-        else:
-            active = {entry["hook_name"] for entry in list_post_user_submit_hooks() if entry["hook_name"]}
-            for hook_name in hooks:
-                enabled = "enabled" if is_hook_enabled(hook_name) else "disabled"
-                loaded = "loaded" if hook_name in active else "not_loaded"
-                lines.append(f"- {hook_name} [{enabled}, {loaded}]")
+            return ToolResult(content="(no hooks)")
+        active = {entry["hook_name"] for entry in list_post_user_submit_hooks() if entry["hook_name"]}
+        lines = []
+        for hook_name in hooks:
+            enabled = "enabled" if is_hook_enabled(hook_name) else "disabled"
+            loaded = "loaded" if hook_name in active else "not_loaded"
+            lines.append(f"- {hook_name} [{enabled}, {loaded}]")
         return ToolResult(content="\n".join(lines))
 
     if not is_hook_enabled(name):
@@ -132,15 +130,12 @@ async def _hook_manage(args: dict[str, Any]) -> ToolResult:
     raise ToolError(f"unknown action: {action}")
 
 
-_HOOK_EVENTS_SUMMARY = format_hook_events_summary()
-
 register_builtin(
     Tool(
         name="hook_view",
         description=(
-            f"{_HOOK_EVENTS_SUMMARY} "
-            "Empty name lists supported events and installed hooks under hooks/<name>/hook.py. "
-            "Given name returns that hook's hook.py source."
+            "View workspace lifecycle hooks. Empty name lists hooks under hooks/<name>/hook.py. "
+            "Given name returns hook.py source. Hooks run on post_user_submit (after user message accepted)."
         ),
         parameters={
             "type": "object",
@@ -156,9 +151,8 @@ register_builtin(
     Tool(
         name="hook_manage",
         description=(
-            f"{_HOOK_EVENTS_SUMMARY} "
             "Manage workspace hooks: create / update / patch / delete / enable / disable hook.py under hooks/<name>/. "
-            "hook.py must define register(ctx); use ctx.register_post_user_submit(callback) for the post_user_submit event."
+            "Each hook must define register(ctx) and may call ctx.register_post_user_submit(callback)."
         ),
         parameters={
             "type": "object",

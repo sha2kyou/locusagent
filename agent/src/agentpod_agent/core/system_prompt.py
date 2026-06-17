@@ -56,11 +56,10 @@ SKILLS_GUIDANCE = (
 
 HOOKS_GUIDANCE = (
     "Workspace lifecycle hooks live under hooks/<name>/hook.py (not inside skills). "
-    "Use hook_view (empty name) to see supported events and installed hooks; hook_manage to create, update, patch, delete, enable, or disable. "
-    "Supported events (register via register(ctx) in hook.py): "
-    "post_user_submit — fires after each user message is accepted, before the LLM loop (observe-only; cannot block or inject context). "
-    "Callback kwargs: hook_name, session_id, user_message, user_message_id, attachment_ids, submit_source (chat|scheduled), is_regenerate, workspace_id. "
-    "Use ctx.register_post_user_submit(callback) to subscribe."
+    "Use hook_view to list or read hooks; hook_manage to create, update, patch, delete, enable, or disable. "
+    "Each hook.py must define register(ctx) and may call ctx.register_post_user_submit(callback) "
+    "to run code after each user message is accepted, before the LLM loop. "
+    "Callbacks receive submit_source (chat or scheduled); source is a legacy alias."
 )
 
 SESSION_SEARCH_GUIDANCE = (

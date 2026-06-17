@@ -71,20 +71,3 @@ async def test_post_user_submit_callback_error_does_not_break() -> None:
     await emit_post_user_submit(session_id="sess-3", user_message="x")
 
     assert calls["ok"] == 1
-
-
-@pytest.mark.asyncio
-async def test_post_user_submit_logs_success(capsys: pytest.CaptureFixture[str]) -> None:
-    def on_submit(**kwargs: object) -> None:
-        pass
-
-    register_post_user_submit(on_submit)
-    await emit_post_user_submit(
-        session_id="sess-log",
-        user_message="hello",
-        submit_source="chat",
-    )
-
-    out = capsys.readouterr().out
-    assert "hook_callback_fired" in out
-    assert "sess-log" in out
