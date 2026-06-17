@@ -352,7 +352,7 @@ def install_skill_from_url(
         skill_src = locate_skill_dir(extract_dir, plan.subpath)
         skill_md_text = (skill_src / "SKILL.md").read_text(encoding="utf-8")
         analysis = analyze_skill_md(skill_md_text, fallback_name=skill_src.name)
-        parsed = _parse_skill_md(skill_src / "SKILL.md", "private")
+        parsed = _parse_skill_md(skill_src / "SKILL.md", "public")
         if parsed is None:
             raise ValueError("failed to parse SKILL.md")
 
@@ -360,6 +360,7 @@ def install_skill_from_url(
         if dest.exists() and not overwrite:
             raise FileExistsError(f"skill already exists: {analysis.name}")
         file_count = _copy_skill_tree(skill_src, dest)
+        _parse_skill_md(dest / "SKILL.md", "private")
         log.info(
             "skill_installed",
             name=parsed.name,

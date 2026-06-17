@@ -1,16 +1,6 @@
 ---
 name: spreadsheet-data
 description: Interpret tables and Excel/CSV data—trends, comparisons, anomalies, rollups, and chart suggestions. When users upload spreadsheets, ask what data means, want summaries, or need conclusions visualized.
-triggers:
-  - spreadsheet
-  - Excel
-  - xlsx
-  - interpret data
-  - analyze data
-  - trend
-  - pivot
-  - what does this column mean
-  - look at these numbers
 ---
 
 # Spreadsheet Data

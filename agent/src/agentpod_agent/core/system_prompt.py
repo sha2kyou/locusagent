@@ -28,7 +28,7 @@ log = get_logger("system_prompt")
 _SNAPSHOT_MEMORY_LIMIT = 30
 _CTX_DELIMITER = "\n<<AGENTPOD_CTX>>\n"
 # Bump when stable template changes so old session caches invalidate.
-FROZEN_SYSTEM_PROMPT_VERSION = 28
+FROZEN_SYSTEM_PROMPT_VERSION = 29
 _CACHE_PREFIX = f"agentpod:sp:v{FROZEN_SYSTEM_PROMPT_VERSION}:"
 
 MEMORY_GUIDANCE = (
@@ -45,7 +45,8 @@ MEMORY_GUIDANCE = (
 )
 
 SKILLS_GUIDANCE = (
-    "A compact skill catalog is listed below. When a skill is relevant, call skill_view{name} to "
+    "A compact skill catalog (name + description) is listed below. "
+    "When the user's request aligns with a skill's name or description, call skill_view{name} to "
     "load the full SKILL.md on demand; do not guess its contents. "
     "For references/, scripts/, or assets/ files listed in the skill, call "
     "skill_view{name, file_path} to load them progressively. "
@@ -219,9 +220,8 @@ async def build_stable_prompt() -> str:
     if skills:
         pieces.append("\n## Available skills catalog")
         for s in skills:
-            triggers = ", ".join(s.triggers[:5]) if s.triggers else "none"
             desc = (s.description or "").strip() or "(no description)"
-            pieces.append(f"- {s.name} [{s.source}] triggers: {triggers} · {desc}")
+            pieces.append(f"- {s.name} [{s.source}]: {desc}")
     categories = await list_categories()
     if categories:
         pieces.append("\n## Artifact categories (existing)")

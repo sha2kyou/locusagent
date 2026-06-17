@@ -12,7 +12,6 @@ import { CollapsiblePanel, CollapsibleSection, ListCard } from "@/components/ui/
 import { Drawer } from "@/components/ui/drawer";
 import { SegmentControl } from "@/components/ui/segment-control";
 import { Empty, listItemDescriptionClass, listRowHoverActionsClass, Loading } from "@/components/ui/list-state";
-import { Tag } from "@/components/ui/tag";
 import { useToast } from "@/components/ui/toast";
 import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
@@ -149,7 +148,6 @@ export function SkillsRoute() {
   const [editing, setEditing] = useState<Skill | null>(null);
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
-  const [triggers, setTriggers] = useState("");
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
   const [installUrl, setInstallUrl] = useState("");
@@ -194,7 +192,6 @@ export function SkillsRoute() {
     setEditing(null);
     setName("");
     setDesc("");
-    setTriggers("");
     setBody("");
   };
 
@@ -202,23 +199,18 @@ export function SkillsRoute() {
     setEditing(s);
     setName(s.name);
     setDesc(s.description);
-    setTriggers(s.triggers.join(", "));
     setBody(s.body);
     requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
   const submit = async () => {
     setSaving(true);
-    const triggerList = triggers
-      .split(/[,，\n]/)
-      .map((t) => t.trim())
-      .filter(Boolean);
     try {
       if (editing) {
-        await updateSkill(editing.name, { description: desc, body, triggers: triggerList });
+        await updateSkill(editing.name, { description: desc, body });
         toast(toastAction("updated", editing.name, "skill"), "success");
       } else {
-        await createSkill({ name, description: desc, body, triggers: triggerList });
+        await createSkill({ name, description: desc, body });
         toast(toastAction("added", name, "skill"), "success");
       }
       resetForm();
@@ -318,13 +310,6 @@ export function SkillsRoute() {
                         )}
                       </div>
                       {s.description && <p className={listItemDescriptionClass}>{s.description}</p>}
-                      {s.triggers.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {s.triggers.map((t) => (
-                            <Tag key={t}>{t}</Tag>
-                          ))}
-                        </div>
-                      )}
                     </div>
                     {s.source === "private" && (
                       <div className="flex shrink-0 gap-1">
@@ -397,10 +382,6 @@ export function SkillsRoute() {
                       <Label>{t("skills.fields.description")}</Label>
                       <Input value={desc} onChange={(e) => setDesc(e.target.value)} />
                     </div>
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label>{t("skills.fields.triggers")}</Label>
-                    <Input value={triggers} onChange={(e) => setTriggers(e.target.value)} />
                   </div>
                   <div className="grid gap-1.5">
                     <Label>{t("skills.fields.body")}</Label>

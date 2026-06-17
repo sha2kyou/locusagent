@@ -1,16 +1,6 @@
 ---
 name: explain-clearly
 description: Explain complex concepts, processes, or debated topics in clear, layered language matched to the audience (layperson / business / technical). Use for "what is this", "explain simply", "explain to a child/boss/client".
-triggers:
-  - explain
-  - plain language
-  - simply
-  - what does it mean
-  - make it clear
-  - primer
-  - beginner
-  - ELI5
-  - how to say it clearly
 ---
 
 # Explain Clearly

@@ -193,10 +193,10 @@ export async function downloadAttachment(id: string, filename: string): Promise<
 // ---- 技能 ----
 export const listSkills = () => apiGet<{ items: Skill[] }>("/api/workspace/skills");
 
-export const createSkill = (body: { name: string; description: string; body: string; triggers: string[] }) =>
+export const createSkill = (body: { name: string; description: string; body: string }) =>
   apiSend<Skill>("/api/workspace/skills", "POST", body);
 
-export const updateSkill = (name: string, body: { description: string; body: string; triggers: string[] }) =>
+export const updateSkill = (name: string, body: { description: string; body: string }) =>
   apiSend<Skill>(`/api/workspace/skills/${encodeURIComponent(name)}`, "PUT", body);
 
 export const deleteSkill = (name: string) =>

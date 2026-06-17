@@ -121,7 +121,6 @@ class SkillIn(BaseModel):
     name: str
     description: str = ""
     body: str = ""
-    triggers: list[str] = Field(default_factory=list)
 
 
 class AttachmentCreateIn(BaseModel):
@@ -143,7 +142,6 @@ class AttachmentCreateIn(BaseModel):
 class SkillUpdateIn(BaseModel):
     description: str | None = None
     body: str | None = None
-    triggers: list[str] | None = None
 
 
 class SkillInstallIn(BaseModel):
@@ -227,7 +225,6 @@ async def workspace_create_skill(payload: SkillIn) -> dict:
         name=payload.name,
         description=payload.description,
         body=payload.body,
-        triggers=payload.triggers,
         source="private",
     )
     try:
@@ -251,7 +248,6 @@ async def workspace_update_skill(name: str, payload: SkillUpdateIn) -> dict:
             name,
             description=payload.description,
             body=payload.body,
-            triggers=payload.triggers,
             origin=ORIGIN_MANUAL,
         )
     except ValueError as exc:

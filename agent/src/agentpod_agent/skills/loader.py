@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
@@ -23,6 +23,20 @@ from ..workspace import workspace_data_dir
 log = get_logger("skills")
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(?P<fm>.*?)\n---\s*\n(?P<body>.*)$", re.DOTALL)
+_DEPRECATED_FRONTMATTER_KEYS = ("trigger", "triggers")
+
+
+def _clean_frontmatter(fm: dict) -> bool:
+    changed = False
+    for key in _DEPRECATED_FRONTMATTER_KEYS:
+        if key in fm:
+            del fm[key]
+            changed = True
+    return changed
+
+
+def format_skill_md(fm: dict, body: str) -> str:
+    return f"---\n{yaml.safe_dump(fm, allow_unicode=True, sort_keys=False).strip()}\n---\n\n{body.strip()}\n"
 
 
 @dataclass(slots=True)
@@ -30,7 +44,6 @@ class Skill:
     name: str
     description: str
     body: str
-    triggers: list[str] = field(default_factory=list)
     source: str = "private"
     origin: str = ORIGIN_MANUAL
     path: str | None = None
@@ -39,14 +52,13 @@ class Skill:
         return {
             "name": self.name,
             "description": self.description,
-            "triggers": self.triggers,
             "source": self.source,
             "origin": self.origin,
             "body": self.body,
         }
 
 
-def _parse_skill_md(path: Path, source: str) -> Skill | None:
+def _parse_skill_md(path: Path, source: str, *, migrate: bool | None = None) -> Skill | None:
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -62,18 +74,22 @@ def _parse_skill_md(path: Path, source: str) -> Skill | None:
             log.warning("skill_frontmatter_invalid", path=str(path), error=str(exc))
             return None
         body = m.group("body").strip()
+        should_migrate = source == "private" if migrate is None else migrate
+        if _clean_frontmatter(fm) and should_migrate:
+            try:
+                path.write_text(format_skill_md(fm, body), encoding="utf-8")
+                log.info("skill_frontmatter_migrated", path=str(path), removed="triggers")
+            except OSError as exc:
+                log.warning("skill_frontmatter_migrate_failed", path=str(path), error=str(exc))
 
     name = str(fm.get("name") or path.parent.name)
     description = str(fm.get("description") or "")
-    triggers_raw = fm.get("trigger") or fm.get("triggers") or []
-    triggers = [str(t) for t in triggers_raw] if isinstance(triggers_raw, list) else []
     origin_raw = str(fm.get("origin") or ORIGIN_MANUAL).strip().lower()
     origin = origin_raw if origin_raw in {ORIGIN_MANUAL, ORIGIN_AUTO_EXTRACT} else ORIGIN_MANUAL
     return Skill(
         name=name,
         description=description,
         body=body,
-        triggers=triggers,
         source=source,
         origin=origin,
         path=str(path),

@@ -1,16 +1,6 @@
 ---
 name: humanizer
 description: Remove AI writing tells and make text sound natural and personal. For humanizing drafts, de-slopping, polishing blogs/copy/docs/email/posts, pre-publish checks, or matching a user writing sample.
-triggers:
-  - humanize
-  - de-slop
-  - de-robot
-  - polish
-  - rewrite
-  - naturalize
-  - writing style
-  - doesn't sound like AI
-  - humanize
 ---
 
 # Humanizer: Remove AI Writing Tells

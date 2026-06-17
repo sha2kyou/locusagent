@@ -1,16 +1,6 @@
 ---
 name: research-brief
 description: Research and structured summary around a question—integrate known facts, list items to verify, separate opinion from evidence. For non-coding info tasks like "look this up", "research", "compare options", "background".
-triggers:
-  - research
-  - look up
-  - help me understand
-  - background
-  - compare
-  - study
-  - compile info
-  - summarize sources
-  - research brief
 ---
 
 # Research Brief

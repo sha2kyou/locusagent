@@ -7,11 +7,9 @@ from __future__ import annotations
 
 import shutil
 
-import yaml
-
 from ..logging import get_logger
 from ..core.write_origin import ORIGIN_AUTO_EXTRACT, ORIGIN_MANUAL
-from .loader import Skill, _parse_skill_md, load_all_skills, private_skill_dir
+from .loader import Skill, _parse_skill_md, format_skill_md, load_all_skills, private_skill_dir
 
 log = get_logger("skill_store")
 
@@ -41,11 +39,10 @@ def _serialize(skill: Skill) -> str:
     fm = {
         "name": skill.name,
         "description": skill.description,
-        "triggers": skill.triggers,
     }
     if skill.origin and skill.origin != ORIGIN_MANUAL:
         fm["origin"] = skill.origin
-    return f"---\n{yaml.safe_dump(fm, allow_unicode=True, sort_keys=False).strip()}\n---\n\n{skill.body.strip()}\n"
+    return format_skill_md(fm, skill.body)
 
 
 def list_skills() -> list[Skill]:
@@ -76,7 +73,6 @@ def update_skill(
     *,
     description: str | None,
     body: str | None,
-    triggers: list[str] | None,
     origin: str | None = None,
 ) -> Skill:
     root = _private_skill_root(name)
@@ -90,7 +86,6 @@ def update_skill(
         name=name,
         description=description if description is not None else current.description,
         body=body if body is not None else current.body,
-        triggers=triggers if triggers is not None else current.triggers,
         source="private",
         origin=origin if origin is not None else current.origin,
         path=str(file),

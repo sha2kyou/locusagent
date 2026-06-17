@@ -85,7 +85,6 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
             name=name,
             description=str(args.get("description", "")),
             body=body,
-            triggers=list(args.get("triggers", []) or []),
             source="private",
             origin=ORIGIN_AUTO_EXTRACT if is_auto_extract_write() else ORIGIN_MANUAL,
         )
@@ -109,7 +108,6 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
                 name,
                 description=args.get("description"),
                 body=body,
-                triggers=args.get("triggers"),
                 origin=write_origin,
             )
         except FileNotFoundError as exc:
@@ -151,7 +149,6 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
                 name,
                 description=None,
                 body=patched,
-                triggers=None,
                 origin=write_origin,
             )
         except FileNotFoundError as exc:
@@ -236,7 +233,6 @@ register_builtin(
                 "name": {"type": "string"},
                 "description": {"type": "string"},
                 "body": {"type": "string"},
-                "triggers": {"type": "array", "items": {"type": "string"}},
                 "old_string": {"type": "string"},
                 "new_string": {"type": "string"},
                 "replace_all": {"type": "boolean", "default": False},

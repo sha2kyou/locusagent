@@ -395,8 +395,7 @@
     },
     "fields": {
       "name": "Name (unique)",
-      "description": "Description",
-      "triggers": "Triggers (comma-separated)",
+      "description": "Description (used for skill matching)",
       "body": "Body (Markdown)"
     },
     "files": {

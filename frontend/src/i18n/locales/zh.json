@@ -395,8 +395,7 @@
     },
     "fields": {
       "name": "名称（唯一）",
-      "description": "描述",
-      "triggers": "触发词（逗号分隔）",
+      "description": "描述（用于自动匹配技能）",
       "body": "正文（Markdown）"
     },
     "files": {

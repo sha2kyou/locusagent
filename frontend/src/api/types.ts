@@ -115,7 +115,6 @@ export interface ChatChunk {
 export interface Skill {
   name: string;
   description: string;
-  triggers: string[];
   source: "private" | "public";
   origin?: "manual" | "auto_extract";
   body: string;

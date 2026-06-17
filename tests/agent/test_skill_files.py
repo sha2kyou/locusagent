@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from agentpod_agent.db import init_db
@@ -15,6 +17,7 @@ from agentpod_agent.skills import (
     resolve_skill_file,
 )
 from agentpod_agent.skills.fs import format_skill_file_tree
+from agentpod_agent.skills.loader import _parse_skill_md
 from agentpod_agent.tools.base import ToolError
 from agentpod_agent.tools.skills import _skill_view
 from agentpod_agent.workspace import set_workspace_id
@@ -35,7 +38,6 @@ def _create_demo_skill(name: str = "demo-skill") -> None:
             name=name,
             description="demo",
             body="Use references/guide.md when needed.",
-            triggers=["demo"],
             source="private",
         )
     )
@@ -107,3 +109,18 @@ def test_format_skill_file_tree_empty_for_skill_md_only() -> None:
     delete_skill("plain")
     create_skill(Skill(name="plain", description="", body="hello", source="private"))
     assert format_skill_file_tree("plain") == ""
+
+
+def test_parse_skill_md_strips_triggers_from_private_file(tmp_path: Path) -> None:
+    skill_md = tmp_path / "legacy-skill" / "SKILL.md"
+    skill_md.parent.mkdir(parents=True)
+    skill_md.write_text(
+        "---\nname: legacy-skill\ndescription: legacy\ntriggers:\n  - foo\n  - bar\n---\n\nBody.\n",
+        encoding="utf-8",
+    )
+    parsed = _parse_skill_md(skill_md, "private")
+    assert parsed is not None
+    assert parsed.name == "legacy-skill"
+    rewritten = skill_md.read_text(encoding="utf-8")
+    assert "triggers:" not in rewritten
+    assert "trigger:" not in rewritten
