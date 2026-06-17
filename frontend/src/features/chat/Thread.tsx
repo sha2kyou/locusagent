@@ -704,6 +704,7 @@ function AssistantPartList({
         return <ToolPartView key={p.id} part={p} />;
       })}
       {chatMsg.error ? <Markdown text={`\n\n> ⚠ ${chatMsg.error}`} /> : null}
+      {streaming ? <span className="apod-caret mt-0.5" aria-hidden /> : null}
       {todoPlan ? <TodoProgressPanel plan={todoPlan} active={todoActive} /> : null}
     </>
   );
@@ -741,11 +742,6 @@ function AssistantMessage() {
         onSelect={selectAttachment}
       />
       <AttachmentDrawer file={selectedAttachment} onClose={() => setSelectedAttachment(null)} />
-      <MessagePrimitive.If last>
-        <ThreadPrimitive.If running>
-          <span className="apod-caret mt-0.5" aria-hidden />
-        </ThreadPrimitive.If>
-      </MessagePrimitive.If>
 
       <MessagePrimitive.If last>
         {lastErrored ? (
