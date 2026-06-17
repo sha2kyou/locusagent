@@ -41,6 +41,7 @@ _SCHEDULED_DISABLED_TOOLS = {
     "clarify",
     "scheduled_task_manage",
     "skill_manage",
+    "hook_manage",
     "artifact_delete",
     "artifact_update",
     "artifact_category_update",
@@ -111,10 +112,19 @@ async def run_scheduled_prompt(*, title: str, prompt: str, task_id: int | None =
     async with lock:
         try:
             run_id = await create_run(sid)
-            await append_message(sid, "user", prompt)
+            user_mid = await append_message(sid, "user", prompt)
             from .session_review_state import begin_user_turn
+            from ..hooks import emit_post_user_submit
+            from ..workspace import get_workspace_id
 
             await begin_user_turn(sid)
+            await emit_post_user_submit(
+                session_id=sid,
+                user_message=prompt,
+                user_message_id=user_mid if user_mid > 0 else None,
+                submit_source="scheduled",
+                workspace_id=get_workspace_id(),
+            )
             system_prompt = await get_or_create_system_prompt(sid)
             db_msgs = await build_llm_messages(sid)
             messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]

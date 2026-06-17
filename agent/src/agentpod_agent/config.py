@@ -88,6 +88,9 @@ class Settings(BaseSettings):
     stream_chunk_timeout_s: float = Field(default=90.0, alias="STREAM_CHUNK_TIMEOUT_S")
     stream_max_duration_s: float = Field(default=600.0, alias="STREAM_MAX_DURATION_S")
 
+    # 工作区 lifecycle hook 单次回调超时（秒）
+    hook_callback_timeout_seconds: float = Field(default=3.0, alias="HOOK_CALLBACK_TIMEOUT_SECONDS")
+
 
 @lru_cache
 def get_settings() -> Settings:
