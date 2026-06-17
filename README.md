@@ -8,6 +8,8 @@
 
 Configuration and runtime data live under `~/.agentpod/` (macOS/Linux) or `%USERPROFILE%\.agentpod\` (Windows): `settings.json`, SQLite databases, and per-workspace storage.
 
+![AgentPod chat UI — multi-workspace sidebar, scheduled tasks, and tool-using agent runs](docs/images/chat-ui.png)
+
 ## About the name
 
 **Agent** + **Pod**: an AI agent in its own isolated runtime.
