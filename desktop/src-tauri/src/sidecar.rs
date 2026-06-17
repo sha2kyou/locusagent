@@ -9,6 +9,9 @@ use std::{
     time::Duration,
 };
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 use tauri::{AppHandle, Manager};
 use tauri::path::BaseDirectory;
 use tracing::{error, info, warn};
@@ -183,6 +186,9 @@ pub fn spawn_backend(app: &AppHandle) -> std::io::Result<Child> {
         "MCP_OAUTH_REDIRECT_URI",
         format!("http://127.0.0.1:{BACKEND_PORT}/api/oauth/mcp/callback"),
     );
+
+    #[cfg(windows)]
+    command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
 
     let mut child = command
         .stdout(Stdio::piped())

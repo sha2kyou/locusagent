@@ -29,8 +29,11 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), String> {
         .tooltip("AgentPod")
         .show_menu_on_left_click(false);
 
-    // 非 macOS 仍用应用图标；macOS 菜单栏图标单独用 SF Symbol（见 menu_bar_icon.rs）。
-    #[cfg(not(target_os = "macos"))]
+    // Windows 托盘用方形小图标；default_window_icon 仍带 macOS 圆角底，小尺寸下星形过小。
+    #[cfg(windows)]
+    let builder = builder.icon(tauri::include_image!("../icons/tray-32.png"));
+
+    #[cfg(all(not(target_os = "macos"), not(windows)))]
     let builder = {
         let icon = app
             .default_window_icon()

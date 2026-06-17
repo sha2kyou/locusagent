@@ -122,10 +122,8 @@ Write-Host "==> build AgentPod Windows installer (Tauri, cargo may take a few mi
 Set-Location (Join-Path $RootDir "desktop")
 npm ci
 
-if (-not (Test-Path "src-tauri/icons/icon.ico")) {
-    Write-Host "==> generate Windows icon from icon.png"
-    npx tauri icon src-tauri/icons/icon.png
-}
+Write-Host "==> generate Windows icons (icon.ico, tray PNGs)"
+bash (Join-Path $RootDir "scripts/generate-windows-icons.sh")
 
 npm run build -- --bundles nsis
 
