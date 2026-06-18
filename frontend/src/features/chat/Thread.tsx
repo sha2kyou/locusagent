@@ -9,7 +9,7 @@ import {
   useThreadRuntime,
   type TextMessagePartComponent,
 } from "@assistant-ui/react";
-import { ArrowDown, ArrowUp, Check, Copy, Download, ExternalLink, MessageSquarePlus, Paperclip, RotateCcw, Square, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Copy, Download, Paperclip, RotateCcw, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
@@ -30,7 +30,6 @@ import { downloadAttachment, attachmentDownloadUrl } from "@/api/endpoints";
 import { Drawer } from "@/components/ui/drawer";
 import { useTimeFormatters } from "@/lib/use-app-timezone";
 import { isDesktopApp } from "@/lib/desktop-app";
-import { openSessionInMainWindow } from "@/lib/quick-chat";
 
 const EMPTY_ATTACHMENTS: ChatAttachment[] = [];
 
@@ -96,19 +95,22 @@ export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
         </div>
 
         <ThreadPrimitive.ScrollToBottom asChild>
-          <Button
-            variant="secondary"
-            size="icon"
-            className="sticky bottom-4 left-1/2 -translate-x-1/2 rounded-full shadow-lg transition-opacity disabled:pointer-events-none disabled:opacity-0"
-            aria-label={t("chat.composer.scrollToBottom")}
-          >
-            <ArrowDown />
-          </Button>
+          {!isQuick ? (
+            <Button
+              variant="secondary"
+              size="icon"
+              className="sticky bottom-4 left-1/2 -translate-x-1/2 rounded-full shadow-lg transition-opacity disabled:pointer-events-none disabled:opacity-0"
+              aria-label={t("chat.composer.scrollToBottom")}
+            >
+              <ArrowDown />
+            </Button>
+          ) : (
+            <span className="hidden" aria-hidden />
+          )}
         </ThreadPrimitive.ScrollToBottom>
       </ThreadPrimitive.Viewport>
 
       <Composer variant={variant} />
-      {isQuick ? <QuickChatFooter /> : null}
     </ThreadPrimitive.Root>
   );
 }
@@ -143,6 +145,7 @@ function Composer({ variant = "default" }: { variant?: ThreadVariant }) {
   useQuickChatComposerFocus(inputRef, isQuick);
 
   const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (isQuick) return;
     const len = e.clipboardData.getData("text").length;
     if (len > LONG_PASTE_THRESHOLD) {
       toast(t("chat.composer.longPaste", { count: len.toLocaleString() }), "info");
@@ -353,37 +356,6 @@ function Composer({ variant = "default" }: { variant?: ThreadVariant }) {
               : t("chat.composer.keyboardHint.default")}
         </p>
       ) : null}
-    </div>
-  );
-}
-
-function QuickChatFooter() {
-  const { t } = useTranslation();
-  const { newSession, currentId } = useChat();
-
-  const openInMain = () => {
-    if (!isDesktopApp()) return;
-    void openSessionInMainWindow(currentId);
-  };
-
-  return (
-    <div className="flex items-center justify-between gap-2 border-t border-border/60 px-4 py-2">
-      <button
-        type="button"
-        onClick={newSession}
-        className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-      >
-        <MessageSquarePlus className="size-3.5" />
-        {t("quickChat.newChat")}
-      </button>
-      <button
-        type="button"
-        onClick={openInMain}
-        className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-      >
-        {t("quickChat.openInMain")}
-        <ExternalLink className="size-3.5" />
-      </button>
     </div>
   );
 }
@@ -889,9 +861,6 @@ function QuickUserMessage() {
       ) : null}
       <MessageAttachmentChips attachments={attachments} align="end" onSelect={selectAttachment} />
       <AttachmentDrawer file={selectedAttachment} onClose={() => setSelectedAttachment(null)} />
-      <div className={cn(messageMetaRowClass, "justify-end")}>
-        <CopyButton text={text} />
-      </div>
     </MessagePrimitive.Root>
   );
 }
@@ -906,7 +875,6 @@ function QuickAssistantMessage() {
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
   const streaming = isRunning && lastAssistant?.id === id;
   const isLastAssistant = lastAssistant?.id === id;
-  const text = useMessageText();
   const archived = useMessage((m) => (m.metadata as { archived?: boolean } | undefined)?.archived);
   return (
     <MessagePrimitive.Root className={cn("group mb-4 flex flex-col gap-1 text-sm apod-enter-up", archived && "opacity-55")}>
@@ -924,11 +892,6 @@ function QuickAssistantMessage() {
       </div>
       <MessageAttachmentChips attachments={attachments} align="start" onSelect={selectAttachment} />
       <AttachmentDrawer file={selectedAttachment} onClose={() => setSelectedAttachment(null)} />
-      <ThreadPrimitive.If running={false}>
-        <div className={messageMetaRowClass}>
-          <CopyButton text={text} />
-        </div>
-      </ThreadPrimitive.If>
     </MessagePrimitive.Root>
   );
 }

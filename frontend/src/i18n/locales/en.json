@@ -44,14 +44,16 @@
       "tools": { "label": "Tools", "description": "Terminal toggle & allow/deny lists" },
       "usage": { "label": "Usage", "description": "Token & API call stats" },
       "logs": { "label": "Logs", "description": "Backend process output" },
+      "quickChat": { "label": "Quick Chat", "description": "Global shortcut (cmd+shift+K)" },
       "developer": { "label": "Developer", "description": "Debug tools & developer options" }
     },
     "pages": {
-      "general": { "title": "General", "subtitle": "Theme & timezone" },
+      "general": { "title": "General", "subtitle": "Theme, timezone & menu bar" },
       "models": { "title": "Models & Services", "subtitle": "LLM, embedding & third-party tools" },
       "tools": { "title": "Tools", "subtitle": "Terminal toggle, allow & deny lists" },
       "usage": { "title": "Usage", "subtitle": "Token & API calls by scenario" },
       "logs": { "title": "Logs", "subtitle": "Backend process output" },
+      "quickChat": { "title": "Quick Chat", "subtitle": "Global shortcut and minimal chat window" },
       "developer": { "title": "Developer", "subtitle": "Debug & developer options" }
     },
     "general": {
@@ -70,7 +72,7 @@
       },
       "menubar": {
         "title": "Menu Bar & Background",
-        "description": "Keep AgentPod in the menu bar after closing the window. Configure the quick chat global shortcut below."
+        "description": "Keep AgentPod in the menu bar after closing the window. Launch at login must be enabled manually."
       },
       "runInBackground": {
         "label": "Keep running in menu bar after closing window",
@@ -89,11 +91,16 @@
         },
         "shortcut": {
           "label": "Global shortcut",
-          "hint": "Example: cmd+shift+Space (cmd on macOS, ctrl on Windows). Click Save desktop preferences after editing.",
+          "hint": "Click Edit, then press the key combination. Esc cancels. Click Save to apply.",
+          "edit": "Edit",
+          "cancel": "Cancel",
+          "recording": "Press a new shortcut…",
           "active": "Shortcut is registered and active",
           "inactive": "Shortcut is not registered — save settings or pick a combo that does not conflict with the system or other apps",
           "error": "Registration failed: {{error}}"
         },
+        "blurHideHint": "The mini window hides when it loses focus. Press the shortcut again to reopen it.",
+        "save": "Save quick chat settings",
         "alwaysOnTop": {
           "label": "Always on top",
           "hint": "Keep the quick chat window above other apps."

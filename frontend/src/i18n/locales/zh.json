@@ -44,14 +44,16 @@
       "tools": { "label": "工具", "description": "Terminal 开关与白名单" },
       "usage": { "label": "用量统计", "description": "Token 与 API 调用" },
       "logs": { "label": "日志", "description": "后端进程运行输出" },
+      "quickChat": { "label": "快捷对话", "description": "全局快捷键（cmd+shift+K）" },
       "developer": { "label": "开发者", "description": "调试工具与开发者选项" }
     },
     "pages": {
-      "general": { "title": "通用", "subtitle": "主题与时区" },
+      "general": { "title": "通用", "subtitle": "主题、时区与菜单栏" },
       "models": { "title": "模型与服务", "subtitle": "LLM、向量嵌入与第三方工具" },
       "tools": { "title": "工具", "subtitle": "Terminal 开关、白名单与禁止项" },
       "usage": { "title": "用量统计", "subtitle": "按场景汇总 Token 与 API 调用" },
       "logs": { "title": "日志", "subtitle": "后端进程运行输出" },
+      "quickChat": { "title": "快捷对话", "subtitle": "全局快捷键与精简对话小窗" },
       "developer": { "title": "开发者", "subtitle": "调试与开发者选项" }
     },
     "general": {
@@ -70,7 +72,7 @@
       },
       "menubar": {
         "title": "菜单栏与后台",
-        "description": "关闭窗口后可在菜单栏保留 AgentPod；下方可配置快捷对话全局快捷键。"
+        "description": "关闭窗口后可在菜单栏保留 AgentPod；开机自启需在此手动开启。"
       },
       "runInBackground": {
         "label": "关闭窗口后在菜单栏继续运行",
@@ -89,11 +91,16 @@
         },
         "shortcut": {
           "label": "全局快捷键",
-          "hint": "格式示例：cmd+shift+Space（macOS 用 cmd，Windows 用 ctrl）。修改后需点击下方「保存桌面偏好」。",
+          "hint": "点击「修改」后按下组合键录入；Esc 取消。录入后需点击保存。",
+          "edit": "修改",
+          "cancel": "取消",
+          "recording": "请按下新的快捷键…",
           "active": "当前快捷键已注册生效",
           "inactive": "快捷键尚未注册，请保存设置或更换不与系统/其他应用冲突的组合键",
           "error": "注册失败：{{error}}"
         },
+        "blurHideHint": "小窗在失去焦点时会自动隐藏；再次按快捷键可唤起。",
+        "save": "保存快捷对话设置",
         "alwaysOnTop": {
           "label": "窗口置顶",
           "hint": "快捷对话窗口显示在其他应用上方。"

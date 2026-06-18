@@ -8,7 +8,7 @@ use tauri::{
 };
 #[cfg(target_os = "macos")]
 use tauri::TitleBarStyle;
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tauri_plugin_global_shortcut::GlobalShortcutExt;
 use tauri_plugin_opener::OpenerExt;
 
 use crate::desktop_prefs::{self, DesktopPrefs};
@@ -18,7 +18,7 @@ pub const QUICK_CHAT_WINDOW_LABEL: &str = "quick-chat";
 pub const QUICK_CHAT_OPEN_EVENT: &str = "quick-chat:open";
 pub const QUICK_CHAT_FOCUS_COMPOSER_EVENT: &str = "quick-chat:focus-composer";
 
-pub const DEFAULT_QUICK_CHAT_SHORTCUT: &str = "cmd+shift+Space";
+pub const DEFAULT_QUICK_CHAT_SHORTCUT: &str = "cmd+shift+K";
 
 static REGISTERED_SHORTCUT: Mutex<Option<String>> = Mutex::new(None);
 static SHORTCUT_SYNC_ERROR: Mutex<Option<String>> = Mutex::new(None);
@@ -68,7 +68,7 @@ pub fn create_quick_chat_window(app: &App) -> Result<(), String> {
         QUICK_CHAT_WINDOW_LABEL,
         WebviewUrl::External(quick_url),
     )
-    .title("AgentPod")
+    .title("")
     .inner_size(440.0, 580.0)
     .min_inner_size(360.0, 420.0)
     .resizable(true)
@@ -147,11 +147,7 @@ pub fn toggle_quick_chat(app: &AppHandle) {
         return;
     };
     if window.is_visible().unwrap_or(false) {
-        if window.is_focused().unwrap_or(false) {
-            let _ = window.hide();
-            return;
-        }
-        let _ = window.set_focus();
+        hide_quick_chat(app);
         return;
     }
     show_quick_chat(app);
@@ -161,9 +157,8 @@ pub fn show_quick_chat(app: &AppHandle) {
     let Some(window) = app.get_webview_window(QUICK_CHAT_WINDOW_LABEL) else {
         return;
     };
-    let prefs = desktop_prefs::read_prefs(app);
     center_quick_chat_window(app);
-    let _ = window.set_always_on_top(prefs.quick_chat_always_on_top);
+    let _ = window.set_always_on_top(false);
     let _ = window.show();
     let _ = window.unminimize();
     let _ = window.set_focus();
@@ -174,6 +169,18 @@ pub fn show_quick_chat(app: &AppHandle) {
 pub fn hide_quick_chat(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(QUICK_CHAT_WINDOW_LABEL) {
         let _ = window.hide();
+    }
+}
+
+pub fn install_quick_chat_window_handler(app: &AppHandle) {
+    let handle = app.clone();
+    if let Some(window) = app.get_webview_window(QUICK_CHAT_WINDOW_LABEL) {
+        window.on_window_event(move |event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                hide_quick_chat(&handle);
+            }
+        });
     }
 }
 
@@ -191,15 +198,8 @@ pub fn sync_quick_chat_shortcut(app: &AppHandle, prefs: &DesktopPrefs) -> Result
     }
 
     let shortcut = normalize_shortcut_string(&prefs.quick_chat_shortcut);
-    // on_shortcut 内部已 register；不可再先 register 同一快捷键，否则会重复注册崩溃。
-    let result = global_shortcut.on_shortcut(shortcut.as_str(), move |app, _shortcut, event| {
-        if event.state == ShortcutState::Pressed {
-            let handle = app.clone();
-            let _ = app.run_on_main_thread(move || {
-                toggle_quick_chat(&handle);
-            });
-        }
-    });
+    // 全局 handler 在 plugin Builder 中注册；此处仅 register 快捷键本身。
+    let result = global_shortcut.register(shortcut.as_str());
     match result {
         Ok(()) => {
             *REGISTERED_SHORTCUT

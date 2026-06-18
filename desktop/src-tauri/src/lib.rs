@@ -22,6 +22,7 @@ use desktop_prefs::{
 #[cfg(target_os = "macos")]
 use desktop_prefs::show_main_window;
 use tauri::{Manager, RunEvent};
+use tauri_plugin_global_shortcut::ShortcutState;
 
 static BACKEND_CHILD: Mutex<Option<std::process::Child>> = Mutex::new(None);
 static QUICK_CHAT_SHORTCUT_SYNCED: AtomicBool = AtomicBool::new(false);
@@ -35,10 +36,25 @@ pub fn run() {
                 .macos_launcher(tauri_plugin_autostart::MacosLauncher::AppleScript);
             autostart.build()
         })
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_filter(|label| label != quick_chat::QUICK_CHAT_WINDOW_LABEL)
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state == ShortcutState::Pressed {
+                        let handle = app.clone();
+                        let _ = app.run_on_main_thread(move || {
+                            quick_chat::toggle_quick_chat(&handle);
+                        });
+                    }
+                })
+                .build(),
+        )
         .invoke_handler(tauri::generate_handler![
             desktop_get_prefs,
             desktop_get_system_locale,
@@ -72,6 +88,8 @@ pub fn run() {
             external_links::create_main_window(app).map_err(|err| format!("main window: {err}"))?;
             quick_chat::create_quick_chat_window(app)
                 .map_err(|err| format!("quick chat window: {err}"))?;
+            quick_chat::hide_quick_chat(app.handle());
+            quick_chat::install_quick_chat_window_handler(app.handle());
             webview_devtools::sync_devtools_runtime(app.handle())
                 .map_err(|err| format!("webview devtools: {err}"))?;
             install_window_close_handler(app.handle());

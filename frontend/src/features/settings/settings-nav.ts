@@ -1,4 +1,4 @@
-import { BarChart3, Code2, Cpu, ScrollText, Settings2, Terminal } from "lucide-react";
+import { BarChart3, Code2, Cpu, MessageSquarePlus, ScrollText, Settings2, Terminal } from "lucide-react";
 import { isDesktopApp } from "@/lib/desktop-app";
 
 export const SETTINGS_NAV_BASE = [
@@ -9,6 +9,13 @@ export const SETTINGS_NAV_BASE = [
   { to: "logs", labelKey: "settings.nav.logs.label", descriptionKey: "settings.nav.logs.description", icon: ScrollText },
 ] as const;
 
+export const SETTINGS_NAV_QUICK_CHAT = {
+  to: "quick-chat",
+  labelKey: "settings.nav.quickChat.label",
+  descriptionKey: "settings.nav.quickChat.description",
+  icon: MessageSquarePlus,
+} as const;
+
 export const SETTINGS_NAV_DEVELOPER = {
   to: "developer",
   labelKey: "settings.nav.developer.label",
@@ -18,11 +25,17 @@ export const SETTINGS_NAV_DEVELOPER = {
 
 export type SettingsNavId =
   | (typeof SETTINGS_NAV_BASE)[number]["to"]
+  | typeof SETTINGS_NAV_QUICK_CHAT.to
   | typeof SETTINGS_NAV_DEVELOPER.to;
 
 export function getSettingsNav() {
   if (isDesktopApp()) {
-    return [...SETTINGS_NAV_BASE, SETTINGS_NAV_DEVELOPER];
+    return [
+      SETTINGS_NAV_BASE[0],
+      SETTINGS_NAV_QUICK_CHAT,
+      ...SETTINGS_NAV_BASE.slice(1),
+      SETTINGS_NAV_DEVELOPER,
+    ];
   }
   return [...SETTINGS_NAV_BASE];
 }
@@ -33,6 +46,10 @@ export const SETTINGS_PAGE_META: Record<SettingsNavId, { titleKey: string; subti
   tools: { titleKey: "settings.pages.tools.title", subtitleKey: "settings.pages.tools.subtitle" },
   usage: { titleKey: "settings.pages.usage.title", subtitleKey: "settings.pages.usage.subtitle" },
   logs: { titleKey: "settings.pages.logs.title", subtitleKey: "settings.pages.logs.subtitle" },
+  "quick-chat": {
+    titleKey: "settings.pages.quickChat.title",
+    subtitleKey: "settings.pages.quickChat.subtitle",
+  },
   developer: {
     titleKey: "settings.pages.developer.title",
     subtitleKey: "settings.pages.developer.subtitle",

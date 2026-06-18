@@ -40,6 +40,11 @@ const icons: Record<ToastType, ReactNode> = {
   error: <XCircle className="size-4 text-destructive" />,
 };
 
+export function NullToastProvider({ children }: { children: ReactNode }) {
+  const noop = useCallback((_message: string, _type?: ToastType, _options?: ToastOptions) => {}, []);
+  return <ToastContext.Provider value={noop}>{children}</ToastContext.Provider>;
+}
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const { t: tr } = useTranslation();
   const [toasts, setToasts] = useState<ToastItem[]>([]);

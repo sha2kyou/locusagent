@@ -30,7 +30,7 @@ import { displaySessionTitle, isBackendDefaultSessionTitle } from "@/lib/session
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/app/auth";
 import { withWorkspacePrefix } from "@/app/workspace-route";
-import { isDesktopApp } from "@/lib/desktop-app";
+import { isNewChatKeyboardShortcut } from "@/lib/format-global-shortcut";
 import {
   appendText,
   appendThinking,
@@ -225,7 +225,7 @@ export function ChatProvider({
   const loadTokenRef = useRef(0);
   const pinnedUrlWorkspaceIdRef = useRef<string | null | undefined>(undefined);
   const pinnedWorkspaceIdRef = useRef<string>("");
-  const resetToNewChatRef = useRef<() => void>(() => {});
+  const newSessionRef = useRef<() => void>(() => {});
 
   const resolveChatPath = (sessionId: string | null) => chatPath(sessionId, urlWorkspaceId, mode);
 
@@ -630,25 +630,6 @@ export function ChatProvider({
     clearMessageQueue();
     setLastErrored(false);
   };
-  resetToNewChatRef.current = resetToNewChat;
-
-  useEffect(() => {
-    if (!isQuick || !isDesktopApp()) return;
-    let cancelled = false;
-    let unlistenOpen: (() => void) | undefined;
-    void (async () => {
-      const { listen } = await import("@tauri-apps/api/event");
-      if (cancelled) return;
-      unlistenOpen = await listen("quick-chat:open", () => {
-        resetToNewChatRef.current();
-        navigate("/quick-chat", { replace: true });
-      });
-    })();
-    return () => {
-      cancelled = true;
-      unlistenOpen?.();
-    };
-  }, [isQuick, navigate]);
 
   const loadSessionFromUrl = (id: string) => {
     const token = ++loadTokenRef.current;
@@ -970,8 +951,25 @@ export function ChatProvider({
 
   // ---- 会话操作 ----
   const newSession = () => {
-    navigate(resolveChatPath(null));
+    if (isQuick) {
+      resetToNewChat();
+      navigate("/quick-chat", { replace: true });
+      return;
+    }
+    resetToNewChat();
+    navigate(resolveChatPath(null), { replace: true });
   };
+  newSessionRef.current = newSession;
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isNewChatKeyboardShortcut(event)) return;
+      event.preventDefault();
+      newSessionRef.current();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const selectSession = (id: string) => {
     navigate(resolveChatPath(id));

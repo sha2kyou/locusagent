@@ -5,7 +5,7 @@ import { stripWorkspacePrefix, withWorkspacePrefix } from "@/app/workspace-route
 import { installExternalLinkHandling } from "@/lib/open-external";
 import { ensureI18nReady } from "@/i18n";
 import "./index.css";
-import { ToastProvider } from "@/components/ui/toast";
+import { ToastProvider, NullToastProvider } from "@/components/ui/toast";
 import { DialogProvider } from "@/components/ui/dialogs";
 import { AuthProvider } from "@/app/auth";
 import { AppLocaleProvider } from "@/lib/use-app-locale";
@@ -55,6 +55,9 @@ const SettingsLogsPage = lazy(() =>
 const SettingsDeveloperPage = lazy(() =>
   import("@/features/settings/SettingsDeveloperPage").then((m) => ({ default: m.SettingsDeveloperPage })),
 );
+const SettingsQuickChatPage = lazy(() =>
+  import("@/features/settings/SettingsQuickChatPage").then((m) => ({ default: m.SettingsQuickChatPage })),
+);
 const SettingsIndexRedirect = lazy(() =>
   import("@/features/settings/SettingsRoute").then((m) => ({ default: m.SettingsIndexRedirect })),
 );
@@ -94,6 +97,7 @@ const shellChildren = [
       { path: "tools", element: <SettingsToolsPage /> },
       { path: "usage", element: <SettingsUsagePage /> },
       { path: "logs", element: <SettingsLogsPage /> },
+      { path: "quick-chat", element: <SettingsQuickChatPage /> },
       { path: "developer", element: <SettingsDeveloperPage /> },
     ],
   },
@@ -108,9 +112,9 @@ const router = createBrowserRouter([
         <AppLocaleProvider>
           <AppTimezoneProvider>
             <ThemeProvider>
-              <ToastProvider>
+              <NullToastProvider>
                 <QuickChatRoute />
-              </ToastProvider>
+              </NullToastProvider>
             </ThemeProvider>
           </AppTimezoneProvider>
         </AppLocaleProvider>
@@ -124,9 +128,9 @@ const router = createBrowserRouter([
         <AppLocaleProvider>
           <AppTimezoneProvider>
             <ThemeProvider>
-              <ToastProvider>
+              <NullToastProvider>
                 <QuickChatRoute />
-              </ToastProvider>
+              </NullToastProvider>
             </ThemeProvider>
           </AppTimezoneProvider>
         </AppLocaleProvider>
