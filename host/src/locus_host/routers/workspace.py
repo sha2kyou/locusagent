@@ -90,6 +90,14 @@ async def proxy_env_vars(
     return await proxy_to_agent(request, target)
 
 
+@router.get("/embedding-progress")
+async def proxy_embedding_progress(
+    request: Request,
+    ctx: AuthContext = Depends(require_session),
+):
+    return await proxy_to_agent(request, "/workspace/embedding-progress")
+
+
 @router.api_route("/sessions", methods=PROXY_METHODS)
 @router.get("/sessions/{session_id}/active-run")
 @router.get("/sessions/{session_id}/runs/{run_id}/stream")
