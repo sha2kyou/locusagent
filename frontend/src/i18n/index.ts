@@ -18,6 +18,12 @@ export function normalizeAppLocale(locale: string): AppLocale {
   return locale.trim().toLowerCase() === "en" ? "en" : "zh";
 }
 
+/** 同步 `<html lang>`，避免与界面语言不一致时触发 WebKit 中文智能标点。 */
+export function syncDocumentLang(locale: AppLocale): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.lang = locale === "en" ? "en" : "zh-CN";
+}
+
 export function consumeLegacyLocalStorageLocale(): AppLocale | null {
   if (typeof localStorage === "undefined") return null;
   const stored = localStorage.getItem(LOCALE_STORAGE_KEY);
@@ -49,6 +55,7 @@ export async function ensureI18nReady(): Promise<void> {
       fallbackLng: { default: [DEFAULT_LOCALE, "zh"] },
       interpolation: { escapeValue: false },
     });
+    syncDocumentLang(normalizeAppLocale(lng));
   })();
 
   return initPromise;
@@ -60,6 +67,7 @@ export async function applyAppLocale(locale: AppLocale): Promise<void> {
   if (i18n.language !== normalized) {
     await i18n.changeLanguage(normalized);
   }
+  syncDocumentLang(normalized);
 }
 
 export function getAppLocale(): AppLocale {

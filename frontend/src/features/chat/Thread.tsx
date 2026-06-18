@@ -331,6 +331,7 @@ function Composer({ variant = "default" }: { variant?: ThreadVariant }) {
           ref={inputRef}
           rows={1}
           autoFocus
+          spellCheck={false}
           onCompositionStart={onCompositionStart}
           onCompositionEnd={onCompositionEnd}
           onKeyDown={onKeyDown}

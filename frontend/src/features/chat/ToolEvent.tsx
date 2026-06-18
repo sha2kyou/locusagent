@@ -126,6 +126,7 @@ function ClarifyCard({ payload }: { payload: ClarifyPayload }) {
             }}
             placeholder={t("chat.clarify.otherPlaceholder")}
             disabled={disabled}
+            spellCheck={false}
             className="h-8 min-w-0 flex-1 rounded-md border border-border bg-surface px-2.5 text-[13px] text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-45"
           />
           <Button type="submit" variant="ghost" size="icon-sm" disabled={disabled || !other.trim()}>
