@@ -26,7 +26,8 @@ import { extractLatestTodoPlan, applyHistoricalTodoInterrupt, isTodoTool, type T
 import { TodoProgressPanel } from "./TodoProgressPanel";
 import { useChat } from "./ChatProvider";
 import type { ChatAttachment } from "./model";
-import { downloadAttachment, attachmentDownloadUrl } from "@/api/endpoints";
+import { downloadAttachment, attachmentDownloadUrl, fetchAttachmentPreview } from "@/api/endpoints";
+import { isFilePreviewable } from "@/lib/file-preview";
 import { Drawer } from "@/components/ui/drawer";
 import { useTimeFormatters } from "@/lib/use-app-timezone";
 import { isDesktopApp } from "@/lib/desktop-app";
@@ -581,6 +582,84 @@ function useAttachmentSelect() {
   return { selectedAttachment, setSelectedAttachment, selectAttachment };
 }
 
+function inlineAttachmentPreview(file: ChatAttachment): {
+  content?: string;
+  imageSrc?: string | null;
+} {
+  if (file.kind === "text" && typeof file.text === "string") {
+    return { content: file.text };
+  }
+  if (file.kind === "image") {
+    return { imageSrc: attachmentImageSrc(file) };
+  }
+  return {};
+}
+
+function useAttachmentPreview(file: ChatAttachment | null) {
+  const { t } = useTranslation();
+  const [remote, setRemote] = useState<{
+    content?: string;
+    imageSrc?: string;
+    mimeType?: string;
+  } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRemote(null);
+    setLoading(false);
+    setLoadError(null);
+    if (!file) return;
+
+    const inline = inlineAttachmentPreview(file);
+    if (inline.content !== undefined || inline.imageSrc) return;
+
+    if (!file.id.startsWith("att_") || !isFilePreviewable(file.name, file.mimeType)) return;
+
+    let cancelled = false;
+    setLoading(true);
+    void fetchAttachmentPreview(file.id, file.name, file.mimeType)
+      .then((payload) => {
+        if (cancelled) {
+          if (payload?.imageSrc) URL.revokeObjectURL(payload.imageSrc);
+          return;
+        }
+        setRemote(payload);
+        setLoading(false);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setLoadError(err instanceof Error ? err.message : t("chat.attachment.readFailed"));
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [file, t]);
+
+  useEffect(() => {
+    const imageSrc = remote?.imageSrc;
+    return () => {
+      if (imageSrc) URL.revokeObjectURL(imageSrc);
+    };
+  }, [remote?.imageSrc]);
+
+  if (!file) {
+    return { loading: false, loadError: null, content: undefined, imageSrc: null, mimeType: undefined, truncated: false };
+  }
+
+  const inline = inlineAttachmentPreview(file);
+  return {
+    loading,
+    loadError,
+    content: inline.content ?? remote?.content,
+    imageSrc: inline.imageSrc ?? remote?.imageSrc ?? null,
+    mimeType: file.mimeType ?? remote?.mimeType,
+    truncated: !!file.truncated,
+  };
+}
+
 function AttachmentDrawer({
   file,
   onClose,
@@ -590,6 +669,11 @@ function AttachmentDrawer({
 }) {
   const { t } = useTranslation();
   const toast = useToast();
+  const preview = useAttachmentPreview(file);
+  const previewable = file ? isFilePreviewable(file.name, preview.mimeType ?? file.mimeType) : false;
+  const hasPreviewData =
+    typeof preview.content === "string" || Boolean(preview.imageSrc);
+
   return (
     <Drawer
       open={!!file}
@@ -613,21 +697,27 @@ function AttachmentDrawer({
       }
     >
       {file ? (
-        file.processable || file.kind === "image" ? (
+        preview.loading ? (
+          <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+        ) : hasPreviewData ? (
           <FilePreview
             filename={file.name}
-            content={file.kind === "text" ? file.text : undefined}
-            imageSrc={file.kind === "image" ? attachmentImageSrc(file) : undefined}
-            mimeType={file.mimeType}
+            content={preview.content}
+            imageSrc={preview.imageSrc}
+            mimeType={preview.mimeType}
             emptyText={t("chat.attachment.emptyFile")}
             unsupportedText={
-              file.kind === "image" && !attachmentImageSrc(file)
+              file.kind === "image" && !preview.imageSrc
                 ? t("chat.attachment.imageMissingData")
                 : t("chat.attachment.previewUnsupported")
             }
-            truncated={file.truncated}
+            truncated={preview.truncated}
             truncatedText={t("chat.attachment.truncatedDisplay")}
           />
+        ) : preview.loadError ? (
+          <p className="text-sm text-muted-foreground">{preview.loadError}</p>
+        ) : previewable || isServerDownloadable(file) ? (
+          <p className="text-sm text-muted-foreground">{t("chat.attachment.previewUnsupported")}</p>
         ) : (
           <p className="text-sm text-muted-foreground">
             {file.unsupportedReason || t("chat.attachment.parseUnsupported")}

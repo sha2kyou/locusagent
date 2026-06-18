@@ -1,5 +1,6 @@
 import { ApiError, apiGet, apiSend, getWorkspaceId, type RequestOptions } from "./client";
 import i18n from "@/i18n";
+import { filePreviewKind, isFilePreviewable } from "@/lib/file-preview";
 import type {
   ActiveRunResponse,
   AppConfig,
@@ -165,6 +166,36 @@ export function attachmentDownloadUrl(id: string): string {
   const base = `/api/workspace/attachments/${encodeURIComponent(id)}/download`;
   if (!workspaceId) return base;
   return `${base}?workspace_id=${encodeURIComponent(workspaceId)}`;
+}
+
+export interface AttachmentPreviewPayload {
+  content?: string;
+  imageSrc?: string;
+  mimeType?: string;
+}
+
+/** 从服务端附件拉取可预览内容（与上传/交付来源无关）。 */
+export async function fetchAttachmentPreview(
+  id: string,
+  filename: string,
+  mimeType?: string,
+): Promise<AttachmentPreviewPayload | null> {
+  if (!isFilePreviewable(filename, mimeType)) return null;
+
+  const res = await fetch(attachmentDownloadUrl(id), { credentials: "same-origin" });
+  if (res.status === 401) {
+    throw new ApiError(i18n.t("errors.unauthenticated"), { status: 401, code: "unauthenticated" });
+  }
+  if (!res.ok) {
+    throw new ApiError(i18n.t("errors.downloadFailed", { status: res.status }), { status: res.status });
+  }
+
+  const blob = await res.blob();
+  const resolvedMime = mimeType || blob.type || "application/octet-stream";
+  if (filePreviewKind(filename, resolvedMime) === "image") {
+    return { imageSrc: URL.createObjectURL(blob), mimeType: resolvedMime };
+  }
+  return { content: await blob.text(), mimeType: resolvedMime };
 }
 
 /** 保留：需编程触发下载时使用（优先用 attachmentDownloadUrl + <a download>） */

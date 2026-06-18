@@ -107,6 +107,62 @@ export function filePreviewKind(filename: string, mimeType?: string | null): Fil
   return "text";
 }
 
+const BINARY_PREVIEW_EXT = new Set([
+  "pdf",
+  "zip",
+  "gz",
+  "gzip",
+  "bz2",
+  "xz",
+  "7z",
+  "rar",
+  "tar",
+  "tgz",
+  "exe",
+  "dll",
+  "so",
+  "dylib",
+  "dmg",
+  "pkg",
+  "deb",
+  "rpm",
+  "msi",
+  "doc",
+  "docx",
+  "xls",
+  "xlsx",
+  "ppt",
+  "pptx",
+  "woff",
+  "woff2",
+  "ttf",
+  "otf",
+  "eot",
+  "mp3",
+  "mp4",
+  "avi",
+  "mov",
+  "wav",
+  "webm",
+  "bin",
+  "dat",
+  "iso",
+]);
+
+/** 是否可在 UI 内联预览（与附件来源无关，仅看文件名/MIME）。 */
+export function isFilePreviewable(filename: string, mimeType?: string | null): boolean {
+  const mime = (mimeType ?? "").toLowerCase();
+  if (mime.startsWith("image/")) return true;
+  if (mime === "application/pdf") return false;
+  if (mime.includes("zip") || mime.includes("msword") || mime.includes("officedocument")) return false;
+
+  const ext = fileExtension(filename);
+  if (BINARY_PREVIEW_EXT.has(ext)) return false;
+
+  const kind = filePreviewKind(filename, mimeType);
+  return kind === "image" || kind === "markdown" || kind === "code" || kind === "text";
+}
+
 export function buildDataUrl(mimeType: string, contentBase64: string): string {
   return `data:${mimeType};base64,${contentBase64}`;
 }
