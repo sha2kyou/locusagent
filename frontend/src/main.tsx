@@ -13,7 +13,7 @@ import { AppTimezoneProvider } from "@/lib/use-app-timezone";
 import { NotificationProvider } from "@/features/notifications/NotificationProvider";
 import { ThemeProvider } from "@/app/theme";
 import { AppShell } from "@/app/AppShell";
-import { RootErrorBoundary } from "@/app/RootErrorBoundary";
+import { GlobalErrorHost } from "@/app/GlobalErrorHost";
 import { routeErrorElement } from "@/app/route-error-shell";
 import { ChatRoute } from "@/routes/ChatRoute";
 import { QuickChatRoute } from "@/routes/QuickChatRoute";
@@ -180,7 +180,7 @@ installExternalLinkHandling();
 void ensureI18nReady().then(() => {
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
-      <RootErrorBoundary>
+      <GlobalErrorHost>
         <ThemeProvider>
           <ToastProvider>
             <DialogProvider>
@@ -188,7 +188,7 @@ void ensureI18nReady().then(() => {
             </DialogProvider>
           </ToastProvider>
         </ThemeProvider>
-      </RootErrorBoundary>
+      </GlobalErrorHost>
     </StrictMode>,
   );
 });

@@ -18,7 +18,7 @@ import { ReadyGate } from "@/components/ReadyGate";
 import { createSkill, deleteSkill, getSkillFile, installSkill, listSkillFiles, listSkills, updateSkill } from "@/api/endpoints";
 import type { Skill, SkillFileContent, SkillFileEntry } from "@/api/types";
 import { toastAction } from "@/lib/toast-copy";
-import { buildFileTree, collectDirPaths } from "@/lib/skill-file-tree";
+import { buildFileTree } from "@/lib/skill-file-tree";
 
 function SkillFilesPanel({ skill }: { skill: Skill }) {
   const { t } = useTranslation();
@@ -31,12 +31,6 @@ function SkillFilesPanel({ skill }: { skill: Skill }) {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
 
   const tree = useMemo(() => buildFileTree(files ?? []), [files]);
-
-  useEffect(() => {
-    if (tree.length > 0) {
-      setExpandedPaths(collectDirPaths(tree));
-    }
-  }, [tree]);
 
   const toggleDir = (path: string) => {
     setExpandedPaths((prev) => {
@@ -64,6 +58,7 @@ function SkillFilesPanel({ skill }: { skill: Skill }) {
   useEffect(() => {
     setSelectedPath(null);
     setPreview(null);
+    setExpandedPaths(new Set());
   }, [skill.name]);
 
   const closeDrawer = () => {
