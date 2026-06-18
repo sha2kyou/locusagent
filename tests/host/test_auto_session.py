@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from starlette.requests import Request
 
-from agentpod_host.auth.auto_session import bootstrap_session, should_issue_session
-from agentpod_host.config import get_settings
+from locus_host.auth.auto_session import bootstrap_session, should_issue_session
+from locus_host.config import get_settings
 
 
 @pytest.fixture(autouse=True)
@@ -35,7 +35,7 @@ async def test_bootstrap_session_without_cookie():
     request = _request()
 
     with patch(
-        "agentpod_host.auth.auto_session.ensure_host_ready",
+        "locus_host.auth.auto_session.ensure_host_ready",
         new=AsyncMock(),
     ):
         ok = await bootstrap_session(request)

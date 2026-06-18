@@ -1,4 +1,4 @@
-"""~/.agentpod/settings.json 读写与默认值。"""
+"""~/.locusagent/settings.json 读写与默认值。"""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from .paths import agentpod_home, ensure_agentpod_home, expand_path
+from .paths import locusagent_home, ensure_locusagent_home, expand_path
 
 
 class LlmSection(BaseModel):
@@ -100,14 +100,14 @@ class SettingsDocument(BaseModel):
 
 
 def settings_path() -> Path:
-    return agentpod_home() / "settings.json"
+    return locusagent_home() / "settings.json"
 
 
 def data_dir(doc: SettingsDocument | None = None) -> Path:
     raw = (doc or load_settings_document()).paths.data_dir.strip()
     if raw:
         return expand_path(raw)
-    return ensure_agentpod_home()
+    return ensure_locusagent_home()
 
 
 def embedding_cache_dir(doc: SettingsDocument | None = None) -> Path:
@@ -164,7 +164,7 @@ def load_settings_document(*, create: bool = True) -> SettingsDocument:
     if not path.is_file():
         if not create:
             return SettingsDocument()
-        ensure_agentpod_home()
+        ensure_locusagent_home()
         doc = SettingsDocument(secrets=SecretsSection.generate())
         save_settings_document(doc)
         return doc
@@ -174,7 +174,7 @@ def load_settings_document(*, create: bool = True) -> SettingsDocument:
 
 
 def save_settings_document(doc: SettingsDocument) -> None:
-    ensure_agentpod_home()
+    ensure_locusagent_home()
     path = settings_path()
     path.write_text(
         json.dumps(doc.model_dump(mode="json"), indent=2, ensure_ascii=False) + "\n",
@@ -309,19 +309,19 @@ def reload_runtime_config() -> None:
     """保存 settings.json 后刷新进程内配置缓存。"""
     clear_settings_cache()
     try:
-        from agentpod_host.config import get_settings as get_host_settings
+        from locus_host.config import get_settings as get_host_settings
 
         get_host_settings.cache_clear()
     except ImportError:
         pass
     try:
-        from agentpod_agent.config import get_settings as get_agent_settings
+        from locus_agent.config import get_settings as get_agent_settings
 
         get_agent_settings.cache_clear()
     except ImportError:
         pass
     try:
-        from agentpod_shared.local_embeddings import _load_model
+        from locus_shared.local_embeddings import _load_model
 
         _load_model.cache_clear()
     except Exception:
@@ -378,7 +378,7 @@ def app_config_for_api(doc: SettingsDocument | None = None) -> dict[str, Any]:
 
 
 def document_to_host_kwargs(doc: SettingsDocument | None = None) -> dict[str, Any]:
-    from .ports import agentpod_base_url
+    from .ports import locusagent_base_url
 
     d = doc or get_settings_document()
     home = data_dir(d)
@@ -388,7 +388,7 @@ def document_to_host_kwargs(doc: SettingsDocument | None = None) -> dict[str, An
         "encryption_key": d.secrets.encryption_key,
         "session_secret": d.secrets.session_secret,
         "host_sqlite_path": str(host_sqlite_path(d)),
-        "agent_service_url": agentpod_base_url(),
+        "agent_service_url": locusagent_base_url(),
         "agent_internal_token": d.secrets.internal_token,
         "llm_base_url": d.llm.base_url,
         "llm_api_key": d.llm.api_key,
@@ -416,7 +416,7 @@ def document_to_host_kwargs(doc: SettingsDocument | None = None) -> dict[str, An
 
 
 def document_to_agent_kwargs(doc: SettingsDocument | None = None) -> dict[str, Any]:
-    from .ports import agentpod_base_url, agentpod_llm_internal_url
+    from .ports import locusagent_base_url, locusagent_llm_internal_url
 
     d = doc or get_settings_document()
     home = data_dir(d)
@@ -424,10 +424,10 @@ def document_to_agent_kwargs(doc: SettingsDocument | None = None) -> dict[str, A
     token = d.secrets.internal_token
     return {
         "internal_token": token,
-        "llm_base_url": agentpod_llm_internal_url(),
+        "llm_base_url": locusagent_llm_internal_url(),
         "embedding_base_url": "local",
         "embedding_model": d.embedding.model,
-        "host_internal_url": agentpod_base_url(),
+        "host_internal_url": locusagent_base_url(),
         "data_dir": home,
         "shared_skills_dir": skills or (home / "skills"),
         "attachment_storage": "local",

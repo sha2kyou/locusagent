@@ -8,9 +8,9 @@ import io
 import pytest
 from openpyxl import Workbook
 
-from agentpod_agent.core.persistence import create_attachment
-from agentpod_agent.db import init_db
-from agentpod_agent.workspace import set_workspace_id
+from locus_agent.core.persistence import create_attachment
+from locus_agent.db import init_db
+from locus_agent.workspace import set_workspace_id
 
 WS_TEST = "ws_0123456789abcdef0123"
 
@@ -32,7 +32,7 @@ def _minimal_xlsx_b64() -> str:
 
 @pytest.mark.asyncio
 async def test_create_attachment_rejects_oversized_base64(monkeypatch: pytest.MonkeyPatch) -> None:
-    from agentpod_agent import config as config_mod
+    from locus_agent import config as config_mod
 
     settings = config_mod.get_settings()
     monkeypatch.setattr(settings, "attachment_max_bytes", 8)
@@ -83,11 +83,11 @@ async def test_create_attachment_office_parse_failure_stores_raw_blob(monkeypatc
         return b"PK\x03\x04\xff\xfe\xfd", _object_key
 
     monkeypatch.setattr(
-        "agentpod_agent.core.persistence.save_attachment_file",
+        "locus_agent.core.persistence.save_attachment_file",
         _fake_save_file,
     )
     monkeypatch.setattr(
-        "agentpod_agent.core.persistence.resolve_attachment_bytes",
+        "locus_agent.core.persistence.resolve_attachment_bytes",
         _fake_resolve,
     )
 
@@ -129,11 +129,11 @@ async def test_create_attachment_office_stores_original_file(monkeypatch: pytest
         return stored.get("data"), _object_key
 
     monkeypatch.setattr(
-        "agentpod_agent.core.persistence.save_attachment_file",
+        "locus_agent.core.persistence.save_attachment_file",
         _fake_save_file,
     )
     monkeypatch.setattr(
-        "agentpod_agent.core.persistence.resolve_attachment_bytes",
+        "locus_agent.core.persistence.resolve_attachment_bytes",
         _fake_resolve,
     )
 
@@ -171,11 +171,11 @@ async def test_create_attachment_reuses_hash_without_payload(monkeypatch: pytest
         return b"hey", _object_key
 
     monkeypatch.setattr(
-        "agentpod_agent.core.persistence.save_attachment_bytes",
+        "locus_agent.core.persistence.save_attachment_bytes",
         _fake_save,
     )
     monkeypatch.setattr(
-        "agentpod_agent.core.persistence.resolve_attachment_bytes",
+        "locus_agent.core.persistence.resolve_attachment_bytes",
         _fake_resolve,
     )
 

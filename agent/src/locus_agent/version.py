@@ -3,7 +3,7 @@ from __future__ import annotations
 from importlib.metadata import PackageNotFoundError, version as pkg_version
 from pathlib import Path
 
-_PKG_NAME = "agentpod-agent"
+_PKG_NAME = "locus-agent"
 
 
 def get_version() -> str:

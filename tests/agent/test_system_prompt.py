@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agentpod_agent.core.system_prompt import (
+from locus_agent.core.system_prompt import (
     FROZEN_SYSTEM_PROMPT_VERSION,
     _CTX_DELIMITER,
     _unwrap_stable_context_cache,
@@ -10,8 +10,8 @@ from agentpod_agent.core.system_prompt import (
     assemble_system_prompt,
     build_context_prompt,
 )
-from agentpod_agent.tools.base import Tool, ToolResult
-from agentpod_agent.tools.registry import ToolRegistry
+from locus_agent.tools.base import Tool, ToolResult
+from locus_agent.tools.registry import ToolRegistry
 
 
 def test_stable_context_cache_invalidates_when_fingerprint_changes():
@@ -26,7 +26,7 @@ def test_stable_context_cache_invalidates_when_fingerprint_changes():
 
 def test_cache_prefix_includes_version_and_context_delimiter():
     wrapped = _wrap_stable_context_cache("stable", "context", "fp123")
-    assert wrapped.startswith(f"agentpod:sp:v{FROZEN_SYSTEM_PROMPT_VERSION}:fp123:")
+    assert wrapped.startswith(f"locusagent:sp:v{FROZEN_SYSTEM_PROMPT_VERSION}:fp123:")
     assert _CTX_DELIMITER in wrapped
 
 
@@ -36,10 +36,10 @@ async def test_build_context_prompt_includes_workspace_summary(monkeypatch):
         return "## Skills (1)\n- demo [private]: test", {"skills": {"count": 1}}
 
     monkeypatch.setattr(
-        "agentpod_agent.workspace_summary.build_workspace_summary",
+        "locus_agent.workspace_summary.build_workspace_summary",
         _fake_summary,
     )
-    monkeypatch.setattr("agentpod_agent.workspace.get_workspace_id", lambda: "ws_0123456789abcdef0123")
+    monkeypatch.setattr("locus_agent.workspace.get_workspace_id", lambda: "ws_0123456789abcdef0123")
 
     text = await build_context_prompt(session_id="sess_1")
     assert "## Workspace context (ws_0123456789abcdef0123)" in text

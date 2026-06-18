@@ -1,4 +1,4 @@
-"""应用内操作日志：JSONL 持久化于 ~/.agentpod/activity.jsonl。"""
+"""应用内操作日志：JSONL 持久化于 ~/.locusagent/activity.jsonl。"""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .paths import ensure_agentpod_home
+from .paths import ensure_locusagent_home
 
 _MAX_LINES = 3000
 _TRIM_TO = 2000
@@ -29,7 +29,7 @@ SENSITIVE_DETAIL_KEYS = frozenset(
 
 
 def activity_log_path() -> Path:
-    return ensure_agentpod_home() / "activity.jsonl"
+    return ensure_locusagent_home() / "activity.jsonl"
 
 
 def _now_iso() -> str:

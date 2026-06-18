@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from agentpod_agent.db import init_db
-from agentpod_agent.skills import (
+from locus_agent.db import init_db
+from locus_agent.skills import (
     Skill,
     create_skill,
     delete_skill,
@@ -16,11 +16,11 @@ from agentpod_agent.skills import (
     read_skill_file_preview,
     resolve_skill_file,
 )
-from agentpod_agent.skills.fs import format_skill_file_tree
-from agentpod_agent.skills.loader import _parse_skill_md
-from agentpod_agent.tools.base import ToolError
-from agentpod_agent.tools.skills import _skill_view
-from agentpod_agent.workspace import set_workspace_id
+from locus_agent.skills.fs import format_skill_file_tree
+from locus_agent.skills.loader import _parse_skill_md
+from locus_agent.tools.base import ToolError
+from locus_agent.tools.skills import _skill_view
+from locus_agent.workspace import set_workspace_id
 
 WS_TEST = "ws_0123456789abcdef0123"
 

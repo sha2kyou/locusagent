@@ -5,7 +5,7 @@ import hashlib
 import pytest
 from fastapi import HTTPException
 
-from agentpod_host.routers.attachments_proxy import (
+from locus_host.routers.attachments_proxy import (
     _assert_body_matches_key_digest,
     _validate_blob_put_key,
     _validate_file_put_key,

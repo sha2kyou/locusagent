@@ -90,7 +90,7 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    from agentpod_shared.settings_store import document_to_host_kwargs
+    from locus_shared.settings_store import document_to_host_kwargs
 
     kwargs = document_to_host_kwargs()
     return Settings.model_construct(**kwargs)

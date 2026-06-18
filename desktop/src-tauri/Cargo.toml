@@ -1,13 +1,13 @@
 [package]
-name = "agentpod-desktop"
-version = "0.1.21"
-description = "AgentPod macOS desktop shell"
-authors = ["AgentPod"]
+name = "locusagent-desktop"
+version = "0.2.0"
+description = "Locus Agent macOS desktop shell"
+authors = ["Locus Agent"]
 license = "Apache-2.0"
 edition = "2021"
 
 [lib]
-name = "agentpod_desktop_lib"
+name = "locusagent_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

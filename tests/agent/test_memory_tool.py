@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agentpod_agent.tools.args import pick_action, pick_int, pick_str
+from locus_agent.tools.args import pick_action, pick_int, pick_str
 
 
 def test_pick_str_prefers_first_non_empty_key() -> None:

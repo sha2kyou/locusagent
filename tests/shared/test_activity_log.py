@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import json
 
-from agentpod_shared import activity_log
+from locus_shared import activity_log
 
 
 def test_record_and_list_activity_logs(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("AGENTPOD_HOME", str(tmp_path))
+    monkeypatch.setenv("LOCUSAGENT_HOME", str(tmp_path))
     activity_log._ID_LOADED = False
     activity_log._NEXT_ID = 0
 

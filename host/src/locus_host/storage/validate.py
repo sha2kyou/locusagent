@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agentpod_shared.settings_store import data_dir
+from locus_shared.settings_store import data_dir
 
 from ..config import Settings, get_settings
 

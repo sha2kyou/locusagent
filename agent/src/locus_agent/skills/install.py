@@ -23,7 +23,7 @@ log = get_logger("skill_install")
 
 MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024
 MAX_ZIP_ENTRIES = 500
-USER_AGENT = "AgentPod-SkillInstaller/1.0"
+USER_AGENT = "Locus Agent-SkillInstaller/1.0"
 
 GITHUB_SHORTHAND_RE = re.compile(
     r"^github:(?P<owner>[^/]+)/(?P<repo>[^/]+)(?:/(?P<subpath>.+))?$",
@@ -323,7 +323,7 @@ def install_skill_from_url(
 ) -> InstallResult:
     plan = parse_install_source(url, subpath=subpath)
 
-    with tempfile.TemporaryDirectory(prefix="agentpod-skill-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="locusagent-skill-") as tmp:
         tmp_dir = Path(tmp)
 
         if plan.kind == "skill_md":

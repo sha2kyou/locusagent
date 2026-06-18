@@ -28,7 +28,7 @@ log = get_logger("background_review")
 _REVIEW_ALLOWED_TOOLS = frozenset({"skill_view", "skill_manage", "memory"})
 
 _REVIEW_SYSTEM_PROMPT = (
-    "You are AgentPod's background self-improvement reviewer. You receive a completed conversation "
+    "You are Locus Agent's background self-improvement reviewer. You receive a completed conversation "
     "trajectory and decide whether to update long-term memory or the private skill library. "
     "You may only call skill_view, skill_manage, memory. "
     "Shared and built-in skills are read-only; only private skills may be created, patched, or deleted. "

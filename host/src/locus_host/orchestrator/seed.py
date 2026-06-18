@@ -1,4 +1,4 @@
-"""shared-skills 同步到 ~/.agentpod/skills。"""
+"""shared-skills 同步到 ~/.locusagent/skills。"""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ log = get_logger("seed")
 
 def _resolve_seed_src() -> Path | None:
     try:
-        from agentpod_shared.settings_store import shared_skills_dir
+        from locus_shared.settings_store import shared_skills_dir
 
         repo = shared_skills_dir()
         if repo and repo.is_dir():
@@ -24,7 +24,7 @@ def _resolve_seed_src() -> Path | None:
 
 
 def _resolve_seed_dst() -> Path:
-    from agentpod_shared.settings_store import data_dir
+    from locus_shared.settings_store import data_dir
 
     return data_dir() / "skills"
 

@@ -1,4 +1,4 @@
-"""本地文件附件存储（~/.agentpod/attachments）。"""
+"""本地文件附件存储（~/.locusagent/attachments）。"""
 
 from __future__ import annotations
 

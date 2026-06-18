@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agentpod_shared.memory_cache import enforce_sliding_rate_limit
+from locus_shared.memory_cache import enforce_sliding_rate_limit
 from fastapi import HTTPException, status
 
 from .config import get_settings

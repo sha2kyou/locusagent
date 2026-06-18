@@ -9,29 +9,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
-name = "agentpod-desktop"
-version = "0.1.21"
-dependencies = [
- "objc2-app-kit",
- "objc2-foundation",
- "objc2-web-kit",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "sys-locale",
- "tauri",
- "tauri-build",
- "tauri-plugin-autostart",
- "tauri-plugin-global-shortcut",
- "tauri-plugin-notification",
- "tauri-plugin-opener",
- "tauri-plugin-window-state",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
 name = "aho-corasick"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2052,6 +2029,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "224399e74b87b5f3557511d98dff8b14089b3dadafcab6bb93eab67d3aace965"
 dependencies = [
  "scopeguard",
+]
+
+[[package]]
+name = "locusagent-desktop"
+version = "0.2.0"
+dependencies = [
+ "objc2-app-kit",
+ "objc2-foundation",
+ "objc2-web-kit",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "sys-locale",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-autostart",
+ "tauri-plugin-global-shortcut",
+ "tauri-plugin-notification",
+ "tauri-plugin-opener",
+ "tauri-plugin-window-state",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]

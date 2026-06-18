@@ -43,7 +43,7 @@ setup_bundle_resources() {
   find "$bundle_venv" -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
 
   echo "==> verify bundled sidecar import"
-  "$py" -c "import agentpod, agentpod_host, agentpod_agent, agentpod_shared"
+  "$py" -c "import locusagent, locus_host, locus_agent, locus_shared"
 
   echo "==> copy shared-skills into bundle resources"
   rm -rf "$bundle_root/shared-skills"
@@ -51,51 +51,51 @@ setup_bundle_resources() {
 }
 
 repackage_dmg() {
-  local app_src="$ROOT_DIR/desktop/src-tauri/target/release/bundle/macos/AgentPod.app"
+  local app_src="$ROOT_DIR/desktop/src-tauri/target/release/bundle/macos/Locus Agent.app"
   local dmg_dir="$ROOT_DIR/desktop/src-tauri/target/release/bundle/dmg"
   local version
   version="$(tr -d '[:space:]' < "$ROOT_DIR/VERSION")"
-  local dmg_out="$dmg_dir/AgentPod_${version}_macos-arm64.dmg"
+  local dmg_out="$dmg_dir/LocusAgent_${version}_macos-arm64.dmg"
 
   if [[ ! -d "$app_src" ]]; then
     echo "error: missing $app_src" >&2
     exit 1
   fi
 
-  rm -f "$dmg_dir"/AgentPod_*.dmg
+  rm -f "$dmg_dir"/LocusAgent_*.dmg
   mkdir -p "$dmg_dir"
-  echo "==> repackage DMG from AgentPod.app"
-  hdiutil create -volname "AgentPod" -srcfolder "$app_src" -ov -format UDZO "$dmg_out"
+  echo "==> repackage DMG from Locus Agent.app"
+  hdiutil create -volname "Locus Agent" -srcfolder "$app_src" -ov -format UDZO "$dmg_out"
 }
 
 publish_desktop_artifacts() {
   local dist="$ROOT_DIR/dist"
-  local app_src="$ROOT_DIR/desktop/src-tauri/target/release/bundle/macos/AgentPod.app"
+  local app_src="$ROOT_DIR/desktop/src-tauri/target/release/bundle/macos/Locus Agent.app"
   local dmg_dir="$ROOT_DIR/desktop/src-tauri/target/release/bundle/dmg"
 
-  rm -rf "$dist"/AgentPod.app "$dist"/AgentPod_*.dmg 2>/dev/null || true
+  rm -rf "$dist/Locus Agent.app" "$dist"/LocusAgent_*.dmg 2>/dev/null || true
   mkdir -p "$dist"
 
   if [[ -d "$app_src" ]]; then
-    echo "==> copy AgentPod.app -> dist/"
-    ditto "$app_src" "$dist/AgentPod.app"
+    echo "==> copy Locus Agent.app -> dist/"
+    ditto "$app_src" "$dist/Locus Agent.app"
   else
     echo "warning: missing $app_src" >&2
   fi
 
   local dmg=""
   if [[ -d "$dmg_dir" ]]; then
-    dmg=$(ls -t "$dmg_dir"/AgentPod_*.dmg 2>/dev/null | head -1 || true)
+    dmg=$(ls -t "$dmg_dir"/LocusAgent_*.dmg 2>/dev/null | head -1 || true)
   fi
   if [[ -n "$dmg" && -f "$dmg" ]]; then
     echo "==> copy $(basename "$dmg") -> dist/"
     cp "$dmg" "$dist/"
   else
-    echo "warning: no AgentPod_*.dmg found under $dmg_dir" >&2
+    echo "warning: no LocusAgent_*.dmg found under $dmg_dir" >&2
   fi
 
-  if [[ -d "$dist/AgentPod.app" ]]; then
-    echo "==> done: $dist/AgentPod.app"
+  if [[ -d "$dist/Locus Agent.app" ]]; then
+    echo "==> done: $dist/Locus Agent.app"
     ls -lh "$dist"
   else
     echo "==> build finished; check desktop/src-tauri/target/release/bundle/" >&2
@@ -129,7 +129,7 @@ if [[ ! -d node_modules ]]; then
 fi
 npm run build:desktop
 
-echo "==> build AgentPod.app (Tauri, cargo may take a few minutes)"
+echo "==> build Locus Agent.app (Tauri, cargo may take a few minutes)"
 "$ROOT_DIR/scripts/prepare-desktop-resources.sh"
 cd "$ROOT_DIR/desktop"
 if [[ ! -d node_modules ]]; then
@@ -137,7 +137,7 @@ if [[ ! -d node_modules ]]; then
 fi
 npm run build
 
-if [[ -d "$ROOT_DIR/desktop/src-tauri/target/release/bundle/macos/AgentPod.app" ]]; then
+if [[ -d "$ROOT_DIR/desktop/src-tauri/target/release/bundle/macos/Locus Agent.app" ]]; then
   repackage_dmg
 fi
 

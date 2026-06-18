@@ -35,7 +35,7 @@ async def proxy_embeddings(
     except json.JSONDecodeError:
         pass
 
-    from agentpod_shared.local_embeddings import embed_openai_response_from_body
+    from locus_shared.local_embeddings import embed_openai_response_from_body
 
     try:
         data, total_tokens = await embed_openai_response_from_body(body)

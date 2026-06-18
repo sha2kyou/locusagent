@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from agentpod_shared.settings_store import (
+from locus_shared.settings_store import (
     app_config_for_api,
     apply_app_config_update,
     export_settings_document,
@@ -21,7 +21,7 @@ from agentpod_shared.settings_store import (
     set_app_timezone,
     validate_app_locale,
 )
-from agentpod_shared.activity_log import list_activity_logs, record_activity
+from locus_shared.activity_log import list_activity_logs, record_activity
 
 from ..auth import AuthContext, require_session
 from ..scheduled_tasks import recalc_task_schedules, validate_timezone
@@ -158,7 +158,7 @@ async def read_backend_logs(
 ) -> BackendLogsOut:
     _ = ctx
     line_limit = max(1, min(lines, 5000))
-    home = Path(os.environ.get("AGENTPOD_HOME", Path.home() / ".agentpod"))
+    home = Path(os.environ.get("LOCUSAGENT_HOME", Path.home() / ".locusagent"))
     log_path = home / "desktop-backend.log"
     if not log_path.is_file():
         return BackendLogsOut(lines=[], path=str(log_path))

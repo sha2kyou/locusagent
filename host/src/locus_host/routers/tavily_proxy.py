@@ -18,7 +18,7 @@ router = APIRouter(prefix="/internal/tavily", tags=["tavily-proxy"])
 log = get_logger("tavily_proxy")
 
 TAVILY_SEARCH_URL = "https://api.tavily.com/search"
-USER_AGENT = "Mozilla/5.0 (compatible; AgentPodHost/0.1)"
+USER_AGENT = "Mozilla/5.0 (compatible; Locus AgentHost/0.1)"
 TIMEOUT = httpx.Timeout(connect=5.0, read=15.0, write=5.0, pool=5.0)
 
 

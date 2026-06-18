@@ -6,7 +6,7 @@ import os
 from typing import Any
 
 _SAFE_ENV_KEYS = ("PATH", "HOME", "LANG", "LC_ALL", "PYTHONPATH", "PYTHONHOME", "TZ")
-_RESERVED_ENV_PREFIXES = ("AGENTPOD_",)
+_RESERVED_ENV_PREFIXES = ("LOCUSAGENT_",)
 _RESERVED_ENV_NAMES = frozenset(
     {
         "INTERNAL_TOKEN",

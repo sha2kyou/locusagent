@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from agentpod_shared.activity_log import record_activity as _record_activity
+from locus_shared.activity_log import record_activity as _record_activity
 
 
 def record_activity(

@@ -26,10 +26,10 @@ from .persistence import get_session_system_prompt, set_session_system_prompt
 log = get_logger("system_prompt")
 
 _SNAPSHOT_MEMORY_LIMIT = 30
-_CTX_DELIMITER = "\n<<AGENTPOD_CTX>>\n"
+_CTX_DELIMITER = "\n<<LOCUSAGENT_CTX>>\n"
 # Bump when stable template changes so old session caches invalidate.
 FROZEN_SYSTEM_PROMPT_VERSION = 29
-_CACHE_PREFIX = f"agentpod:sp:v{FROZEN_SYSTEM_PROMPT_VERSION}:"
+_CACHE_PREFIX = f"locusagent:sp:v{FROZEN_SYSTEM_PROMPT_VERSION}:"
 
 MEMORY_GUIDANCE = (
     "You have persistent memory across sessions. Use the memory tool to save long-lived facts: "
@@ -146,7 +146,7 @@ async def build_stable_prompt() -> str:
     tool_names = sorted(_format_available_tools())
     enabled = set(tool_names)
     pieces = [
-        "You are an AI agent running in the AgentPod desktop app.",
+        "You are an AI agent running in the Locus Agent desktop app.",
         f"Use the provided tools when appropriate. Available tools: {', '.join(tool_names)}.",
         "Call tools only via native tool_calls—never write tool invocations in message body text. "
         "Do not output pseudo tool tags, pseudo function calls, pseudo arguments, JSON tool stubs, "
@@ -172,7 +172,7 @@ async def build_stable_prompt() -> str:
         "Workspace files live under workspace/ in the current workspace; private skills under skills/.",
         "Use read_file, search_files, write_file, patch for workspace file ops.",
         "manage_workspace is only for MCP server config and environment summary—"
-        "never for creating, deleting, renaming, or switching AgentPod workspaces. "
+        "never for creating, deleting, renaming, or switching Locus Agent workspaces. "
         "You operate only in the user's current workspace; if they ask to create/delete/rename/switch workspaces in chat, "
         "refuse and tell them to use the Workspaces page outside chat.",
         "The user cannot browse the local filesystem directly from the UI.",

@@ -14,7 +14,7 @@ pub fn apply_menu_bar_icon(tray: &TrayIcon) -> Result<(), String> {
             .ns_status_item()
             .ok_or_else(|| "menu bar status item missing".to_string())?;
         let symbol = NSString::from_str(MENU_BAR_SYMBOL);
-        let description = NSString::from_str("AgentPod");
+        let description = NSString::from_str("Locus Agent");
         let image = NSImage::imageWithSystemSymbolName_accessibilityDescription(&symbol, Some(&description))
             .ok_or_else(|| format!("SF Symbol not found: {MENU_BAR_SYMBOL}"))?;
         image.setTemplate(true);

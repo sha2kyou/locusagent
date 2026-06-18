@@ -20,7 +20,7 @@ router = APIRouter(prefix="/internal/jina", tags=["jina-proxy"])
 log = get_logger("jina_proxy")
 
 JINA_READER_URL = "https://r.jina.ai/"
-USER_AGENT = "Mozilla/5.0 (compatible; AgentPodHost/0.1)"
+USER_AGENT = "Mozilla/5.0 (compatible; Locus AgentHost/0.1)"
 TIMEOUT = httpx.Timeout(connect=5.0, read=60.0, write=5.0, pool=5.0)
 MAX_URLS = 5
 MAX_CONTENT_CHARS = 12_000

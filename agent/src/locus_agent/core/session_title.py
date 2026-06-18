@@ -7,7 +7,7 @@ import re
 from typing import Any
 
 from ..logging import get_logger
-from agentpod_shared.session_titles import is_default_session_title
+from locus_shared.session_titles import is_default_session_title
 from .auxiliary_completion import create_chat_completion
 from .llm import get_llm_client
 from .openai_fields import openai_completion_text

@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
 from pathlib import Path
 
-from agentpod_shared.workspace_ids import is_valid_workspace_id, normalize_workspace_id
+from locus_shared.workspace_ids import is_valid_workspace_id, normalize_workspace_id
 
 from .config import get_settings
 

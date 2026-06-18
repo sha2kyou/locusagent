@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import pytest
 
-from agentpod_agent.db import init_db
-from agentpod_agent.env_vars import add_env_var, resolve_env_var_names
-from agentpod_agent.subprocess_env import (
+from locus_agent.db import init_db
+from locus_agent.env_vars import add_env_var, resolve_env_var_names
+from locus_agent.subprocess_env import (
     is_reserved_env_name,
     merge_subprocess_env,
     normalize_env_names,
     safe_subprocess_env,
 )
-from agentpod_agent.workspace import set_workspace_id
+from locus_agent.workspace import set_workspace_id
 
 WS_TEST = "ws_0123456789abcdef0123"
 
@@ -75,7 +75,7 @@ def test_is_reserved_env_name_blocks_system_keys() -> None:
     assert is_reserved_env_name("PATH")
     assert is_reserved_env_name("path")
     assert is_reserved_env_name("INTERNAL_TOKEN")
-    assert is_reserved_env_name("AGENTPOD_HOME")
+    assert is_reserved_env_name("LOCUSAGENT_HOME")
     assert not is_reserved_env_name("GITHUB_TOKEN")
 
 

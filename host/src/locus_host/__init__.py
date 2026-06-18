@@ -1,4 +1,4 @@
-"""AgentPod host: FastAPI web server, OAuth, orchestrator, API proxy."""
+"""Locus Agent host: FastAPI web server, OAuth, orchestrator, API proxy."""
 
 from .version import get_version
 

@@ -1,3 +1,3 @@
-from agentpod.cli import main
+from locusagent.cli import main
 
 main()

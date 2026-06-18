@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 from sqlalchemy import or_, select, update
 
-from agentpod_shared.settings_store import get_app_timezone
+from locus_shared.settings_store import get_app_timezone
 
 from ..config import get_settings
 from ..db import get_session

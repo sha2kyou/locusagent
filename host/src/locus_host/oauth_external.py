@@ -21,8 +21,8 @@ def oauth_callback_html(*, ok: bool, server_name: str = "", message: str = "") -
         body = f"已成功完成 <strong>{server}</strong> 的 OAuth 授权，Agent 现在可以连接该 MCP 服务。"
     else:
         badge = '<span class="badge badge-error">失败</span>'
-        body = html.escape(message or "授权过程中出现错误，请返回 AgentPod 重试。")
-    hint = "请返回 AgentPod 应用继续使用，此页面可以关闭。"
+        body = html.escape(message or "授权过程中出现错误，请返回 Locus Agent 重试。")
+    hint = "请返回 Locus Agent 应用继续使用，此页面可以关闭。"
 
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -30,7 +30,7 @@ def oauth_callback_html(*, ok: bool, server_name: str = "", message: str = "") -
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light dark" />
-  <title>AgentPod · OAuth 授权</title>
+  <title>Locus Agent · OAuth 授权</title>
   <link rel="icon" href="/favicon.ico" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

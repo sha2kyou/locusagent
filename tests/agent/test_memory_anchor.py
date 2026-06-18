@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agentpod_agent.memory import (
+from locus_agent.memory import (
     MEMORY_ANCHOR_LONG,
     MEMORY_ANCHOR_SHORT,
     memory_term_label,

@@ -7,7 +7,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from agentpod_shared.activity_log import record_activity
+from locus_shared.activity_log import record_activity
 
 from ..auth import AuthContext, require_session
 from ..scheduled_tasks import create_task, delete_task, get_task, list_tasks, update_task

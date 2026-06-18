@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from agentpod_shared.session_titles import default_session_title, is_default_session_title
+from locus_shared.session_titles import default_session_title, is_default_session_title
 from ..config import get_settings
 from ..db import conn_scope, run_in_thread
 from ..memory.embedder import EmbeddingUnavailable, embed_text

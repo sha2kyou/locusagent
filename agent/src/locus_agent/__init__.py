@@ -1,4 +1,4 @@
-"""AgentPod agent: per-user container with chat loop, tools, skills, MCP, memory."""
+"""Locus Agent agent: per-user container with chat loop, tools, skills, MCP, memory."""
 
 from .version import get_version
 

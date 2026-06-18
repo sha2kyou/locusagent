@@ -6,13 +6,13 @@ import os
 
 
 def main() -> None:
-    os.environ.setdefault("AGENTPOD_MONOLITH", "1")
+    os.environ.setdefault("LOCUSAGENT_MONOLITH", "1")
     import uvicorn
 
-    from agentpod.main import app
-    from agentpod_shared.ports import AGENTPOD_HOST, AGENTPOD_PORT
+    from locusagent.main import app
+    from locus_shared.ports import LOCUSAGENT_HOST, LOCUSAGENT_PORT
 
-    uvicorn.run(app, host=AGENTPOD_HOST, port=AGENTPOD_PORT, log_level="info")
+    uvicorn.run(app, host=LOCUSAGENT_HOST, port=LOCUSAGENT_PORT, log_level="info")
 
 
 if __name__ == "__main__":

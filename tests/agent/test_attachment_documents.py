@@ -7,7 +7,7 @@ import io
 from docx import Document
 from openpyxl import Workbook
 
-from agentpod_agent.core.attachment_documents import (
+from locus_agent.core.attachment_documents import (
     OFFICE_EXTRACTED_MIME,
     extract_document_text,
     has_office_filename,

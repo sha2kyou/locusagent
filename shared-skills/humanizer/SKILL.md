@@ -19,9 +19,9 @@ Use when the user asks for:
 - match tone to a user-provided writing sample
 - pre-publish AI-tell check
 
-Apply to your own long user-visible replies too; AgentPod defaults to concise/professional—a dedicated pass clears leftover AI voice.
+Apply to your own long user-visible replies too; Locus Agent defaults to concise/professional—a dedicated pass clears leftover AI voice.
 
-## Using in AgentPod
+## Using in Locus Agent
 
 1. **Inline in chat (default)** — rewrite in place, reply in conversation.
 2. **Workspace files** — `read_file{path}` (under `workspace/`); `patch` for sections, `write_file` for full doc.
@@ -491,4 +491,4 @@ Deliver in chat as:
 
 ## Credits
 
-Ported from [blader/humanizer](https://github.com/blader/humanizer) (MIT), referencing [Wikipedia: Signs of AI writing](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing). Adapted for AgentPod tool conventions. MIT license in `LICENSE`.
+Ported from [blader/humanizer](https://github.com/blader/humanizer) (MIT), referencing [Wikipedia: Signs of AI writing](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing). Adapted for Locus Agent tool conventions. MIT license in `LICENSE`.

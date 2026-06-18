@@ -8,8 +8,8 @@ from sqlalchemy import select
 
 from ..auth import AuthContext, require_session
 from ..db import Workspace, get_session
-from agentpod_shared.workspace_ids import generate_workspace_id
-from agentpod_shared.activity_log import record_activity
+from locus_shared.workspace_ids import generate_workspace_id
+from locus_shared.activity_log import record_activity
 from ..workspaces import (
     copy_mcp_oauth_credentials,
     copy_workspace_on_disk,

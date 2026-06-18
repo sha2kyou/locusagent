@@ -24,7 +24,7 @@ from .workspace import workspace_data_dir
 T = TypeVar("T")
 log = get_logger("db")
 
-_DB_THREAD_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="agentpod-db")
+_DB_THREAD_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="locusagent-db")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS memory (

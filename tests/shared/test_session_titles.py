@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agentpod_shared.session_titles import (
+from locus_shared.session_titles import (
     DEFAULT_SESSION_TITLE_EN,
     DEFAULT_SESSION_TITLE_ZH,
     default_session_title,

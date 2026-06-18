@@ -38,7 +38,7 @@ def _artifact_notify_category(label: str) -> str:
 
 
 def _notify_workspace_id() -> str | None:
-    from agentpod_shared.workspace_ids import is_valid_workspace_id
+    from locus_shared.workspace_ids import is_valid_workspace_id
 
     from .workspace import get_workspace_id
 

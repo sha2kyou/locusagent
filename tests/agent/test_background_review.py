@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agentpod_agent.core.background_review import summarize_background_review_actions
+from locus_agent.core.background_review import summarize_background_review_actions
 
 
 def test_summarize_uses_tool_name_not_keywords() -> None:

@@ -72,14 +72,14 @@
       },
       "menubar": {
         "title": "Menu Bar & Background",
-        "description": "Keep AgentPod in the menu bar after closing the window. Launch at login must be enabled manually."
+        "description": "Keep Locus Agent in the menu bar after closing the window. Launch at login must be enabled manually."
       },
       "runInBackground": {
         "label": "Keep running in menu bar after closing window",
         "hint": "Hides the window instead of quitting. Reopen from the menu bar icon."
       },
       "launchAtLogin": {
-        "label": "Launch AgentPod at login",
+        "label": "Launch Locus Agent at login",
         "hint": "Starts the app when you log in. Off by default."
       },
       "quickChat": {
@@ -233,11 +233,11 @@
   },
   "copy": {
     "agent": {
-      "unavailable": "AgentPod is temporarily unavailable. Please try again later.",
-      "startingTimeout": "AgentPod startup timed out. Please try again later or contact your administrator.",
-      "composerPlaceholder": "Message AgentPod…",
+      "unavailable": "Locus Agent is temporarily unavailable. Please try again later.",
+      "startingTimeout": "Locus Agent startup timed out. Please try again later or contact your administrator.",
+      "composerPlaceholder": "Message Locus Agent…",
       "authLoadFailed": "Cannot connect to server. Please try again later.",
-      "streamRetry": "AgentPod starting, retry in {{seconds}}s ({{attempt}}/{{max}})"
+      "streamRetry": "Locus Agent starting, retry in {{seconds}}s ({{attempt}}/{{max}})"
     },
     "toast": {
       "unnamed": "(unnamed)"
@@ -310,9 +310,9 @@
     },
     "empty": {
       "title": "How can I help?",
-      "subtitle": "AgentPod can read/write files, search the web, and use tools to help with tasks.",
+      "subtitle": "Locus Agent can read/write files, search the web, and use tools to help with tasks.",
       "suggestions": [
-        "What can AgentPod do?",
+        "What can Locus Agent do?",
         "What is the normal distribution PDF formula?",
         "Search and summarize the latest AI progress"
       ]
@@ -583,7 +583,7 @@
   },
   "scheduled": {
     "title": "Scheduled Tasks",
-    "subtitle": "Run AgentPod on a cron or one-time schedule; each run creates a new session",
+    "subtitle": "Run Locus Agent on a cron or one-time schedule; each run creates a new session",
     "count": "{{count}} total",
     "empty": "No scheduled tasks yet",
     "notifyBadge": "Notify",
@@ -609,8 +609,8 @@
       "createTitle": "New task",
       "title": "Title",
       "titlePlaceholder": "e.g. Daily briefing",
-      "instruction": "Instruction (prompt for AgentPod)",
-      "instructionPlaceholder": "AgentPod will run this instruction at the scheduled time…",
+      "instruction": "Instruction (prompt for Locus Agent)",
+      "instructionPlaceholder": "Locus Agent will run this instruction at the scheduled time…",
       "type": "Type",
       "cronPicker": "Cron picker",
       "cronHint": "Interpreted in your configured timezone. The cron expression is generated from the visual picker.",

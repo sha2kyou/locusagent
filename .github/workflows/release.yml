@@ -39,8 +39,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: AgentPod-${{ github.ref_name }}-macos
-          path: dist/AgentPod_*.dmg
+          name: LocusAgent-${{ github.ref_name }}-macos
+          path: dist/LocusAgent_*.dmg
           if-no-files-found: error
 
   build-windows:
@@ -76,8 +76,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: AgentPod-${{ github.ref_name }}-windows
-          path: dist/AgentPod_*_windows-x64.exe
+          name: LocusAgent-${{ github.ref_name }}-windows
+          path: dist/LocusAgent_*_windows-x64.exe
           if-no-files-found: error
 
   release:
@@ -92,13 +92,13 @@ jobs:
       - name: Download macOS artifact
         uses: actions/download-artifact@v8
         with:
-          name: AgentPod-${{ github.ref_name }}-macos
+          name: LocusAgent-${{ github.ref_name }}-macos
           path: artifacts/macos
 
       - name: Download Windows artifact
         uses: actions/download-artifact@v8
         with:
-          name: AgentPod-${{ github.ref_name }}-windows
+          name: LocusAgent-${{ github.ref_name }}-windows
           path: artifacts/windows
 
       - name: Generate release notes
@@ -113,8 +113,8 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: |
-            artifacts/macos/AgentPod_*.dmg
-            artifacts/windows/AgentPod_*_windows-x64.exe
+            artifacts/macos/LocusAgent_*.dmg
+            artifacts/windows/LocusAgent_*_windows-x64.exe
           body_path: RELEASE_NOTES.md
           fail_on_unmatched_files: true
 
@@ -139,7 +139,7 @@ jobs:
         if: ${{ steps.token.outputs.run_update == 'true' }}
         uses: actions/download-artifact@v8
         with:
-          name: AgentPod-${{ github.ref_name }}-macos
+          name: LocusAgent-${{ github.ref_name }}-macos
 
       - name: Compute version and SHA256
         if: ${{ steps.token.outputs.run_update == 'true' }}
@@ -147,7 +147,7 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME}"
           VERSION="${TAG#v}"
-          DMG_NAME="AgentPod_${VERSION}_macos-arm64.dmg"
+          DMG_NAME="LocusAgent_${VERSION}_macos-arm64.dmg"
           SHA256="$(shasum -a 256 "${DMG_NAME}" | awk '{print $1}')"
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "sha256=${SHA256}" >> "${GITHUB_OUTPUT}"
@@ -160,22 +160,22 @@ jobs:
       - name: Update cask file
         if: ${{ steps.token.outputs.run_update == 'true' }}
         run: |
-          cat > tap/Casks/agentpod.rb <<EOF
-          cask "agentpod" do
+          cat > tap/Casks/locusagent.rb <<EOF
+          cask "locusagent" do
             version "${{ steps.vars.outputs.version }}"
             sha256 "${{ steps.vars.outputs.sha256 }}"
 
-            url "https://github.com/sha2kyou/agentpod/releases/download/v#{version}/AgentPod_#{version}_macos-arm64.dmg",
-                verified: "github.com/sha2kyou/agentpod/"
-            name "AgentPod"
+            url "https://github.com/sha2kyou/locusagent/releases/download/v#{version}/LocusAgent_#{version}_macos-arm64.dmg",
+                verified: "github.com/sha2kyou/locusagent/"
+            name "Locus Agent"
             desc "macOS desktop AI agent with chat, skills, MCP, and memory"
-            homepage "https://github.com/sha2kyou/agentpod"
+            homepage "https://github.com/sha2kyou/locusagent"
 
             auto_updates true
-            app "AgentPod.app"
+            app "Locus Agent.app"
 
             postflight do
-              app_path = "#{appdir}/AgentPod.app"
+              app_path = "#{appdir}/Locus Agent.app"
               next unless File.exist?(app_path)
 
               system_command "/usr/bin/xattr",
@@ -184,9 +184,9 @@ jobs:
             end
 
             zap trash: [
-              "~/.agentpod",
-              "~/Library/Preferences/com.agentpod.desktop.plist",
-              "~/Library/Saved Application State/com.agentpod.desktop.savedState",
+              "~/.locusagent",
+              "~/Library/Preferences/com.locusagent.desktop.plist",
+              "~/Library/Saved Application State/com.locusagent.desktop.savedState",
             ]
           end
           EOF
@@ -199,10 +199,10 @@ jobs:
           cd tap
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Casks/agentpod.rb
+          git add Casks/locusagent.rb
           if git diff --cached --quiet; then
             echo "No tap changes to commit."
             exit 0
           fi
-          git commit -m "chore(cask): update agentpod for ${GITHUB_REF_NAME}"
+          git commit -m "chore(cask): update locusagent for ${GITHUB_REF_NAME}"
           git push "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${TAP_REPO}.git" HEAD:main

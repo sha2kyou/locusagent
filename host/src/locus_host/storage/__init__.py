@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agentpod_shared import local_storage
+from locus_shared import local_storage
 
 AttachmentStorageError = local_storage.AttachmentStorageError
 delete_objects = local_storage.delete_objects

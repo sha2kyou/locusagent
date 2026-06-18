@@ -9,8 +9,8 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from agentpod_host.db.models import Base, McpOauthCredential, Workspace
-from agentpod_host.workspaces import (
+from locus_host.db.models import Base, McpOauthCredential, Workspace
+from locus_host.workspaces import (
     agent_sqlite_session_count,
     copy_mcp_oauth_credentials,
     copy_workspace_on_disk,
@@ -20,7 +20,7 @@ from agentpod_host.workspaces import (
     sync_workspaces_from_disk,
     workspace_dirs_on_disk,
 )
-from agentpod_shared.workspace_ids import generate_workspace_id, is_valid_workspace_id
+from locus_shared.workspace_ids import generate_workspace_id, is_valid_workspace_id
 
 WS_A = "ws_0123456789abcdef0123"
 WS_B = "ws_0123456789abcdef0124"
@@ -28,9 +28,9 @@ WS_B = "ws_0123456789abcdef0124"
 
 @pytest.fixture
 async def host_session(tmp_path, monkeypatch):
-    home = tmp_path / "agentpod-home"
+    home = tmp_path / "locusagent-home"
     (home / "workspaces").mkdir(parents=True)
-    monkeypatch.setenv("AGENTPOD_HOME", str(home))
+    monkeypatch.setenv("LOCUSAGENT_HOME", str(home))
 
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'host.sqlite'}")
     async with engine.begin() as conn:

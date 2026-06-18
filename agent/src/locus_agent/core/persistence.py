@@ -363,7 +363,7 @@ def _is_openai_tool_calls(tool_calls: Any) -> bool:
 
 async def create_session(title: str | None = None, *, hidden: bool = False) -> str:
     from ..todos.store import interrupt_other_session_todos
-    from agentpod_shared.session_titles import default_session_title
+    from locus_shared.session_titles import default_session_title
 
     from ..host_settings import get_locale
 

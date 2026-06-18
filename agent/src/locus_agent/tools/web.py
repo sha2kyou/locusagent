@@ -11,7 +11,7 @@ import httpx
 from ..host_internal import HostInternalError, error_detail, internal_base_and_headers
 from .base import Tool, ToolError, ToolResult, register_builtin
 
-USER_AGENT = "Mozilla/5.0 (compatible; AgentPodAgent/0.1)"
+USER_AGENT = "Mozilla/5.0 (compatible; Locus AgentAgent/0.1)"
 TIMEOUT = httpx.Timeout(connect=5.0, read=15.0, write=5.0, pool=5.0)
 JINA_TIMEOUT = httpx.Timeout(connect=5.0, read=65.0, write=5.0, pool=5.0)
 TAVILY_TIMEOUT = httpx.Timeout(connect=5.0, read=15.0, write=5.0, pool=5.0)

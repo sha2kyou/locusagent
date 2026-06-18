@@ -6,8 +6,8 @@ import shutil
 import sqlite3
 from pathlib import Path
 
-from agentpod_shared.settings_store import data_dir
-from agentpod_shared.workspace_ids import (
+from locus_shared.settings_store import data_dir
+from locus_shared.workspace_ids import (
     generate_workspace_id,
     is_valid_workspace_id,
     normalize_workspace_id,

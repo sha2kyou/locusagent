@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from sqlalchemy import or_, select
 
-from agentpod_shared.settings_store import get_app_timezone
+from locus_shared.settings_store import get_app_timezone
 
 from ..db import get_session
 from ..db.models import ScheduledTask

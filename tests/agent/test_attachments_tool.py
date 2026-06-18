@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from agentpod_agent.core.persistence import _unreferenced_object_keys
-from agentpod_agent.tools.attachments import _attachments_tool, _format_attachment_detail, _safe_filename
-from agentpod_agent.tools.base import ToolError
+from locus_agent.core.persistence import _unreferenced_object_keys
+from locus_agent.tools.attachments import _attachments_tool, _format_attachment_detail, _safe_filename
+from locus_agent.tools.base import ToolError
 
 
 def test_unreferenced_object_keys_after_single_delete():

@@ -260,7 +260,7 @@ register_builtin(
         name="mcp_manage",
         description=(
             "Manage MCP connections: add / update / remove.\n"
-            "Query with mcp_view; reconnect/refresh with mcp_refresh; cannot create/delete/switch AgentPod workspaces."
+            "Query with mcp_view; reconnect/refresh with mcp_refresh; cannot create/delete/switch Locus Agent workspaces."
         ),
         parameters={
             "type": "object",

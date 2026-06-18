@@ -1,4 +1,4 @@
-mod agentpod_paths;
+mod locusagent_paths;
 mod app_settings;
 mod desktop_prefs;
 mod external_links;
@@ -30,7 +30,7 @@ static QUICK_CHAT_SHORTCUT_SYNCED: AtomicBool = AtomicBool::new(false);
 pub fn run() {
     tauri::Builder::default()
         .plugin({
-            let autostart = tauri_plugin_autostart::Builder::new().app_name("AgentPod");
+            let autostart = tauri_plugin_autostart::Builder::new().app_name("Locus Agent");
             #[cfg(target_os = "macos")]
             let autostart = autostart
                 .macos_launcher(tauri_plugin_autostart::MacosLauncher::AppleScript);

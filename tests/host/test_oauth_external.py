@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agentpod_host.oauth_external import oauth_callback_html
+from locus_host.oauth_external import oauth_callback_html
 
 
 def test_oauth_callback_html_success() -> None:

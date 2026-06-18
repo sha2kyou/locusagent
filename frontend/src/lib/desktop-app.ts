@@ -8,7 +8,7 @@ function isTauriRuntime(): boolean {
   return w.__TAURI__ != null || w.__TAURI_INTERNALS__ != null;
 }
 
-/** 是否在 AgentPod 桌面壳（Tauri webview）内运行 */
+/** 是否在 Locus Agent 桌面壳（Tauri webview）内运行 */
 export function isDesktopApp(): boolean {
   return isTauriRuntime();
 }

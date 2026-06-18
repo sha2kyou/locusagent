@@ -10,164 +10,11 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "agentpod-agent",
-    "agentpod-host",
-    "agentpod-shared",
-    "agentpod-sidecar",
-    "agentpod-workspace",
-]
-
-[[package]]
-name = "agentpod-agent"
-version = "0.1.21"
-source = { editable = "agent" }
-dependencies = [
-    { name = "agentpod-shared" },
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "mcp" },
-    { name = "numpy" },
-    { name = "openai" },
-    { name = "openpyxl" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "python-docx" },
-    { name = "pyyaml" },
-    { name = "sqlite-vec" },
-    { name = "structlog" },
-    { name = "tenacity" },
-    { name = "tiktoken" },
-    { name = "uvicorn", extra = ["standard"] },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "agentpod-shared", editable = "shared" },
-    { name = "fastapi", specifier = ">=0.115" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "mcp", specifier = ">=1.0" },
-    { name = "numpy", specifier = ">=1.26" },
-    { name = "openai", specifier = ">=1.40" },
-    { name = "openpyxl", specifier = ">=3.1" },
-    { name = "pydantic", specifier = ">=2.7" },
-    { name = "pydantic-settings", specifier = ">=2.4" },
-    { name = "python-docx", specifier = ">=1.1" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "sqlite-vec", specifier = ">=0.1.6" },
-    { name = "structlog", specifier = ">=24.4" },
-    { name = "tenacity", specifier = ">=9.0" },
-    { name = "tiktoken", specifier = ">=0.13.0" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
-]
-
-[[package]]
-name = "agentpod-host"
-version = "0.1.21"
-source = { editable = "host" }
-dependencies = [
-    { name = "agentpod-shared" },
-    { name = "aiosqlite" },
-    { name = "authlib" },
-    { name = "croniter" },
-    { name = "cryptography" },
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "itsdangerous" },
-    { name = "mcp" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "python-multipart" },
-    { name = "sqlalchemy", extra = ["asyncio"] },
-    { name = "structlog" },
-    { name = "uvicorn", extra = ["standard"] },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "agentpod-shared", editable = "shared" },
-    { name = "aiosqlite", specifier = ">=0.20" },
-    { name = "authlib", specifier = ">=1.3" },
-    { name = "croniter", specifier = ">=2.0" },
-    { name = "cryptography", specifier = ">=43.0" },
-    { name = "fastapi", specifier = ">=0.115" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "itsdangerous", specifier = ">=2.2" },
-    { name = "mcp", specifier = ">=1.27" },
-    { name = "pydantic", specifier = ">=2.7" },
-    { name = "pydantic-settings", specifier = ">=2.4" },
-    { name = "python-multipart", specifier = ">=0.0.9" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
-    { name = "structlog", specifier = ">=24.4" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
-]
-
-[[package]]
-name = "agentpod-shared"
-version = "0.1.21"
-source = { editable = "shared" }
-dependencies = [
-    { name = "cryptography" },
-    { name = "fastembed" },
-    { name = "numpy" },
-    { name = "pydantic" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "cryptography", specifier = ">=43.0" },
-    { name = "fastembed", specifier = ">=0.6" },
-    { name = "numpy", specifier = ">=1.26" },
-    { name = "pydantic", specifier = ">=2.7" },
-]
-
-[[package]]
-name = "agentpod-sidecar"
-version = "0.1.21"
-source = { editable = "sidecar" }
-dependencies = [
-    { name = "agentpod-agent" },
-    { name = "agentpod-host" },
-    { name = "agentpod-shared" },
-    { name = "uvicorn", extra = ["standard"] },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "agentpod-agent", editable = "agent" },
-    { name = "agentpod-host", editable = "host" },
-    { name = "agentpod-shared", editable = "shared" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
-]
-
-[[package]]
-name = "agentpod-workspace"
-version = "0.1.21"
-source = { virtual = "." }
-
-[package.dev-dependencies]
-dev = [
-    { name = "agentpod-agent" },
-    { name = "agentpod-host" },
-    { name = "agentpod-shared" },
-    { name = "agentpod-sidecar" },
-    { name = "httpx" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "agentpod-agent", editable = "agent" },
-    { name = "agentpod-host", editable = "host" },
-    { name = "agentpod-shared", editable = "shared" },
-    { name = "agentpod-sidecar", editable = "sidecar" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "pytest", specifier = ">=8.0" },
-    { name = "pytest-asyncio", specifier = ">=0.23" },
-    { name = "ruff", specifier = ">=0.6.0" },
+    "locus-agent",
+    "locus-host",
+    "locus-shared",
+    "locus-sidecar",
+    "locus-workspace",
 ]
 
 [[package]]
@@ -946,6 +793,159 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/19/74/a633ee74eb36c44aa6d1095e7cc5569bebf04342ee146178e2d36600708b/jsonschema_specifications-2025.9.1.tar.gz", hash = "sha256:b540987f239e745613c7a9176f3edb72b832a4ac465cf02712288397832b5e8d", size = 32855, upload-time = "2025-09-08T01:34:59.186Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/41/45/1a4ed80516f02155c51f51e8cedb3c1902296743db0bbc66608a0db2814f/jsonschema_specifications-2025.9.1-py3-none-any.whl", hash = "sha256:98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe", size = 18437, upload-time = "2025-09-08T01:34:57.871Z" },
+]
+
+[[package]]
+name = "locus-agent"
+version = "0.2.0"
+source = { editable = "agent" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "locus-shared" },
+    { name = "mcp" },
+    { name = "numpy" },
+    { name = "openai" },
+    { name = "openpyxl" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "python-docx" },
+    { name = "pyyaml" },
+    { name = "sqlite-vec" },
+    { name = "structlog" },
+    { name = "tenacity" },
+    { name = "tiktoken" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "locus-shared", editable = "shared" },
+    { name = "mcp", specifier = ">=1.0" },
+    { name = "numpy", specifier = ">=1.26" },
+    { name = "openai", specifier = ">=1.40" },
+    { name = "openpyxl", specifier = ">=3.1" },
+    { name = "pydantic", specifier = ">=2.7" },
+    { name = "pydantic-settings", specifier = ">=2.4" },
+    { name = "python-docx", specifier = ">=1.1" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "sqlite-vec", specifier = ">=0.1.6" },
+    { name = "structlog", specifier = ">=24.4" },
+    { name = "tenacity", specifier = ">=9.0" },
+    { name = "tiktoken", specifier = ">=0.13.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
+]
+
+[[package]]
+name = "locus-host"
+version = "0.2.0"
+source = { editable = "host" }
+dependencies = [
+    { name = "aiosqlite" },
+    { name = "authlib" },
+    { name = "croniter" },
+    { name = "cryptography" },
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "itsdangerous" },
+    { name = "locus-shared" },
+    { name = "mcp" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "python-multipart" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "structlog" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiosqlite", specifier = ">=0.20" },
+    { name = "authlib", specifier = ">=1.3" },
+    { name = "croniter", specifier = ">=2.0" },
+    { name = "cryptography", specifier = ">=43.0" },
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "itsdangerous", specifier = ">=2.2" },
+    { name = "locus-shared", editable = "shared" },
+    { name = "mcp", specifier = ">=1.27" },
+    { name = "pydantic", specifier = ">=2.7" },
+    { name = "pydantic-settings", specifier = ">=2.4" },
+    { name = "python-multipart", specifier = ">=0.0.9" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+    { name = "structlog", specifier = ">=24.4" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
+]
+
+[[package]]
+name = "locus-shared"
+version = "0.2.0"
+source = { editable = "shared" }
+dependencies = [
+    { name = "cryptography" },
+    { name = "fastembed" },
+    { name = "numpy" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cryptography", specifier = ">=43.0" },
+    { name = "fastembed", specifier = ">=0.6" },
+    { name = "numpy", specifier = ">=1.26" },
+    { name = "pydantic", specifier = ">=2.7" },
+]
+
+[[package]]
+name = "locus-sidecar"
+version = "0.2.0"
+source = { editable = "sidecar" }
+dependencies = [
+    { name = "locus-agent" },
+    { name = "locus-host" },
+    { name = "locus-shared" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "locus-agent", editable = "agent" },
+    { name = "locus-host", editable = "host" },
+    { name = "locus-shared", editable = "shared" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
+]
+
+[[package]]
+name = "locus-workspace"
+version = "0.2.0"
+source = { virtual = "." }
+
+[package.dev-dependencies]
+dev = [
+    { name = "httpx" },
+    { name = "locus-agent" },
+    { name = "locus-host" },
+    { name = "locus-shared" },
+    { name = "locus-sidecar" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "locus-agent", editable = "agent" },
+    { name = "locus-host", editable = "host" },
+    { name = "locus-shared", editable = "shared" },
+    { name = "locus-sidecar", editable = "sidecar" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-asyncio", specifier = ">=0.23" },
+    { name = "ruff", specifier = ">=0.6.0" },
 ]
 
 [[package]]

@@ -24,8 +24,8 @@ class Settings(BaseSettings):
 
     host_internal_url: str = Field(default="http://127.0.0.1:21223", alias="HOST_INTERNAL_URL")
 
-    data_dir: Path = Field(default=Path.home() / ".agentpod", alias="DATA_DIR")
-    shared_skills_dir: Path = Field(default=Path.home() / ".agentpod" / "skills", alias="SHARED_SKILLS_DIR")
+    data_dir: Path = Field(default=Path.home() / ".locusagent", alias="DATA_DIR")
+    shared_skills_dir: Path = Field(default=Path.home() / ".locusagent" / "skills", alias="SHARED_SKILLS_DIR")
     attachment_storage: str = Field(default="local", alias="ATTACHMENT_STORAGE")
 
     max_loop_rounds: int = Field(default=100, alias="MAX_LOOP_ROUNDS")
@@ -91,7 +91,7 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    from agentpod_shared.settings_store import document_to_agent_kwargs
+    from locus_shared.settings_store import document_to_agent_kwargs
 
     kwargs = document_to_agent_kwargs()
     return Settings.model_construct(**kwargs)

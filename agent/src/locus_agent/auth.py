@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import hmac
 
-from agentpod_shared.workspace_ids import is_valid_workspace_id
+from locus_shared.workspace_ids import is_valid_workspace_id
 from fastapi import Header, HTTPException, status
 
 from .config import get_settings

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use tauri::{AppHandle, Manager, State};
 
-use crate::agentpod_paths::agentpod_home;
+use crate::locusagent_paths::locusagent_home;
 
 fn default_quick_chat_enabled() -> bool {
     true
@@ -63,11 +63,11 @@ pub struct DesktopPrefsView {
 }
 
 fn settings_path() -> PathBuf {
-    agentpod_home().join("settings.json")
+    locusagent_home().join("settings.json")
 }
 
 fn legacy_prefs_path() -> PathBuf {
-    agentpod_home().join("desktop.prefs.json")
+    locusagent_home().join("desktop.prefs.json")
 }
 
 fn read_settings_root() -> Map<String, Value> {
@@ -156,7 +156,7 @@ fn remove_legacy_launch_agent_plists() {
         return;
     };
     let dir = PathBuf::from(home).join("Library/LaunchAgents");
-    for name in ["AgentPod.plist", "agentpod-desktop.plist", "agentpod.plist"] {
+    for name in ["Locus Agent.plist", "locusagent-desktop.plist", "locusagent.plist"] {
         let _ = fs::remove_file(dir.join(name));
     }
 }

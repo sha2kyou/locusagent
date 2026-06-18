@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agentpod_agent.todos.intent import (
+from locus_agent.todos.intent import (
     TodoIntent,
     build_todo_intent_system_message,
     messages_require_todo_intent,

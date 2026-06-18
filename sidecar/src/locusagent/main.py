@@ -1,4 +1,4 @@
-"""AgentPod 桌面单体：Host + Agent 单进程 FastAPI。"""
+"""Locus Agent 桌面单体：Host + Agent 单进程 FastAPI。"""
 
 from __future__ import annotations
 
@@ -11,55 +11,55 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-os.environ.setdefault("AGENTPOD_MONOLITH", "1")
+os.environ.setdefault("LOCUSAGENT_MONOLITH", "1")
 
-from agentpod_agent.errors import WsError, ws_error_handler, ws_validation_handler
-from agentpod_agent.memory import start_embedding_worker, stop_embedding_worker
-from agentpod_agent.routers import internal as agent_internal_router
-from agentpod_agent.routers import v1 as agent_v1_router
-from agentpod_agent.routers import workspace as agent_workspace_router
-from agentpod_agent.workspace import ensure_workspace_storage_initialized, iter_workspace_ids, set_workspace_id
-from agentpod_agent.workspace_runtime import (
+from locus_agent.errors import WsError, ws_error_handler, ws_validation_handler
+from locus_agent.memory import start_embedding_worker, stop_embedding_worker
+from locus_agent.routers import internal as agent_internal_router
+from locus_agent.routers import v1 as agent_v1_router
+from locus_agent.routers import workspace as agent_workspace_router
+from locus_agent.workspace import ensure_workspace_storage_initialized, iter_workspace_ids, set_workspace_id
+from locus_agent.workspace_runtime import (
     mark_workspace_runtime_bootstrapped,
     start_mcp_reconnect_loop,
     stop_mcp_reconnect_loop,
     warm_mcp_runtime_background,
 )
-from agentpod_host import __version__
-from agentpod_host.config import get_settings
-from agentpod_host.db import dispose_engine, init_engine
-from agentpod_host.logging import configure_logging, get_logger
-from agentpod_host.middleware import install_auth_isolation, install_auto_session, install_internal_network_guard
-from agentpod_host.orchestrator import sync_shared_skills
-from agentpod_host.bootstrap import ensure_host_ready
-from agentpod_host.workspaces import ensure_default_workspace_row
-from agentpod_host.app_cache import close_app_cache, init_app_cache
-from agentpod_host.routers import attachments_proxy as attachments_proxy_router
-from agentpod_host.routers import embedding_proxy as embedding_proxy_router
-from agentpod_host.routers import internal_mcp_oauth as internal_mcp_oauth_router
-from agentpod_host.routers import internal_notifications as internal_notifications_router
-from agentpod_host.routers import internal_scheduled_tasks as internal_scheduled_tasks_router
-from agentpod_host.routers import internal_settings as internal_settings_router
-from agentpod_host.routers import internal_usage as internal_usage_router
-from agentpod_host.routers import jina_proxy as jina_proxy_router
-from agentpod_host.routers import llm_proxy as llm_proxy_router
-from agentpod_host.routers import me as me_router
-from agentpod_host.routers import notifications as notifications_router
-from agentpod_host.routers import oauth_mcp as oauth_mcp_router
-from agentpod_host.routers import scheduled_tasks as scheduled_tasks_router
-from agentpod_host.routers import settings as settings_router
-from agentpod_host.routers import tavily_proxy as tavily_proxy_router
-from agentpod_host.routers import workspace as host_workspace_router
-from agentpod_host.routers import workspaces as workspaces_router
-from agentpod_host.scheduled_tasks.queue import scheduled_task_worker_context
-from agentpod_host.storage.validate import validate_attachment_storage
-from agentpod_shared.settings_store import ensure_agentpod_home, set_bundled_skills_dir, shared_skills_dir
-from agentpod_shared.local_embeddings import warm_embedding_model
+from locus_host import __version__
+from locus_host.config import get_settings
+from locus_host.db import dispose_engine, init_engine
+from locus_host.logging import configure_logging, get_logger
+from locus_host.middleware import install_auth_isolation, install_auto_session, install_internal_network_guard
+from locus_host.orchestrator import sync_shared_skills
+from locus_host.bootstrap import ensure_host_ready
+from locus_host.workspaces import ensure_default_workspace_row
+from locus_host.app_cache import close_app_cache, init_app_cache
+from locus_host.routers import attachments_proxy as attachments_proxy_router
+from locus_host.routers import embedding_proxy as embedding_proxy_router
+from locus_host.routers import internal_mcp_oauth as internal_mcp_oauth_router
+from locus_host.routers import internal_notifications as internal_notifications_router
+from locus_host.routers import internal_scheduled_tasks as internal_scheduled_tasks_router
+from locus_host.routers import internal_settings as internal_settings_router
+from locus_host.routers import internal_usage as internal_usage_router
+from locus_host.routers import jina_proxy as jina_proxy_router
+from locus_host.routers import llm_proxy as llm_proxy_router
+from locus_host.routers import me as me_router
+from locus_host.routers import notifications as notifications_router
+from locus_host.routers import oauth_mcp as oauth_mcp_router
+from locus_host.routers import scheduled_tasks as scheduled_tasks_router
+from locus_host.routers import settings as settings_router
+from locus_host.routers import tavily_proxy as tavily_proxy_router
+from locus_host.routers import workspace as host_workspace_router
+from locus_host.routers import workspaces as workspaces_router
+from locus_host.scheduled_tasks.queue import scheduled_task_worker_context
+from locus_host.storage.validate import validate_attachment_storage
+from locus_shared.settings_store import ensure_locusagent_home, set_bundled_skills_dir, shared_skills_dir
+from locus_shared.local_embeddings import warm_embedding_model
 
 
 def _configure_runtime_paths() -> None:
-    ensure_agentpod_home()
-    bundled_skills = os.environ.get("AGENTPOD_BUNDLED_SKILLS_DIR", "").strip()
+    ensure_locusagent_home()
+    bundled_skills = os.environ.get("LOCUSAGENT_BUNDLED_SKILLS_DIR", "").strip()
     if bundled_skills:
         path = Path(bundled_skills)
         if path.is_dir():
@@ -78,10 +78,10 @@ async def lifespan(app: FastAPI):
     _configure_runtime_paths()
     exit_stack = AsyncExitStack()
     configure_logging()
-    log = get_logger("agentpod")
+    log = get_logger("locusagent")
     settings = get_settings()
     app.state.settings = settings
-    log.info("agentpod_starting", version=app.version)
+    log.info("locusagent_starting", version=app.version)
 
     validate_attachment_storage(settings)
     await init_engine()
@@ -99,7 +99,7 @@ async def lifespan(app: FastAPI):
         log.warning("shared_skills_seed_failed", error=str(exc))
 
     try:
-        from agentpod_host.scheduled_tasks.executor import (
+        from locus_host.scheduled_tasks.executor import (
             reconcile_interrupted_scheduled_tasks,
             recover_stale_running_tasks,
         )
@@ -113,9 +113,9 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         log.warning("scheduled_tasks_startup_recover_failed", error=str(exc))
 
-    from agentpod_agent.config import get_settings as get_agent_settings
-    from agentpod_agent.db import init_db
-    from agentpod_agent.core.persistence import expire_stale_runs, interrupt_running_runs_on_startup
+    from locus_agent.config import get_settings as get_agent_settings
+    from locus_agent.db import init_db
+    from locus_agent.core.persistence import expire_stale_runs, interrupt_running_runs_on_startup
 
     agent_settings = get_agent_settings()
     app.state.agent_settings = agent_settings
@@ -130,7 +130,7 @@ async def lifespan(app: FastAPI):
         stats = await interrupt_running_runs_on_startup()
         interrupt_stats["runs_interrupted"] += stats["runs_interrupted"]
         interrupt_stats["sessions_marked_interrupted"] += stats["sessions_marked_interrupted"]
-        from agentpod_agent.todos.store import interrupt_in_progress_on_startup
+        from locus_agent.todos.store import interrupt_in_progress_on_startup
 
         tstats = await interrupt_in_progress_on_startup()
         todo_stats["plans_updated"] += tstats["plans_updated"]
@@ -141,7 +141,7 @@ async def lifespan(app: FastAPI):
         set_workspace_id(wid)
         expired_total += await expire_stale_runs()
 
-    from agentpod_agent.tools import registry as tool_registry
+    from locus_agent.tools import registry as tool_registry
 
     app.state.tool_registry = tool_registry
     log.info("agent_ready", tools=len(tool_registry.list()))
@@ -161,12 +161,12 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        from agentpod_agent.core.run_manager import shutdown_run_manager
-        from agentpod_agent.core.session_title import shutdown_session_title_tasks
-        from agentpod_agent.mcp_.client import stop_all_mcp
-        from agentpod_agent.db import shutdown_db_thread_pool
-        from agentpod_agent.routers.v1 import shutdown_v1_background_tasks
-        from agentpod_shared.local_embeddings import shutdown_embed_thread_pool
+        from locus_agent.core.run_manager import shutdown_run_manager
+        from locus_agent.core.session_title import shutdown_session_title_tasks
+        from locus_agent.mcp_.client import stop_all_mcp
+        from locus_agent.db import shutdown_db_thread_pool
+        from locus_agent.routers.v1 import shutdown_v1_background_tasks
+        from locus_shared.local_embeddings import shutdown_embed_thread_pool
 
         await stop_mcp_reconnect_loop()
         await shutdown_v1_background_tasks()
@@ -182,11 +182,11 @@ async def lifespan(app: FastAPI):
         await exit_stack.aclose()
         await close_app_cache()
         await dispose_engine()
-        log.info("agentpod_stopped")
+        log.info("locusagent_stopped")
 
 
 app = FastAPI(
-    title="AgentPod",
+    title="Locus Agent",
     version=__version__,
     lifespan=lifespan,
     docs_url=None,
@@ -237,7 +237,7 @@ def _install_desktop_static(app: FastAPI) -> None:
     from fastapi.responses import FileResponse
     from starlette.staticfiles import StaticFiles
 
-    raw = os.environ.get("AGENTPOD_STATIC_DIR", "").strip()
+    raw = os.environ.get("LOCUSAGENT_STATIC_DIR", "").strip()
     if not raw:
         return
     root = Path(raw)

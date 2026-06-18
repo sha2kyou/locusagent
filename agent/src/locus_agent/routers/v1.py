@@ -59,7 +59,7 @@ router.include_router(sessions_router)
 log = get_logger("v1")
 _background_tasks: set[asyncio.Task] = set()
 
-PUBLIC_API_MODEL_ID = "agentpod-v1"
+PUBLIC_API_MODEL_ID = "locusagent-v1"
 
 
 async def _resolve_v1_model(requested: str | None) -> tuple[str, str]:
@@ -402,7 +402,7 @@ async def list_models() -> dict:
             {
                 "id": PUBLIC_API_MODEL_ID,
                 "object": "model",
-                "owned_by": "agentpod",
+                "owned_by": "locusagent",
             }
         ],
     }

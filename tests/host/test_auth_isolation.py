@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from agentpod_host.middleware.auth_isolation import install_auth_isolation
+from locus_host.middleware.auth_isolation import install_auth_isolation
 
 
 def _client() -> TestClient:

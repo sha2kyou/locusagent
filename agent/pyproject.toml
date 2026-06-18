@@ -1,7 +1,7 @@
 [project]
-name = "agentpod-agent"
-version = "0.1.21"
-description = "AgentPod agent: per-user container with chat loop, tools, skills, MCP, memory"
+name = "locus-agent"
+version = "0.2.0"
+description = "Locus Agent agent: per-user container with chat loop, tools, skills, MCP, memory"
 license = "Apache-2.0"
 requires-python = ">=3.11"
 dependencies = [
@@ -20,7 +20,7 @@ dependencies = [
     "tiktoken>=0.13.0",
     "openpyxl>=3.1",
     "python-docx>=1.1",
-    "agentpod-shared",
+    "locus-shared",
 ]
 
 [build-system]
@@ -28,4 +28,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/agentpod_agent"]
+packages = ["src/locus_agent"]

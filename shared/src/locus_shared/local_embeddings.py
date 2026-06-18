@@ -14,7 +14,7 @@ from fastembed import TextEmbedding
 from .settings_store import embedding_cache_dir, get_settings_document
 
 _model_lock = asyncio.Lock()
-_EMBED_THREAD_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="agentpod-embed")
+_EMBED_THREAD_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="locusagent-embed")
 
 
 @lru_cache

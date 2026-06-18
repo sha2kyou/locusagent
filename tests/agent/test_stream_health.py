@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from agentpod_agent.core.stream_health import StreamHealthError, iter_with_stream_health
+from locus_agent.core.stream_health import StreamHealthError, iter_with_stream_health
 
 
 async def _slow_stream(delay_s: float, items: list[str]):

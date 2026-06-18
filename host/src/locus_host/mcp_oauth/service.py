@@ -60,7 +60,7 @@ class McpOAuthError(RuntimeError):
 
 def _client_metadata(redirect_uri: str) -> OAuthClientMetadata:
     return OAuthClientMetadata(
-        client_name="AgentPod",
+        client_name="Locus Agent",
         redirect_uris=[AnyUrl(redirect_uri)],
         grant_types=["authorization_code", "refresh_token"],
         response_types=["code"],

@@ -704,7 +704,7 @@ async def workspace_session_run_stream(session_id: str, run_id: str) -> Streamin
     if handle.session_id != session_id:
         raise WsError("run_mismatch", "run session mismatch", status_code=404)
 
-    public_model = "agentpod-v1"
+    public_model = "locusagent-v1"
     chat_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
     created = int(time.time())
     subscriber = attach_run_subscriber(handle)

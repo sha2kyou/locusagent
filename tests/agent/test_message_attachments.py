@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agentpod_agent.core.persistence import (
+from locus_agent.core.persistence import (
     _compose_user_content_with_attachments,
     build_persisted_user_message_text,
 )

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 
-from agentpod_shared.settings_store import get_app_locale, get_app_timezone
+from locus_shared.settings_store import get_app_locale, get_app_timezone
 
 from ..auth.agent_internal import require_agent_internal
 from ..llm_models import ModelRole, resolve_model

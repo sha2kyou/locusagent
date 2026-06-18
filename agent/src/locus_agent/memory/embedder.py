@@ -63,7 +63,7 @@ async def _http_embed(text: str) -> list[float]:
 
 
 async def _local_embed(text: str) -> list[float]:
-    from agentpod_shared.local_embeddings import embed_vector
+    from locus_shared.local_embeddings import embed_vector
 
     return await embed_vector(text)
 
