@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agentpod_agent.core.loop import (
+from locus_agent.core.loop import (
     _ensure_user_visible_text,
     _finalize_request_kwargs,
     _TOOL_ROUND_LIMIT_FALLBACK,

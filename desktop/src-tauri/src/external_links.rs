@@ -34,7 +34,7 @@ pub fn create_main_window(app: &App) -> tauri::Result<()> {
     let app_url: url::Url = app_origin().parse().expect("app url");
 
     let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(app_url))
-        .title("AgentPod")
+        .title("Locus Agent")
         .inner_size(1280.0, 840.0)
         .resizable(true);
 

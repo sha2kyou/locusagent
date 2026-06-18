@@ -1,7 +1,7 @@
 [project]
-name = "agentpod-workspace"
-version = "0.1.20"
-description = "AgentPod desktop AI agent platform"
+name = "locus-workspace"
+version = "0.2.0"
+description = "Locus Agent desktop AI agent platform"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11"
@@ -11,17 +11,17 @@ dependencies = []
 members = ["shared", "host", "agent", "sidecar"]
 
 [tool.uv.sources]
-agentpod-shared = { workspace = true }
-agentpod-host = { workspace = true }
-agentpod-agent = { workspace = true }
-agentpod-sidecar = { workspace = true }
+locus-shared = { workspace = true }
+locus-host = { workspace = true }
+locus-agent = { workspace = true }
+locus-sidecar = { workspace = true }
 
 [dependency-groups]
 dev = [
-    "agentpod-shared",
-    "agentpod-host",
-    "agentpod-agent",
-    "agentpod-sidecar",
+    "locus-shared",
+    "locus-host",
+    "locus-agent",
+    "locus-sidecar",
     "ruff>=0.6.0",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",

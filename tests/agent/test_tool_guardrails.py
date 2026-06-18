@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from concurrent.futures import ThreadPoolExecutor
 
-from agentpod_agent.core.tool_guardrails import (
+from locus_agent.core.tool_guardrails import (
     ToolCallGuardrailConfig,
     ToolCallGuardrailController,
     classify_tool_failure,

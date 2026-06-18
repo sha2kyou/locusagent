@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agentpod_agent.host_notify import _artifact_notify_category
+from locus_agent.host_notify import _artifact_notify_category
 
 
 def test_artifact_notify_category_respects_max_length() -> None:

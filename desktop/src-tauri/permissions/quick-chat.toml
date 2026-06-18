@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-desktop-open-session-in-main"
+description = "Open a chat session in the main window from quick chat."
+commands.allow = ["desktop_open_session_in_main"]

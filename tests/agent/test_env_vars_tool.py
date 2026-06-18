@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from agentpod_agent.db import init_db
-from agentpod_agent.env_vars import add_env_var
-from agentpod_agent.tools.base import ToolError
-from agentpod_agent.tools.env_vars import _env_vars_tool
-from agentpod_agent.workspace import set_workspace_id
+from locus_agent.db import init_db
+from locus_agent.env_vars import add_env_var
+from locus_agent.tools.base import ToolError
+from locus_agent.tools.env_vars import _env_vars_tool
+from locus_agent.workspace import set_workspace_id
 
 WS_TEST = "ws_0123456789abcdef0123"
 

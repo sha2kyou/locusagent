@@ -25,6 +25,7 @@ data/
 .cursor-cache/
 .cursor-tmp/
 .history/
+CLAUDE.md
 
 # Frontend build outputs
 frontend/dist-desktop/

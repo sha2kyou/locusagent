@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agentpod_agent.latex_normalize import normalize_latex_input
+from locus_agent.latex_normalize import normalize_latex_input
 
 
 def test_backspace_fix_begin_outside_math():

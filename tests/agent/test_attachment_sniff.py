@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agentpod_agent.core.attachment_sniff import (
+from locus_agent.core.attachment_sniff import (
     classify_uploaded_bytes,
     is_likely_utf8_text,
 )

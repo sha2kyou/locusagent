@@ -96,7 +96,7 @@ function Setup-BundleResources {
         Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
     Write-Host "==> verify bundled sidecar import"
-    & $py -c "import agentpod, agentpod_host, agentpod_agent, agentpod_shared"
+    & $py -c "import locusagent, locus_host, locus_agent, locus_shared"
     Assert-LastExitCode "bundled sidecar import"
 
     Write-Host "==> copy shared-skills into bundle resources"
@@ -118,7 +118,7 @@ Set-Location (Join-Path $RootDir "frontend")
 npm ci
 npm run build:desktop
 
-Write-Host "==> build AgentPod Windows installer (Tauri, cargo may take a few minutes)"
+Write-Host "==> build Locus Agent Windows installer (Tauri, cargo may take a few minutes)"
 Set-Location (Join-Path $RootDir "desktop")
 npm ci
 
@@ -136,12 +136,12 @@ if (-not $setupExe) {
 
 $distDir = Join-Path $RootDir "dist"
 if (Test-Path $distDir) {
-    Get-ChildItem -Path $distDir -Filter "AgentPod_*_windows-x64.exe" -ErrorAction SilentlyContinue |
+    Get-ChildItem -Path $distDir -Filter "LocusAgent_*_windows-x64.exe" -ErrorAction SilentlyContinue |
         Remove-Item -Force
 }
 New-Item -ItemType Directory -Force -Path $distDir | Out-Null
 
-$outName = "AgentPod_${Version}_windows-x64.exe"
+$outName = "LocusAgent_${Version}_windows-x64.exe"
 $outPath = Join-Path $distDir $outName
 Copy-Item -Path $setupExe.FullName -Destination $outPath -Force
 

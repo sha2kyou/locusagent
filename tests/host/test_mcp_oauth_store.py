@@ -11,10 +11,10 @@ import pytest
 from cryptography.fernet import Fernet
 from sqlalchemy import select
 
-from agentpod_host.config import get_settings
-from agentpod_host.db import McpOauthCredential, Workspace, dispose_engine, get_session, init_engine
-from agentpod_host.mcp_oauth import store
-from agentpod_host.security.crypto import _fernet, encrypt_str
+from locus_host.config import get_settings
+from locus_host.db import McpOauthCredential, Workspace, dispose_engine, get_session, init_engine
+from locus_host.mcp_oauth import store
+from locus_host.security.crypto import _fernet, encrypt_str
 
 
 def _reset_engine_sync() -> None:

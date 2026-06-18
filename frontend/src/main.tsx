@@ -5,7 +5,7 @@ import { stripWorkspacePrefix, withWorkspacePrefix } from "@/app/workspace-route
 import { installExternalLinkHandling } from "@/lib/open-external";
 import { ensureI18nReady } from "@/i18n";
 import "./index.css";
-import { ToastProvider } from "@/components/ui/toast";
+import { ToastProvider, NullToastProvider } from "@/components/ui/toast";
 import { DialogProvider } from "@/components/ui/dialogs";
 import { AuthProvider } from "@/app/auth";
 import { AppLocaleProvider } from "@/lib/use-app-locale";
@@ -14,6 +14,7 @@ import { NotificationProvider } from "@/features/notifications/NotificationProvi
 import { ThemeProvider } from "@/app/theme";
 import { AppShell } from "@/app/AppShell";
 import { ChatRoute } from "@/routes/ChatRoute";
+import { QuickChatRoute } from "@/routes/QuickChatRoute";
 const SkillsRoute = lazy(() =>
   import("@/features/skills/SkillsRoute").then((m) => ({ default: m.SkillsRoute })),
 );
@@ -54,6 +55,9 @@ const SettingsLogsPage = lazy(() =>
 const SettingsDeveloperPage = lazy(() =>
   import("@/features/settings/SettingsDeveloperPage").then((m) => ({ default: m.SettingsDeveloperPage })),
 );
+const SettingsQuickChatPage = lazy(() =>
+  import("@/features/settings/SettingsQuickChatPage").then((m) => ({ default: m.SettingsQuickChatPage })),
+);
 const SettingsIndexRedirect = lazy(() =>
   import("@/features/settings/SettingsRoute").then((m) => ({ default: m.SettingsIndexRedirect })),
 );
@@ -93,6 +97,7 @@ const shellChildren = [
       { path: "tools", element: <SettingsToolsPage /> },
       { path: "usage", element: <SettingsUsagePage /> },
       { path: "logs", element: <SettingsLogsPage /> },
+      { path: "quick-chat", element: <SettingsQuickChatPage /> },
       { path: "developer", element: <SettingsDeveloperPage /> },
     ],
   },
@@ -100,6 +105,38 @@ const shellChildren = [
 ];
 
 const router = createBrowserRouter([
+  {
+    path: "/quick-chat/:sessionId",
+    element: (
+      <AuthProvider>
+        <AppLocaleProvider>
+          <AppTimezoneProvider>
+            <ThemeProvider>
+              <NullToastProvider>
+                <QuickChatRoute />
+              </NullToastProvider>
+            </ThemeProvider>
+          </AppTimezoneProvider>
+        </AppLocaleProvider>
+      </AuthProvider>
+    ),
+  },
+  {
+    path: "/quick-chat",
+    element: (
+      <AuthProvider>
+        <AppLocaleProvider>
+          <AppTimezoneProvider>
+            <ThemeProvider>
+              <NullToastProvider>
+                <QuickChatRoute />
+              </NullToastProvider>
+            </ThemeProvider>
+          </AppTimezoneProvider>
+        </AppLocaleProvider>
+      </AuthProvider>
+    ),
+  },
   {
     path: "/",
     element: (

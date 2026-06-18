@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from agentpod_agent.tools.base import Tool, ToolResult
-from agentpod_agent.tools.registry import ToolRegistry
+from locus_agent.tools.base import Tool, ToolResult
+from locus_agent.tools.registry import ToolRegistry
 
 
 async def _noop_handler(_args):

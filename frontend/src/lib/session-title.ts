@@ -1,6 +1,6 @@
 import type { TFunction } from "i18next";
 
-/** Stored defaults from backend (zh/en); must stay in sync with agentpod_shared.session_titles */
+/** Stored defaults from backend (zh/en); must stay in sync with locus_shared.session_titles */
 export const BACKEND_DEFAULT_SESSION_TITLES = ["新对话", "New chat"] as const;
 
 /** @deprecated use BACKEND_DEFAULT_SESSION_TITLES */

@@ -252,7 +252,7 @@ export function AppShell() {
             >
               <Menu className="size-5" />
             </button>
-            <span className="text-sm font-semibold tracking-tight">AgentPod</span>
+            <span className="text-sm font-semibold tracking-tight">Locus Agent</span>
             <div className="ml-auto flex items-center gap-1">
               <NotificationBell />
               {mobileAction}

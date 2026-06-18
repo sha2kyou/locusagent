@@ -13,9 +13,9 @@ for sub in ("shared/src", "host/src", "agent/src", "sidecar/src"):
     if src.is_dir() and str(src) not in sys.path:
         sys.path.insert(0, str(src))
 
-_test_home = tempfile.mkdtemp(prefix="agentpod-test-")
-os.environ.setdefault("AGENTPOD_HOME", _test_home)
-os.environ.setdefault("AGENTPOD_MONOLITH", "1")
+_test_home = tempfile.mkdtemp(prefix="locusagent-test-")
+os.environ.setdefault("LOCUSAGENT_HOME", _test_home)
+os.environ.setdefault("LOCUSAGENT_MONOLITH", "1")
 os.environ.setdefault("INTERNAL_TOKEN", "test-internal-token")
 os.environ.setdefault("LLM_BASE_URL", "http://127.0.0.1:9")
 os.environ.setdefault("EMBEDDING_BASE_URL", "local")

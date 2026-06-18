@@ -1,6 +1,6 @@
 """Chat loop 模型选择：角色专用模型优先于会话默认主模型。"""
 
-from agentpod_agent.core.loop import _select_chat_model
+from locus_agent.core.loop import _select_chat_model
 
 _IMG_MSG = [
     {

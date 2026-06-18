@@ -1,5 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    agentpod_desktop_lib::run()
+    locusagent_desktop_lib::run()
 }

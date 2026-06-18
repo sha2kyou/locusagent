@@ -3,7 +3,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ============================================================
-   AgentPod 设计系统
+   Locus Agent 设计系统
    方向：浅色（白底 + 近黑单色强调），参考 ChatGPT WebUI
    主操作用近黑按钮，强调色集中在 --brand，换色只改这一处即可。
    ============================================================ */
@@ -668,4 +668,15 @@ html.apod-desktop [data-tauri-drag-region] label,
 html.apod-desktop [data-tauri-drag-region] [role="button"] {
   -webkit-app-region: no-drag;
   app-region: no-drag;
+}
+
+html.apod-quick-chat body {
+  overflow: hidden;
+}
+
+html.apod-quick-chat [data-tauri-drag-region] {
+  -webkit-app-region: drag;
+  app-region: drag;
+  cursor: default;
+  background: transparent;
 }

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agentpod_agent.todos.store import plan_is_active
+from locus_agent.todos.store import plan_is_active
 
 
 def test_plan_is_active_with_pending_or_in_progress() -> None:

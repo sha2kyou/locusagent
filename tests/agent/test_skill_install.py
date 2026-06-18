@@ -8,12 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from agentpod_agent.db import init_db
-from agentpod_agent.skills import install_skill_from_url
-from agentpod_agent.skills.install import analyze_skill_md, locate_skill_dir, parse_install_source
-from agentpod_agent.tools.base import ToolError
-from agentpod_agent.tools.skills import _skill_install
-from agentpod_agent.workspace import set_workspace_id
+from locus_agent.db import init_db
+from locus_agent.skills import install_skill_from_url
+from locus_agent.skills.install import analyze_skill_md, locate_skill_dir, parse_install_source
+from locus_agent.tools.base import ToolError
+from locus_agent.tools.skills import _skill_install
+from locus_agent.workspace import set_workspace_id
 
 WS_TEST = "ws_0123456789abcdef0123"
 
@@ -100,11 +100,11 @@ def test_install_rejects_invalid_skill_md(tmp_path: Path, monkeypatch: pytest.Mo
     dest_root = tmp_path / "installed"
     dest_root.mkdir()
     monkeypatch.setattr(
-        "agentpod_agent.skills.install.private_skill_dir",
+        "locus_agent.skills.install.private_skill_dir",
         lambda: dest_root,
     )
     monkeypatch.setattr(
-        "agentpod_agent.skills.install._download_bytes",
+        "locus_agent.skills.install._download_bytes",
         lambda _url: b"# Not a skill\n",
     )
     with pytest.raises(ValueError, match="frontmatter"):
@@ -134,11 +134,11 @@ def test_install_from_local_zip_bytes(tmp_path: Path, monkeypatch: pytest.Monkey
     dest_root = tmp_path / "installed"
     dest_root.mkdir()
     monkeypatch.setattr(
-        "agentpod_agent.skills.install.private_skill_dir",
+        "locus_agent.skills.install.private_skill_dir",
         lambda: dest_root,
     )
     monkeypatch.setattr(
-        "agentpod_agent.skills.install._download_bytes",
+        "locus_agent.skills.install._download_bytes",
         lambda _url: payload,
     )
 
@@ -161,11 +161,11 @@ async def test_skill_install_tool_success(tmp_path: Path, monkeypatch: pytest.Mo
     dest_root = tmp_path / "installed"
     dest_root.mkdir()
     monkeypatch.setattr(
-        "agentpod_agent.skills.install.private_skill_dir",
+        "locus_agent.skills.install.private_skill_dir",
         lambda: dest_root,
     )
     monkeypatch.setattr(
-        "agentpod_agent.skills.install._download_bytes",
+        "locus_agent.skills.install._download_bytes",
         lambda _url: payload,
     )
 

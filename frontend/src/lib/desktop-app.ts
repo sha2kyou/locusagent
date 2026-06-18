@@ -2,9 +2,31 @@ import { useEffect, type HTMLAttributes, type MouseEvent as ReactMouseEvent } fr
 
 export const DESKTOP_GATEWAY_ORIGIN = "http://127.0.0.1:21223";
 
-export function isDesktopApp(): boolean {
+function isTauriRuntime(): boolean {
   if (typeof window === "undefined") return false;
-  return window.location.origin === DESKTOP_GATEWAY_ORIGIN;
+  const w = window as Window & { __TAURI__?: unknown; __TAURI_INTERNALS__?: unknown };
+  return w.__TAURI__ != null || w.__TAURI_INTERNALS__ != null;
+}
+
+/** 是否在 Locus Agent 桌面壳（Tauri webview）内运行 */
+export function isDesktopApp(): boolean {
+  return isTauriRuntime();
+}
+
+export function isQuickChatWindow(): boolean {
+  if (typeof window === "undefined") return false;
+  return isDesktopApp() && window.location.pathname.startsWith("/quick-chat");
+}
+
+/** 快捷对话窗根节点 class */
+export function useQuickChatHtmlClass(): void {
+  useEffect(() => {
+    if (!isQuickChatWindow()) return;
+    document.documentElement.classList.add("apod-quick-chat", "apod-desktop");
+    return () => {
+      document.documentElement.classList.remove("apod-quick-chat", "apod-desktop");
+    };
+  }, []);
 }
 
 /** 桌面壳根节点 class，供拖拽样式等全局规则使用 */

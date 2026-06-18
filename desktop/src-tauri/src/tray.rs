@@ -16,17 +16,17 @@ const MENU_HIDE: &str = "tray_hide";
 const MENU_QUIT: &str = "tray_quit";
 
 pub fn setup_tray(app: &AppHandle) -> Result<(), String> {
-    let show = MenuItem::with_id(app, MENU_SHOW, "打开 AgentPod", true, None::<&str>)
+    let show = MenuItem::with_id(app, MENU_SHOW, "打开 Locus Agent", true, None::<&str>)
         .map_err(|e| e.to_string())?;
     let hide = MenuItem::with_id(app, MENU_HIDE, "隐藏窗口", true, None::<&str>)
         .map_err(|e| e.to_string())?;
-    let quit = MenuItem::with_id(app, MENU_QUIT, "退出 AgentPod", true, None::<&str>)
+    let quit = MenuItem::with_id(app, MENU_QUIT, "退出 Locus Agent", true, None::<&str>)
         .map_err(|e| e.to_string())?;
     let menu = Menu::with_items(app, &[&show, &hide, &quit]).map_err(|e| e.to_string())?;
 
     let builder = TrayIconBuilder::new()
         .menu(&menu)
-        .tooltip("AgentPod")
+        .tooltip("Locus Agent")
         .show_menu_on_left_click(false);
 
     // Windows 托盘用方形小图标；default_window_icon 仍带 macOS 圆角底，小尺寸下星形过小。

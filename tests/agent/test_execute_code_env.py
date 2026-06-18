@@ -7,12 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from agentpod_agent.db import init_db
-from agentpod_agent.env_vars import add_env_var
-from agentpod_agent.tools.base import ToolError
-from agentpod_agent.tools.execute_code import _execute_code
-from agentpod_agent.tools.proc_env import build_proc_env
-from agentpod_agent.workspace import set_workspace_id
+from locus_agent.db import init_db
+from locus_agent.env_vars import add_env_var
+from locus_agent.tools.base import ToolError
+from locus_agent.tools.execute_code import _execute_code
+from locus_agent.tools.proc_env import build_proc_env
+from locus_agent.workspace import set_workspace_id
 
 WS_TEST = "ws_0123456789abcdef0123"
 
@@ -23,12 +23,12 @@ def _init_test_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     init_db()
     root = tmp_path / "workspace"
     root.mkdir()
-    monkeypatch.setattr("agentpod_agent.tools.execute_code.workspace_root_dir", lambda: root)
+    monkeypatch.setattr("locus_agent.tools.execute_code.workspace_root_dir", lambda: root)
     monkeypatch.setattr(
-        "agentpod_agent.tools.execute_code.resolve_workdir",
+        "locus_agent.tools.execute_code.resolve_workdir",
         lambda workdir, restrict_to_workspace=True: root,
     )
-    monkeypatch.setattr("agentpod_agent.tools.execute_code.build_sandbox_preexec_fn", lambda: None)
+    monkeypatch.setattr("locus_agent.tools.execute_code.build_sandbox_preexec_fn", lambda: None)
 
 
 @pytest.mark.asyncio
@@ -68,7 +68,7 @@ async def test_execute_code_passes_env_to_subprocess(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", _fake_exec)
     monkeypatch.setattr(
-        "agentpod_agent.tools.execute_code._python_bin",
+        "locus_agent.tools.execute_code._python_bin",
         lambda _root: "python3",
     )
 

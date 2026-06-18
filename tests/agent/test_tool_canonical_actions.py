@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from agentpod_agent.tools.attachments import _attachments_tool
-from agentpod_agent.tools.base import ToolError
-from agentpod_agent.tools.env_vars import _env_vars_tool
-from agentpod_agent.tools.mcp_manage import _mcp_manage
-from agentpod_agent.tools.memory import _memory_tool
-from agentpod_agent.tools.scheduled_tasks import _scheduled_task_manage
-from agentpod_agent.tools.skills import _skill_manage
+from locus_agent.tools.attachments import _attachments_tool
+from locus_agent.tools.base import ToolError
+from locus_agent.tools.env_vars import _env_vars_tool
+from locus_agent.tools.mcp_manage import _mcp_manage
+from locus_agent.tools.memory import _memory_tool
+from locus_agent.tools.scheduled_tasks import _scheduled_task_manage
+from locus_agent.tools.skills import _skill_manage
 
 
 @pytest.mark.parametrize(

@@ -44,14 +44,16 @@
       "tools": { "label": "工具", "description": "Terminal 开关与白名单" },
       "usage": { "label": "用量统计", "description": "Token 与 API 调用" },
       "logs": { "label": "日志", "description": "后端进程运行输出" },
+      "quickChat": { "label": "快捷对话", "description": "全局快捷键（cmd+shift+K）" },
       "developer": { "label": "开发者", "description": "调试工具与开发者选项" }
     },
     "pages": {
-      "general": { "title": "通用", "subtitle": "主题与时区" },
+      "general": { "title": "通用", "subtitle": "主题、时区与菜单栏" },
       "models": { "title": "模型与服务", "subtitle": "LLM、向量嵌入与第三方工具" },
       "tools": { "title": "工具", "subtitle": "Terminal 开关、白名单与禁止项" },
       "usage": { "title": "用量统计", "subtitle": "按场景汇总 Token 与 API 调用" },
       "logs": { "title": "日志", "subtitle": "后端进程运行输出" },
+      "quickChat": { "title": "快捷对话", "subtitle": "全局快捷键与精简对话小窗" },
       "developer": { "title": "开发者", "subtitle": "调试与开发者选项" }
     },
     "general": {
@@ -70,15 +72,39 @@
       },
       "menubar": {
         "title": "菜单栏与后台",
-        "description": "关闭窗口后可在菜单栏保留 AgentPod；开机自启需在此手动开启。"
+        "description": "关闭窗口后可在菜单栏保留 Locus Agent；开机自启需在此手动开启。"
       },
       "runInBackground": {
         "label": "关闭窗口后在菜单栏继续运行",
         "hint": "点击窗口关闭按钮时隐藏窗口，不退出应用；可从菜单栏图标重新打开。"
       },
       "launchAtLogin": {
-        "label": "登录时自动启动 AgentPod",
+        "label": "登录时自动启动 Locus Agent",
         "hint": "在系统登录时启动应用；默认关闭，需手动开启。"
+      },
+      "quickChat": {
+        "title": "快捷对话",
+        "description": "使用全局快捷键在任何地方唤起精简对话窗口。",
+        "enabled": {
+          "label": "启用快捷对话",
+          "hint": "关闭后全局快捷键不再唤起小窗。"
+        },
+        "shortcut": {
+          "label": "全局快捷键",
+          "hint": "点击「修改」后按下组合键录入；Esc 取消。录入后需点击保存。",
+          "edit": "修改",
+          "cancel": "取消",
+          "recording": "请按下新的快捷键…",
+          "active": "当前快捷键已注册生效",
+          "inactive": "快捷键尚未注册，请保存设置或更换不与系统/其他应用冲突的组合键",
+          "error": "注册失败：{{error}}"
+        },
+        "blurHideHint": "小窗在失去焦点时会自动隐藏；再次按快捷键可唤起。",
+        "save": "保存快捷对话设置",
+        "alwaysOnTop": {
+          "label": "窗口置顶",
+          "hint": "快捷对话窗口显示在其他应用上方。"
+        }
       },
       "saveDesktopPrefs": "保存桌面偏好",
       "desktopPrefsSaved": "桌面偏好已保存",
@@ -207,11 +233,11 @@
   },
   "copy": {
     "agent": {
-      "unavailable": "AgentPod 暂时不可用，请稍后重试。",
-      "startingTimeout": "AgentPod 启动超时，请稍后再试；若持续失败请联系管理员。",
-      "composerPlaceholder": "给 AgentPod 发送消息…",
+      "unavailable": "Locus Agent 暂时不可用，请稍后重试。",
+      "startingTimeout": "Locus Agent 启动超时，请稍后再试；若持续失败请联系管理员。",
+      "composerPlaceholder": "给 Locus Agent 发送消息…",
       "authLoadFailed": "无法连接服务器，请稍后重试。",
-      "streamRetry": "AgentPod 启动中，{{seconds}}s 后重试（{{attempt}}/{{max}}）"
+      "streamRetry": "Locus Agent 启动中，{{seconds}}s 后重试（{{attempt}}/{{max}}）"
     },
     "toast": {
       "unnamed": "（未命名）"
@@ -264,6 +290,10 @@
   "auth": {
     "retry": "重试"
   },
+  "quickChat": {
+    "newChat": "新对话",
+    "openInMain": "在主窗口打开"
+  },
   "chat": {
     "session": {
       "defaultTitle": "新对话",
@@ -280,10 +310,9 @@
     },
     "empty": {
       "title": "有什么可以帮你？",
-      "subtitle": "AgentPod 可读写文件、搜索网络、调用工具，帮你完成各类任务。",
+      "subtitle": "Locus Agent 可读写文件、搜索网络、调用工具，帮你完成各类任务。",
       "suggestions": [
-        "帮我总结这个网页的要点：sidefyapp.com",
-        "AgentPod 有哪些功能？",
+        "Locus Agent 有哪些功能？",
         "什么是正态分布概率密度公式？",
         "搜索并总结最新的 AI 进展"
       ]
@@ -554,7 +583,7 @@
   },
   "scheduled": {
     "title": "定时任务",
-    "subtitle": "按 Cron 或指定时间自动运行 AgentPod；每次执行新建会话",
+    "subtitle": "按 Cron 或指定时间自动运行 Locus Agent；每次执行新建会话",
     "count": "共 {{count}} 条",
     "empty": "暂无定时任务",
     "notifyBadge": "通知",
@@ -580,8 +609,8 @@
       "createTitle": "新建任务",
       "title": "标题",
       "titlePlaceholder": "例如：每日早报",
-      "instruction": "指令（发给 AgentPod 的 prompt）",
-      "instructionPlaceholder": "到点后 AgentPod 将按此指令执行…",
+      "instruction": "指令（发给 Locus Agent 的 prompt）",
+      "instructionPlaceholder": "到点后 Locus Agent 将按此指令执行…",
       "type": "类型",
       "cronPicker": "Cron 选择器",
       "cronHint": "按设置中的时区解释。可视化选择后会自动生成 Cron 表达式。",

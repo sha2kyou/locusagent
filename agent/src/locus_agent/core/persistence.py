@@ -1,0 +1,1621 @@
+"""会话/消息持久化（SQLite，单 writer 通过 asyncio.to_thread 串行）。"""
+
+from __future__ import annotations
+
+import asyncio
+import base64
+import binascii
+import hashlib
+import json
+import re
+import secrets
+from typing import Any
+
+from ..db import conn_scope, run_in_thread
+from ..logging import get_logger
+from .attachment_documents import (
+    OFFICE_EXTRACTED_MIME,
+    extract_document_text,
+    is_office_attachment,
+    is_office_binary_payload,
+    is_office_extracted_blob,
+    has_office_filename,
+)
+from .attachment_images import validate_processable_image
+from .attachment_sniff import MAX_TEXT_EXTRACT_CHARS, classify_uploaded_bytes, is_likely_utf8_text
+from ..storage import (
+    AttachmentStorageError,
+    blob_object_key,
+    delete_attachment_objects,
+    file_object_key,
+    resolve_attachment_bytes,
+    save_attachment_bytes,
+    save_attachment_file,
+    upload_was_skipped,
+)
+
+log = get_logger("persistence")
+
+_SHA256_HEX_RE = re.compile(r"^[a-f0-9]{64}$")
+
+_session_locks: dict[str, asyncio.Lock] = {}
+_locks_guard = asyncio.Lock()
+
+
+async def session_lock(session_id: str) -> asyncio.Lock:
+    async with _locks_guard:
+        lock = _session_locks.get(session_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            _session_locks[session_id] = lock
+        return lock
+
+
+def _new_session_id() -> str:
+    return f"sess_{secrets.token_urlsafe(12)}"
+
+
+def _new_run_id() -> str:
+    return f"run_{secrets.token_urlsafe(10)}"
+
+
+def _new_attachment_id() -> str:
+    return f"att_{secrets.token_urlsafe(12)}"
+
+
+def _decode_data_url(raw: str) -> tuple[str, bytes]:
+    if not raw.startswith("data:") or "," not in raw:
+        raise ValueError("invalid data url")
+    header, b64 = raw.split(",", 1)
+    if ";base64" not in header:
+        raise ValueError("unsupported image payload")
+    mime = header[5:].split(";", 1)[0].strip() or "application/octet-stream"
+    try:
+        data = base64.b64decode(b64, validate=True)
+    except (ValueError, binascii.Error) as exc:
+        raise ValueError("invalid base64 payload") from exc
+    return mime, data
+
+
+def _encode_data_url(mime: str, data: bytes) -> str:
+    return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
+
+
+def _find_existing_blob(
+    c: Any,
+    *,
+    sha256: str,
+    kind: str,
+    canonical_key: str,
+) -> tuple[str, str] | None:
+    row = c.execute(
+        "SELECT object_key, object_etag FROM attachments "
+        "WHERE sha256 = ? AND kind = ? AND object_key IS NOT NULL AND object_key != '' "
+        "ORDER BY CASE WHEN object_key = ? THEN 0 WHEN instr(object_key, '/blobs/') > 0 THEN 1 ELSE 2 END, "
+        "created_at DESC LIMIT 1",
+        (sha256, kind, canonical_key),
+    ).fetchone()
+    if row is None:
+        return None
+    key = str(row["object_key"] or "").strip()
+    if not key:
+        return None
+    return key, str(row["object_etag"] or "")
+
+
+def _normalize_sha256_hex(value: str | None) -> str:
+    digest = str(value or "").strip().lower()
+    if not _SHA256_HEX_RE.fullmatch(digest):
+        return ""
+    return digest
+
+
+def _find_attachment_template_by_file_sha256(c: Any, file_sha256: str) -> dict[str, Any] | None:
+    row = c.execute(
+        "SELECT kind, mime_type, object_key, object_etag, sha256, processable, "
+        "unsupported_reason, truncated FROM attachments "
+        "WHERE file_sha256 = ? AND object_key IS NOT NULL AND object_key != '' "
+        "ORDER BY created_at DESC LIMIT 1",
+        (file_sha256,),
+    ).fetchone()
+    return dict(row) if row is not None else None
+
+
+def _find_attachment_template_by_content_sha256(c: Any, *, sha256: str, kind: str) -> dict[str, Any] | None:
+    row = c.execute(
+        "SELECT kind, mime_type, object_key, object_etag, sha256, processable, "
+        "unsupported_reason, truncated FROM attachments "
+        "WHERE sha256 = ? AND kind = ? AND object_key IS NOT NULL AND object_key != '' "
+        "ORDER BY created_at DESC LIMIT 1",
+        (sha256, kind),
+    ).fetchone()
+    return dict(row) if row is not None else None
+
+
+def _unreferenced_object_keys(c: Any, keys: list[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in keys:
+        key = str(raw or "").strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        cnt = c.execute(
+            "SELECT COUNT(*) AS n FROM attachments WHERE object_key = ?",
+            (key,),
+        ).fetchone()
+        if int(cnt["n"] or 0) == 0:
+            out.append(key)
+    return out
+
+
+def _to_attachment_meta_row(row: Any) -> dict[str, Any]:
+    return {
+        "id": str(row["id"]),
+        "name": str(row["name"] or "attachment"),
+        "kind": str(row["kind"] or "other"),
+        "mimeType": str(row["mime_type"] or "application/octet-stream"),
+        "objectKey": str(row["object_key"] or ""),
+        "sha256": str(row["sha256"] or ""),
+        "processable": bool(int(row["processable"] or 0)),
+        "unsupportedReason": row["unsupported_reason"],
+        "truncated": bool(int(row["truncated"] or 0)),
+    }
+
+
+async def _hydrate_attachment(meta: dict[str, Any]) -> dict[str, Any]:
+    out = {
+        "id": meta["id"],
+        "name": meta["name"],
+        "kind": meta["kind"],
+        "mimeType": meta["mimeType"],
+        "text": None,
+        "imageDataUrl": None,
+        "processable": bool(meta["processable"]),
+        "unsupportedReason": meta["unsupportedReason"],
+        "truncated": bool(meta["truncated"]),
+    }
+    object_key = str(meta.get("objectKey") or "")
+    content_sha256 = str(meta.get("sha256") or "")
+    if not object_key:
+        if out["processable"] and out["kind"] in {"text", "image"}:
+            out["processable"] = False
+            out["unsupportedReason"] = "attachment object missing"
+        return out
+    try:
+        data, _resolved_key = await resolve_attachment_bytes(
+            object_key,
+            content_sha256=content_sha256 or None,
+        )
+    except AttachmentStorageError as exc:
+        log.warning("attachment_load_failed", attachment_id=out["id"], error=str(exc))
+        out["processable"] = False
+        out["unsupportedReason"] = "attachment read failed"
+        return out
+    if data is None:
+        out["processable"] = False
+        out["unsupportedReason"] = "attachment object missing"
+        return out
+
+    if out["kind"] == "other" and is_likely_utf8_text(data):
+        text = data.decode("utf-8", errors="replace")
+        if text.strip():
+            out["kind"] = "text"
+            out["processable"] = True
+            out["unsupportedReason"] = None
+            if len(text) > MAX_TEXT_EXTRACT_CHARS:
+                out["text"] = f"{text[:MAX_TEXT_EXTRACT_CHARS]}\n...（文档过长，已截断）"
+                out["truncated"] = True
+            else:
+                out["text"] = text
+            return out
+
+    if out["kind"] == "text":
+        attachment_name = str(meta.get("name") or "")
+        attachment_mime = str(out["mimeType"])
+        if is_office_extracted_blob(name=attachment_name, mime_type=attachment_mime):
+            out["text"] = data.decode("utf-8", errors="replace")
+        elif is_office_attachment(name=attachment_name, mime_type=attachment_mime) or (
+            is_office_binary_payload(data) and has_office_filename(attachment_name)
+        ):
+            text, _trunc, err = await run_in_thread(
+                extract_document_text,
+                data,
+                name=attachment_name,
+                mime_type=attachment_mime,
+            )
+            if err:
+                out["processable"] = False
+                out["unsupportedReason"] = err
+            else:
+                out["text"] = text
+        else:
+            out["text"] = data.decode("utf-8", errors="replace")
+    elif out["kind"] == "image" and out["processable"]:
+        out["imageDataUrl"] = _encode_data_url(str(out["mimeType"]), data)
+    return out
+
+
+def attachment_ids_signature(attachment_ids: list[str]) -> str:
+    joined = "\n".join(attachment_ids)
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:12]
+
+
+def _attachment_persisted_lines(attachments: list[dict[str, Any]]) -> list[str]:
+    lines: list[str] = []
+    for a in attachments:
+        name = str(a.get("name") or "attachment")
+        kind = str(a.get("kind") or "other")
+        aid = str(a.get("id") or "")
+        lines.append(f"[user attachment] {name} ({kind}, id={aid})")
+    return lines
+
+
+def build_persisted_user_message_text(
+    text: str,
+    *,
+    attachments: list[dict[str, Any]] | None = None,
+    attachment_ids: list[str] | None = None,
+) -> str:
+    """写入 messages.content 的纯文本：保留用户正文与附件文件名，供后续轮次与检索使用。"""
+    clean = (text or "").strip()
+    lines: list[str] = []
+    if clean:
+        lines.append(clean)
+    if attachments:
+        lines.extend(_attachment_persisted_lines(attachments))
+    ids = [str(x).strip() for x in (attachment_ids or []) if str(x).strip()]
+    if ids:
+        lines.append(f"[attachment_ids:{attachment_ids_signature(ids)}]")
+    body = "\n".join(lines).strip()
+    return body or "[attachment]"
+
+
+def _load_message_attachments_map(c: Any, message_ids: list[int]) -> dict[int, list[dict[str, Any]]]:
+    if not message_ids:
+        return {}
+    placeholders = ",".join("?" for _ in message_ids)
+    rows = c.execute(
+        "SELECT ma.message_id, a.id, a.name, a.kind, a.mime_type, a.object_key, a.object_etag, a.sha256, "
+        "a.processable, a.unsupported_reason, a.truncated, ma.order_index "
+        "FROM message_attachments ma "
+        "JOIN attachments a ON a.id = ma.attachment_id "
+        f"WHERE ma.message_id IN ({placeholders}) "
+        "ORDER BY ma.message_id ASC, ma.order_index ASC",
+        message_ids,
+    ).fetchall()
+    out: dict[int, list[dict[str, Any]]] = {}
+    for row in rows:
+        mid = int(row["message_id"])
+        out.setdefault(mid, []).append(_to_attachment_meta_row(row))
+    return out
+
+
+def _unsupported_attachment_hint_lines(attachments: list[dict[str, Any]]) -> list[str]:
+    lines: list[str] = []
+    for a in attachments:
+        name = str(a.get("name") or "attachment")
+        kind = str(a.get("kind") or "other")
+        aid = str(a.get("id") or "").strip()
+        if aid:
+            lines.append(
+                f"[user attachment] {name} ({kind}, id={aid}) "
+                "— not inlined; use attachments tool to download and process."
+            )
+        else:
+            lines.append(f"[user attachment] {name} ({kind}) — not inlined.")
+    return lines
+
+
+def _compose_user_content_with_attachments(text: str, attachments: list[dict[str, Any]]) -> Any:
+    clean = text.strip()
+    if not attachments:
+        return clean
+
+    has_image = any(a.get("kind") == "image" and a.get("processable") for a in attachments)
+    text_attachments = [a for a in attachments if a.get("kind") == "text" and a.get("processable")]
+    unsupported = [a for a in attachments if not a.get("processable")]
+
+    if has_image:
+        parts: list[dict[str, Any]] = []
+        parts.append({"type": "text", "text": clean or "Answer using the attached content."})
+        image_index = 0
+        for a in attachments:
+            if a.get("kind") != "image" or not a.get("processable") or not a.get("imageDataUrl"):
+                continue
+            image_index += 1
+            parts.append(
+                {
+                    "type": "text",
+                    "text": f"[image attachment {image_index}] name={a.get('name')}",
+                }
+            )
+            parts.append({"type": "image_url", "image_url": {"url": a["imageDataUrl"]}})
+        if text_attachments:
+            for i, a in enumerate(text_attachments, start=1):
+                parts.append(
+                    {"type": "text", "text": f"[attachment {i}] name={a.get('name')}\n{str(a.get('text') or '')}"}
+                )
+        if unsupported:
+            for line in _unsupported_attachment_hint_lines(unsupported):
+                parts.append({"type": "text", "text": line})
+        return parts
+
+    text_parts: list[dict[str, Any]] = []
+    text_parts.append({"type": "text", "text": clean or "Answer using the attached content."})
+    if text_attachments:
+        for i, a in enumerate(text_attachments, start=1):
+            text_parts.append(
+                {"type": "text", "text": f"[attachment {i}] name={a.get('name')}\n{str(a.get('text') or '')}"}
+            )
+    if unsupported:
+        for line in _unsupported_attachment_hint_lines(unsupported):
+            text_parts.append({"type": "text", "text": line})
+    return text_parts
+
+
+def _is_openai_tool_calls(tool_calls: Any) -> bool:
+    if not isinstance(tool_calls, list) or not tool_calls:
+        return False
+    first = tool_calls[0]
+    return isinstance(first, dict) and ("function" in first or first.get("type") == "function")
+
+
+async def create_session(title: str | None = None, *, hidden: bool = False) -> str:
+    from ..todos.store import interrupt_other_session_todos
+    from locus_shared.session_titles import default_session_title
+
+    from ..host_settings import get_locale
+
+    sid = _new_session_id()
+    if not hidden:
+        await interrupt_other_session_todos(sid)
+
+    resolved_title = (title or "").strip()
+    if not resolved_title:
+        resolved_title = default_session_title(await get_locale())
+
+    def _do() -> None:
+        with conn_scope(load_vec=False) as c:
+            c.execute(
+                "INSERT INTO sessions(id, title, hidden) VALUES(?, ?, ?)",
+                (sid, resolved_title, 1 if hidden else 0),
+            )
+
+    await run_in_thread(_do)
+    return sid
+
+
+async def upsert_session_meta(
+    session_id: str,
+    *,
+    title: str | None = None,
+    tokens_delta: int = 0,
+    status: str | None = None,
+) -> None:
+    def _do() -> None:
+        with conn_scope(load_vec=False) as c:
+            updates = ["updated_at = datetime('now')"]
+            params: list[Any] = []
+            if title is not None:
+                updates.append("title = ?")
+                params.append(title)
+            if status is not None:
+                updates.append("status = ?")
+                params.append(status)
+            if tokens_delta:
+                updates.append("total_tokens = total_tokens + ?")
+                params.append(tokens_delta)
+            params.append(session_id)
+            sql = f"UPDATE sessions SET {', '.join(updates)} WHERE id = ?"
+            c.execute(sql, params)
+
+    await run_in_thread(_do)
+
+
+STALE_RUN_SECONDS = 600
+RESTART_INTERRUPTED_ERROR = "run interrupted: service restarted"
+
+
+async def expire_stale_run_ids(
+    session_id: str | None = None,
+    *,
+    max_age_seconds: int = STALE_RUN_SECONDS,
+) -> list[str]:
+    """将超时 run 标记为 failed，并返回受影响 run_id 列表。"""
+
+    def _do() -> list[str]:
+        with conn_scope(load_vec=False) as c:
+            if session_id:
+                rows = c.execute(
+                    "SELECT id FROM runs WHERE session_id=? AND status='running' "
+                    "AND updated_at < datetime('now', ?)",
+                    (session_id, f"-{int(max_age_seconds)} seconds"),
+                ).fetchall()
+            else:
+                rows = c.execute(
+                    "SELECT id FROM runs WHERE status='running' "
+                    "AND updated_at < datetime('now', ?)",
+                    (f"-{int(max_age_seconds)} seconds",),
+                ).fetchall()
+            run_ids = [str(r["id"]) for r in rows]
+            if not run_ids:
+                return []
+            placeholders = ",".join("?" for _ in run_ids)
+            c.execute(
+                "UPDATE runs SET status='failed', error_message='stale run expired', "
+                "updated_at=datetime('now') "
+                f"WHERE id IN ({placeholders})",
+                run_ids,
+            )
+            return run_ids
+
+    return await run_in_thread(_do)
+
+
+async def interrupt_running_runs_on_startup(
+    *,
+    error_message: str = RESTART_INTERRUPTED_ERROR,
+    session_status: str = "interrupted",
+) -> dict[str, int]:
+    """应用重启后，将残留 running run 收敛为终态，避免会话长期显示进行中。"""
+
+    def _do() -> dict[str, int]:
+        with conn_scope(load_vec=False) as c:
+            rows = c.execute(
+                "SELECT id, session_id FROM runs WHERE status='running'"
+            ).fetchall()
+            if not rows:
+                return {"runs_interrupted": 0, "sessions_marked_interrupted": 0}
+            run_ids = [str(r["id"]) for r in rows]
+            session_ids = sorted({str(r["session_id"]) for r in rows if r["session_id"]})
+            run_placeholders = ",".join("?" for _ in run_ids)
+            c.execute(
+                "UPDATE runs SET status='failed', error_message=?, updated_at=datetime('now') "
+                f"WHERE id IN ({run_placeholders})",
+                [error_message, *run_ids],
+            )
+            if session_ids:
+                session_placeholders = ",".join("?" for _ in session_ids)
+                cur = c.execute(
+                    "UPDATE sessions SET status=?, updated_at=datetime('now') "
+                    f"WHERE id IN ({session_placeholders}) "
+                    "AND status != ?",
+                    [session_status, *session_ids, session_status],
+                )
+                sessions_marked = int(cur.rowcount or 0)
+            else:
+                sessions_marked = 0
+            return {
+                "runs_interrupted": len(run_ids),
+                "sessions_marked_interrupted": sessions_marked,
+            }
+
+    return await run_in_thread(_do)
+
+
+async def expire_stale_runs(
+    session_id: str | None = None,
+    *,
+    max_age_seconds: int = STALE_RUN_SECONDS,
+) -> int:
+    """将超时未更新的 running run 标为 failed，返回清理数量。"""
+    return len(
+        await expire_stale_run_ids(
+            session_id,
+            max_age_seconds=max_age_seconds,
+        )
+    )
+
+
+async def create_run(session_id: str) -> str:
+    await expire_stale_runs(session_id)
+    run_id = _new_run_id()
+
+    def _do() -> None:
+        with conn_scope(load_vec=False) as c:
+            c.execute(
+                "INSERT INTO runs(id, session_id, status) VALUES (?, ?, 'running')",
+                (run_id, session_id),
+            )
+
+    await run_in_thread(_do)
+    return run_id
+
+
+async def update_run(
+    run_id: str,
+    *,
+    status: str | None = None,
+    assistant_message_id: int | None = None,
+    error_message: str | None = None,
+) -> None:
+    def _do() -> None:
+        with conn_scope(load_vec=False) as c:
+            updates = ["updated_at = datetime('now')"]
+            params: list[Any] = []
+            if status is not None:
+                updates.append("status = ?")
+                params.append(status)
+            if assistant_message_id is not None:
+                updates.append("assistant_message_id = ?")
+                params.append(assistant_message_id)
+            if error_message is not None:
+                updates.append("error_message = ?")
+                params.append(error_message)
+            params.append(run_id)
+            c.execute(f"UPDATE runs SET {', '.join(updates)} WHERE id = ?", params)
+
+    await run_in_thread(_do)
+
+
+async def get_active_run(session_id: str) -> dict[str, Any] | None:
+    await expire_stale_runs(session_id)
+
+    def _do() -> dict[str, Any] | None:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT id, session_id, status, assistant_message_id, error_message, "
+                "created_at, updated_at FROM runs "
+                "WHERE session_id = ? AND status = 'running' "
+                "ORDER BY updated_at DESC LIMIT 1",
+                (session_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            d = dict(row)
+            msg_id = d.get("assistant_message_id")
+            if msg_id:
+                msg = c.execute(
+                    "SELECT id, role, content, reasoning_content, tool_calls, tool_call_id, created_at "
+                    "FROM messages WHERE id = ?",
+                    (msg_id,),
+                ).fetchone()
+                if msg is not None:
+                    md = dict(msg)
+                    if md.get("tool_calls"):
+                        try:
+                            md["tool_calls"] = json.loads(md["tool_calls"])
+                        except json.JSONDecodeError:
+                            md["tool_calls"] = None
+                    d["assistant_message"] = md
+            return d
+
+    run = await run_in_thread(_do)
+    if run is None:
+        return None
+    return run
+
+
+async def get_latest_run(session_id: str) -> dict[str, Any] | None:
+    def _do() -> dict[str, Any] | None:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT id, status, error_message FROM runs "
+                "WHERE session_id = ? ORDER BY updated_at DESC LIMIT 1",
+                (session_id,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    return await run_in_thread(_do)
+
+
+async def get_last_assistant_text(session_id: str) -> str:
+    def _do() -> str:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT content FROM messages "
+                "WHERE session_id = ? AND role = 'assistant' ORDER BY id DESC LIMIT 1",
+                (session_id,),
+            ).fetchone()
+            if row is None:
+                return ""
+            return str(row["content"] or "")
+
+    return await run_in_thread(_do)
+
+
+async def append_message(
+    session_id: str,
+    role: str,
+    content: str,
+    *,
+    reasoning_content: str | None = None,
+    tool_calls: Any = None,
+    tool_call_id: str | None = None,
+    run_id: str | None = None,
+    tokens: int | None = None,
+    enqueue_embedding: bool = True,
+) -> int:
+    def _do() -> int:
+        with conn_scope(load_vec=False) as c:
+            cur = c.execute(
+                "INSERT INTO messages(session_id, role, content, reasoning_content, tool_calls, "
+                "tool_call_id, run_id, tokens) "
+                "SELECT ?, ?, ?, ?, ?, ?, ?, ? "
+                "WHERE EXISTS(SELECT 1 FROM sessions WHERE id = ?)",
+                (
+                    session_id,
+                    role,
+                    content,
+                    reasoning_content or "",
+                    json.dumps(tool_calls) if tool_calls else None,
+                    tool_call_id,
+                    run_id,
+                    tokens,
+                    session_id,
+                ),
+            )
+            return int(cur.lastrowid or 0)
+
+    message_id = await run_in_thread(_do)
+    if message_id <= 0:
+        return 0
+    if role in {"user", "assistant"}:
+        if enqueue_embedding:
+            from ..memory.queue import enqueue_message_embedding
+
+            await enqueue_message_embedding(message_id)
+    else:
+        from ..recall.messages import mark_message_embedding_skipped
+
+        await mark_message_embedding_skipped(message_id)
+    return message_id
+
+
+async def _create_attachment_from_existing_hash(
+    *,
+    session_id: str | None,
+    kind: str,
+    name: str,
+    size_bytes: int,
+    mime_type: str | None,
+    content_sha256: str,
+    file_sha256: str,
+) -> dict[str, Any] | None:
+    clean_name = (name or "attachment").strip() or "attachment"
+    clean_kind = str(kind or "other").strip() or "other"
+
+    def _lookup() -> dict[str, Any] | None:
+        with conn_scope(load_vec=False) as c:
+            template: dict[str, Any] | None = None
+            if file_sha256:
+                template = _find_attachment_template_by_file_sha256(c, file_sha256)
+            if template is None and content_sha256:
+                template = _find_attachment_template_by_content_sha256(
+                    c,
+                    sha256=content_sha256,
+                    kind=clean_kind,
+                )
+            return template
+
+    template = await run_in_thread(_lookup)
+    if template is None:
+        return None
+
+    attachment_id = _new_attachment_id()
+    template_kind = str(template["kind"] or clean_kind)
+    template_mime = str(template["mime_type"] or mime_type or "application/octet-stream")
+    object_key = str(template["object_key"] or "")
+    object_etag = str(template["object_etag"] or "")
+    payload_sha256 = str(template["sha256"] or content_sha256 or "")
+    processable = bool(int(template["processable"] or 0))
+    unsupported_reason = template["unsupported_reason"]
+    truncated = bool(int(template["truncated"] or 0))
+    stored_file_sha256 = file_sha256 or ""
+
+    def _do() -> dict[str, Any]:
+        with conn_scope(load_vec=False) as c:
+            c.execute(
+                "INSERT INTO attachments("
+                "id, session_id, kind, name, mime_type, size_bytes, object_key, object_etag, sha256, "
+                "file_sha256, processable, unsupported_reason, truncated"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    attachment_id,
+                    session_id,
+                    template_kind,
+                    clean_name,
+                    template_mime,
+                    max(0, int(size_bytes or 0)),
+                    object_key,
+                    object_etag,
+                    payload_sha256,
+                    stored_file_sha256 or None,
+                    1 if processable else 0,
+                    unsupported_reason,
+                    1 if truncated else 0,
+                ),
+            )
+            row = c.execute(
+                "SELECT id, name, kind, mime_type, object_key, object_etag, sha256, processable, "
+                "unsupported_reason, truncated FROM attachments WHERE id = ?",
+                (attachment_id,),
+            ).fetchone()
+            return _to_attachment_meta_row(row)
+
+    meta = await run_in_thread(_do)
+    log.info(
+        "attachment_hash_reused",
+        attachment_id=attachment_id,
+        sha256=(payload_sha256 or file_sha256)[:12],
+    )
+    hydrated = await _hydrate_attachment(meta)
+    hydrated["reused"] = True
+    return hydrated
+
+
+async def create_attachment(
+    *,
+    session_id: str | None,
+    kind: str,
+    name: str,
+    mime_type: str | None,
+    size_bytes: int,
+    text_content: str | None,
+    image_data_url: str | None,
+    file_data_base64: str | None = None,
+    processable: bool,
+    unsupported_reason: str | None,
+    truncated: bool,
+    content_sha256_hint: str | None = None,
+    file_sha256_hint: str | None = None,
+) -> dict[str, Any]:
+    content_hint = _normalize_sha256_hex(content_sha256_hint)
+    file_hint = _normalize_sha256_hex(file_sha256_hint)
+    has_payload = bool(
+        str(file_data_base64 or "").strip()
+        or str(text_content or "").strip()
+        or str(image_data_url or "").strip()
+    )
+    if not has_payload and (content_hint or file_hint):
+        reused = await _create_attachment_from_existing_hash(
+            session_id=session_id,
+            kind=kind,
+            name=name,
+            size_bytes=size_bytes,
+            mime_type=mime_type,
+            content_sha256=content_hint,
+            file_sha256=file_hint,
+        )
+        if reused is None:
+            raise ValueError("attachment hash not found")
+        return reused
+    if not has_payload and size_bytes > 0:
+        raise ValueError("attachment content required")
+
+    attachment_id = _new_attachment_id()
+    clean_name = (name or "attachment").strip() or "attachment"
+    name = clean_name
+    clean_mime = str(mime_type or "").strip() or "application/octet-stream"
+    payload: bytes | None = None
+    stored_file_sha256 = file_hint if has_payload and file_hint else ""
+    store_as_original_file = False
+
+    if file_data_base64:
+        import base64
+
+        from ..config import get_settings
+
+        try:
+            raw = base64.b64decode(str(file_data_base64).strip(), validate=True)
+        except Exception as exc:
+            raise ValueError(f"invalid file_data_base64: {exc}") from exc
+        max_bytes = max(1, int(get_settings().attachment_max_bytes))
+        if len(raw) > max_bytes:
+            raise ValueError(f"file exceeds attachment limit ({max_bytes} bytes)")
+        stored_file_sha256 = hashlib.sha256(raw).hexdigest()
+        classified = await run_in_thread(
+            classify_uploaded_bytes,
+            data=raw,
+            name=clean_name,
+            mime_type=clean_mime,
+        )
+        kind = classified.kind
+        processable = classified.processable
+        payload = classified.raw
+        clean_mime = classified.mime_type
+        unsupported_reason = classified.unsupported_reason
+        truncated = bool(classified.truncated)
+        store_as_original_file = True
+        if classified.text_content is not None:
+            text_content = classified.text_content
+    elif kind == "text":
+        payload = (text_content or "").encode("utf-8")
+        if not mime_type:
+            clean_mime = "text/plain;charset=utf-8"
+    elif kind == "image":
+        if image_data_url:
+            parsed_mime, decoded = _decode_data_url(image_data_url)
+            clean_mime = parsed_mime or clean_mime
+            payload = decoded
+            if payload:
+                ok, clean_mime, reason = validate_processable_image(payload, clean_mime)
+                if not ok:
+                    processable = False
+                    unsupported_reason = reason or unsupported_reason
+    elif text_content:
+        payload = text_content.encode("utf-8")
+
+    object_key = ""
+    object_etag = ""
+    content_sha256 = ""
+    uploaded_new_object = False
+    if payload is not None:
+        content_sha256 = hashlib.sha256(payload).hexdigest()
+        if not stored_file_sha256:
+            stored_file_sha256 = content_sha256
+
+        if store_as_original_file:
+            object_key = file_object_key(attachment_id, name)
+
+            def _lookup_file_template() -> dict[str, Any] | None:
+                with conn_scope(load_vec=False) as c:
+                    return _find_attachment_template_by_file_sha256(c, stored_file_sha256)
+
+            template = await run_in_thread(_lookup_file_template)
+            if template and str(template.get("object_key") or ""):
+                object_key = str(template["object_key"])
+                object_etag = str(template.get("object_etag") or "")
+                log.info(
+                    "attachment_file_reused",
+                    attachment_id=attachment_id,
+                    sha256=stored_file_sha256[:12],
+                    object_key=object_key,
+                )
+            else:
+                try:
+                    uploaded = await save_attachment_file(
+                        object_key=object_key,
+                        mime_type=clean_mime,
+                        data=payload,
+                    )
+                    object_key = str(uploaded["object_key"])
+                    object_etag = str(uploaded["etag"])
+                    uploaded_new_object = not upload_was_skipped(uploaded)
+                except AttachmentStorageError as exc:
+                    raise RuntimeError(f"attachment storage upload failed: {exc}") from exc
+        else:
+            if kind == "image" and not stored_file_sha256:
+                stored_file_sha256 = content_sha256
+            canonical_key = blob_object_key(content_sha256)
+
+            def _lookup_existing() -> tuple[str, str] | None:
+                with conn_scope(load_vec=False) as c:
+                    return _find_existing_blob(
+                        c,
+                        sha256=content_sha256,
+                        kind=kind,
+                        canonical_key=canonical_key,
+                    )
+
+            existing = await run_in_thread(_lookup_existing)
+            if existing:
+                object_key, object_etag = existing
+                if object_key != canonical_key:
+                    try:
+                        canonical_data, _ = await resolve_attachment_bytes(canonical_key)
+                        if canonical_data is not None:
+                            object_key = canonical_key
+                    except AttachmentStorageError:
+                        pass
+                log.info(
+                    "attachment_blob_reused",
+                    attachment_id=attachment_id,
+                    sha256=content_sha256[:12],
+                    object_key=object_key,
+                )
+            else:
+                try:
+                    uploaded = await save_attachment_bytes(
+                        content_sha256=content_sha256,
+                        mime_type=clean_mime,
+                        data=payload,
+                    )
+                    object_key = str(uploaded["object_key"])
+                    object_etag = str(uploaded["etag"])
+                    uploaded_new_object = not upload_was_skipped(uploaded)
+                except AttachmentStorageError as exc:
+                    raise RuntimeError(f"attachment storage upload failed: {exc}") from exc
+
+    def _do() -> dict[str, Any]:
+        with conn_scope(load_vec=False) as c:
+            c.execute(
+                "INSERT INTO attachments("
+                "id, session_id, kind, name, mime_type, size_bytes, object_key, object_etag, sha256, "
+                "file_sha256, processable, unsupported_reason, truncated"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    attachment_id,
+                    session_id,
+                    kind,
+                    name,
+                    clean_mime,
+                    size_bytes,
+                    object_key,
+                    object_etag,
+                    content_sha256,
+                    stored_file_sha256 or None,
+                    1 if processable else 0,
+                    unsupported_reason,
+                    1 if truncated else 0,
+                ),
+            )
+            row = c.execute(
+                "SELECT id, name, kind, mime_type, object_key, object_etag, sha256, processable, "
+                "unsupported_reason, truncated FROM attachments WHERE id = ?",
+                (attachment_id,),
+            ).fetchone()
+            return _to_attachment_meta_row(row)
+
+    try:
+        meta = await run_in_thread(_do)
+    except Exception:
+        if uploaded_new_object and object_key:
+
+            def _rollback_keys() -> list[str]:
+                with conn_scope(load_vec=False) as c:
+                    return _unreferenced_object_keys(c, [object_key])
+
+            orphan_keys = await run_in_thread(_rollback_keys)
+            if orphan_keys:
+                await delete_attachment_objects(orphan_keys)
+        raise
+    hydrated = await _hydrate_attachment(meta)
+    hydrated["reused"] = bool(content_sha256 and object_key and not uploaded_new_object)
+    return hydrated
+
+
+async def create_binary_attachment(
+    *,
+    session_id: str | None,
+    name: str,
+    mime_type: str | None,
+    data: bytes,
+) -> dict[str, Any]:
+    """上传二进制到 MinIO，供对话内下载（不注入 LLM 上下文）。"""
+    from ..config import get_settings
+
+    if not data:
+        raise ValueError("data is empty")
+    max_bytes = max(1, int(get_settings().attachment_max_bytes))
+    if len(data) > max_bytes:
+        raise ValueError(f"file exceeds attachment limit ({max_bytes} bytes)")
+
+    attachment_id = _new_attachment_id()
+    clean_name = (name or "file").strip() or "file"
+    clean_mime = str(mime_type or "").strip() or "application/octet-stream"
+    content_sha256 = hashlib.sha256(data).hexdigest()
+    kind = "other"
+    canonical_key = blob_object_key(content_sha256)
+    object_key = ""
+    object_etag = ""
+    uploaded_new_object = False
+
+    def _lookup_existing() -> tuple[str, str] | None:
+        with conn_scope(load_vec=False) as c:
+            return _find_existing_blob(
+                c,
+                sha256=content_sha256,
+                kind=kind,
+                canonical_key=canonical_key,
+            )
+
+    existing = await run_in_thread(_lookup_existing)
+    if existing:
+        object_key, object_etag = existing
+    else:
+        try:
+            uploaded = await save_attachment_bytes(
+                content_sha256=content_sha256,
+                mime_type=clean_mime,
+                data=data,
+            )
+            object_key = str(uploaded["object_key"])
+            object_etag = str(uploaded["etag"])
+            uploaded_new_object = not upload_was_skipped(uploaded)
+        except AttachmentStorageError as exc:
+            raise RuntimeError(f"attachment storage upload failed: {exc}") from exc
+
+    def _do() -> dict[str, Any]:
+        with conn_scope(load_vec=False) as c:
+            c.execute(
+                "INSERT INTO attachments("
+                "id, session_id, kind, name, mime_type, size_bytes, object_key, object_etag, sha256, "
+                "processable, unsupported_reason, truncated"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    attachment_id,
+                    session_id,
+                    kind,
+                    clean_name,
+                    clean_mime,
+                    len(data),
+                    object_key,
+                    object_etag,
+                    content_sha256,
+                    0,
+                    None,
+                    0,
+                ),
+            )
+            row = c.execute(
+                "SELECT id, name, kind, mime_type, object_key, object_etag, sha256, processable, "
+                "unsupported_reason, truncated FROM attachments WHERE id = ?",
+                (attachment_id,),
+            ).fetchone()
+            return _to_attachment_meta_row(row)
+
+    try:
+        meta = await run_in_thread(_do)
+    except Exception:
+        if uploaded_new_object and object_key:
+
+            def _rollback_keys() -> list[str]:
+                with conn_scope(load_vec=False) as c:
+                    return _unreferenced_object_keys(c, [object_key])
+
+            orphan_keys = await run_in_thread(_rollback_keys)
+            if orphan_keys:
+                await delete_attachment_objects(orphan_keys)
+        raise
+    return await _hydrate_attachment(meta)
+
+
+async def get_attachment_download(attachment_id: str) -> tuple[str, str, bytes] | None:
+    aid = str(attachment_id or "").strip()
+    if not aid:
+        return None
+
+    def _do() -> dict[str, Any] | None:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT name, mime_type, object_key, sha256 FROM attachments WHERE id = ?",
+                (aid,),
+            ).fetchone()
+            if row is None:
+                return None
+            return {
+                "name": str(row["name"] or "file"),
+                "mime_type": str(row["mime_type"] or "application/octet-stream"),
+                "object_key": str(row["object_key"] or ""),
+                "sha256": str(row["sha256"] or ""),
+            }
+
+    meta = await run_in_thread(_do)
+    if meta is None:
+        return None
+    object_key = str(meta["object_key"] or "")
+    if not object_key:
+        return None
+    try:
+        data, _ = await resolve_attachment_bytes(object_key, content_sha256=str(meta["sha256"] or "") or None)
+    except AttachmentStorageError:
+        return None
+    if data is None:
+        return None
+    return str(meta["name"]), str(meta["mime_type"]), data
+
+
+async def get_attachments_by_ids(attachment_ids: list[str]) -> list[dict[str, Any]]:
+    if not attachment_ids:
+        return []
+
+    def _do() -> list[dict[str, Any]]:
+        with conn_scope(load_vec=False) as c:
+            placeholders = ",".join("?" for _ in attachment_ids)
+            rows = c.execute(
+                "SELECT id, name, kind, mime_type, object_key, object_etag, sha256, processable, "
+                "unsupported_reason, truncated "
+                f"FROM attachments WHERE id IN ({placeholders})",
+                attachment_ids,
+            ).fetchall()
+            by_id = {str(r["id"]): _to_attachment_meta_row(r) for r in rows}
+            out: list[dict[str, Any]] = []
+            for aid in attachment_ids:
+                item = by_id.get(aid)
+                if item:
+                    out.append(item)
+            return out
+
+    metas = await run_in_thread(_do)
+    return [await _hydrate_attachment(m) for m in metas]
+
+
+_ATTACHMENT_TEXT_PREVIEW_MAX = 8000
+
+
+async def get_attachment_detail(attachment_id: str) -> dict[str, Any] | None:
+    aid = str(attachment_id or "").strip()
+    if not aid:
+        return None
+
+    def _do() -> dict[str, Any] | None:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT id, session_id, kind, name, mime_type, size_bytes, object_key, "
+                "object_etag, sha256, processable, unsupported_reason, truncated, created_at "
+                "FROM attachments WHERE id = ?",
+                (aid,),
+            ).fetchone()
+            if row is None:
+                return None
+            link_count = c.execute(
+                "SELECT COUNT(*) AS n FROM message_attachments WHERE attachment_id = ?",
+                (aid,),
+            ).fetchone()
+            return {
+                **_to_attachment_meta_row(row),
+                "sessionId": row["session_id"],
+                "sizeBytes": int(row["size_bytes"] or 0),
+                "createdAt": str(row["created_at"] or ""),
+                "messageLinkCount": int(link_count["n"] or 0),
+            }
+
+    meta = await run_in_thread(_do)
+    if meta is None:
+        return None
+
+    hydrated = await _hydrate_attachment(meta)
+    detail: dict[str, Any] = {
+        "id": hydrated["id"],
+        "name": hydrated["name"],
+        "kind": hydrated["kind"],
+        "mimeType": hydrated["mimeType"],
+        "objectKey": meta.get("objectKey") or "",
+        "sha256": meta.get("sha256") or "",
+        "sessionId": meta.get("sessionId"),
+        "sizeBytes": meta.get("sizeBytes", 0),
+        "createdAt": meta.get("createdAt", ""),
+        "messageLinkCount": meta.get("messageLinkCount", 0),
+        "processable": bool(hydrated.get("processable")),
+        "unsupportedReason": hydrated.get("unsupportedReason"),
+        "truncated": bool(hydrated.get("truncated")),
+    }
+    text = hydrated.get("text")
+    if isinstance(text, str) and text:
+        if len(text) > _ATTACHMENT_TEXT_PREVIEW_MAX:
+            detail["textPreview"] = text[:_ATTACHMENT_TEXT_PREVIEW_MAX]
+            detail["textPreviewTruncated"] = True
+        else:
+            detail["textPreview"] = text
+    elif hydrated.get("kind") == "image" and hydrated.get("imageDataUrl"):
+        detail["imageAvailable"] = True
+    return detail
+
+
+async def delete_attachment_by_id(attachment_id: str) -> bool:
+    aid = str(attachment_id or "").strip()
+    if not aid:
+        return False
+
+    def _do() -> tuple[bool, list[str]]:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT object_key FROM attachments WHERE id = ?",
+                (aid,),
+            ).fetchone()
+            if row is None:
+                return False, []
+            object_key = str(row["object_key"] or "")
+            c.execute("DELETE FROM message_attachments WHERE attachment_id = ?", (aid,))
+            cur = c.execute("DELETE FROM attachments WHERE id = ?", (aid,))
+            deleted = (cur.rowcount or 0) > 0
+            orphan_keys = _unreferenced_object_keys(c, [object_key] if object_key else [])
+            return deleted, orphan_keys
+
+    deleted, object_keys = await run_in_thread(_do)
+    if object_keys:
+        await delete_attachment_objects(object_keys)
+    return deleted
+
+
+async def link_message_attachments(message_id: int, attachment_ids: list[str]) -> None:
+    if message_id <= 0 or not attachment_ids:
+        return
+
+    def _do() -> None:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute("SELECT session_id FROM messages WHERE id = ?", (message_id,)).fetchone()
+            session_id = str(row["session_id"]) if row and row["session_id"] else None
+            for idx, aid in enumerate(attachment_ids):
+                c.execute(
+                    "INSERT OR IGNORE INTO message_attachments(message_id, attachment_id, order_index) "
+                    "VALUES (?, ?, ?)",
+                    (message_id, aid, idx),
+                )
+                if session_id:
+                    c.execute(
+                        "UPDATE attachments SET session_id = COALESCE(session_id, ?) WHERE id = ?",
+                        (session_id, aid),
+                    )
+
+    await run_in_thread(_do)
+
+
+async def update_message(
+    message_id: int,
+    *,
+    content: str | None = None,
+    reasoning_content: str | None = None,
+    tool_calls: Any = None,
+    tokens: int | None = None,
+    reindex_embedding: bool = True,
+) -> bool:
+    def _do() -> bool:
+        with conn_scope(load_vec=False) as c:
+            updates: list[str] = []
+            params: list[Any] = []
+            if content is not None:
+                updates.append("content = ?")
+                params.append(content)
+            if reasoning_content is not None:
+                updates.append("reasoning_content = ?")
+                params.append(reasoning_content)
+            if tool_calls is not None:
+                updates.append("tool_calls = ?")
+                params.append(json.dumps(tool_calls) if tool_calls else None)
+            if tokens is not None:
+                updates.append("tokens = ?")
+                params.append(tokens)
+            if not updates:
+                return False
+            params.append(message_id)
+            sql = f"UPDATE messages SET {', '.join(updates)} WHERE id = ?"
+            cur = c.execute(sql, params)
+            return (cur.rowcount or 0) > 0
+
+    ok = await run_in_thread(_do)
+    if ok and content is not None and reindex_embedding:
+        from ..memory.queue import bump_message_embedding
+
+        await bump_message_embedding(message_id)
+    return ok
+
+
+async def persist_openai_message(
+    session_id: str,
+    msg: dict[str, Any],
+    *,
+    run_id: str | None = None,
+) -> int:
+    role = msg.get("role")
+    if role == "assistant":
+        return await append_message(
+            session_id,
+            "assistant",
+            str(msg.get("content") or ""),
+            reasoning_content=str(msg.get("reasoning_content") or ""),
+            tool_calls=msg.get("tool_calls"),
+            run_id=run_id,
+        )
+    if role == "tool":
+        return await append_message(
+            session_id,
+            "tool",
+            str(msg.get("content") or ""),
+            tool_call_id=str(msg.get("tool_call_id") or ""),
+            run_id=run_id,
+        )
+    if role == "user":
+        return await append_message(session_id, "user", str(msg.get("content") or ""), run_id=run_id)
+    raise ValueError(f"unsupported role for persist: {role}")
+
+
+async def persist_context_compression(
+    session_id: str,
+    *,
+    archive_message_ids: list[int],
+    summary_text: str,
+    mode: str,
+    before_tokens: int,
+    after_tokens: int,
+    run_id: str | None = None,
+) -> int:
+    """归档中间消息并写入 context_summary（原消息保留，仅标记 archived）。"""
+    if not archive_message_ids:
+        return 0
+    batch_id = f"cmp_{secrets.token_urlsafe(8)}"
+    body = summary_text.strip() or "(middle conversation archived; no displayable summary generated)"
+    meta = {
+        "compression": {
+            "mode": mode,
+            "before_tokens": before_tokens,
+            "after_tokens": after_tokens,
+            "archive_batch_id": batch_id,
+            "archived_message_ids": archive_message_ids,
+        }
+    }
+
+    def _do() -> int:
+        with conn_scope(load_vec=False) as c:
+            c.execute("BEGIN")
+            try:
+                placeholders = ",".join("?" * len(archive_message_ids))
+                c.execute(
+                    f"UPDATE messages SET context_state='archived', archive_batch_id=?, "
+                    f"archived_at=datetime('now') "
+                    f"WHERE session_id=? AND context_state='active' AND id IN ({placeholders})",
+                    (batch_id, session_id, *archive_message_ids),
+                )
+                cur = c.execute(
+                    "INSERT INTO messages("
+                    "session_id, role, content, tool_calls, run_id, context_state"
+                    ") VALUES (?, 'context_summary', ?, ?, ?, 'active')",
+                    (
+                        session_id,
+                        body,
+                        json.dumps(meta, ensure_ascii=False),
+                        run_id,
+                    ),
+                )
+                c.execute("COMMIT")
+                return int(cur.lastrowid or 0)
+            except Exception:
+                c.execute("ROLLBACK")
+                raise
+
+    return await run_in_thread(_do)
+
+
+async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
+    """从 DB 重建 OpenAI 格式上下文（仅 active 消息）。"""
+
+    def _do() -> tuple[list[Any], dict[int, list[dict[str, Any]]]]:
+        with conn_scope(load_vec=False) as c:
+            rows = c.execute(
+                "SELECT id, role, content, reasoning_content, tool_calls, tool_call_id "
+                "FROM messages WHERE session_id = ? AND context_state = 'active' "
+                "ORDER BY id ASC",
+                (session_id,),
+            ).fetchall()
+            mids = [int(r["id"]) for r in rows]
+            attachments_meta_map = _load_message_attachments_map(c, mids)
+            return rows, attachments_meta_map
+
+    rows, attachments_meta_map = await run_in_thread(_do)
+    attachments_map: dict[int, list[dict[str, Any]]] = {}
+    for mid, metas in attachments_meta_map.items():
+        attachments_map[mid] = [await _hydrate_attachment(m) for m in metas]
+
+    out: list[dict[str, Any]] = []
+    for r in rows:
+            msg_id = int(r["id"])
+            role = r["role"]
+            content = r["content"] or ""
+            tool_calls_raw = r["tool_calls"]
+            tool_calls = None
+            if tool_calls_raw:
+                try:
+                    tool_calls = json.loads(tool_calls_raw)
+                except json.JSONDecodeError:
+                    tool_calls = None
+
+            if role == "context_summary":
+                if content:
+                    out.append(
+                        {
+                            "role": "system",
+                            "content": "## Conversation summary (earlier messages compressed)\n" + content,
+                            "id": msg_id,
+                        }
+                    )
+                continue
+
+            if role == "user":
+                attachments = attachments_map.get(msg_id, [])
+                out.append(
+                    {
+                        "role": "user",
+                        "content": _compose_user_content_with_attachments(content, attachments),
+                        "id": msg_id,
+                    }
+                )
+                continue
+
+            if role == "assistant":
+                d: dict[str, Any] = {"role": "assistant", "id": msg_id}
+                if content:
+                    d["content"] = content
+                reasoning = str(r["reasoning_content"] or "").strip()
+                if reasoning:
+                    d["reasoning_content"] = reasoning
+                if _is_openai_tool_calls(tool_calls):
+                    d["tool_calls"] = tool_calls
+                if (
+                    d.get("content") is not None
+                    or d.get("reasoning_content")
+                    or d.get("tool_calls")
+                ):
+                    out.append(d)
+                continue
+
+            if role == "tool":
+                tc_id = r["tool_call_id"] or ""
+                if tc_id:
+                    out.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc_id,
+                            "content": content,
+                            "id": msg_id,
+                        }
+                    )
+    return out
+
+
+async def truncate_after_last_user(session_id: str) -> int:
+    """删除最后一条 user 消息之后的所有 assistant/tool 消息。
+
+    用于"重新生成 / 失败重试"：流式路径在首个 token 即落库 assistant，
+    重跑前需先清掉上一轮(可能是完整或中断的)助手输出，避免历史中残留重复。
+    返回删除的消息数。
+    """
+
+    def _do() -> int:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT id FROM messages WHERE session_id = ? AND role = 'user' "
+                "ORDER BY id DESC LIMIT 1",
+                (session_id,),
+            ).fetchone()
+            if row is None:
+                return 0
+            cur = c.execute(
+                "DELETE FROM messages WHERE session_id = ? AND id > ? AND context_state = 'active'",
+                (session_id, row["id"]),
+            )
+            return int(cur.rowcount or 0)
+
+    return await run_in_thread(_do)
+
+
+async def get_last_user_message(session_id: str) -> str | None:
+    def _do() -> str | None:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT content FROM messages WHERE session_id = ? AND role = 'user' "
+                "ORDER BY id DESC LIMIT 1",
+                (session_id,),
+            ).fetchone()
+            return str(row["content"]) if row else None
+
+    return await run_in_thread(_do)
+
+
+async def list_sessions(limit: int = 50, *, include_hidden: bool = False) -> list[dict]:
+    def _do() -> list[dict]:
+        with conn_scope(load_vec=False) as c:
+            sql = (
+                "SELECT id, title, status, total_tokens, created_at, updated_at "
+                "FROM sessions "
+            )
+            if not include_hidden:
+                sql += "WHERE COALESCE(hidden, 0) = 0 "
+            sql += "ORDER BY updated_at DESC LIMIT ?"
+            rows = c.execute(sql, (limit,)).fetchall()
+            return [dict(r) for r in rows]
+
+    return await run_in_thread(_do)
+
+
+async def count_user_turns(session_id: str) -> int:
+    """统计会话内用户消息条数（用于 memory review 周期 nudge）。"""
+
+    def _do() -> int:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT COUNT(*) AS n FROM messages WHERE session_id = ? AND role = 'user'",
+                (session_id,),
+            ).fetchone()
+            return int(row["n"] or 0) if row is not None else 0
+
+    return await run_in_thread(_do)
+
+
+async def get_session_system_prompt(session_id: str) -> str | None:
+    """读取 session 级 stable/context system prompt 缓存。"""
+
+    def _do() -> str | None:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute(
+                "SELECT system_prompt FROM sessions WHERE id = ?",
+                (session_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            value = row["system_prompt"]
+            return str(value) if value else None
+
+    return await run_in_thread(_do)
+
+
+async def set_session_system_prompt(session_id: str, system_prompt: str) -> None:
+    """写入 session 级 stable/context system prompt 缓存。"""
+
+    def _do() -> None:
+        with conn_scope(load_vec=False) as c:
+            c.execute(
+                "UPDATE sessions SET system_prompt = ? WHERE id = ?",
+                (system_prompt, session_id),
+            )
+
+    await run_in_thread(_do)
+
+
+async def get_session_title(session_id: str) -> str | None:
+    def _do() -> str | None:
+        with conn_scope(load_vec=False) as c:
+            row = c.execute("SELECT title FROM sessions WHERE id = ?", (session_id,)).fetchone()
+            if row is None:
+                return None
+            title = row["title"]
+            return str(title) if title is not None else None
+
+    return await run_in_thread(_do)
+
+
+async def list_messages(session_id: str) -> list[dict]:
+    def _do() -> tuple[list[Any], dict[int, list[dict[str, Any]]]]:
+        with conn_scope(load_vec=False) as c:
+            rows = c.execute(
+                "SELECT id, role, content, reasoning_content, tool_calls, tool_call_id, run_id, tokens, "
+                "created_at, context_state, archive_batch_id, archived_at "
+                "FROM messages WHERE session_id = ? ORDER BY id ASC",
+                (session_id,),
+            ).fetchall()
+            mids = [int(r["id"]) for r in rows]
+            attachments_meta_map = _load_message_attachments_map(c, mids)
+            return rows, attachments_meta_map
+
+    rows, attachments_meta_map = await run_in_thread(_do)
+    attachments_map: dict[int, list[dict[str, Any]]] = {}
+    for mid, metas in attachments_meta_map.items():
+        attachments_map[mid] = [await _hydrate_attachment(m) for m in metas]
+    out: list[dict] = []
+    for r in rows:
+        d = dict(r)
+        if d.get("tool_calls"):
+            try:
+                d["tool_calls"] = json.loads(d["tool_calls"])
+            except json.JSONDecodeError:
+                d["tool_calls"] = None
+        d["attachments"] = attachments_map.get(int(d["id"]), [])
+        out.append(d)
+    return out
+
+
+async def delete_session(session_id: str) -> bool:
+    def _do() -> tuple[bool, list[str]]:
+        with conn_scope(load_vec=False) as c:
+            attachment_rows = c.execute(
+                "SELECT object_key FROM attachments WHERE session_id = ?",
+                (session_id,),
+            ).fetchall()
+            message_rows = c.execute(
+                "SELECT id FROM messages WHERE session_id = ?",
+                (session_id,),
+            ).fetchall()
+            mids = [int(r["id"]) for r in message_rows]
+            if mids:
+                placeholders = ",".join("?" for _ in mids)
+                c.execute(
+                    f"DELETE FROM message_attachments WHERE message_id IN ({placeholders})",
+                    mids,
+                )
+            keys = [str(r["object_key"] or "") for r in attachment_rows]
+            c.execute("DELETE FROM attachments WHERE session_id = ?", (session_id,))
+            c.execute("DELETE FROM runs WHERE session_id = ?", (session_id,))
+            c.execute("DELETE FROM session_todos WHERE session_id = ?", (session_id,))
+            c.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
+            cur = c.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+            orphan_keys = _unreferenced_object_keys(c, keys)
+            return (cur.rowcount or 0) > 0, orphan_keys
+
+    deleted, object_keys = await run_in_thread(_do)
+    if object_keys:
+        await delete_attachment_objects(object_keys)
+    if deleted:
+        async with _locks_guard:
+            _session_locks.pop(session_id, None)
+    return deleted

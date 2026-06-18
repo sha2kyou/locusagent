@@ -44,14 +44,16 @@
       "tools": { "label": "Tools", "description": "Terminal toggle & allow/deny lists" },
       "usage": { "label": "Usage", "description": "Token & API call stats" },
       "logs": { "label": "Logs", "description": "Backend process output" },
+      "quickChat": { "label": "Quick Chat", "description": "Global shortcut (cmd+shift+K)" },
       "developer": { "label": "Developer", "description": "Debug tools & developer options" }
     },
     "pages": {
-      "general": { "title": "General", "subtitle": "Theme & timezone" },
+      "general": { "title": "General", "subtitle": "Theme, timezone & menu bar" },
       "models": { "title": "Models & Services", "subtitle": "LLM, embedding & third-party tools" },
       "tools": { "title": "Tools", "subtitle": "Terminal toggle, allow & deny lists" },
       "usage": { "title": "Usage", "subtitle": "Token & API calls by scenario" },
       "logs": { "title": "Logs", "subtitle": "Backend process output" },
+      "quickChat": { "title": "Quick Chat", "subtitle": "Global shortcut and minimal chat window" },
       "developer": { "title": "Developer", "subtitle": "Debug & developer options" }
     },
     "general": {
@@ -70,15 +72,39 @@
       },
       "menubar": {
         "title": "Menu Bar & Background",
-        "description": "Keep AgentPod in the menu bar after closing the window. Launch at login must be enabled manually."
+        "description": "Keep Locus Agent in the menu bar after closing the window. Launch at login must be enabled manually."
       },
       "runInBackground": {
         "label": "Keep running in menu bar after closing window",
         "hint": "Hides the window instead of quitting. Reopen from the menu bar icon."
       },
       "launchAtLogin": {
-        "label": "Launch AgentPod at login",
+        "label": "Launch Locus Agent at login",
         "hint": "Starts the app when you log in. Off by default."
+      },
+      "quickChat": {
+        "title": "Quick Chat",
+        "description": "Summon a minimal chat window from anywhere with a global shortcut.",
+        "enabled": {
+          "label": "Enable quick chat",
+          "hint": "When off, the global shortcut will not open the quick chat window."
+        },
+        "shortcut": {
+          "label": "Global shortcut",
+          "hint": "Click Edit, then press the key combination. Esc cancels. Click Save to apply.",
+          "edit": "Edit",
+          "cancel": "Cancel",
+          "recording": "Press a new shortcut…",
+          "active": "Shortcut is registered and active",
+          "inactive": "Shortcut is not registered — save settings or pick a combo that does not conflict with the system or other apps",
+          "error": "Registration failed: {{error}}"
+        },
+        "blurHideHint": "The mini window hides when it loses focus. Press the shortcut again to reopen it.",
+        "save": "Save quick chat settings",
+        "alwaysOnTop": {
+          "label": "Always on top",
+          "hint": "Keep the quick chat window above other apps."
+        }
       },
       "saveDesktopPrefs": "Save desktop preferences",
       "desktopPrefsSaved": "Desktop preferences saved",
@@ -207,11 +233,11 @@
   },
   "copy": {
     "agent": {
-      "unavailable": "AgentPod is temporarily unavailable. Please try again later.",
-      "startingTimeout": "AgentPod startup timed out. Please try again later or contact your administrator.",
-      "composerPlaceholder": "Message AgentPod…",
+      "unavailable": "Locus Agent is temporarily unavailable. Please try again later.",
+      "startingTimeout": "Locus Agent startup timed out. Please try again later or contact your administrator.",
+      "composerPlaceholder": "Message Locus Agent…",
       "authLoadFailed": "Cannot connect to server. Please try again later.",
-      "streamRetry": "AgentPod starting, retry in {{seconds}}s ({{attempt}}/{{max}})"
+      "streamRetry": "Locus Agent starting, retry in {{seconds}}s ({{attempt}}/{{max}})"
     },
     "toast": {
       "unnamed": "(unnamed)"
@@ -264,6 +290,10 @@
   "auth": {
     "retry": "Retry"
   },
+  "quickChat": {
+    "newChat": "New chat",
+    "openInMain": "Open in main window"
+  },
   "chat": {
     "session": {
       "defaultTitle": "New chat",
@@ -280,10 +310,9 @@
     },
     "empty": {
       "title": "How can I help?",
-      "subtitle": "AgentPod can read/write files, search the web, and use tools to help with tasks.",
+      "subtitle": "Locus Agent can read/write files, search the web, and use tools to help with tasks.",
       "suggestions": [
-        "Summarize the key points of this page: sidefyapp.com",
-        "What can AgentPod do?",
+        "What can Locus Agent do?",
         "What is the normal distribution PDF formula?",
         "Search and summarize the latest AI progress"
       ]
@@ -554,7 +583,7 @@
   },
   "scheduled": {
     "title": "Scheduled Tasks",
-    "subtitle": "Run AgentPod on a cron or one-time schedule; each run creates a new session",
+    "subtitle": "Run Locus Agent on a cron or one-time schedule; each run creates a new session",
     "count": "{{count}} total",
     "empty": "No scheduled tasks yet",
     "notifyBadge": "Notify",
@@ -580,8 +609,8 @@
       "createTitle": "New task",
       "title": "Title",
       "titlePlaceholder": "e.g. Daily briefing",
-      "instruction": "Instruction (prompt for AgentPod)",
-      "instructionPlaceholder": "AgentPod will run this instruction at the scheduled time…",
+      "instruction": "Instruction (prompt for Locus Agent)",
+      "instructionPlaceholder": "Locus Agent will run this instruction at the scheduled time…",
       "type": "Type",
       "cronPicker": "Cron picker",
       "cronHint": "Interpreted in your configured timezone. The cron expression is generated from the visual picker.",

@@ -1,8 +1,8 @@
-//! 读取 ~/.agentpod/settings.json 中的应用配置（桌面壳侧）。
+//! 读取 ~/.locusagent/settings.json 中的应用配置（桌面壳侧）。
 
 use serde::Deserialize;
 
-use crate::agentpod_paths::agentpod_home;
+use crate::locusagent_paths::locusagent_home;
 
 #[derive(Deserialize, Default)]
 struct DeveloperSection {
@@ -17,7 +17,7 @@ struct SettingsDocument {
 }
 
 fn load_settings() -> SettingsDocument {
-    let path = agentpod_home().join("settings.json");
+    let path = locusagent_home().join("settings.json");
     if !path.is_file() {
         return SettingsDocument::default();
     }

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agentpod_agent.core.llm_classifier import parse_json_object
+from locus_agent.core.llm_classifier import parse_json_object
 
 
 def test_parse_json_object_plain() -> None:

@@ -108,9 +108,13 @@ export function SettingsGeneralPage() {
   const saveDesktopPrefs = async () => {
     setDesktopPrefsSaving(true);
     try {
+      const current = await getDesktopPrefs();
       const next = await setDesktopPrefs({
         run_in_background: runInBackground,
         launch_at_login: launchAtLogin,
+        quick_chat_enabled: current.quick_chat_enabled,
+        quick_chat_shortcut: current.quick_chat_shortcut,
+        quick_chat_always_on_top: false,
       });
       setRunInBackground(next.run_in_background);
       setLaunchAtLogin(next.launch_at_login);

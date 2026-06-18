@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from agentpod_agent.core import post_run as post_run_module
+from locus_agent.core import post_run as post_run_module
 
 
 @pytest.mark.asyncio

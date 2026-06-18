@@ -29,13 +29,16 @@ import type { ChatAttachment } from "./model";
 import { downloadAttachment, attachmentDownloadUrl } from "@/api/endpoints";
 import { Drawer } from "@/components/ui/drawer";
 import { useTimeFormatters } from "@/lib/use-app-timezone";
+import { isDesktopApp } from "@/lib/desktop-app";
+import { isShortcutRecordingActive } from "@/lib/format-global-shortcut";
 
 const EMPTY_ATTACHMENTS: ChatAttachment[] = [];
 
-const UserText: TextMessagePartComponent = ({ text }) => <Markdown text={text} />;
+type ThreadVariant = "default" | "quick";
 
-export function Thread() {
+export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
   const { t } = useTranslation();
+  const isQuick = variant === "quick";
   const promptChips = t("chat.empty.suggestions", { returnObjects: true }) as string[];
   return (
     <ThreadPrimitive.Root className="flex h-full flex-col">
@@ -51,7 +54,12 @@ export function Thread() {
           />
         </ThreadPrimitive.Empty>
 
-        <div className="relative z-10 mx-auto w-full max-w-3xl px-6 py-10">
+        <div
+          className={cn(
+            "relative z-10 mx-auto w-full py-6",
+            isQuick ? "max-w-full px-4 pb-4 pt-8" : "max-w-3xl px-6 py-10",
+          )}
+        >
           <ThreadPrimitive.Empty>
             <div className="flex min-h-[55vh] flex-col items-center justify-center text-center">
               <h2 className="text-2xl font-semibold tracking-tight">{t("chat.empty.title")}</h2>
@@ -59,47 +67,57 @@ export function Thread() {
                 {t("chat.empty.subtitle")}
               </p>
               <div className="mt-6 flex max-w-lg flex-wrap justify-center gap-2">
-                  {promptChips.map((p) => (
-                    <ThreadPrimitive.Suggestion
-                      key={p}
-                      prompt={p}
-                      method="replace"
-                      asChild
-                    >
-                      <button className="rounded-lg border border-border bg-background/80 px-3.5 py-2 text-sm text-muted-foreground shadow-xs transition-all duration-150 hover:border-border hover:bg-surface hover:text-foreground hover:shadow-sm">
-                        {p}
-                      </button>
-                    </ThreadPrimitive.Suggestion>
-                  ))}
-                </div>
+                {promptChips.map((p) => (
+                  <ThreadPrimitive.Suggestion
+                    key={p}
+                    prompt={p}
+                    method="replace"
+                    asChild
+                  >
+                    <button className="rounded-lg border border-border bg-background/80 px-3.5 py-2 text-sm text-muted-foreground shadow-xs transition-all duration-150 hover:border-border hover:bg-surface hover:text-foreground hover:shadow-sm">
+                      {p}
+                    </button>
+                  </ThreadPrimitive.Suggestion>
+                ))}
+              </div>
             </div>
           </ThreadPrimitive.Empty>
 
           <ThreadPrimitive.Messages
-            components={{ UserMessage, AssistantMessage }}
+            components={{
+              UserMessage: isQuick ? QuickUserMessage : UserMessage,
+              AssistantMessage: isQuick ? QuickAssistantMessage : AssistantMessage,
+            }}
           />
         </div>
 
         <ThreadPrimitive.ScrollToBottom asChild>
-          <Button
-            variant="secondary"
-            size="icon"
-            className="sticky bottom-4 left-1/2 -translate-x-1/2 rounded-full shadow-lg transition-opacity disabled:pointer-events-none disabled:opacity-0"
-            aria-label={t("chat.composer.scrollToBottom")}
-          >
-            <ArrowDown />
-          </Button>
+          {!isQuick ? (
+            <Button
+              variant="secondary"
+              size="icon"
+              className="sticky bottom-4 left-1/2 -translate-x-1/2 rounded-full shadow-lg transition-opacity disabled:pointer-events-none disabled:opacity-0"
+              aria-label={t("chat.composer.scrollToBottom")}
+            >
+              <ArrowDown />
+            </Button>
+          ) : (
+            <span className="hidden" aria-hidden />
+          )}
         </ThreadPrimitive.ScrollToBottom>
       </ThreadPrimitive.Viewport>
 
-      <Composer />
+      <Composer variant={variant} />
     </ThreadPrimitive.Root>
   );
 }
 
 const LONG_PASTE_THRESHOLD = 8000;
 
-function Composer() {
+const UserText: TextMessagePartComponent = ({ text }) => <Markdown text={text} />;
+
+function Composer({ variant = "default" }: { variant?: ThreadVariant }) {
+  const isQuick = variant === "quick";
   const { t } = useTranslation();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -120,9 +138,11 @@ function Composer() {
   } = useChat();
 
   // 全局 "/" 聚焦输入（不在其它输入/可编辑元素中时）
-  useGlobalFocusShortcut(inputRef);
+  useGlobalFocusShortcut(inputRef, !isQuick);
+  useQuickChatComposerFocus(inputRef, isQuick);
 
   const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (isQuick) return;
     const len = e.clipboardData.getData("text").length;
     if (len > LONG_PASTE_THRESHOLD) {
       toast(t("chat.composer.longPaste", { count: len.toLocaleString() }), "info");
@@ -192,9 +212,9 @@ function Composer() {
   };
 
   return (
-    <div className="px-6 pb-6 pt-2">
+    <div className={cn(isQuick ? "px-4 pb-3 pt-1" : "px-6 pb-6 pt-2")}>
       {messageQueue.length > 0 ? (
-        <div className="mx-auto mb-2 flex w-full max-w-3xl flex-col gap-1.5">
+        <div className={cn("mx-auto mb-2 flex w-full flex-col gap-1.5", !isQuick && "max-w-3xl")}>
           {messageQueue.map((item, index) => (
             <div
               key={item.id}
@@ -240,7 +260,7 @@ function Composer() {
       ) : null}
 
       {pendingAttachments.length > 0 ? (
-        <div className="mx-auto mb-2 flex w-full max-w-3xl flex-wrap gap-1.5">
+        <div className={cn("mx-auto mb-2 flex w-full flex-wrap gap-1.5", !isQuick && "max-w-3xl")}>
           {pendingAttachments.map((file) => (
             <span
               key={file.id}
@@ -265,7 +285,12 @@ function Composer() {
         </div>
       ) : null}
 
-      <ComposerPrimitive.Root className="mx-auto flex w-full max-w-3xl items-end gap-2 rounded-xl border border-border bg-background px-2.5 py-2.5 shadow-sm transition-[box-shadow,border-color] duration-150 focus-within:border-brand/30 focus-within:shadow-[0_0_0_3px_var(--color-ring),var(--shadow-sm)]">
+      <ComposerPrimitive.Root
+        className={cn(
+          "mx-auto flex w-full items-end gap-2 rounded-xl border border-border bg-background px-2.5 py-2.5 shadow-sm transition-[box-shadow,border-color] duration-150 focus-within:border-brand/30 focus-within:shadow-[0_0_0_3px_var(--color-ring),var(--shadow-sm)]",
+          !isQuick && "max-w-3xl",
+        )}
+      >
         <input
           ref={fileInputRef}
           type="file"
@@ -319,20 +344,50 @@ function Composer() {
         </ThreadPrimitive.If>
       </ComposerPrimitive.Root>
 
-      <p className="mx-auto mt-2 max-w-3xl text-center text-[11px] text-muted-foreground/50">
-        {isRunning
-          ? t("chat.composer.keyboardHint.queue")
-          : messageQueue.length > 0
-            ? t("chat.composer.keyboardHint.queueWithPending")
-            : t("chat.composer.keyboardHint.default")}
-      </p>
+      {!isQuick ? (
+        <p className="mx-auto mt-2 max-w-3xl text-center text-[11px] text-muted-foreground/50">
+          {isRunning
+            ? t("chat.composer.keyboardHint.queue")
+            : messageQueue.length > 0
+              ? t("chat.composer.keyboardHint.queueWithPending")
+              : t("chat.composer.keyboardHint.default")}
+        </p>
+      ) : null}
     </div>
   );
 }
 
-function useGlobalFocusShortcut(ref: React.RefObject<HTMLTextAreaElement | null>) {
+function useQuickChatComposerFocus(
+  ref: React.RefObject<HTMLTextAreaElement | null>,
+  enabled: boolean,
+) {
   useEffect(() => {
+    if (!enabled || !isDesktopApp()) return;
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    const onFocus = () => ref.current?.focus();
+    void (async () => {
+      const { listen } = await import("@tauri-apps/api/event");
+      if (cancelled) return;
+      unlisten = await listen("quick-chat:focus-composer", onFocus);
+    })();
+    window.addEventListener("quick-chat:focus-composer", onFocus);
+    return () => {
+      cancelled = true;
+      unlisten?.();
+      window.removeEventListener("quick-chat:focus-composer", onFocus);
+    };
+  }, [enabled, ref]);
+}
+
+function useGlobalFocusShortcut(
+  ref: React.RefObject<HTMLTextAreaElement | null>,
+  enabled = true,
+) {
+  useEffect(() => {
+    if (!enabled) return;
     const handler = (e: KeyboardEvent) => {
+      if (isShortcutRecordingActive()) return;
       const el = document.activeElement as HTMLElement | null;
       const typing =
         !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
@@ -343,7 +398,7 @@ function useGlobalFocusShortcut(ref: React.RefObject<HTMLTextAreaElement | null>
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [ref]);
+  }, [ref, enabled]);
 }
 
 function useMessageText(): string {
@@ -412,9 +467,26 @@ function attachmentImageSrc(file: ChatAttachment): string | null {
 
 function canExportAttachment(file: ChatAttachment | null): boolean {
   if (!file) return false;
+  if (isServerDownloadable(file)) return true;
   if (file.kind === "text") return typeof file.text === "string";
   if (file.kind === "image") return attachmentImageSrc(file) !== null;
   return false;
+}
+
+function downloadChatAttachment(
+  file: ChatAttachment,
+  toast: ReturnType<typeof useToast>,
+  t: (key: string) => string,
+): void {
+  if (isServerDownloadable(file)) {
+    void downloadAttachment(file.id, file.name).catch((err: unknown) => {
+      toast(err instanceof Error ? err.message : t("chat.attachment.downloadFailed"), "error");
+    });
+    return;
+  }
+  if (!exportInlineAttachment(file)) {
+    toast(t("chat.attachment.exportUnsupported"), "info");
+  }
 }
 
 function exportInlineAttachment(file: ChatAttachment): boolean {
@@ -471,17 +543,9 @@ function MessageAttachmentChips({
           key={file.id}
           onClick={() => onSelect(file)}
           className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/70 px-2.5 py-1 text-xs text-muted-foreground transition hover:bg-surface"
-          title={
-            isServerDownloadable(file)
-              ? t("chat.attachment.downloadNamed", { name: file.name })
-              : t("chat.attachment.viewNamed", { name: file.name })
-          }
+          title={t("chat.attachment.viewNamed", { name: file.name })}
         >
-          {isServerDownloadable(file) ? (
-            <Download className="size-3" />
-          ) : (
-            <Paperclip className="size-3" />
-          )}
+          <Paperclip className="size-3" />
           <span className="max-w-56 truncate">{file.name}</span>
           {!showsUnparseableBadge(file) ? null : (
             <span className="text-warning">{t("chat.attachment.unparseable")}</span>
@@ -493,17 +557,9 @@ function MessageAttachmentChips({
 }
 
 function useAttachmentSelect() {
-  const { t } = useTranslation();
-  const toast = useToast();
   const [selectedAttachment, setSelectedAttachment] = useState<ChatAttachment | null>(null);
 
   const selectAttachment = (file: ChatAttachment) => {
-    if (isServerDownloadable(file)) {
-      void downloadAttachment(file.id, file.name).catch((err: unknown) => {
-        toast(err instanceof Error ? err.message : t("chat.attachment.downloadFailed"), "error");
-      });
-      return;
-    }
     setSelectedAttachment(file);
   };
 
@@ -532,16 +588,7 @@ function AttachmentDrawer({
           disabled={!canExportAttachment(file)}
           onClick={() => {
             if (!file) return;
-            if (file.kind === "image" && attachmentImageSrc(file) && !attachmentImageSrc(file)!.startsWith("data:")) {
-              void downloadAttachment(file.id, file.name).catch((err: unknown) => {
-                toast(err instanceof Error ? err.message : t("chat.attachment.downloadFailed"), "error");
-              });
-              return;
-            }
-            const exported = exportInlineAttachment(file);
-            if (!exported) {
-              toast(t("chat.attachment.exportUnsupported"), "info");
-            }
+            downloadChatAttachment(file, toast, t);
           }}
           title={t("chat.attachment.download")}
           aria-label={t("chat.attachment.download")}
@@ -551,7 +598,7 @@ function AttachmentDrawer({
       }
     >
       {file ? (
-        file.processable ? (
+        file.processable || file.kind === "image" ? (
           <FilePreview
             filename={file.name}
             content={file.kind === "text" ? file.text : undefined}
@@ -661,11 +708,13 @@ function AssistantPartList({
   streaming,
   sessionTodoPlan,
   isLastAssistant,
+  hideTodo = false,
 }: {
   chatMsg: ChatMessage | undefined;
   streaming: boolean;
   sessionTodoPlan: TodoPlan | null;
   isLastAssistant: boolean;
+  hideTodo?: boolean;
 }) {
   if (!chatMsg) return null;
   const fromParts = extractLatestTodoPlan(chatMsg.parts);
@@ -705,7 +754,7 @@ function AssistantPartList({
       })}
       {chatMsg.error ? <Markdown text={`\n\n> ⚠ ${chatMsg.error}`} /> : null}
       {streaming ? <span className="apod-caret mt-0.5" aria-hidden /> : null}
-      {todoPlan ? <TodoProgressPanel plan={todoPlan} active={todoActive} /> : null}
+      {!hideTodo && todoPlan ? <TodoProgressPanel plan={todoPlan} active={todoActive} /> : null}
     </>
   );
 }
@@ -775,6 +824,64 @@ function AssistantMessage() {
           </MessagePrimitive.If>
         </div>
       </ThreadPrimitive.If>
+    </MessagePrimitive.Root>
+  );
+}
+
+function QuickUserMessage() {
+  const { t } = useTranslation();
+  const { messageAttachments } = useChat();
+  const text = useMessageText();
+  const messageId = useMessage((m) => String(m.id ?? ""));
+  const archived = useMessage((m) => (m.metadata as { archived?: boolean } | undefined)?.archived);
+  const attachments = messageAttachments[messageId] ?? EMPTY_ATTACHMENTS;
+  const { selectedAttachment, setSelectedAttachment, selectAttachment } = useAttachmentSelect();
+  const hasText = text.length > 0;
+  return (
+    <MessagePrimitive.Root
+      className={cn("group mb-4 flex flex-col items-end gap-1 text-sm apod-enter-up", archived && "opacity-55")}
+    >
+      {archived ? (
+        <p className="text-[11px] text-muted-foreground">{t("chat.message.archived")}</p>
+      ) : null}
+      {hasText ? (
+        <div className="min-w-0 max-w-[90%] rounded-xl border border-border bg-surface px-3 py-2.5 shadow-xs">
+          <MessagePrimitive.Parts components={{ Text: UserText }} />
+        </div>
+      ) : null}
+      <MessageAttachmentChips attachments={attachments} align="end" onSelect={selectAttachment} />
+      <AttachmentDrawer file={selectedAttachment} onClose={() => setSelectedAttachment(null)} />
+    </MessagePrimitive.Root>
+  );
+}
+
+function QuickAssistantMessage() {
+  const { t } = useTranslation();
+  const { messages, isRunning, messageAttachments, sessionTodoPlan } = useChat();
+  const id = useMessage((m) => m.id);
+  const chatMsg = messages.find((m) => m.id === id);
+  const attachments = messageAttachments[id] ?? EMPTY_ATTACHMENTS;
+  const { selectedAttachment, setSelectedAttachment, selectAttachment } = useAttachmentSelect();
+  const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+  const streaming = isRunning && lastAssistant?.id === id;
+  const isLastAssistant = lastAssistant?.id === id;
+  const archived = useMessage((m) => (m.metadata as { archived?: boolean } | undefined)?.archived);
+  return (
+    <MessagePrimitive.Root className={cn("group mb-4 flex flex-col gap-1 text-sm apod-enter-up", archived && "opacity-55")}>
+      {archived ? (
+        <p className="text-[11px] text-muted-foreground">{t("chat.message.archived")}</p>
+      ) : null}
+      <div className="min-w-0">
+        <AssistantPartList
+          chatMsg={chatMsg}
+          streaming={streaming}
+          sessionTodoPlan={sessionTodoPlan}
+          isLastAssistant={isLastAssistant}
+          hideTodo
+        />
+      </div>
+      <MessageAttachmentChips attachments={attachments} align="start" onSelect={selectAttachment} />
+      <AttachmentDrawer file={selectedAttachment} onClose={() => setSelectedAttachment(null)} />
     </MessagePrimitive.Root>
   );
 }

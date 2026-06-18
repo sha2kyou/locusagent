@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from agentpod_agent.security.guard import review_write
+from locus_agent.security.guard import review_write
 
 
 def _guard_enabled_settings():
@@ -16,7 +16,7 @@ def _guard_enabled_settings():
 
 @pytest.mark.asyncio
 async def test_review_write_skipped_when_guard_disabled():
-    with patch("agentpod_agent.security.guard.get_settings", return_value=SimpleNamespace(write_guard_enabled=False)):
+    with patch("locus_agent.security.guard.get_settings", return_value=SimpleNamespace(write_guard_enabled=False)):
         result = await review_write("-----BEGIN RSA PRIVATE KEY-----\nabc", kind="memory")
     assert result.allowed
     assert result.reason == "guard disabled"
@@ -24,7 +24,7 @@ async def test_review_write_skipped_when_guard_disabled():
 
 @pytest.mark.asyncio
 async def test_review_write_blocks_hard_secret():
-    with patch("agentpod_agent.security.guard.get_settings", return_value=_guard_enabled_settings()):
+    with patch("locus_agent.security.guard.get_settings", return_value=_guard_enabled_settings()):
         result = await review_write("-----BEGIN RSA PRIVATE KEY-----\nabc", kind="memory")
     assert not result.allowed
     assert "private key" in result.reason
@@ -32,9 +32,9 @@ async def test_review_write_blocks_hard_secret():
 
 @pytest.mark.asyncio
 async def test_review_write_fail_closed_on_llm_error():
-    with patch("agentpod_agent.security.guard.get_settings", return_value=_guard_enabled_settings()):
-        with patch("agentpod_agent.core.auxiliary_completion.create_chat_completion", new=AsyncMock(side_effect=RuntimeError("down"))):
-            with patch("agentpod_agent.core.models.resolve_model", new=AsyncMock(return_value="gpt-test")):
+    with patch("locus_agent.security.guard.get_settings", return_value=_guard_enabled_settings()):
+        with patch("locus_agent.core.auxiliary_completion.create_chat_completion", new=AsyncMock(side_effect=RuntimeError("down"))):
+            with patch("locus_agent.core.models.resolve_model", new=AsyncMock(return_value="gpt-test")):
                 result = await review_write("safe preference text", kind="memory")
     assert not result.allowed
     assert "blocked" in result.reason
@@ -43,10 +43,10 @@ async def test_review_write_fail_closed_on_llm_error():
 @pytest.mark.asyncio
 async def test_review_write_fail_closed_on_empty_review():
     mock_resp = type("Resp", (), {"usage": None})()
-    with patch("agentpod_agent.security.guard.get_settings", return_value=_guard_enabled_settings()):
-        with patch("agentpod_agent.core.auxiliary_completion.create_chat_completion", new=AsyncMock(return_value=mock_resp)):
-            with patch("agentpod_agent.core.models.resolve_model", new=AsyncMock(return_value="gpt-test")):
-                with patch("agentpod_agent.core.openai_fields.openai_completion_text", return_value=""):
+    with patch("locus_agent.security.guard.get_settings", return_value=_guard_enabled_settings()):
+        with patch("locus_agent.core.auxiliary_completion.create_chat_completion", new=AsyncMock(return_value=mock_resp)):
+            with patch("locus_agent.core.models.resolve_model", new=AsyncMock(return_value="gpt-test")):
+                with patch("locus_agent.core.openai_fields.openai_completion_text", return_value=""):
                     result = await review_write("safe preference text", kind="memory")
     assert not result.allowed
 
@@ -54,10 +54,10 @@ async def test_review_write_fail_closed_on_empty_review():
 @pytest.mark.asyncio
 async def test_review_write_fail_closed_on_invalid_json():
     mock_resp = type("Resp", (), {"usage": None})()
-    with patch("agentpod_agent.security.guard.get_settings", return_value=_guard_enabled_settings()):
-        with patch("agentpod_agent.core.auxiliary_completion.create_chat_completion", new=AsyncMock(return_value=mock_resp)):
-            with patch("agentpod_agent.core.models.resolve_model", new=AsyncMock(return_value="gpt-test")):
-                with patch("agentpod_agent.core.openai_fields.openai_completion_text", return_value="not-json"):
+    with patch("locus_agent.security.guard.get_settings", return_value=_guard_enabled_settings()):
+        with patch("locus_agent.core.auxiliary_completion.create_chat_completion", new=AsyncMock(return_value=mock_resp)):
+            with patch("locus_agent.core.models.resolve_model", new=AsyncMock(return_value="gpt-test")):
+                with patch("locus_agent.core.openai_fields.openai_completion_text", return_value="not-json"):
                     result = await review_write("safe preference text", kind="memory")
     assert not result.allowed
 
@@ -65,10 +65,10 @@ async def test_review_write_fail_closed_on_invalid_json():
 @pytest.mark.asyncio
 async def test_review_write_allows_when_llm_approves():
     mock_resp = type("Resp", (), {"usage": None})()
-    with patch("agentpod_agent.security.guard.get_settings", return_value=_guard_enabled_settings()):
-        with patch("agentpod_agent.core.auxiliary_completion.create_chat_completion", new=AsyncMock(return_value=mock_resp)):
-            with patch("agentpod_agent.core.models.resolve_model", new=AsyncMock(return_value="gpt-test")):
-                with patch("agentpod_agent.core.openai_fields.openai_completion_text", return_value='{"allow": true, "reason": "ok"}'):
-                    with patch("agentpod_agent.usage_report.schedule_openai_usage"):
+    with patch("locus_agent.security.guard.get_settings", return_value=_guard_enabled_settings()):
+        with patch("locus_agent.core.auxiliary_completion.create_chat_completion", new=AsyncMock(return_value=mock_resp)):
+            with patch("locus_agent.core.models.resolve_model", new=AsyncMock(return_value="gpt-test")):
+                with patch("locus_agent.core.openai_fields.openai_completion_text", return_value='{"allow": true, "reason": "ok"}'):
+                    with patch("locus_agent.usage_report.schedule_openai_usage"):
                         result = await review_write("User prefers concise answers.", kind="memory")
     assert result.allowed

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from agentpod_agent.core.persistence import _hydrate_attachment
+from locus_agent.core.persistence import _hydrate_attachment
 
 
 @pytest.mark.asyncio
@@ -15,7 +15,7 @@ async def test_hydrate_reclassifies_utf8_other_blob(monkeypatch: pytest.MonkeyPa
         return text.encode("utf-8"), _object_key
 
     monkeypatch.setattr(
-        "agentpod_agent.core.persistence.resolve_attachment_bytes",
+        "locus_agent.core.persistence.resolve_attachment_bytes",
         _fake_resolve,
     )
 
@@ -41,7 +41,7 @@ async def test_hydrate_reclassifies_utf8_other_blob(monkeypatch: pytest.MonkeyPa
 
 @pytest.mark.asyncio
 async def test_create_attachment_requires_content_for_nonempty_size() -> None:
-    from agentpod_agent.core.persistence import create_attachment
+    from locus_agent.core.persistence import create_attachment
 
     with pytest.raises(ValueError, match="attachment content required"):
         await create_attachment(

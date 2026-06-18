@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from agentpod_agent.db import run_in_thread
-from agentpod_agent.mcp_.config import add_mcp_server, get_mcp_server, list_mcp_servers
-from agentpod_agent.workspace import get_workspace_id, set_workspace_id
+from locus_agent.db import run_in_thread
+from locus_agent.mcp_.config import add_mcp_server, get_mcp_server, list_mcp_servers
+from locus_agent.workspace import get_workspace_id, set_workspace_id
 
 WS_A = "ws_0123456789abcdef0123"
 WS_B = "ws_0123456789abcdef0124"
@@ -24,14 +24,14 @@ async def test_run_in_thread_preserves_workspace_context() -> None:
 
 @pytest.mark.asyncio
 async def test_mcp_config_reads_active_workspace_in_thread(tmp_path, monkeypatch) -> None:
-    from agentpod_agent.config import get_settings
+    from locus_agent.config import get_settings
 
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     get_settings.cache_clear()
 
     set_workspace_id(WS_A)
 
-    from agentpod_agent.mcp_.config import MCPServerConfig
+    from locus_agent.mcp_.config import MCPServerConfig
 
     cfg = MCPServerConfig(name="demo", transport="stdio", command=["echo"])
     await run_in_thread(add_mcp_server, cfg)

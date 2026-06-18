@@ -37,7 +37,7 @@ trim = true
 render_always = true
 # An array of regex based postprocessors to modify the changelog.
 postprocessors = [
-    { pattern = '<REPO>', replace = "https://github.com/sha2kyou/agentpod" },
+    { pattern = '<REPO>', replace = "https://github.com/sha2kyou/locusagent" },
 ]
 # render body even when there are no releases to process
 # render_always = true

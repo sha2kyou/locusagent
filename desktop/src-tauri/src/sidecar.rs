@@ -22,38 +22,38 @@ pub fn backend_url() -> String {
     format!("http://127.0.0.1:{BACKEND_PORT}")
 }
 
-fn default_agentpod_home() -> PathBuf {
+fn default_locusagent_home() -> PathBuf {
     #[cfg(windows)]
     {
         std::env::var("USERPROFILE")
             .map(PathBuf::from)
             .unwrap_or_default()
-            .join(".agentpod")
+            .join(".locusagent")
     }
     #[cfg(not(windows))]
     {
         std::env::var("HOME")
             .map(PathBuf::from)
             .unwrap_or_default()
-            .join(".agentpod")
+            .join(".locusagent")
     }
 }
 
-fn agentpod_home() -> PathBuf {
-    std::env::var("AGENTPOD_HOME")
+fn locusagent_home() -> PathBuf {
+    std::env::var("LOCUSAGENT_HOME")
         .ok()
         .map(PathBuf::from)
-        .unwrap_or_else(default_agentpod_home)
+        .unwrap_or_else(default_locusagent_home)
 }
 
 fn backend_log_path() -> PathBuf {
-    agentpod_home().join("desktop-backend.log")
+    locusagent_home().join("desktop-backend.log")
 }
 
 /// 持续读取子进程输出并写入 desktop-backend.log，避免管道写满导致子进程阻塞。
 fn spawn_log_drainer(stream: impl std::io::Read + Send + 'static) {
     thread::spawn(move || {
-        let home = agentpod_home();
+        let home = locusagent_home();
         let _ = std::fs::create_dir_all(&home);
         let mut log_file = OpenOptions::new()
             .create(true)
@@ -77,7 +77,7 @@ fn spawn_log_drainer(stream: impl std::io::Read + Send + 'static) {
 }
 
 fn repo_root() -> PathBuf {
-    if let Ok(root) = std::env::var("AGENTPOD_REPO_ROOT") {
+    if let Ok(root) = std::env::var("LOCUSAGENT_REPO_ROOT") {
         let path = PathBuf::from(root);
         if path.join("sidecar").is_dir() {
             return path;
@@ -116,7 +116,7 @@ fn bundled_python(app: &AppHandle) -> Option<PathBuf> {
 
 fn bundled_agent_doc(app: &AppHandle) -> Option<PathBuf> {
     app.path()
-        .resolve("AGENTPOD.md", BaseDirectory::Resource)
+        .resolve("LOCUSAGENT.md", BaseDirectory::Resource)
         .ok()
         .filter(|p| p.is_file())
 }
@@ -129,7 +129,7 @@ fn bundled_skills_dir(app: &AppHandle) -> Option<PathBuf> {
 }
 
 fn dev_python(root: &Path) -> Option<PathBuf> {
-    if let Ok(py) = std::env::var("AGENTPOD_PYTHON") {
+    if let Ok(py) = std::env::var("LOCUSAGENT_PYTHON") {
         let path = PathBuf::from(py);
         if path.is_file() {
             return Some(path);
@@ -162,25 +162,25 @@ fn python_executable(app: &AppHandle) -> (PathBuf, Option<PathBuf>, Option<PathB
 
 pub fn spawn_backend(app: &AppHandle) -> std::io::Result<Child> {
     let (python, workdir, skills_dir) = python_executable(app);
-    info!(python = %python.display(), "spawning agentpod backend");
+    info!(python = %python.display(), "spawning locusagent backend");
 
     let mut command = Command::new(&python);
     command
         .arg("-m")
-        .arg("agentpod.cli")
-        .env("AGENTPOD_MONOLITH", "1");
+        .arg("locusagent.cli")
+        .env("LOCUSAGENT_MONOLITH", "1");
     if let Some(dir) = workdir {
         command.current_dir(dir);
     }
     if let Some(skills) = skills_dir {
-        command.env("AGENTPOD_BUNDLED_SKILLS_DIR", skills);
+        command.env("LOCUSAGENT_BUNDLED_SKILLS_DIR", skills);
     }
     if let Some(agent_doc) = bundled_agent_doc(app) {
-        command.env("AGENTPOD_AGENT_DOC_PATH", agent_doc);
+        command.env("LOCUSAGENT_AGENT_DOC_PATH", agent_doc);
     }
     let static_dir = crate::gateway::resolve_static_dir(app);
     if static_dir.join("index.html").is_file() {
-        command.env("AGENTPOD_STATIC_DIR", static_dir);
+        command.env("LOCUSAGENT_STATIC_DIR", static_dir);
     }
     command.env(
         "MCP_OAUTH_REDIRECT_URI",

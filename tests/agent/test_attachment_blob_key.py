@@ -2,7 +2,7 @@
 
 import pytest
 
-from agentpod_agent.storage.attachments import (
+from locus_agent.storage.attachments import (
     AttachmentStorageError,
     blob_object_key,
     file_object_key,
@@ -21,7 +21,7 @@ def test_blob_object_key():
 
 def test_blob_object_key_format(monkeypatch):
     monkeypatch.setattr(
-        "agentpod_agent.storage.attachments.get_workspace_id",
+        "locus_agent.storage.attachments.get_workspace_id",
         lambda: "ws_0123456789abcdef0123",
     )
     digest = "b" * 64
@@ -30,7 +30,7 @@ def test_blob_object_key_format(monkeypatch):
 
 def test_file_object_key_format(monkeypatch):
     monkeypatch.setattr(
-        "agentpod_agent.storage.attachments.get_workspace_id",
+        "locus_agent.storage.attachments.get_workspace_id",
         lambda: "ws_0123456789abcdef0123",
     )
     assert (

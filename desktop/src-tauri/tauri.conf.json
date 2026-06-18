@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "AgentPod",
-  "version": "0.1.20",
-  "identifier": "com.agentpod.desktop",
+  "productName": "Locus Agent",
+  "version": "0.2.0",
+  "identifier": "com.locusagent.desktop",
   "build": {
     "beforeDevCommand": "cd ../frontend && npm run build:desktop",
     "beforeBuildCommand": "cd ../frontend && npm run build:desktop",
@@ -34,7 +34,7 @@
       "../../frontend/dist-desktop/": "dist-desktop/",
       "resources/sidecar-venv/": "sidecar-venv/",
       "resources/shared-skills/": "shared-skills/",
-      "../../docs/AGENTPOD.md": "AGENTPOD.md"
+      "../../docs/LOCUSAGENT.md": "LOCUSAGENT.md"
     }
   }
 }

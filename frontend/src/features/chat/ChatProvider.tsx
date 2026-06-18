@@ -30,6 +30,7 @@ import { displaySessionTitle, isBackendDefaultSessionTitle } from "@/lib/session
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/app/auth";
 import { withWorkspacePrefix } from "@/app/workspace-route";
+import { isNewChatKeyboardShortcut, isShortcutRecordingActive } from "@/lib/format-global-shortcut";
 import {
   appendText,
   appendThinking,
@@ -141,7 +142,14 @@ function ensureLiveAssistant(messages: ChatMessage[]): ChatMessage[] {
   return [...messages, emptyAssistant()];
 }
 
-function chatPath(sessionId: string | null, workspaceId?: string | null): string {
+function chatPath(
+  sessionId: string | null,
+  workspaceId?: string | null,
+  mode: "default" | "quick" = "default",
+): string {
+  if (mode === "quick") {
+    return sessionId ? `/quick-chat/${encodeURIComponent(sessionId)}` : "/quick-chat";
+  }
   const base = sessionId ? `/chat/${encodeURIComponent(sessionId)}` : "/chat";
   return withWorkspacePrefix(base, workspaceId);
 }
@@ -163,7 +171,14 @@ async function waitActiveRunSettled(sessionId: string): Promise<void> {
   }
 }
 
-export function ChatProvider({ children }: { children: ReactNode }) {
+export function ChatProvider({
+  children,
+  mode = "default",
+}: {
+  children: ReactNode;
+  mode?: "default" | "quick";
+}) {
+  const isQuick = mode === "quick";
   const { t } = useTranslation();
   const toast = useToast();
   const { me } = useAuth();
@@ -210,16 +225,26 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const loadTokenRef = useRef(0);
   const pinnedUrlWorkspaceIdRef = useRef<string | null | undefined>(undefined);
   const pinnedWorkspaceIdRef = useRef<string>("");
+  const newSessionRef = useRef<() => void>(() => {});
+
+  const resolveChatPath = (sessionId: string | null) => chatPath(sessionId, urlWorkspaceId, mode);
 
   useLayoutEffect(() => {
+    if (isQuick) {
+      pinnedWorkspaceIdRef.current =
+        me?.current_workspace_id || getWorkspaceId() || "";
+      if (pinnedWorkspaceIdRef.current) setWorkspaceId(pinnedWorkspaceIdRef.current);
+      return;
+    }
     if (pinnedUrlWorkspaceIdRef.current !== undefined) return;
     pinnedUrlWorkspaceIdRef.current = urlWorkspaceId;
     pinnedWorkspaceIdRef.current =
       urlWorkspaceId || me?.current_workspace_id || getWorkspaceId() || "";
     if (pinnedWorkspaceIdRef.current) setWorkspaceId(pinnedWorkspaceIdRef.current);
-  }, [urlWorkspaceId, me?.current_workspace_id]);
+  }, [urlWorkspaceId, me?.current_workspace_id, isQuick]);
 
   useEffect(() => {
+    if (isQuick) return;
     if (pinnedUrlWorkspaceIdRef.current === undefined) return;
     const pinnedUrl = pinnedUrlWorkspaceIdRef.current;
     const pinnedId = pinnedWorkspaceIdRef.current;
@@ -228,7 +253,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       return;
     }
     if (getWorkspaceId() !== pinnedId) setWorkspaceId(pinnedId || undefined);
-  }, [urlWorkspaceId, urlSessionId, me?.current_workspace_id, navigate]);
+  }, [urlWorkspaceId, urlSessionId, me?.current_workspace_id, navigate, isQuick]);
 
   useEffect(() => {
     pendingAttachmentsRef.current = pendingAttachments;
@@ -405,7 +430,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const navigateSession = opts.navigateSession ?? false;
     if (chunk.session_id && navigateSession) {
       if (!currentIdRef.current) setCurrent(chunk.session_id);
-      const path = chatPath(chunk.session_id, urlWorkspaceId);
+      const path = resolveChatPath(chunk.session_id);
       if (window.location.pathname !== path) {
         navigate(path, { replace: true });
       }
@@ -637,7 +662,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         if (token !== loadTokenRef.current || !mountedRef.current) return;
         toast((e as Error).message || t("chat.errors.sessionNotFound"), "error");
         resetToNewChat();
-        navigate(chatPath(null, urlWorkspaceId), { replace: true });
+        navigate(resolveChatPath(null), { replace: true });
       }
     })();
   };
@@ -926,11 +951,29 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // ---- 会话操作 ----
   const newSession = () => {
-    navigate(chatPath(null, urlWorkspaceId));
+    if (isQuick) {
+      resetToNewChat();
+      navigate("/quick-chat", { replace: true });
+      return;
+    }
+    resetToNewChat();
+    navigate(resolveChatPath(null), { replace: true });
   };
+  newSessionRef.current = newSession;
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isShortcutRecordingActive()) return;
+      if (!isNewChatKeyboardShortcut(event)) return;
+      event.preventDefault();
+      newSessionRef.current();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const selectSession = (id: string) => {
-    navigate(chatPath(id, urlWorkspaceId));
+    navigate(resolveChatPath(id));
   };
 
   // toast 放在 Provider：删除当前对话会触发路由 remount，Sidebar 层调用不可靠
@@ -948,7 +991,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
     if (!mountedRef.current) return;
     await refreshSessions();
-    if (wasCurrent && mountedRef.current) navigate(chatPath(null, urlWorkspaceId));
+    if (wasCurrent && mountedRef.current) navigate(resolveChatPath(null));
   };
 
   const removePendingAttachment = (id: string) => {

@@ -1,11 +1,11 @@
 """附件图片格式与 blob 去重测试。"""
 
-from agentpod_agent.core.attachment_images import (
+from locus_agent.core.attachment_images import (
     UNSUPPORTED_IMAGE_REASON,
     detect_image_mime,
     validate_processable_image,
 )
-from agentpod_agent.core.persistence import _find_existing_blob, _unreferenced_object_keys
+from locus_agent.core.persistence import _find_existing_blob, _unreferenced_object_keys
 
 
 def test_detect_png():
