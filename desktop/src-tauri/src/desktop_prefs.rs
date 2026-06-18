@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use tauri::{AppHandle, Manager, State};
 
 use crate::agentpod_paths::agentpod_home;
@@ -13,10 +14,6 @@ fn default_quick_chat_enabled() -> bool {
 
 fn default_quick_chat_shortcut() -> String {
     crate::quick_chat::DEFAULT_QUICK_CHAT_SHORTCUT.to_string()
-}
-
-fn default_quick_chat_always_on_top() -> bool {
-    true
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -35,7 +32,7 @@ pub struct DesktopPrefs {
     pub quick_chat_enabled: bool,
     #[serde(default = "default_quick_chat_shortcut")]
     pub quick_chat_shortcut: String,
-    #[serde(default = "default_quick_chat_always_on_top")]
+    #[serde(default)]
     pub quick_chat_always_on_top: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quick_chat_window_bounds: Option<QuickChatWindowBounds>,
@@ -48,7 +45,7 @@ impl Default for DesktopPrefs {
             launch_at_login: false,
             quick_chat_enabled: default_quick_chat_enabled(),
             quick_chat_shortcut: default_quick_chat_shortcut(),
-            quick_chat_always_on_top: default_quick_chat_always_on_top(),
+            quick_chat_always_on_top: false,
             quick_chat_window_bounds: None,
         }
     }
@@ -65,28 +62,69 @@ pub struct DesktopPrefsView {
     pub quick_chat_shortcut_error: Option<String>,
 }
 
-fn prefs_file() -> PathBuf {
+fn settings_path() -> PathBuf {
+    agentpod_home().join("settings.json")
+}
+
+fn legacy_prefs_path() -> PathBuf {
     agentpod_home().join("desktop.prefs.json")
 }
 
-pub fn load_prefs() -> DesktopPrefs {
-    let path = prefs_file();
+fn read_settings_root() -> Map<String, Value> {
+    let path = settings_path();
     if !path.is_file() {
-        return DesktopPrefs::default();
+        return Map::new();
     }
     fs::read_to_string(path)
         .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+        .and_then(|value| value.as_object().cloned())
         .unwrap_or_default()
 }
 
-fn save_prefs(prefs: &DesktopPrefs) -> Result<(), String> {
-    let path = prefs_file();
+fn write_settings_root(root: Map<String, Value>) -> Result<(), String> {
+    let path = settings_path();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let json = serde_json::to_string_pretty(prefs).map_err(|e| e.to_string())?;
-    fs::write(path, json).map_err(|e| e.to_string())
+    let json = serde_json::to_string_pretty(&Value::Object(root)).map_err(|e| e.to_string())?;
+    fs::write(path, format!("{json}\n")).map_err(|e| e.to_string())
+}
+
+fn load_desktop_from_settings() -> Option<DesktopPrefs> {
+    read_settings_root()
+        .get("desktop")
+        .and_then(|value| serde_json::from_value(value.clone()).ok())
+}
+
+fn migrate_legacy_prefs_file() -> Option<DesktopPrefs> {
+    let path = legacy_prefs_path();
+    if !path.is_file() {
+        return None;
+    }
+    let prefs = fs::read_to_string(&path)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<DesktopPrefs>(&raw).ok())?;
+    let _ = fs::remove_file(&path);
+    Some(prefs)
+}
+
+pub fn load_prefs() -> DesktopPrefs {
+    if let Some(prefs) = load_desktop_from_settings() {
+        return prefs;
+    }
+    if let Some(prefs) = migrate_legacy_prefs_file() {
+        let _ = save_prefs(&prefs);
+        return prefs;
+    }
+    DesktopPrefs::default()
+}
+
+fn save_prefs(prefs: &DesktopPrefs) -> Result<(), String> {
+    let mut root = read_settings_root();
+    let desktop = serde_json::to_value(prefs).map_err(|e| e.to_string())?;
+    root.insert("desktop".to_string(), desktop);
+    write_settings_root(root)
 }
 
 pub fn run_in_background(app: &AppHandle) -> bool {
@@ -119,7 +157,7 @@ fn remove_legacy_launch_agent_plists() {
     };
     let dir = PathBuf::from(home).join("Library/LaunchAgents");
     for name in ["AgentPod.plist", "agentpod-desktop.plist", "agentpod.plist"] {
-        let _ = std::fs::remove_file(dir.join(name));
+        let _ = fs::remove_file(dir.join(name));
     }
 }
 

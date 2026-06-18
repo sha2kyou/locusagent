@@ -73,12 +73,27 @@ class DeveloperSection(BaseModel):
     devtools_enabled: bool = False
 
 
+class QuickChatWindowBounds(BaseModel):
+    x: int
+    y: int
+
+
+class DesktopSection(BaseModel):
+    run_in_background: bool = False
+    launch_at_login: bool = False
+    quick_chat_enabled: bool = True
+    quick_chat_shortcut: str = "cmd+shift+K"
+    quick_chat_always_on_top: bool = False
+    quick_chat_window_bounds: QuickChatWindowBounds | None = None
+
+
 class SettingsDocument(BaseModel):
     llm: LlmSection = Field(default_factory=LlmSection)
     embedding: EmbeddingSection = Field(default_factory=EmbeddingSection)
     tools: ToolsSection = Field(default_factory=ToolsSection)
     terminal: TerminalSection = Field(default_factory=TerminalSection)
     developer: DeveloperSection = Field(default_factory=DeveloperSection)
+    desktop: DesktopSection = Field(default_factory=DesktopSection)
     paths: PathsSection = Field(default_factory=PathsSection)
     secrets: SecretsSection = Field(default_factory=SecretsSection)
     app: AppSection = Field(default_factory=AppSection)
@@ -342,6 +357,18 @@ def app_config_for_api(doc: SettingsDocument | None = None) -> dict[str, Any]:
         },
         "developer": {
             "devtools_enabled": d.developer.devtools_enabled,
+        },
+        "desktop": {
+            "run_in_background": d.desktop.run_in_background,
+            "launch_at_login": d.desktop.launch_at_login,
+            "quick_chat_enabled": d.desktop.quick_chat_enabled,
+            "quick_chat_shortcut": d.desktop.quick_chat_shortcut,
+            "quick_chat_always_on_top": d.desktop.quick_chat_always_on_top,
+            "quick_chat_window_bounds": (
+                d.desktop.quick_chat_window_bounds.model_dump(mode="json")
+                if d.desktop.quick_chat_window_bounds
+                else None
+            ),
         },
         "app": {
             "timezone": get_app_timezone(d),
