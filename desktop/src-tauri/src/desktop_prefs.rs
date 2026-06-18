@@ -20,6 +20,12 @@ fn default_quick_chat_always_on_top() -> bool {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+pub struct QuickChatWindowBounds {
+    pub x: i32,
+    pub y: i32,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct DesktopPrefs {
     #[serde(default)]
     pub run_in_background: bool,
@@ -31,6 +37,8 @@ pub struct DesktopPrefs {
     pub quick_chat_shortcut: String,
     #[serde(default = "default_quick_chat_always_on_top")]
     pub quick_chat_always_on_top: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quick_chat_window_bounds: Option<QuickChatWindowBounds>,
 }
 
 impl Default for DesktopPrefs {
@@ -41,6 +49,7 @@ impl Default for DesktopPrefs {
             quick_chat_enabled: default_quick_chat_enabled(),
             quick_chat_shortcut: default_quick_chat_shortcut(),
             quick_chat_always_on_top: default_quick_chat_always_on_top(),
+            quick_chat_window_bounds: None,
         }
     }
 }
@@ -124,6 +133,36 @@ pub fn read_prefs(app: &AppHandle) -> DesktopPrefs {
         .unwrap_or_default()
 }
 
+pub fn remember_quick_chat_window_bounds(app: &AppHandle) {
+    let Some(window) = app.get_webview_window(crate::quick_chat::QUICK_CHAT_WINDOW_LABEL) else {
+        return;
+    };
+    let Ok(position) = window.outer_position() else {
+        return;
+    };
+    let mut prefs = read_prefs(app);
+    prefs.quick_chat_window_bounds = Some(QuickChatWindowBounds {
+        x: position.x,
+        y: position.y,
+    });
+    if let Some(state) = app.try_state::<PrefsState>() {
+        *state.0.lock().expect("prefs lock") = prefs.clone();
+    }
+    let _ = save_prefs(&prefs);
+}
+
+pub fn apply_quick_chat_window_bounds(app: &AppHandle) -> bool {
+    let prefs = read_prefs(app);
+    let Some(bounds) = prefs.quick_chat_window_bounds else {
+        return false;
+    };
+    let Some(window) = app.get_webview_window(crate::quick_chat::QUICK_CHAT_WINDOW_LABEL) else {
+        return false;
+    };
+    let _ = window.set_position(tauri::PhysicalPosition::new(bounds.x, bounds.y));
+    true
+}
+
 pub fn show_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
@@ -159,6 +198,9 @@ pub fn desktop_set_prefs(
     state: State<PrefsState>,
     prefs: DesktopPrefs,
 ) -> Result<DesktopPrefs, String> {
+    let previous = state.0.lock().expect("prefs lock poisoned").clone();
+    let mut prefs = prefs;
+    prefs.quick_chat_window_bounds = previous.quick_chat_window_bounds;
     *state.0.lock().expect("prefs lock poisoned") = prefs.clone();
     save_prefs(&prefs)?;
     if let Err(err) = apply_autostart(&app, prefs.launch_at_login) {

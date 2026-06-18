@@ -19,6 +19,8 @@ pub const QUICK_CHAT_OPEN_EVENT: &str = "quick-chat:open";
 pub const QUICK_CHAT_FOCUS_COMPOSER_EVENT: &str = "quick-chat:focus-composer";
 
 pub const DEFAULT_QUICK_CHAT_SHORTCUT: &str = "cmd+shift+K";
+pub const QUICK_CHAT_WINDOW_WIDTH: f64 = 440.0;
+pub const QUICK_CHAT_WINDOW_HEIGHT: f64 = 580.0;
 
 static REGISTERED_SHORTCUT: Mutex<Option<String>> = Mutex::new(None);
 static SHORTCUT_SYNC_ERROR: Mutex<Option<String>> = Mutex::new(None);
@@ -69,9 +71,10 @@ pub fn create_quick_chat_window(app: &App) -> Result<(), String> {
         WebviewUrl::External(quick_url),
     )
     .title("")
-    .inner_size(440.0, 580.0)
-    .min_inner_size(360.0, 420.0)
-    .resizable(true)
+    .inner_size(QUICK_CHAT_WINDOW_WIDTH, QUICK_CHAT_WINDOW_HEIGHT)
+    .min_inner_size(QUICK_CHAT_WINDOW_WIDTH, QUICK_CHAT_WINDOW_HEIGHT)
+    .max_inner_size(QUICK_CHAT_WINDOW_WIDTH, QUICK_CHAT_WINDOW_HEIGHT)
+    .resizable(false)
     .visible(false);
 
     #[cfg(target_os = "macos")]
@@ -157,7 +160,9 @@ pub fn show_quick_chat(app: &AppHandle) {
     let Some(window) = app.get_webview_window(QUICK_CHAT_WINDOW_LABEL) else {
         return;
     };
-    center_quick_chat_window(app);
+    if !desktop_prefs::apply_quick_chat_window_bounds(app) {
+        center_quick_chat_window(app);
+    }
     let _ = window.set_always_on_top(false);
     let _ = window.show();
     let _ = window.unminimize();
@@ -167,6 +172,7 @@ pub fn show_quick_chat(app: &AppHandle) {
 }
 
 pub fn hide_quick_chat(app: &AppHandle) {
+    desktop_prefs::remember_quick_chat_window_bounds(app);
     if let Some(window) = app.get_webview_window(QUICK_CHAT_WINDOW_LABEL) {
         let _ = window.hide();
     }

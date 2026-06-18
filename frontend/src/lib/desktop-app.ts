@@ -22,8 +22,10 @@ export function isQuickChatWindow(): boolean {
 export function useQuickChatHtmlClass(): void {
   useEffect(() => {
     if (!isQuickChatWindow()) return;
-    document.documentElement.classList.add("apod-quick-chat");
-    return () => document.documentElement.classList.remove("apod-quick-chat");
+    document.documentElement.classList.add("apod-quick-chat", "apod-desktop");
+    return () => {
+      document.documentElement.classList.remove("apod-quick-chat", "apod-desktop");
+    };
   }, []);
 }
 

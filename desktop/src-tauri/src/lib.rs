@@ -114,6 +114,7 @@ pub fn run() {
             #[cfg(not(target_os = "macos"))]
             let _ = app;
             if matches!(event, RunEvent::Exit) {
+                desktop_prefs::remember_quick_chat_window_bounds(app);
                 if let Some(child) = BACKEND_CHILD.lock().expect("backend child lock").take() {
                     sidecar::stop_backend(child);
                 }

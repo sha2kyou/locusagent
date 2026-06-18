@@ -42,49 +42,45 @@ export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
   return (
     <ThreadPrimitive.Root className="flex h-full flex-col">
       <ThreadPrimitive.Viewport className="relative flex-1 overflow-y-auto">
-        {!isQuick ? (
-          <ThreadPrimitive.Empty>
-            <div
-              className="pointer-events-none absolute inset-x-0 top-[8%] z-0 h-[min(55vh,440px)]"
-              style={{
-                background:
-                  "radial-gradient(ellipse 680px 68% at 50% 48%, var(--color-brand-soft) 0%, transparent 70%)",
-              }}
-              aria-hidden
-            />
-          </ThreadPrimitive.Empty>
-        ) : null}
+        <ThreadPrimitive.Empty>
+          <div
+            className="pointer-events-none absolute inset-x-0 top-[8%] z-0 h-[min(55vh,440px)]"
+            style={{
+              background:
+                "radial-gradient(ellipse 680px 68% at 50% 48%, var(--color-brand-soft) 0%, transparent 70%)",
+            }}
+            aria-hidden
+          />
+        </ThreadPrimitive.Empty>
 
         <div
           className={cn(
             "relative z-10 mx-auto w-full py-6",
-            isQuick ? "max-w-full px-4 py-4" : "max-w-3xl px-6 py-10",
+            isQuick ? "max-w-full px-4 pb-4 pt-8" : "max-w-3xl px-6 py-10",
           )}
         >
-          {!isQuick ? (
-            <ThreadPrimitive.Empty>
-              <div className="flex min-h-[55vh] flex-col items-center justify-center text-center">
-                <h2 className="text-2xl font-semibold tracking-tight">{t("chat.empty.title")}</h2>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {t("chat.empty.subtitle")}
-                </p>
-                <div className="mt-6 flex max-w-lg flex-wrap justify-center gap-2">
-                  {promptChips.map((p) => (
-                    <ThreadPrimitive.Suggestion
-                      key={p}
-                      prompt={p}
-                      method="replace"
-                      asChild
-                    >
-                      <button className="rounded-lg border border-border bg-background/80 px-3.5 py-2 text-sm text-muted-foreground shadow-xs transition-all duration-150 hover:border-border hover:bg-surface hover:text-foreground hover:shadow-sm">
-                        {p}
-                      </button>
-                    </ThreadPrimitive.Suggestion>
-                  ))}
-                </div>
+          <ThreadPrimitive.Empty>
+            <div className="flex min-h-[55vh] flex-col items-center justify-center text-center">
+              <h2 className="text-2xl font-semibold tracking-tight">{t("chat.empty.title")}</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {t("chat.empty.subtitle")}
+              </p>
+              <div className="mt-6 flex max-w-lg flex-wrap justify-center gap-2">
+                {promptChips.map((p) => (
+                  <ThreadPrimitive.Suggestion
+                    key={p}
+                    prompt={p}
+                    method="replace"
+                    asChild
+                  >
+                    <button className="rounded-lg border border-border bg-background/80 px-3.5 py-2 text-sm text-muted-foreground shadow-xs transition-all duration-150 hover:border-border hover:bg-surface hover:text-foreground hover:shadow-sm">
+                      {p}
+                    </button>
+                  </ThreadPrimitive.Suggestion>
+                ))}
               </div>
-            </ThreadPrimitive.Empty>
-          ) : null}
+            </div>
+          </ThreadPrimitive.Empty>
 
           <ThreadPrimitive.Messages
             components={{

@@ -674,12 +674,9 @@ html.apod-quick-chat body {
   overflow: hidden;
 }
 
-html.apod-quick-chat .apod-quick-chat-body {
-  padding-top: 28px;
-}
-
 html.apod-quick-chat [data-tauri-drag-region] {
   -webkit-app-region: drag;
   app-region: drag;
   cursor: default;
+  background: transparent;
 }
