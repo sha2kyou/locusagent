@@ -389,6 +389,15 @@ export function ChatProvider({
     titlePollTimerRef.current = timer;
   };
 
+  /** run 结束后刷新列表；标题仍为默认名时再启动 watchTitle */
+  const syncSessionsAfterRun = (sid: string | null) => {
+    void refreshSessions().then((items) => {
+      if (!sid) return;
+      const found = items.find((s) => s.id === sid);
+      if (!found || isBackendDefaultSessionTitle(found.title)) watchTitle(sid);
+    });
+  };
+
   // ---- 流式事件处理（新请求与 active run 重连共用） ----
   const applyStreamSync = (sync: NonNullable<ChatChunk["x_sync"]>) => {
     const syncId = sync.assistant_message_id != null ? `a_${sync.assistant_message_id}` : undefined;
@@ -428,8 +437,8 @@ export function ChatProvider({
   const applyStreamChunk = (chunk: ChatChunk, opts: { navigateSession?: boolean } = {}) => {
     if (!mountedRef.current) return;
     const navigateSession = opts.navigateSession ?? false;
-    if (chunk.session_id && navigateSession) {
-      if (!currentIdRef.current) setCurrent(chunk.session_id);
+    if (chunk.session_id && navigateSession && !currentIdRef.current) {
+      setCurrent(chunk.session_id);
       const path = resolveChatPath(chunk.session_id);
       if (window.location.pathname !== path) {
         navigate(path, { replace: true });
@@ -602,8 +611,7 @@ export function ChatProvider({
           );
           isRunningRef.current = false;
           setIsRunning(false);
-          void refreshSessions();
-          watchTitle(sid);
+          syncSessionsAfterRun(sid);
           queueMicrotask(() => {
             tryProcessQueueRef.current();
           });
@@ -846,9 +854,7 @@ export function ChatProvider({
           });
         }
       }
-      void refreshSessions();
-      const sidAfter = currentIdRef.current;
-      if (sidAfter) watchTitle(sidAfter);
+      syncSessionsAfterRun(currentIdRef.current);
     }
   };
 
