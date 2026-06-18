@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   formatGlobalShortcutForDisplay,
   keyboardEventToGlobalShortcut,
+  setShortcutRecordingActive,
 } from "@/lib/format-global-shortcut";
 
 type ShortcutCaptureProps = {
@@ -19,11 +20,17 @@ export function ShortcutCapture({ value, onChange, disabled }: ShortcutCapturePr
   const [recording, setRecording] = useState(false);
 
   useEffect(() => {
-    if (!recording) return;
+    if (!recording) {
+      setShortcutRecordingActive(false);
+      return;
+    }
+
+    setShortcutRecordingActive(true);
 
     const onKeyDown = (event: KeyboardEvent) => {
       event.preventDefault();
       event.stopPropagation();
+      event.stopImmediatePropagation();
 
       if (event.key === "Escape") {
         setRecording(false);
@@ -38,7 +45,10 @@ export function ShortcutCapture({ value, onChange, disabled }: ShortcutCapturePr
     };
 
     window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      setShortcutRecordingActive(false);
+    };
   }, [onChange, recording]);
 
   return (

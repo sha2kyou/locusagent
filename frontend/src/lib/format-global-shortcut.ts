@@ -34,7 +34,7 @@ export function isMacOS(): boolean {
   return /Mac|iPhone|iPod|iPad/i.test(navigator.platform) || /Mac OS X/i.test(navigator.userAgent);
 }
 
-/** 将存储的全局快捷键格式化为当前平台可读样式（macOS 用 ⌘⇧K，其它平台用 Ctrl+Shift+K） */
+/** 将存储的全局快捷键格式化为当前平台可读样式（如 ⌘+⇧+K / Ctrl+Shift+K） */
 export function formatGlobalShortcutForDisplay(shortcut: string): string {
   const trimmed = shortcut.trim();
   if (!trimmed) return trimmed;
@@ -44,26 +44,29 @@ export function formatGlobalShortcutForDisplay(shortcut: string): string {
 
   const mac = isMacOS();
   const modifierLabels = mac ? MACOS_MODIFIER_LABELS : WINDOWS_MODIFIER_LABELS;
-  const modifiers: string[] = [];
-  let mainKey = "";
+  const labels: string[] = [];
 
   for (const part of parts) {
     const normalized = part.toLowerCase();
     if (normalized in modifierLabels) {
-      modifiers.push(modifierLabels[normalized]);
+      labels.push(modifierLabels[normalized]);
       continue;
     }
-    mainKey = mac ? part.toUpperCase() : part;
+    labels.push(mac ? (MACOS_KEY_LABELS[part] ?? part.toUpperCase()) : part);
   }
 
-  if (!mainKey) return trimmed;
+  return labels.join("+");
+}
 
-  if (mac) {
-    const mainLabel = MACOS_KEY_LABELS[mainKey] ?? mainKey;
-    return `${modifiers.join("")}${mainLabel}`;
-  }
+let shortcutRecordingActive = false;
 
-  return [...modifiers, mainKey].join("+");
+/** 设置页录入全局快捷键时为 true，应用内快捷键应忽略 */
+export function setShortcutRecordingActive(active: boolean): void {
+  shortcutRecordingActive = active;
+}
+
+export function isShortcutRecordingActive(): boolean {
+  return shortcutRecordingActive;
 }
 
 /** 主界面 / 快捷窗：新对话快捷键（macOS ⌘N，其它平台 Ctrl+N） */

@@ -30,7 +30,7 @@ import { displaySessionTitle, isBackendDefaultSessionTitle } from "@/lib/session
 import { useToast } from "@/components/ui/toast";
 import { useAuth } from "@/app/auth";
 import { withWorkspacePrefix } from "@/app/workspace-route";
-import { isNewChatKeyboardShortcut } from "@/lib/format-global-shortcut";
+import { isNewChatKeyboardShortcut, isShortcutRecordingActive } from "@/lib/format-global-shortcut";
 import {
   appendText,
   appendThinking,
@@ -963,6 +963,7 @@ export function ChatProvider({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isShortcutRecordingActive()) return;
       if (!isNewChatKeyboardShortcut(event)) return;
       event.preventDefault();
       newSessionRef.current();

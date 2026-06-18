@@ -30,6 +30,7 @@ import { downloadAttachment, attachmentDownloadUrl } from "@/api/endpoints";
 import { Drawer } from "@/components/ui/drawer";
 import { useTimeFormatters } from "@/lib/use-app-timezone";
 import { isDesktopApp } from "@/lib/desktop-app";
+import { isShortcutRecordingActive } from "@/lib/format-global-shortcut";
 
 const EMPTY_ATTACHMENTS: ChatAttachment[] = [];
 
@@ -386,6 +387,7 @@ function useGlobalFocusShortcut(
   useEffect(() => {
     if (!enabled) return;
     const handler = (e: KeyboardEvent) => {
+      if (isShortcutRecordingActive()) return;
       const el = document.activeElement as HTMLElement | null;
       const typing =
         !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
@@ -465,9 +467,26 @@ function attachmentImageSrc(file: ChatAttachment): string | null {
 
 function canExportAttachment(file: ChatAttachment | null): boolean {
   if (!file) return false;
+  if (isServerDownloadable(file)) return true;
   if (file.kind === "text") return typeof file.text === "string";
   if (file.kind === "image") return attachmentImageSrc(file) !== null;
   return false;
+}
+
+function downloadChatAttachment(
+  file: ChatAttachment,
+  toast: ReturnType<typeof useToast>,
+  t: (key: string) => string,
+): void {
+  if (isServerDownloadable(file)) {
+    void downloadAttachment(file.id, file.name).catch((err: unknown) => {
+      toast(err instanceof Error ? err.message : t("chat.attachment.downloadFailed"), "error");
+    });
+    return;
+  }
+  if (!exportInlineAttachment(file)) {
+    toast(t("chat.attachment.exportUnsupported"), "info");
+  }
 }
 
 function exportInlineAttachment(file: ChatAttachment): boolean {
@@ -524,17 +543,9 @@ function MessageAttachmentChips({
           key={file.id}
           onClick={() => onSelect(file)}
           className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/70 px-2.5 py-1 text-xs text-muted-foreground transition hover:bg-surface"
-          title={
-            isServerDownloadable(file)
-              ? t("chat.attachment.downloadNamed", { name: file.name })
-              : t("chat.attachment.viewNamed", { name: file.name })
-          }
+          title={t("chat.attachment.viewNamed", { name: file.name })}
         >
-          {isServerDownloadable(file) ? (
-            <Download className="size-3" />
-          ) : (
-            <Paperclip className="size-3" />
-          )}
+          <Paperclip className="size-3" />
           <span className="max-w-56 truncate">{file.name}</span>
           {!showsUnparseableBadge(file) ? null : (
             <span className="text-warning">{t("chat.attachment.unparseable")}</span>
@@ -546,17 +557,9 @@ function MessageAttachmentChips({
 }
 
 function useAttachmentSelect() {
-  const { t } = useTranslation();
-  const toast = useToast();
   const [selectedAttachment, setSelectedAttachment] = useState<ChatAttachment | null>(null);
 
   const selectAttachment = (file: ChatAttachment) => {
-    if (isServerDownloadable(file)) {
-      void downloadAttachment(file.id, file.name).catch((err: unknown) => {
-        toast(err instanceof Error ? err.message : t("chat.attachment.downloadFailed"), "error");
-      });
-      return;
-    }
     setSelectedAttachment(file);
   };
 
@@ -585,16 +588,7 @@ function AttachmentDrawer({
           disabled={!canExportAttachment(file)}
           onClick={() => {
             if (!file) return;
-            if (file.kind === "image" && attachmentImageSrc(file) && !attachmentImageSrc(file)!.startsWith("data:")) {
-              void downloadAttachment(file.id, file.name).catch((err: unknown) => {
-                toast(err instanceof Error ? err.message : t("chat.attachment.downloadFailed"), "error");
-              });
-              return;
-            }
-            const exported = exportInlineAttachment(file);
-            if (!exported) {
-              toast(t("chat.attachment.exportUnsupported"), "info");
-            }
+            downloadChatAttachment(file, toast, t);
           }}
           title={t("chat.attachment.download")}
           aria-label={t("chat.attachment.download")}
@@ -604,7 +598,7 @@ function AttachmentDrawer({
       }
     >
       {file ? (
-        file.processable ? (
+        file.processable || file.kind === "image" ? (
           <FilePreview
             filename={file.name}
             content={file.kind === "text" ? file.text : undefined}
