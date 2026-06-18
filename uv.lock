@@ -797,7 +797,7 @@ wheels = [
 
 [[package]]
 name = "locus-agent"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "agent" }
 dependencies = [
     { name = "fastapi" },
@@ -840,7 +840,7 @@ requires-dist = [
 
 [[package]]
 name = "locus-host"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "host" }
 dependencies = [
     { name = "aiosqlite" },
@@ -881,7 +881,7 @@ requires-dist = [
 
 [[package]]
 name = "locus-shared"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "shared" }
 dependencies = [
     { name = "cryptography" },
@@ -900,7 +900,7 @@ requires-dist = [
 
 [[package]]
 name = "locus-sidecar"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "sidecar" }
 dependencies = [
     { name = "locus-agent" },
@@ -919,7 +919,7 @@ requires-dist = [
 
 [[package]]
 name = "locus-workspace"
-version = "0.2.0"
+version = "0.3.0"
 source = { virtual = "." }
 
 [package.dev-dependencies]
