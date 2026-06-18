@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default AgentPod desktop capability",
-  "windows": ["main"],
+  "windows": ["main", "quick-chat"],
   "remote": {
     "urls": ["http://127.0.0.1:21223", "http://127.0.0.1:21223/*"]
   },
@@ -16,6 +16,10 @@
     "allow-desktop-get-prefs",
     "allow-desktop-get-system-locale",
     "allow-desktop-set-prefs",
-    "allow-desktop-apply-devtools-settings"
+    "allow-desktop-apply-devtools-settings",
+    "allow-desktop-open-session-in-main",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-is-registered"
   ]
 }

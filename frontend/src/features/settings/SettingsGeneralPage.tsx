@@ -40,6 +40,9 @@ export function SettingsGeneralPage() {
   const [timezoneSaving, setTimezoneSaving] = useState(false);
   const [runInBackground, setRunInBackground] = useState(false);
   const [launchAtLogin, setLaunchAtLogin] = useState(false);
+  const [quickChatEnabled, setQuickChatEnabled] = useState(true);
+  const [quickChatShortcut, setQuickChatShortcut] = useState("cmd+shift+Space");
+  const [quickChatAlwaysOnTop, setQuickChatAlwaysOnTop] = useState(true);
   const [desktopPrefsSaving, setDesktopPrefsSaving] = useState(false);
   const [localeSaving, setLocaleSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -88,6 +91,9 @@ export function SettingsGeneralPage() {
     void getDesktopPrefs().then((prefs) => {
       setRunInBackground(prefs.run_in_background);
       setLaunchAtLogin(prefs.launch_at_login);
+      setQuickChatEnabled(prefs.quick_chat_enabled ?? true);
+      setQuickChatShortcut(prefs.quick_chat_shortcut || "cmd+shift+Space");
+      setQuickChatAlwaysOnTop(prefs.quick_chat_always_on_top ?? true);
     });
   }, [desktopPrefsAvailable]);
 
@@ -111,9 +117,15 @@ export function SettingsGeneralPage() {
       const next = await setDesktopPrefs({
         run_in_background: runInBackground,
         launch_at_login: launchAtLogin,
+        quick_chat_enabled: quickChatEnabled,
+        quick_chat_shortcut: quickChatShortcut.trim() || "cmd+shift+Space",
+        quick_chat_always_on_top: quickChatAlwaysOnTop,
       });
       setRunInBackground(next.run_in_background);
       setLaunchAtLogin(next.launch_at_login);
+      setQuickChatEnabled(next.quick_chat_enabled);
+      setQuickChatShortcut(next.quick_chat_shortcut);
+      setQuickChatAlwaysOnTop(next.quick_chat_always_on_top);
       toast(t("settings.general.desktopPrefsSaved"), "success");
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -122,6 +134,9 @@ export function SettingsGeneralPage() {
           const next = await getDesktopPrefs();
           setRunInBackground(next.run_in_background);
           setLaunchAtLogin(next.launch_at_login);
+          setQuickChatEnabled(next.quick_chat_enabled);
+          setQuickChatShortcut(next.quick_chat_shortcut);
+          setQuickChatAlwaysOnTop(next.quick_chat_always_on_top);
         } catch {
           // 忽略回读失败
         }
@@ -270,6 +285,67 @@ export function SettingsGeneralPage() {
                 {t("settings.general.launchAtLogin.label")}
                 <span className="mt-1 block text-xs text-muted-foreground">
                   {t("settings.general.launchAtLogin.hint")}
+                </span>
+              </span>
+            </label>
+            <div>
+              <Button
+                variant="primary"
+                disabled={desktopPrefsSaving}
+                onClick={() => void saveDesktopPrefs()}
+              >
+                {desktopPrefsSaving && <Loader2 className="size-4 animate-spin" />}
+                {t("common.actions.save")}
+              </Button>
+            </div>
+          </div>
+        </SettingsSection>
+      )}
+
+      {desktopPrefsAvailable && (
+        <SettingsSection
+          title={t("settings.general.quickChat.title")}
+          description={t("settings.general.quickChat.description")}
+        >
+          <div className="grid max-w-xl gap-4">
+            <label className="flex cursor-pointer items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={quickChatEnabled}
+                onChange={(e) => setQuickChatEnabled(e.target.checked)}
+              />
+              <span>
+                {t("settings.general.quickChat.enabled.label")}
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {t("settings.general.quickChat.enabled.hint")}
+                </span>
+              </span>
+            </label>
+            <div className="grid gap-1.5">
+              <Label htmlFor="quick-chat-shortcut">{t("settings.general.quickChat.shortcut.label")}</Label>
+              <Input
+                id="quick-chat-shortcut"
+                value={quickChatShortcut}
+                onChange={(e) => setQuickChatShortcut(e.target.value)}
+                placeholder="cmd+shift+Space"
+                className="max-w-md font-mono text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                {t("settings.general.quickChat.shortcut.hint")}
+              </p>
+            </div>
+            <label className="flex cursor-pointer items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={quickChatAlwaysOnTop}
+                onChange={(e) => setQuickChatAlwaysOnTop(e.target.checked)}
+              />
+              <span>
+                {t("settings.general.quickChat.alwaysOnTop.label")}
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {t("settings.general.quickChat.alwaysOnTop.hint")}
                 </span>
               </span>
             </label>

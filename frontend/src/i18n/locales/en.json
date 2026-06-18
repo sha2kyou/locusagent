@@ -80,6 +80,22 @@
         "label": "Launch AgentPod at login",
         "hint": "Starts the app when you log in. Off by default."
       },
+      "quickChat": {
+        "title": "Quick Chat",
+        "description": "Summon a minimal chat window from anywhere with a global shortcut.",
+        "enabled": {
+          "label": "Enable quick chat",
+          "hint": "When off, the global shortcut will not open the quick chat window."
+        },
+        "shortcut": {
+          "label": "Global shortcut",
+          "hint": "Example format: cmd+shift+Space (use cmd on macOS, ctrl on Windows)."
+        },
+        "alwaysOnTop": {
+          "label": "Always on top",
+          "hint": "Keep the quick chat window above other apps."
+        }
+      },
       "saveDesktopPrefs": "Save desktop preferences",
       "desktopPrefsSaved": "Desktop preferences saved",
       "desktopPrefsAutostartFailed": "Preferences saved, but launch at login could not be updated",
@@ -263,6 +279,10 @@
   },
   "auth": {
     "retry": "Retry"
+  },
+  "quickChat": {
+    "newChat": "New chat",
+    "openInMain": "Open in main window"
   },
   "chat": {
     "session": {

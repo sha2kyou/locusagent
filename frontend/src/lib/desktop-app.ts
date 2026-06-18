@@ -7,6 +7,20 @@ export function isDesktopApp(): boolean {
   return window.location.origin === DESKTOP_GATEWAY_ORIGIN;
 }
 
+export function isQuickChatWindow(): boolean {
+  if (typeof window === "undefined") return false;
+  return isDesktopApp() && window.location.pathname.startsWith("/quick-chat");
+}
+
+/** 快捷对话窗根节点 class */
+export function useQuickChatHtmlClass(): void {
+  useEffect(() => {
+    if (!isQuickChatWindow()) return;
+    document.documentElement.classList.add("apod-quick-chat");
+    return () => document.documentElement.classList.remove("apod-quick-chat");
+  }, []);
+}
+
 /** 桌面壳根节点 class，供拖拽样式等全局规则使用 */
 export function useDesktopAppHtmlClass(): void {
   useEffect(() => {

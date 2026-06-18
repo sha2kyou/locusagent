@@ -669,3 +669,7 @@ html.apod-desktop [data-tauri-drag-region] [role="button"] {
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
+
+html.apod-quick-chat body {
+  overflow: hidden;
+}

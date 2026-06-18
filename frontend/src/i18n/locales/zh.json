@@ -80,6 +80,22 @@
         "label": "登录时自动启动 AgentPod",
         "hint": "在系统登录时启动应用；默认关闭，需手动开启。"
       },
+      "quickChat": {
+        "title": "快捷对话",
+        "description": "使用全局快捷键在任何地方唤起精简对话窗口。",
+        "enabled": {
+          "label": "启用快捷对话",
+          "hint": "关闭后全局快捷键不再唤起小窗。"
+        },
+        "shortcut": {
+          "label": "全局快捷键",
+          "hint": "格式示例：cmd+shift+Space（macOS 用 cmd，Windows 用 ctrl）。"
+        },
+        "alwaysOnTop": {
+          "label": "窗口置顶",
+          "hint": "快捷对话窗口显示在其他应用上方。"
+        }
+      },
       "saveDesktopPrefs": "保存桌面偏好",
       "desktopPrefsSaved": "桌面偏好已保存",
       "desktopPrefsAutostartFailed": "偏好已保存，但开机自启设置失败",
@@ -263,6 +279,10 @@
   },
   "auth": {
     "retry": "重试"
+  },
+  "quickChat": {
+    "newChat": "新对话",
+    "openInMain": "在主窗口打开"
   },
   "chat": {
     "session": {

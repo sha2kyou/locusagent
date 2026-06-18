@@ -7,12 +7,42 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::agentpod_paths::agentpod_home;
 
-#[derive(Clone, Serialize, Deserialize, Default)]
+fn default_quick_chat_enabled() -> bool {
+    true
+}
+
+fn default_quick_chat_shortcut() -> String {
+    crate::quick_chat::DEFAULT_QUICK_CHAT_SHORTCUT.to_string()
+}
+
+fn default_quick_chat_always_on_top() -> bool {
+    true
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct DesktopPrefs {
     #[serde(default)]
     pub run_in_background: bool,
     #[serde(default)]
     pub launch_at_login: bool,
+    #[serde(default = "default_quick_chat_enabled")]
+    pub quick_chat_enabled: bool,
+    #[serde(default = "default_quick_chat_shortcut")]
+    pub quick_chat_shortcut: String,
+    #[serde(default = "default_quick_chat_always_on_top")]
+    pub quick_chat_always_on_top: bool,
+}
+
+impl Default for DesktopPrefs {
+    fn default() -> Self {
+        Self {
+            run_in_background: false,
+            launch_at_login: false,
+            quick_chat_enabled: default_quick_chat_enabled(),
+            quick_chat_shortcut: default_quick_chat_shortcut(),
+            quick_chat_always_on_top: default_quick_chat_always_on_top(),
+        }
+    }
 }
 
 pub struct PrefsState(pub Mutex<DesktopPrefs>);
@@ -79,6 +109,12 @@ pub fn sync_autostart(app: &AppHandle, prefs: &DesktopPrefs) -> Result<(), Strin
     apply_autostart(app, prefs.launch_at_login)
 }
 
+pub fn read_prefs(app: &AppHandle) -> DesktopPrefs {
+    app.try_state::<PrefsState>()
+        .map(|state| state.0.lock().expect("prefs lock").clone())
+        .unwrap_or_default()
+}
+
 pub fn show_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
@@ -113,6 +149,9 @@ pub fn desktop_set_prefs(
     save_prefs(&prefs)?;
     if let Err(err) = apply_autostart(&app, prefs.launch_at_login) {
         return Err(format!("偏好已保存，但开机自启设置失败: {err}"));
+    }
+    if let Err(err) = crate::quick_chat::sync_quick_chat_shortcut(&app, &prefs) {
+        return Err(format!("偏好已保存，但快捷对话快捷键更新失败: {err}"));
     }
     Ok(prefs)
 }
