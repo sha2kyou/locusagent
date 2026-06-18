@@ -25,6 +25,7 @@ import type {
   TimezoneConfig,
   LocaleConfig,
   BackendLogs,
+  EmbeddingProgress,
   UsageSummary,
   WorkspaceItem,
 } from "./types";
@@ -292,6 +293,9 @@ export const updateEnvVar = (id: number, body: { name?: string; value?: string; 
 
 export const deleteEnvVar = (id: number) =>
   apiSend<{ deleted: boolean }>(`/api/workspace/env-vars/${id}`, "DELETE");
+
+export const getEmbeddingProgress = (signal?: AbortSignal) =>
+  apiGet<EmbeddingProgress>("/api/workspace/embedding-progress", { signal });
 
 export const recallEnvVars = (body: { query: string; top_k?: number }) =>
   apiSend<{ items: EnvVarEntry[] }>("/api/workspace/env-vars/recall", "POST", body);

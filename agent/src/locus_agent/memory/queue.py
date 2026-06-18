@@ -574,6 +574,30 @@ async def start_embedding_worker() -> None:
     )
 
 
+def get_embedding_queue_stats(*, workspace_id: str | None = None) -> dict[str, int | dict[str, int]]:
+    """返回内存队列深度；可按工作区过滤。"""
+
+    def matches(job: _EmbedJob) -> bool:
+        return workspace_id is None or job.workspace_id == workspace_id
+
+    by_kind: dict[str, int] = defaultdict(int)
+    queued = 0
+    retry_waiting = 0
+    for job in _queued:
+        if not matches(job):
+            continue
+        queued += 1
+        by_kind[job.kind] += 1
+    for job in _retry_waiting:
+        if matches(job):
+            retry_waiting += 1
+    return {
+        "queued": queued,
+        "retry_waiting": retry_waiting,
+        "by_kind": dict(by_kind),
+    }
+
+
 async def stop_embedding_worker() -> None:
     global _drain_task, _worker_tasks
     _stop_event.set()

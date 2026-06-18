@@ -153,6 +153,20 @@ CREATE TABLE IF NOT EXISTS session_todos (
     created_at  TIMESTAMP NOT NULL DEFAULT (datetime('now')),
     updated_at  TIMESTAMP NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS skill_embeddings (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    skill_name      TEXT NOT NULL,
+    chunk_id        TEXT NOT NULL,
+    chunk_text      TEXT NOT NULL,
+    content_hash    TEXT NOT NULL,
+    embedding       BLOB,
+    embedding_state TEXT NOT NULL DEFAULT 'pending',
+    updated_at      TIMESTAMP NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(skill_name, chunk_id)
+);
+CREATE INDEX IF NOT EXISTS idx_skill_embeddings_name ON skill_embeddings(skill_name);
+CREATE INDEX IF NOT EXISTS idx_skill_embeddings_state ON skill_embeddings(embedding_state);
 """
 
 

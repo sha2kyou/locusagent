@@ -45,6 +45,9 @@ const SettingsGeneralPage = lazy(() =>
 const SettingsModelsPage = lazy(() =>
   import("@/features/settings/SettingsModelsPage").then((m) => ({ default: m.SettingsModelsPage })),
 );
+const SettingsEmbeddingPage = lazy(() =>
+  import("@/features/settings/SettingsEmbeddingPage").then((m) => ({ default: m.SettingsEmbeddingPage })),
+);
 const SettingsUsagePage = lazy(() =>
   import("@/features/settings/UsageSummaryCard").then((m) => ({ default: m.SettingsUsageRoute })),
 );
@@ -96,6 +99,7 @@ const shellChildren = [
       { index: true, element: <SettingsIndexRedirect /> },
       { path: "general", element: <SettingsGeneralPage /> },
       { path: "models", element: <SettingsModelsPage /> },
+      { path: "embedding", element: <SettingsEmbeddingPage /> },
       { path: "tools", element: <SettingsToolsPage /> },
       { path: "usage", element: <SettingsUsagePage /> },
       { path: "logs", element: <SettingsLogsPage /> },

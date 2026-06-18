@@ -48,6 +48,7 @@ from ..core.run_manager import (
 from ..core.run_sse import iter_run_sse
 from ..core.session_title import schedule_session_title_generation
 from ..core.system_prompt import get_or_create_system_prompt as _get_or_create_system_prompt
+from ..skills.router import build_skill_route_message
 from ..logging import get_logger
 from ..activity import record_activity
 from ..workspace import get_workspace_id
@@ -230,6 +231,9 @@ async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, 
     system_prompt = await _get_or_create_system_prompt(sid)
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     await _insert_runtime_time_context(messages)
+    route_msg = await build_skill_route_message(user_query)
+    if route_msg:
+        messages.append({"role": "system", "content": route_msg})
     messages.extend(db_msgs)
     return messages, user_query
 

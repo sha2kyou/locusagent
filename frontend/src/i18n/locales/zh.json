@@ -41,6 +41,7 @@
     "nav": {
       "general": { "label": "通用", "description": "主题、时区与菜单栏" },
       "models": { "label": "模型与服务", "description": "LLM、嵌入与第三方工具" },
+      "embedding": { "label": "向量化", "description": "索引构建进度与队列状态" },
       "tools": { "label": "工具", "description": "Terminal 开关与白名单" },
       "usage": { "label": "用量统计", "description": "Token 与 API 调用" },
       "logs": { "label": "日志", "description": "后端进程运行输出" },
@@ -50,6 +51,7 @@
     "pages": {
       "general": { "title": "通用", "subtitle": "主题、时区与菜单栏" },
       "models": { "title": "模型与服务", "subtitle": "LLM、向量嵌入与第三方工具" },
+      "embedding": { "title": "向量化", "subtitle": "当前工作区索引构建进度" },
       "tools": { "title": "工具", "subtitle": "Terminal 开关、白名单与禁止项" },
       "usage": { "title": "用量统计", "subtitle": "按场景汇总 Token 与 API 调用" },
       "logs": { "title": "日志", "subtitle": "后端进程运行输出" },
@@ -208,6 +210,33 @@
     "logs": {
       "loading": "加载中…",
       "empty": "暂无日志。"
+    },
+    "embedding": {
+      "loading": "加载中…",
+      "empty": "当前工作区暂无可索引内容。",
+      "statusIdle": "已完成",
+      "statusActive": "进行中",
+      "summaryLine": "已就绪 {{ready}} · 剩余 {{remaining}} · 已跳过 {{skipped}}",
+      "queueDetail": "队列 {{queued}} 项 · 重试等待 {{retry}} 项",
+      "queueShort": "队列 {{count}}",
+      "skillFullReindex": "技能索引全量重建排队中",
+      "skillPending": "{{count}} 个技能待重建索引",
+      "rowRemaining": "剩余 {{count}}",
+      "rowDone": "已完成",
+      "overall": {
+        "title": "总体进度",
+        "description": "统计当前工作区记忆、对话、产物、环境变量与技能的向量索引状态，每 3 秒自动刷新。"
+      },
+      "byKind": {
+        "title": "分类明细"
+      },
+      "kinds": {
+        "memory": "记忆",
+        "message": "对话消息",
+        "artifact": "产物",
+        "env_var": "环境变量",
+        "skill": "技能"
+      }
     },
     "usage": {
       "loading": "加载中…",

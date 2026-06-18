@@ -54,6 +54,7 @@ class Settings(BaseSettings):
 
     # 向量召回：余弦距离上限（距离越小越相关），超过则视为不相关丢弃
     recall_max_distance: float = Field(default=0.6, alias="RECALL_MAX_DISTANCE")
+    skill_route_top_k: int = Field(default=1, alias="SKILL_ROUTE_TOP_K")
 
     # MCP 工具调用超时（秒）：避免上游插件异常时调用长期挂起
     mcp_call_timeout_seconds: float = Field(default=45.0, alias="MCP_CALL_TIMEOUT_SECONDS")

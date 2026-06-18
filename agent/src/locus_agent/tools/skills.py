@@ -20,6 +20,7 @@ from ..skills import (
     read_skill_file,
     update_skill,
 )
+from ..skills.embeddings import reindex_skill
 from ..tool_settings import is_skill_enabled
 from .args import pick_action, pick_str
 from .base import Tool, ToolError, ToolResult, register_builtin
@@ -92,6 +93,7 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
             await run_in_thread(create_skill, skill)
         except FileExistsError as exc:
             raise ToolError(str(exc)) from exc
+        await reindex_skill(name)
         origin_label = " [auto_extract]" if skill.origin == ORIGIN_AUTO_EXTRACT else ""
         return ToolResult(content=f"skill '{name}' created{origin_label}")
 
@@ -112,6 +114,7 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
             )
         except FileNotFoundError as exc:
             raise ToolError(str(exc)) from exc
+        await reindex_skill(name)
         origin_label = " [auto_extract]" if write_origin == ORIGIN_AUTO_EXTRACT else ""
         return ToolResult(content=f"skill '{name}' updated{origin_label}")
 
@@ -153,6 +156,7 @@ async def _skill_manage(args: dict[str, Any]) -> ToolResult:
             )
         except FileNotFoundError as exc:
             raise ToolError(str(exc)) from exc
+        await reindex_skill(name)
         origin_label = " [auto_extract]" if write_origin == ORIGIN_AUTO_EXTRACT else ""
         return ToolResult(
             content=f"skill '{name}' patched ({count} match{'es' if count != 1 else ''}){origin_label}"
@@ -186,6 +190,7 @@ async def _skill_install(args: dict[str, Any]) -> ToolResult:
         raise ToolError(str(exc)) from exc
     except httpx.HTTPError as exc:
         raise ToolError(f"download failed: {exc}") from exc
+    await reindex_skill(result.name)
     return ToolResult(
         content=(
             f"skill '{result.name}' installed ({result.file_count} files)\n"

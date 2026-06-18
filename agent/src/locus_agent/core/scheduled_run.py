@@ -20,6 +20,7 @@ from ..core.post_run import schedule_post_run
 from ..core.system_prompt import get_or_create_system_prompt
 from ..host_settings import build_runtime_time_context
 from ..logging import get_logger
+from ..skills.router import build_skill_route_message
 
 log = get_logger("scheduled_run")
 
@@ -120,6 +121,9 @@ async def run_scheduled_prompt(*, title: str, prompt: str, task_id: int | None =
             messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
             messages.append({"role": "system", "content": _NON_INTERACTIVE_SYSTEM_PROMPT})
             messages.append({"role": "system", "content": await build_runtime_time_context()})
+            route_msg = await build_skill_route_message(prompt)
+            if route_msg:
+                messages.append({"role": "system", "content": route_msg})
             messages.extend(db_msgs)
             initial_len = len(messages)
 

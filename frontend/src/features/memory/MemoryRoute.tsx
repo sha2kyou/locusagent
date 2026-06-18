@@ -14,7 +14,6 @@ import { useDialogs } from "@/components/ui/dialogs";
 import { ReadyGate } from "@/components/ReadyGate";
 import { createMemory, deleteMemory, listMemory, updateMemory } from "@/api/endpoints";
 import type { MemoryAnchor, MemoryEntry } from "@/api/types";
-import { EMBEDDING_LABEL } from "@/lib/embedding-labels";
 import { toastAction } from "@/lib/toast-copy";
 
 export function MemoryRoute() {
@@ -28,36 +27,19 @@ export function MemoryRoute() {
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
   const formRef = useRef<HTMLDivElement>(null);
-  const pollRef = useRef<number | null>(null);
 
-  const load = async (silent = false) => {
+  const load = async () => {
     try {
       const { items } = await listMemory(100);
       setItems(items);
     } catch (e) {
-      if (!silent) toast((e as Error).message, "error");
-      if (!silent) setItems([]);
+      toast((e as Error).message, "error");
+      setItems([]);
     }
   };
   useEffect(() => {
     void load();
   }, []);
-
-  useEffect(() => {
-    const hasPending = (items ?? []).some((m) => m.embedding_state === "pending");
-    if (hasPending && !pollRef.current) {
-      pollRef.current = window.setInterval(() => void load(true), 3000);
-    } else if (!hasPending && pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-    return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    };
-  }, [items]);
 
   const counts = useMemo(() => {
     const list = items ?? [];
@@ -168,15 +150,12 @@ export function MemoryRoute() {
             <Empty text={query ? t("memory.noMatch") : t("memory.empty")} />
           ) : (
             <div className="space-y-2">
-              {filtered.map((m) => {
-                const emb = EMBEDDING_LABEL[m.embedding_state];
-                return (
+              {filtered.map((m) => (
                   <ListCard key={m.id} className="group p-0 overflow-hidden">
                     <div className="flex items-start justify-between gap-3 px-4 py-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{t("memory.item.title", { id: m.id })}</span>
-                          <Badge variant={emb.variant}>{emb.text}</Badge>
                           {m.origin === "auto_extract" && (
                             <Badge variant="outline">{t("memory.item.autoExtract")}</Badge>
                           )}
@@ -213,8 +192,7 @@ export function MemoryRoute() {
                       </pre>
                     </CollapsibleSection>
                   </ListCard>
-                );
-              })}
+              ))}
             </div>
           )}
 

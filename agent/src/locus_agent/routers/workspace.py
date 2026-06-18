@@ -51,6 +51,7 @@ from ..core.run_sse import (
 )
 from ..core.persistence import get_attachment_download
 from ..db import run_in_thread
+from ..embedding_progress import get_embedding_progress
 from ..env_vars import (
     add_env_var,
     delete_env_var,
@@ -95,6 +96,7 @@ from ..skills import (
     read_skill_file_preview,
     update_skill,
 )
+from ..skills.embeddings import reindex_skill
 from ..tool_settings import (
     is_mcp_server_enabled,
     is_skill_enabled,
@@ -216,6 +218,7 @@ async def workspace_install_skill(payload: SkillInstallIn) -> dict:
     except httpx.HTTPError as exc:
         raise WsError("skill_install_failed", f"download failed: {exc}", status_code=502) from exc
     record_activity("skill", "install", f"已安装技能「{result.name}」")
+    await reindex_skill(result.name)
     return result.to_dict()
 
 
@@ -232,6 +235,7 @@ async def workspace_create_skill(payload: SkillIn) -> dict:
     except FileExistsError as exc:
         raise WsError("skill_exists", str(exc), status_code=409) from exc
     record_activity("skill", "create", f"已创建技能「{created.name}」")
+    await reindex_skill(created.name)
     return created.to_dict()
 
 
@@ -255,6 +259,7 @@ async def workspace_update_skill(name: str, payload: SkillUpdateIn) -> dict:
     except FileNotFoundError as exc:
         raise WsError("skill_not_found", str(exc), status_code=404) from exc
     record_activity("skill", "update", f"已更新技能「{updated.name}」")
+    await reindex_skill(updated.name)
     return updated.to_dict()
 
 
@@ -625,6 +630,11 @@ async def workspace_delete_env_var(entry_id: int) -> dict:
         raise WsError("env_var_not_found", "env var not found", status_code=404)
     record_activity("env", "delete", f"已删除环境变量 #{entry_id}")
     return {"deleted": True}
+
+
+@router.get("/embedding-progress")
+async def workspace_embedding_progress() -> dict:
+    return await get_embedding_progress()
 
 
 @router.get("/sessions")

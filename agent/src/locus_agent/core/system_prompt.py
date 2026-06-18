@@ -28,7 +28,7 @@ log = get_logger("system_prompt")
 _SNAPSHOT_MEMORY_LIMIT = 30
 _CTX_DELIMITER = "\n<<LOCUSAGENT_CTX>>\n"
 # Bump when stable template changes so old session caches invalidate.
-FROZEN_SYSTEM_PROMPT_VERSION = 29
+FROZEN_SYSTEM_PROMPT_VERSION = 30
 _CACHE_PREFIX = f"locusagent:sp:v{FROZEN_SYSTEM_PROMPT_VERSION}:"
 
 MEMORY_GUIDANCE = (
@@ -46,8 +46,9 @@ MEMORY_GUIDANCE = (
 
 SKILLS_GUIDANCE = (
     "A compact skill catalog (name + description) is listed below. "
-    "When the user's request aligns with a skill's name or description, call skill_view{name} to "
-    "load the full SKILL.md on demand; do not guess its contents. "
+    "Before replying, scan the catalog; when the user's request aligns with a skill, "
+    "call skill_view{name} as your first tool call to load the full SKILL.md on demand; do not guess its contents. "
+    "When a Skill router block is present in context, follow it first. "
     "For references/, scripts/, or assets/ files listed in the skill, call "
     "skill_view{name, file_path} to load them progressively. "
     "To install a skill from GitHub, a zip URL, or a direct SKILL.md link into the workspace, use skill_install. "

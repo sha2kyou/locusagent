@@ -9,6 +9,7 @@ import shutil
 
 from ..logging import get_logger
 from ..core.write_origin import ORIGIN_AUTO_EXTRACT, ORIGIN_MANUAL
+from .embeddings import delete_skill_embeddings, mark_skill_reindex
 from .loader import Skill, _parse_skill_md, format_skill_md, load_all_skills, private_skill_dir
 
 log = get_logger("skill_store")
@@ -65,6 +66,7 @@ def create_skill(skill: Skill) -> Skill:
     root.mkdir(parents=True, exist_ok=True)
     (root / "SKILL.md").write_text(_serialize(skill), encoding="utf-8")
     log.info("skill_created", name=skill.name)
+    mark_skill_reindex(skill.name)
     return skill
 
 
@@ -92,6 +94,7 @@ def update_skill(
     )
     file.write_text(_serialize(new), encoding="utf-8")
     log.info("skill_updated", name=name)
+    mark_skill_reindex(name)
     return new
 
 
@@ -101,4 +104,5 @@ def delete_skill(name: str) -> bool:
         return False
     shutil.rmtree(root)
     log.info("skill_deleted", name=name)
+    delete_skill_embeddings(name)
     return True

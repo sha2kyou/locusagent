@@ -62,6 +62,10 @@ async def ensure_workspace_context(workspace_id: str) -> None:
                 )
         _apply_builtin_tool_settings()
         _active_workspace_id = workspace_id
+        if not same_workspace:
+            from .skills.router import ensure_skill_router_ready
+
+            await ensure_skill_router_ready()
 
 
 async def ensure_mcp_tools_for_chat(workspace_id: str) -> None:

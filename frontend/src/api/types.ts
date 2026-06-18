@@ -346,3 +346,34 @@ export interface ArtifactEntry {
   created_at: string;
   updated_at: string;
 }
+
+export interface EmbeddingStateCounts {
+  pending: number;
+  ready: number;
+  failed: number;
+  skipped: number;
+}
+
+export interface EmbeddingProgress {
+  workspace_id: string;
+  active: boolean;
+  summary: {
+    ready: number;
+    pending: number;
+    failed: number;
+    skipped: number;
+    remaining: number;
+    indexable: number;
+    percent: number | null;
+  };
+  by_kind: Record<string, EmbeddingStateCounts>;
+  queue: {
+    queued: number;
+    retry_waiting: number;
+    by_kind: Record<string, number>;
+  };
+  skill_reindex: {
+    pending_skills: number;
+    full_reindex: boolean;
+  };
+}

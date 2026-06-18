@@ -16,6 +16,7 @@ import httpx
 import yaml
 
 from ..logging import get_logger
+from .embeddings import mark_skill_reindex
 from .loader import FRONTMATTER_RE, _parse_skill_md, private_skill_dir
 from .store import _is_valid_skill_name
 
@@ -338,6 +339,7 @@ def install_skill_from_url(
             if parsed is None:
                 raise ValueError("failed to parse installed SKILL.md")
             log.info("skill_installed", name=analysis.name, source=url, kind="skill_md")
+            mark_skill_reindex(parsed.name)
             return InstallResult(
                 name=parsed.name,
                 description=parsed.description,
@@ -368,6 +370,7 @@ def install_skill_from_url(
             kind="archive",
             files=file_count,
         )
+        mark_skill_reindex(parsed.name)
         return InstallResult(
             name=parsed.name,
             description=parsed.description,

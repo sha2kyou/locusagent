@@ -56,6 +56,21 @@ def set_builtin_tool_enabled(name: str, enabled: bool) -> ToolSettings:
     return data
 
 
+def set_skill_enabled(name: str, enabled: bool) -> ToolSettings:
+    data = load_tool_settings()
+    data.skills[name] = bool(enabled)
+    save_tool_settings(data)
+    if enabled:
+        from .skills.embeddings import mark_skill_reindex
+
+        mark_skill_reindex(name)
+    else:
+        from .skills.embeddings import delete_skill_embeddings
+
+        delete_skill_embeddings(name)
+    return data
+
+
 def is_skill_enabled(name: str) -> bool:
     data = load_tool_settings()
     return data.skills.get(name, True)

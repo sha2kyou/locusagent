@@ -41,6 +41,7 @@
     "nav": {
       "general": { "label": "General", "description": "Theme, timezone & menu bar" },
       "models": { "label": "Models & Services", "description": "LLM, embedding & third-party tools" },
+      "embedding": { "label": "Embedding", "description": "Index build progress & queue status" },
       "tools": { "label": "Tools", "description": "Terminal toggle & allow/deny lists" },
       "usage": { "label": "Usage", "description": "Token & API call stats" },
       "logs": { "label": "Logs", "description": "Backend process output" },
@@ -50,6 +51,7 @@
     "pages": {
       "general": { "title": "General", "subtitle": "Theme, timezone & menu bar" },
       "models": { "title": "Models & Services", "subtitle": "LLM, embedding & third-party tools" },
+      "embedding": { "title": "Embedding", "subtitle": "Current workspace index build progress" },
       "tools": { "title": "Tools", "subtitle": "Terminal toggle, allow & deny lists" },
       "usage": { "title": "Usage", "subtitle": "Token & API calls by scenario" },
       "logs": { "title": "Logs", "subtitle": "Backend process output" },
@@ -208,6 +210,33 @@
     "logs": {
       "loading": "Loading…",
       "empty": "No logs yet."
+    },
+    "embedding": {
+      "loading": "Loading…",
+      "empty": "Nothing to index in the current workspace yet.",
+      "statusIdle": "Complete",
+      "statusActive": "In progress",
+      "summaryLine": "Ready {{ready}} · Remaining {{remaining}} · Skipped {{skipped}}",
+      "queueDetail": "Queue {{queued}} · Retry waiting {{retry}}",
+      "queueShort": "queue {{count}}",
+      "skillFullReindex": "Full skill reindex queued",
+      "skillPending": "{{count}} skill(s) pending reindex",
+      "rowRemaining": "{{count}} left",
+      "rowDone": "Done",
+      "overall": {
+        "title": "Overall progress",
+        "description": "Vector index status for memory, messages, artifacts, env vars, and skills in the current workspace. Refreshes every 3 seconds."
+      },
+      "byKind": {
+        "title": "By category"
+      },
+      "kinds": {
+        "memory": "Memory",
+        "message": "Messages",
+        "artifact": "Artifacts",
+        "env_var": "Env vars",
+        "skill": "Skills"
+      }
     },
     "usage": {
       "loading": "Loading…",
