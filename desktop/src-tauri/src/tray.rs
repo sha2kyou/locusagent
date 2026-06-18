@@ -31,7 +31,7 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), String> {
 
     // Windows 托盘用方形小图标；default_window_icon 仍带 macOS 圆角底，小尺寸下星形过小。
     #[cfg(windows)]
-    let builder = builder.icon(tauri::include_image!("../icons/tray-32.png"));
+    let builder = builder.icon(tauri::include_image!("icons/tray-32.png"));
 
     #[cfg(all(not(target_os = "macos"), not(windows)))]
     let builder = {
