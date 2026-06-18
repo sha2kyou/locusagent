@@ -11,6 +11,7 @@ mod webview_devtools;
 #[cfg(target_os = "macos")]
 mod menu_bar_icon;
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -23,6 +24,7 @@ use desktop_prefs::show_main_window;
 use tauri::{Manager, RunEvent};
 
 static BACKEND_CHILD: Mutex<Option<std::process::Child>> = Mutex::new(None);
+static QUICK_CHAT_SHORTCUT_SYNCED: AtomicBool = AtomicBool::new(false);
 
 pub fn run() {
     tauri::Builder::default()
@@ -70,9 +72,6 @@ pub fn run() {
             external_links::create_main_window(app).map_err(|err| format!("main window: {err}"))?;
             quick_chat::create_quick_chat_window(app)
                 .map_err(|err| format!("quick chat window: {err}"))?;
-            let prefs = load_prefs();
-            quick_chat::sync_quick_chat_shortcut(app.handle(), &prefs)
-                .map_err(|err| format!("quick chat shortcut: {err}"))?;
             webview_devtools::sync_devtools_runtime(app.handle())
                 .map_err(|err| format!("webview devtools: {err}"))?;
             install_window_close_handler(app.handle());
@@ -82,6 +81,14 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
+            if matches!(event, RunEvent::Ready) {
+                if !QUICK_CHAT_SHORTCUT_SYNCED.swap(true, Ordering::SeqCst) {
+                    let prefs = desktop_prefs::read_prefs(app);
+                    if let Err(err) = quick_chat::sync_quick_chat_shortcut(app, &prefs) {
+                        eprintln!("[desktop] quick chat shortcut: {err}");
+                    }
+                }
+            }
             #[cfg(target_os = "macos")]
             if matches!(event, RunEvent::Reopen { .. }) {
                 show_main_window(app);

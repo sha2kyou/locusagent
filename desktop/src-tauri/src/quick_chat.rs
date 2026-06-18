@@ -173,16 +173,14 @@ pub fn sync_quick_chat_shortcut(app: &AppHandle, prefs: &DesktopPrefs) -> Result
 
     let shortcut = normalize_shortcut_string(&prefs.quick_chat_shortcut);
     let app_handle = app.clone();
-    global_shortcut
-        .register(shortcut.as_str())
-        .map_err(|e| format!("快捷键注册失败: {e}"))?;
+    // on_shortcut 内部已 register；不可再先 register 同一快捷键，否则会重复注册崩溃。
     global_shortcut
         .on_shortcut(shortcut.as_str(), move |_app, _shortcut, event| {
             if event.state == ShortcutState::Pressed {
                 toggle_quick_chat(&app_handle);
             }
         })
-        .map_err(|e| format!("快捷键处理注册失败: {e}"))?;
+        .map_err(|e| format!("快捷键注册失败: {e}"))?;
     *REGISTERED_SHORTCUT
         .lock()
         .expect("shortcut lock") = Some(shortcut);
