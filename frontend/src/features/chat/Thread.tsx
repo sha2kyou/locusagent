@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ComposerPrimitive,
@@ -33,13 +33,28 @@ import { isDesktopApp } from "@/lib/desktop-app";
 import { isShortcutRecordingActive } from "@/lib/format-global-shortcut";
 
 const EMPTY_ATTACHMENTS: ChatAttachment[] = [];
+const EMPTY_SUGGESTION_COUNT = 3;
+
+function pickRandomSample<T>(items: T[], count: number): T[] {
+  if (items.length <= count) return [...items];
+  const copy = [...items];
+  for (let i = 0; i < count; i++) {
+    const j = i + Math.floor(Math.random() * (copy.length - i));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy.slice(0, count);
+}
 
 type ThreadVariant = "default" | "quick";
 
 export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const { currentId } = useChat();
   const isQuick = variant === "quick";
-  const promptChips = t("chat.empty.suggestions", { returnObjects: true }) as string[];
+  const promptChips = useMemo(() => {
+    const all = t("chat.empty.suggestions", { returnObjects: true }) as string[];
+    return pickRandomSample(all, EMPTY_SUGGESTION_COUNT);
+  }, [currentId, i18n.language, t]);
   return (
     <ThreadPrimitive.Root className="flex h-full flex-col">
       <ThreadPrimitive.Viewport className="relative flex-1 overflow-y-auto">

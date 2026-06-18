@@ -314,7 +314,14 @@
       "suggestions": [
         "What can Locus Agent do?",
         "What is the normal distribution PDF formula?",
-        "Search and summarize the latest AI progress"
+        "Search and summarize the latest AI progress",
+        "Write a Python script to process a CSV file",
+        "Explain what a piece of code does",
+        "How do I run this repo locally?",
+        "Help me debug this error from the logs",
+        "Translate this English technical document",
+        "Write unit tests for this function",
+        "Help me list tasks for this week"
       ]
     },
     "queue": {
