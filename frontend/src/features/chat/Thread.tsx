@@ -56,9 +56,8 @@ export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
     const all = t("chat.empty.suggestions", { returnObjects: true }) as string[];
     return pickRandomSample(all, EMPTY_SUGGESTION_COUNT);
   }, [currentId, i18n.language, t]);
-  const threadKey = currentId ?? "__new__";
   return (
-    <ThreadPrimitive.Root key={threadKey} className="flex h-full flex-col">
+    <ThreadPrimitive.Root className="flex h-full flex-col">
       <ThreadPrimitive.Viewport className="relative flex-1 overflow-y-auto">
         <ThreadPrimitive.Empty>
           <div

@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AppErrorPage, formatThrownError } from "./AppErrorPage";
+import { isRecoverableRenderRace } from "./asset-load-errors";
 
 interface Props {
   children: ReactNode;
@@ -18,6 +19,10 @@ export class RootErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: unknown, info: ErrorInfo): void {
+    if (isRecoverableRenderRace(error)) {
+      queueMicrotask(() => this.setState({ error: null }));
+      return;
+    }
     console.error("[RootErrorBoundary]", error, info.componentStack);
   }
 

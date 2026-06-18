@@ -960,13 +960,13 @@ export function ChatProvider({
 
   // ---- 会话操作 ----
   const newSession = () => {
-    if (isQuick) {
-      resetToNewChat();
-      navigate("/quick-chat", { replace: true });
+    abortChat();
+    stopActiveRunAttach();
+    if (urlSessionId !== null) {
+      navigate(isQuick ? "/quick-chat" : resolveChatPath(null), { replace: true });
       return;
     }
     resetToNewChat();
-    navigate(resolveChatPath(null), { replace: true });
   };
   newSessionRef.current = newSession;
 
@@ -1135,6 +1135,8 @@ export function ChatProvider({
     onCancel: cancel,
   });
 
+  const runtimeScopeKey = currentId ?? "__new__";
+
   return (
     <ChatContext.Provider
       value={{
@@ -1170,7 +1172,9 @@ export function ChatProvider({
         sessionTodoPlan,
       }}
     >
-      <AssistantRuntimeProvider runtime={runtime}>{children}</AssistantRuntimeProvider>
+      <AssistantRuntimeProvider key={runtimeScopeKey} runtime={runtime}>
+        {children}
+      </AssistantRuntimeProvider>
     </ChatContext.Provider>
   );
 }

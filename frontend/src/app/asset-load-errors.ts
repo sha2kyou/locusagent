@@ -6,10 +6,24 @@ const CHUNK_LOAD_MESSAGE =
 
 export function isAssetLoadError(error: unknown): boolean {
   if (!error) return false;
+  if (isAbortError(error)) return false;
+
   const message = error instanceof Error ? error.message : String(error);
-  if (CHUNK_LOAD_MESSAGE.test(message)) return true;
-  if (error instanceof TypeError && /failed to fetch/i.test(message)) return true;
+  return CHUNK_LOAD_MESSAGE.test(message);
+}
+
+function isAbortError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === "AbortError") return true;
+  if (typeof error === "object" && error !== null && "name" in error) {
+    return (error as { name?: unknown }).name === "AbortError";
+  }
   return false;
+}
+
+/** assistant-ui 切换会话时的瞬时索引竞态，可安全恢复 */
+export function isRecoverableRenderRace(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /tapClientLookup:\s*Index\s+\d+\s+out of bounds/i.test(message);
 }
 
 function assetTargetUrl(target: EventTarget | null): string | undefined {
