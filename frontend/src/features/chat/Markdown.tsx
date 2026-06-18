@@ -8,6 +8,7 @@ import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import { Brain, Check, Copy, WrapText } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { normalizeBareAutolinks } from "@/lib/markdown-autolink";
 import { normalizeLatexInput } from "@/lib/latex-normalize";
 import { CollapsibleMetaBlock } from "./CollapsibleMetaBlock";
 
@@ -60,10 +61,10 @@ export const Markdown = memo(function Markdown({ text, enableMath = true }: { te
 });
 
 function MarkdownBlock({ text, enableMath = true }: { text: string; enableMath?: boolean }) {
-  const normalized = useMemo(
-    () => (enableMath ? normalizeLatexInput(text) : text),
-    [text, enableMath],
-  );
+  const normalized = useMemo(() => {
+    const withAutolinks = normalizeBareAutolinks(text);
+    return enableMath ? normalizeLatexInput(withAutolinks) : withAutolinks;
+  }, [text, enableMath]);
   const remarkPlugins = enableMath ? [remarkMath, remarkGfm] : [remarkGfm];
   const rehypePlugins = enableMath ? [rehypeKatex, rehypeHighlight] : [rehypeHighlight];
   return (
