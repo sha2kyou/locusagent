@@ -287,6 +287,11 @@
     "unauthenticated": "未登录",
     "downloadFailed": "下载失败 ({{status}})"
   },
+  "appError": {
+    "title": "页面出错了",
+    "description": "应用遇到意外错误，请刷新页面后重试。",
+    "refresh": "刷新页面"
+  },
   "auth": {
     "retry": "重试"
   },

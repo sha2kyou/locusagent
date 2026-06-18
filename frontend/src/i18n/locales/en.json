@@ -287,6 +287,11 @@
     "unauthenticated": "Not signed in",
     "downloadFailed": "Download failed ({{status}})"
   },
+  "appError": {
+    "title": "Something went wrong",
+    "description": "The app hit an unexpected error. Refresh the page and try again.",
+    "refresh": "Refresh page"
+  },
   "auth": {
     "retry": "Retry"
   },

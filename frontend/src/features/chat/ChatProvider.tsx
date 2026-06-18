@@ -645,6 +645,9 @@ export function ChatProvider({
     stopActiveRunAttach();
     stopTitlePoll();
     setCurrent(id);
+    // 立即清空，避免 assistant-ui 旧消息组件在新会话加载前访问越界索引
+    setMessages([]);
+    setSessionTodoPlan(null);
     isRunningRef.current = false;
     setIsRunning(false);
     setPendingAttachments([]);

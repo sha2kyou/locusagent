@@ -13,6 +13,8 @@ import { AppTimezoneProvider } from "@/lib/use-app-timezone";
 import { NotificationProvider } from "@/features/notifications/NotificationProvider";
 import { ThemeProvider } from "@/app/theme";
 import { AppShell } from "@/app/AppShell";
+import { RootErrorBoundary } from "@/app/RootErrorBoundary";
+import { routeErrorElement } from "@/app/route-error-shell";
 import { ChatRoute } from "@/routes/ChatRoute";
 import { QuickChatRoute } from "@/routes/QuickChatRoute";
 const SkillsRoute = lazy(() =>
@@ -107,6 +109,7 @@ const shellChildren = [
 const router = createBrowserRouter([
   {
     path: "/quick-chat/:sessionId",
+    errorElement: routeErrorElement,
     element: (
       <AuthProvider>
         <AppLocaleProvider>
@@ -123,6 +126,7 @@ const router = createBrowserRouter([
   },
   {
     path: "/quick-chat",
+    errorElement: routeErrorElement,
     element: (
       <AuthProvider>
         <AppLocaleProvider>
@@ -139,6 +143,7 @@ const router = createBrowserRouter([
   },
   {
     path: "/",
+    errorElement: routeErrorElement,
     element: (
       <AuthProvider>
         <AppLocaleProvider>
@@ -154,6 +159,7 @@ const router = createBrowserRouter([
   },
   {
     path: "/w/:workspaceId",
+    errorElement: routeErrorElement,
     element: (
       <AuthProvider>
         <AppLocaleProvider>
@@ -174,13 +180,15 @@ installExternalLinkHandling();
 void ensureI18nReady().then(() => {
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
-      <ThemeProvider>
-        <ToastProvider>
-          <DialogProvider>
-            <RouterProvider router={router} />
-          </DialogProvider>
-        </ToastProvider>
-      </ThemeProvider>
+      <RootErrorBoundary>
+        <ThemeProvider>
+          <ToastProvider>
+            <DialogProvider>
+              <RouterProvider router={router} />
+            </DialogProvider>
+          </ToastProvider>
+        </ThemeProvider>
+      </RootErrorBoundary>
     </StrictMode>,
   );
 });

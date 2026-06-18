@@ -15,7 +15,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@assistant-ui/react": "^0.14.11",
+    "@assistant-ui/react": "^0.14.23",
     "@tauri-apps/plugin-opener": "^2.5.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
