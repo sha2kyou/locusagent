@@ -85,8 +85,8 @@ export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
 
           <ThreadPrimitive.Messages
             components={{
-              UserMessage: isQuick ? QuickUserMessage : UserMessage,
-              AssistantMessage: isQuick ? QuickAssistantMessage : AssistantMessage,
+              UserMessage,
+              AssistantMessage,
             }}
           />
         </div>
@@ -824,64 +824,6 @@ function AssistantMessage() {
           </MessagePrimitive.If>
         </div>
       </ThreadPrimitive.If>
-    </MessagePrimitive.Root>
-  );
-}
-
-function QuickUserMessage() {
-  const { t } = useTranslation();
-  const { messageAttachments } = useChat();
-  const text = useMessageText();
-  const messageId = useMessage((m) => String(m.id ?? ""));
-  const archived = useMessage((m) => (m.metadata as { archived?: boolean } | undefined)?.archived);
-  const attachments = messageAttachments[messageId] ?? EMPTY_ATTACHMENTS;
-  const { selectedAttachment, setSelectedAttachment, selectAttachment } = useAttachmentSelect();
-  const hasText = text.length > 0;
-  return (
-    <MessagePrimitive.Root
-      className={cn("group mb-4 flex flex-col items-end gap-1 text-sm apod-enter-up", archived && "opacity-55")}
-    >
-      {archived ? (
-        <p className="text-[11px] text-muted-foreground">{t("chat.message.archived")}</p>
-      ) : null}
-      {hasText ? (
-        <div className="min-w-0 max-w-[90%] rounded-xl border border-border bg-surface px-3 py-2.5 shadow-xs">
-          <MessagePrimitive.Parts components={{ Text: UserText }} />
-        </div>
-      ) : null}
-      <MessageAttachmentChips attachments={attachments} align="end" onSelect={selectAttachment} />
-      <AttachmentDrawer file={selectedAttachment} onClose={() => setSelectedAttachment(null)} />
-    </MessagePrimitive.Root>
-  );
-}
-
-function QuickAssistantMessage() {
-  const { t } = useTranslation();
-  const { messages, isRunning, messageAttachments, sessionTodoPlan } = useChat();
-  const id = useMessage((m) => m.id);
-  const chatMsg = messages.find((m) => m.id === id);
-  const attachments = messageAttachments[id] ?? EMPTY_ATTACHMENTS;
-  const { selectedAttachment, setSelectedAttachment, selectAttachment } = useAttachmentSelect();
-  const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
-  const streaming = isRunning && lastAssistant?.id === id;
-  const isLastAssistant = lastAssistant?.id === id;
-  const archived = useMessage((m) => (m.metadata as { archived?: boolean } | undefined)?.archived);
-  return (
-    <MessagePrimitive.Root className={cn("group mb-4 flex flex-col gap-1 text-sm apod-enter-up", archived && "opacity-55")}>
-      {archived ? (
-        <p className="text-[11px] text-muted-foreground">{t("chat.message.archived")}</p>
-      ) : null}
-      <div className="min-w-0">
-        <AssistantPartList
-          chatMsg={chatMsg}
-          streaming={streaming}
-          sessionTodoPlan={sessionTodoPlan}
-          isLastAssistant={isLastAssistant}
-          hideTodo
-        />
-      </div>
-      <MessageAttachmentChips attachments={attachments} align="start" onSelect={selectAttachment} />
-      <AttachmentDrawer file={selectedAttachment} onClose={() => setSelectedAttachment(null)} />
     </MessagePrimitive.Root>
   );
 }
