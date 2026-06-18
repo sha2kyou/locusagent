@@ -43,6 +43,8 @@ export function SettingsGeneralPage() {
   const [quickChatEnabled, setQuickChatEnabled] = useState(true);
   const [quickChatShortcut, setQuickChatShortcut] = useState("cmd+shift+Space");
   const [quickChatAlwaysOnTop, setQuickChatAlwaysOnTop] = useState(true);
+  const [quickChatShortcutRegistered, setQuickChatShortcutRegistered] = useState(false);
+  const [quickChatShortcutError, setQuickChatShortcutError] = useState<string | null>(null);
   const [desktopPrefsSaving, setDesktopPrefsSaving] = useState(false);
   const [localeSaving, setLocaleSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -94,8 +96,17 @@ export function SettingsGeneralPage() {
       setQuickChatEnabled(prefs.quick_chat_enabled ?? true);
       setQuickChatShortcut(prefs.quick_chat_shortcut || "cmd+shift+Space");
       setQuickChatAlwaysOnTop(prefs.quick_chat_always_on_top ?? true);
+      setQuickChatShortcutRegistered(prefs.quick_chat_shortcut_registered ?? false);
+      setQuickChatShortcutError(prefs.quick_chat_shortcut_error ?? null);
     });
   }, [desktopPrefsAvailable]);
+
+  const refreshDesktopPrefsStatus = async () => {
+    const prefs = await getDesktopPrefs();
+    setQuickChatShortcutRegistered(prefs.quick_chat_shortcut_registered ?? false);
+    setQuickChatShortcutError(prefs.quick_chat_shortcut_error ?? null);
+    return prefs;
+  };
 
   const saveTimezone = async () => {
     setTimezoneSaving(true);
@@ -126,12 +137,13 @@ export function SettingsGeneralPage() {
       setQuickChatEnabled(next.quick_chat_enabled);
       setQuickChatShortcut(next.quick_chat_shortcut);
       setQuickChatAlwaysOnTop(next.quick_chat_always_on_top);
+      await refreshDesktopPrefsStatus();
       toast(t("settings.general.desktopPrefsSaved"), "success");
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       if (isDesktopPrefsPartialSaveError(message)) {
         try {
-          const next = await getDesktopPrefs();
+          const next = await refreshDesktopPrefsStatus();
           setRunInBackground(next.run_in_background);
           setLaunchAtLogin(next.launch_at_login);
           setQuickChatEnabled(next.quick_chat_enabled);
@@ -288,26 +300,14 @@ export function SettingsGeneralPage() {
                 </span>
               </span>
             </label>
-            <div>
-              <Button
-                variant="primary"
-                disabled={desktopPrefsSaving}
-                onClick={() => void saveDesktopPrefs()}
-              >
-                {desktopPrefsSaving && <Loader2 className="size-4 animate-spin" />}
-                {t("common.actions.save")}
-              </Button>
-            </div>
-          </div>
-        </SettingsSection>
-      )}
 
-      {desktopPrefsAvailable && (
-        <SettingsSection
-          title={t("settings.general.quickChat.title")}
-          description={t("settings.general.quickChat.description")}
-        >
-          <div className="grid max-w-xl gap-4">
+            <div className="border-t border-border pt-4">
+              <p className="text-sm font-medium">{t("settings.general.quickChat.title")}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("settings.general.quickChat.description")}
+              </p>
+            </div>
+
             <label className="flex cursor-pointer items-start gap-2 text-sm">
               <input
                 type="checkbox"
@@ -334,6 +334,19 @@ export function SettingsGeneralPage() {
               <p className="text-xs text-muted-foreground">
                 {t("settings.general.quickChat.shortcut.hint")}
               </p>
+              {quickChatEnabled && quickChatShortcutError ? (
+                <p className="text-xs text-destructive">
+                  {t("settings.general.quickChat.shortcut.error", { error: quickChatShortcutError })}
+                </p>
+              ) : quickChatEnabled && quickChatShortcutRegistered ? (
+                <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                  {t("settings.general.quickChat.shortcut.active")}
+                </p>
+              ) : quickChatEnabled ? (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  {t("settings.general.quickChat.shortcut.inactive")}
+                </p>
+              ) : null}
             </div>
             <label className="flex cursor-pointer items-start gap-2 text-sm">
               <input
@@ -356,7 +369,7 @@ export function SettingsGeneralPage() {
                 onClick={() => void saveDesktopPrefs()}
               >
                 {desktopPrefsSaving && <Loader2 className="size-4 animate-spin" />}
-                {t("common.actions.save")}
+                {t("settings.general.saveDesktopPrefs")}
               </Button>
             </div>
           </div>

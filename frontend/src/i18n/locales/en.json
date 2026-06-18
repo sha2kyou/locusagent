@@ -70,7 +70,7 @@
       },
       "menubar": {
         "title": "Menu Bar & Background",
-        "description": "Keep AgentPod in the menu bar after closing the window. Launch at login must be enabled manually."
+        "description": "Keep AgentPod in the menu bar after closing the window. Configure the quick chat global shortcut below."
       },
       "runInBackground": {
         "label": "Keep running in menu bar after closing window",
@@ -89,7 +89,10 @@
         },
         "shortcut": {
           "label": "Global shortcut",
-          "hint": "Example format: cmd+shift+Space (use cmd on macOS, ctrl on Windows)."
+          "hint": "Example: cmd+shift+Space (cmd on macOS, ctrl on Windows). Click Save desktop preferences after editing.",
+          "active": "Shortcut is registered and active",
+          "inactive": "Shortcut is not registered — save settings or pick a combo that does not conflict with the system or other apps",
+          "error": "Registration failed: {{error}}"
         },
         "alwaysOnTop": {
           "label": "Always on top",

@@ -21,6 +21,22 @@ pub const QUICK_CHAT_FOCUS_COMPOSER_EVENT: &str = "quick-chat:focus-composer";
 pub const DEFAULT_QUICK_CHAT_SHORTCUT: &str = "cmd+shift+Space";
 
 static REGISTERED_SHORTCUT: Mutex<Option<String>> = Mutex::new(None);
+static SHORTCUT_SYNC_ERROR: Mutex<Option<String>> = Mutex::new(None);
+
+pub fn last_shortcut_sync_error() -> Option<String> {
+    SHORTCUT_SYNC_ERROR
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone())
+}
+
+pub fn is_shortcut_registered(app: &AppHandle, prefs: &DesktopPrefs) -> bool {
+    if !prefs.quick_chat_enabled {
+        return false;
+    }
+    let shortcut = normalize_shortcut_string(&prefs.quick_chat_shortcut);
+    app.global_shortcut().is_registered(shortcut.as_str())
+}
 
 fn app_origin() -> String {
     sidecar::backend_url()
@@ -168,23 +184,40 @@ pub fn sync_quick_chat_shortcut(app: &AppHandle, prefs: &DesktopPrefs) -> Result
     }
 
     if !prefs.quick_chat_enabled {
+        if let Ok(mut err) = SHORTCUT_SYNC_ERROR.lock() {
+            *err = None;
+        }
         return Ok(());
     }
 
     let shortcut = normalize_shortcut_string(&prefs.quick_chat_shortcut);
-    let app_handle = app.clone();
     // on_shortcut 内部已 register；不可再先 register 同一快捷键，否则会重复注册崩溃。
-    global_shortcut
-        .on_shortcut(shortcut.as_str(), move |_app, _shortcut, event| {
-            if event.state == ShortcutState::Pressed {
-                toggle_quick_chat(&app_handle);
+    let result = global_shortcut.on_shortcut(shortcut.as_str(), move |app, _shortcut, event| {
+        if event.state == ShortcutState::Pressed {
+            let handle = app.clone();
+            let _ = app.run_on_main_thread(move || {
+                toggle_quick_chat(&handle);
+            });
+        }
+    });
+    match result {
+        Ok(()) => {
+            *REGISTERED_SHORTCUT
+                .lock()
+                .expect("shortcut lock") = Some(shortcut);
+            if let Ok(mut err) = SHORTCUT_SYNC_ERROR.lock() {
+                *err = None;
             }
-        })
-        .map_err(|e| format!("快捷键注册失败: {e}"))?;
-    *REGISTERED_SHORTCUT
-        .lock()
-        .expect("shortcut lock") = Some(shortcut);
-    Ok(())
+            Ok(())
+        }
+        Err(e) => {
+            let message = format!("快捷键注册失败: {e}");
+            if let Ok(mut err) = SHORTCUT_SYNC_ERROR.lock() {
+                *err = Some(message.clone());
+            }
+            Err(message)
+        }
+    }
 }
 
 fn normalize_shortcut_string(raw: &str) -> String {

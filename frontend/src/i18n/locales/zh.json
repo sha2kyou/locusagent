@@ -70,7 +70,7 @@
       },
       "menubar": {
         "title": "菜单栏与后台",
-        "description": "关闭窗口后可在菜单栏保留 AgentPod；开机自启需在此手动开启。"
+        "description": "关闭窗口后可在菜单栏保留 AgentPod；下方可配置快捷对话全局快捷键。"
       },
       "runInBackground": {
         "label": "关闭窗口后在菜单栏继续运行",
@@ -89,7 +89,10 @@
         },
         "shortcut": {
           "label": "全局快捷键",
-          "hint": "格式示例：cmd+shift+Space（macOS 用 cmd，Windows 用 ctrl）。"
+          "hint": "格式示例：cmd+shift+Space（macOS 用 cmd，Windows 用 ctrl）。修改后需点击下方「保存桌面偏好」。",
+          "active": "当前快捷键已注册生效",
+          "inactive": "快捷键尚未注册，请保存设置或更换不与系统/其他应用冲突的组合键",
+          "error": "注册失败：{{error}}"
         },
         "alwaysOnTop": {
           "label": "窗口置顶",

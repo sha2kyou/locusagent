@@ -47,6 +47,15 @@ impl Default for DesktopPrefs {
 
 pub struct PrefsState(pub Mutex<DesktopPrefs>);
 
+#[derive(Serialize)]
+pub struct DesktopPrefsView {
+    #[serde(flatten)]
+    pub prefs: DesktopPrefs,
+    pub quick_chat_shortcut_registered: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quick_chat_shortcut_error: Option<String>,
+}
+
 fn prefs_file() -> PathBuf {
     agentpod_home().join("desktop.prefs.json")
 }
@@ -135,8 +144,13 @@ pub fn desktop_get_system_locale() -> Option<String> {
 }
 
 #[tauri::command]
-pub fn desktop_get_prefs(state: State<PrefsState>) -> DesktopPrefs {
-    state.0.lock().expect("prefs lock poisoned").clone()
+pub fn desktop_get_prefs(app: AppHandle, state: State<PrefsState>) -> DesktopPrefsView {
+    let prefs = state.0.lock().expect("prefs lock poisoned").clone();
+    DesktopPrefsView {
+        quick_chat_shortcut_registered: crate::quick_chat::is_shortcut_registered(&app, &prefs),
+        quick_chat_shortcut_error: crate::quick_chat::last_shortcut_sync_error(),
+        prefs,
+    }
 }
 
 #[tauri::command]
