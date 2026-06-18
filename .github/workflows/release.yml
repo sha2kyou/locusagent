@@ -160,6 +160,7 @@ jobs:
       - name: Update cask file
         if: ${{ steps.token.outputs.run_update == 'true' }}
         run: |
+          mkdir -p tap/Casks
           cat > tap/Casks/locusagent.rb <<EOF
           cask "locusagent" do
             version "${{ steps.vars.outputs.version }}"
