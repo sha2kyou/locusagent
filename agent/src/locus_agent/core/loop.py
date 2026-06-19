@@ -37,6 +37,7 @@ from .tool_guardrails import (
 )
 from .openai_fields import (
     assistant_message_dict,
+    normalize_messages_for_llm_api,
     openai_delta_content,
     openai_delta_reasoning,
     openai_message_reasoning,
@@ -440,7 +441,7 @@ def _finalize_request_kwargs(
     extra: dict[str, Any] | None,
     notice: str,
 ) -> dict[str, Any]:
-    req_messages = list(working_messages)
+    req_messages = normalize_messages_for_llm_api(list(working_messages))
     req_messages.append({"role": "system", "content": notice})
     kwargs: dict[str, Any] = {
         "model": model,
@@ -655,7 +656,7 @@ async def run_chat_loop(
         round_model = _round_model(working)
         kwargs: dict[str, Any] = {
             "model": round_model,
-            "messages": working,
+            "messages": normalize_messages_for_llm_api(working),
         }
         if tools_schema:
             kwargs["tools"] = tools_schema
@@ -947,7 +948,7 @@ async def run_chat_loop_stream(
         )
         kwargs: dict[str, Any] = {
             "model": _round_model(working),
-            "messages": working,
+            "messages": normalize_messages_for_llm_api(working),
             "stream": True,
         }
         if tools_schema:

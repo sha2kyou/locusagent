@@ -13,6 +13,7 @@ from typing import Any
 
 from ..db import conn_scope, run_in_thread
 from ..logging import get_logger
+from .openai_fields import normalize_assistant_for_llm_api
 from .attachment_documents import (
     OFFICE_EXTRACTED_MIME,
     extract_document_text,
@@ -1422,12 +1423,11 @@ async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
                     d["reasoning_content"] = reasoning
                 if _is_openai_tool_calls(tool_calls):
                     d["tool_calls"] = tool_calls
-                if (
-                    d.get("content") is not None
-                    or d.get("reasoning_content")
-                    or d.get("tool_calls")
-                ):
-                    out.append(d)
+                normalized = normalize_assistant_for_llm_api(d)
+                if normalized is not None:
+                    if msg_id:
+                        normalized["id"] = msg_id
+                    out.append(normalized)
                 continue
 
             if role == "tool":
