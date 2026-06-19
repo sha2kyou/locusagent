@@ -1,4 +1,4 @@
-export type FilePreviewKind = "markdown" | "code" | "image" | "text" | "unsupported";
+export type FilePreviewKind = "markdown" | "code" | "image" | "pdf" | "text" | "unsupported";
 
 const MARKDOWN_EXT = new Set(["md", "markdown"]);
 const IMAGE_EXT = new Set(["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "ico"]);
@@ -98,8 +98,10 @@ export function highlightLanguage(filename: string): string {
 export function filePreviewKind(filename: string, mimeType?: string | null): FilePreviewKind {
   const mime = (mimeType ?? "").toLowerCase();
   if (mime.startsWith("image/")) return "image";
+  if (mime === "application/pdf") return "pdf";
 
   const ext = fileExtension(filename);
+  if (ext === "pdf") return "pdf";
   if (MARKDOWN_EXT.has(ext)) return "markdown";
   if (IMAGE_EXT.has(ext)) return "image";
   if (CODE_EXT.has(ext)) return "code";
@@ -108,7 +110,6 @@ export function filePreviewKind(filename: string, mimeType?: string | null): Fil
 }
 
 const BINARY_PREVIEW_EXT = new Set([
-  "pdf",
   "zip",
   "gz",
   "gzip",
@@ -153,14 +154,14 @@ const BINARY_PREVIEW_EXT = new Set([
 export function isFilePreviewable(filename: string, mimeType?: string | null): boolean {
   const mime = (mimeType ?? "").toLowerCase();
   if (mime.startsWith("image/")) return true;
-  if (mime === "application/pdf") return false;
+  if (mime === "application/pdf") return true;
   if (mime.includes("zip") || mime.includes("msword") || mime.includes("officedocument")) return false;
 
   const ext = fileExtension(filename);
   if (BINARY_PREVIEW_EXT.has(ext)) return false;
 
   const kind = filePreviewKind(filename, mimeType);
-  return kind === "image" || kind === "markdown" || kind === "code" || kind === "text";
+  return kind === "image" || kind === "pdf" || kind === "markdown" || kind === "code" || kind === "text";
 }
 
 export function buildDataUrl(mimeType: string, contentBase64: string): string {

@@ -601,6 +601,7 @@ function useAttachmentPreview(file: ChatAttachment | null) {
   const [remote, setRemote] = useState<{
     content?: string;
     imageSrc?: string;
+    documentSrc?: string;
     mimeType?: string;
   } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -623,6 +624,7 @@ function useAttachmentPreview(file: ChatAttachment | null) {
       .then((payload) => {
         if (cancelled) {
           if (payload?.imageSrc) URL.revokeObjectURL(payload.imageSrc);
+          if (payload?.documentSrc) URL.revokeObjectURL(payload.documentSrc);
           return;
         }
         setRemote(payload);
@@ -641,13 +643,23 @@ function useAttachmentPreview(file: ChatAttachment | null) {
 
   useEffect(() => {
     const imageSrc = remote?.imageSrc;
+    const documentSrc = remote?.documentSrc;
     return () => {
       if (imageSrc) URL.revokeObjectURL(imageSrc);
+      if (documentSrc) URL.revokeObjectURL(documentSrc);
     };
-  }, [remote?.imageSrc]);
+  }, [remote?.imageSrc, remote?.documentSrc]);
 
   if (!file) {
-    return { loading: false, loadError: null, content: undefined, imageSrc: null, mimeType: undefined, truncated: false };
+    return {
+      loading: false,
+      loadError: null,
+      content: undefined,
+      imageSrc: null,
+      documentSrc: null,
+      mimeType: undefined,
+      truncated: false,
+    };
   }
 
   const inline = inlineAttachmentPreview(file);
@@ -656,6 +668,7 @@ function useAttachmentPreview(file: ChatAttachment | null) {
     loadError,
     content: inline.content ?? remote?.content,
     imageSrc: inline.imageSrc ?? remote?.imageSrc ?? null,
+    documentSrc: remote?.documentSrc ?? null,
     mimeType: file.mimeType ?? remote?.mimeType,
     truncated: !!file.truncated,
   };
@@ -673,7 +686,7 @@ function AttachmentDrawer({
   const preview = useAttachmentPreview(file);
   const previewable = file ? isFilePreviewable(file.name, preview.mimeType ?? file.mimeType) : false;
   const hasPreviewData =
-    typeof preview.content === "string" || Boolean(preview.imageSrc);
+    typeof preview.content === "string" || Boolean(preview.imageSrc) || Boolean(preview.documentSrc);
 
   return (
     <Drawer
@@ -705,6 +718,7 @@ function AttachmentDrawer({
             filename={file.name}
             content={preview.content}
             imageSrc={preview.imageSrc}
+            documentSrc={preview.documentSrc}
             mimeType={preview.mimeType}
             emptyText={t("chat.attachment.emptyFile")}
             unsupportedText={

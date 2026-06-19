@@ -13,9 +13,14 @@ test("filePreviewKind detects images by extension and mime", () => {
   assert.equal(filePreviewKind("photo.bin", "image/jpeg"), "image");
 });
 
-test("isFilePreviewable excludes binaries but allows markdown", () => {
+test("filePreviewKind detects pdf by extension and mime", () => {
+  assert.equal(filePreviewKind("report.pdf"), "pdf");
+  assert.equal(filePreviewKind("doc.bin", "application/pdf"), "pdf");
+});
+
+test("isFilePreviewable excludes binaries but allows markdown and pdf", () => {
   assert.equal(isFilePreviewable("guide.md"), true);
   assert.equal(isFilePreviewable("deepseek-balance-guide.md"), true);
-  assert.equal(isFilePreviewable("report.pdf"), false);
+  assert.equal(isFilePreviewable("report.pdf"), true);
   assert.equal(isFilePreviewable("archive.zip"), false);
 });

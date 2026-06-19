@@ -14,6 +14,8 @@ export interface FilePreviewProps {
   mimeType?: string | null;
   /** 显式图片地址（附件 data URL 等），优先于 contentBase64 */
   imageSrc?: string | null;
+  /** PDF 等文档 blob URL（由 fetchAttachmentPreview 生成） */
+  documentSrc?: string | null;
   emptyText?: string;
   unsupportedText?: string;
   truncated?: boolean;
@@ -55,7 +57,23 @@ function ImagePreview({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-function renderByKind(kind: FilePreviewKind, props: FilePreviewProps, content: string, imageSrc: string | null) {
+function PdfPreview({ src, title }: { src: string; title: string }) {
+  return (
+    <iframe
+      src={src}
+      title={title}
+      className="h-[min(70vh,720px)] w-full rounded-md border border-border bg-surface-2"
+    />
+  );
+}
+
+function renderByKind(
+  kind: FilePreviewKind,
+  props: FilePreviewProps,
+  content: string,
+  imageSrc: string | null,
+  documentSrc: string | null,
+) {
   switch (kind) {
     case "markdown":
       return <ProseMarkdown text={content} />;
@@ -64,6 +82,12 @@ function renderByKind(kind: FilePreviewKind, props: FilePreviewProps, content: s
     case "image":
       return imageSrc ? (
         <ImagePreview src={imageSrc} alt={props.filename} />
+      ) : (
+        <p className="text-sm text-muted-foreground">{props.unsupportedText ?? "Preview not available."}</p>
+      );
+    case "pdf":
+      return documentSrc ? (
+        <PdfPreview src={documentSrc} title={props.filename} />
       ) : (
         <p className="text-sm text-muted-foreground">{props.unsupportedText ?? "Preview not available."}</p>
       );
@@ -82,6 +106,7 @@ export function FilePreview({
   contentBase64,
   mimeType,
   imageSrc: imageSrcProp,
+  documentSrc,
   emptyText = "Empty file.",
   unsupportedText,
   truncated,
@@ -106,10 +131,22 @@ export function FilePreview({
         ) : (
           <p className="text-sm text-muted-foreground">{unsupportedText ?? emptyText}</p>
         )
+      ) : kind === "pdf" ? (
+        documentSrc ? (
+          <PdfPreview src={documentSrc} title={filename} />
+        ) : (
+          <p className="text-sm text-muted-foreground">{unsupportedText ?? emptyText}</p>
+        )
       ) : !text.trim() ? (
         <p className="text-sm text-muted-foreground">{emptyText}</p>
       ) : (
-        renderByKind(kind, { filename, content, contentBase64, mimeType, imageSrc: imageSrcProp, emptyText, unsupportedText }, text, imageSrc)
+        renderByKind(
+          kind,
+          { filename, content, contentBase64, mimeType, imageSrc: imageSrcProp, documentSrc, emptyText, unsupportedText },
+          text,
+          imageSrc,
+          documentSrc ?? null,
+        )
       )}
       {truncated && truncatedText ? <p className="text-xs text-warning">{truncatedText}</p> : null}
     </div>

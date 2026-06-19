@@ -172,6 +172,7 @@ export function attachmentDownloadUrl(id: string): string {
 export interface AttachmentPreviewPayload {
   content?: string;
   imageSrc?: string;
+  documentSrc?: string;
   mimeType?: string;
 }
 
@@ -193,8 +194,12 @@ export async function fetchAttachmentPreview(
 
   const blob = await res.blob();
   const resolvedMime = mimeType || blob.type || "application/octet-stream";
-  if (filePreviewKind(filename, resolvedMime) === "image") {
+  const kind = filePreviewKind(filename, resolvedMime);
+  if (kind === "image") {
     return { imageSrc: URL.createObjectURL(blob), mimeType: resolvedMime };
+  }
+  if (kind === "pdf") {
+    return { documentSrc: URL.createObjectURL(blob), mimeType: resolvedMime };
   }
   return { content: await blob.text(), mimeType: resolvedMime };
 }
