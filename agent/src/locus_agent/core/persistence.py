@@ -974,7 +974,7 @@ async def create_binary_attachment(
     mime_type: str | None,
     data: bytes,
 ) -> dict[str, Any]:
-    """上传二进制到 MinIO，供对话内下载（不注入 LLM 上下文）。"""
+    """上传二进制到本地附件存储（~/.locusagent/attachments），供对话内下载（不注入 LLM 上下文）。"""
     from ..config import get_settings
 
     if not data:

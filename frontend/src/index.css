@@ -376,6 +376,7 @@
   .apod-prose {
     line-height: 1.7;
     word-break: break-word;
+    min-width: 0;
   }
   .apod-prose > :first-child {
     margin-top: 0;
@@ -469,8 +470,8 @@
     font-size: 0.875em;
     line-height: 1.45;
   }
-  .apod-prose th,
-  .apod-prose td {
+  .apod-prose .apod-table-scroll th,
+  .apod-prose .apod-table-scroll td {
     padding: 0.55em 1em;
     text-align: left;
     vertical-align: top;
@@ -480,12 +481,12 @@
     word-break: break-word;
     overflow-wrap: anywhere;
   }
-  .apod-prose thead th {
+  .apod-prose .apod-table-scroll thead th {
     background-color: var(--color-surface);
     font-weight: 600;
     color: var(--color-foreground);
   }
-  .apod-prose tbody tr:last-child td {
+  .apod-prose .apod-table-scroll tbody tr:last-child td {
     border-bottom: 0;
   }
 

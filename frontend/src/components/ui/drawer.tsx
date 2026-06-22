@@ -85,7 +85,7 @@ export function Drawer({
             </Button>
           </div>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">{children}</div>
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-4">{children}</div>
       </div>
     </div>,
     document.body,

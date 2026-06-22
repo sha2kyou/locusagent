@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { ProseMarkdown } from "@/features/chat/Markdown";
+import { Markdown } from "@/features/chat/Markdown";
 import {
   buildDataUrl,
   filePreviewKind,
@@ -47,7 +47,7 @@ function PlainTextBlock({ content, className }: { content: string; className?: s
 
 function CodePreview({ filename, content }: { filename: string; content: string }) {
   const lang = highlightLanguage(filename);
-  return <ProseMarkdown text={`\`\`\`${lang}\n${content}\n\`\`\``} enableMath={false} />;
+  return <Markdown text={`\`\`\`${lang}\n${content}\n\`\`\``} enableMath={false} />;
 }
 
 function ImagePreview({ src, alt }: { src: string; alt: string }) {
@@ -87,7 +87,7 @@ function renderByKind(
 ) {
   switch (kind) {
     case "markdown":
-      return <ProseMarkdown text={content} />;
+      return <Markdown text={content} />;
     case "code":
       return <CodePreview filename={props.filename} content={content} />;
     case "image":
@@ -135,7 +135,7 @@ export function FilePreview({
   const text = content ?? "";
 
   return (
-    <div className={cn("space-y-3", className)}>
+    <div className={cn("min-w-0 space-y-3", className)}>
       {kind === "image" ? (
         imageSrc ? (
           <ImagePreview src={imageSrc} alt={filename} />

@@ -1,6 +1,6 @@
 import { memo, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeHighlight from "rehype-highlight";
@@ -11,6 +11,23 @@ import { cn } from "@/lib/utils";
 import { normalizeBareAutolinks } from "@/lib/markdown-autolink";
 import { normalizeLatexInput } from "@/lib/latex-normalize";
 import { CollapsibleMetaBlock } from "./CollapsibleMetaBlock";
+
+/** 对话气泡 / 抽屉预览 / 产物等共用排版容器（与 Thread 消息 text-sm 对齐） */
+export const MARKDOWN_PROSE_CLASS = "apod-prose min-w-0 text-sm";
+
+const MARKDOWN_COMPONENTS: Components = {
+  pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
+  table: ({ children, ...props }) => (
+    <div className="apod-table-scroll">
+      <table {...props}>{children}</table>
+    </div>
+  ),
+  a: ({ children, href }) => (
+    <a href={href} rel="noreferrer" className="text-brand underline underline-offset-2">
+      {children}
+    </a>
+  ),
+};
 
 interface Segment {
   kind: "md" | "thinking";
@@ -41,10 +58,18 @@ function hashString(s: string): string {
   return (h >>> 0).toString(36);
 }
 
-export const Markdown = memo(function Markdown({ text, enableMath = true }: { text: string; enableMath?: boolean }) {
+export const Markdown = memo(function Markdown({
+  text,
+  className,
+  enableMath = true,
+}: {
+  text: string;
+  className?: string;
+  enableMath?: boolean;
+}) {
   const segs = splitThinking(text).filter((s) => s.content.trim().length > 0 || s.kind !== "md");
   return (
-    <div className="apod-prose">
+    <div className={cn(MARKDOWN_PROSE_CLASS, className)}>
       {segs.map((s, i) => {
         if (s.kind === "thinking")
           return (
@@ -68,33 +93,13 @@ function MarkdownBlock({ text, enableMath = true }: { text: string; enableMath?:
   const remarkPlugins = enableMath ? [remarkMath, remarkGfm] : [remarkGfm];
   const rehypePlugins = enableMath ? [rehypeKatex, rehypeHighlight] : [rehypeHighlight];
   return (
-    <ReactMarkdown
-      remarkPlugins={remarkPlugins}
-      rehypePlugins={rehypePlugins}
-      components={{
-        pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
-        table: ({ children, ...props }) => (
-          <div className="apod-table-scroll">
-            <table {...props}>{children}</table>
-          </div>
-        ),
-        a: ({ children, href }) => (
-          <a
-            href={href}
-            rel="noreferrer"
-            className="text-brand underline underline-offset-2"
-          >
-            {children}
-          </a>
-        ),
-      }}
-    >
+    <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={MARKDOWN_COMPONENTS}>
       {normalized}
     </ReactMarkdown>
   );
 }
 
-/** 无 thinking 分段，用于用户气泡等纯 Markdown+公式场景 */
+/** 与 {@link Markdown} 相同；保留兼容别名 */
 export function ProseMarkdown({
   text,
   className,
@@ -104,11 +109,7 @@ export function ProseMarkdown({
   className?: string;
   enableMath?: boolean;
 }) {
-  return (
-    <div className={cn("apod-prose max-w-none", className)}>
-      <MarkdownBlock text={text} enableMath={enableMath} />
-    </div>
-  );
+  return <Markdown text={text} className={className} enableMath={enableMath} />;
 }
 
 function extractLang(children: ReactNode): string {
@@ -199,7 +200,7 @@ export function ThinkingBlock({
       icon={<Brain className="size-3.5" />}
       preview={content}
     >
-      <div className="apod-prose text-[13px] text-muted-foreground/90">
+      <div className={cn(MARKDOWN_PROSE_CLASS, "text-[13px] text-muted-foreground/90")}>
         <MarkdownBlock text={content} />
       </div>
     </CollapsibleMetaBlock>

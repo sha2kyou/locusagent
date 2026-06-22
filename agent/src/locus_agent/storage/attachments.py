@@ -1,4 +1,4 @@
-"""Object storage helpers for large binary payloads."""
+"""附件本地文件存储辅助：经 Host internal API 读写 ~/.locusagent/attachments。"""
 
 from __future__ import annotations
 

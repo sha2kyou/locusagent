@@ -91,7 +91,7 @@ export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
       <ThreadPrimitive.Viewport className="relative flex-1 overflow-y-auto">
         <div
           className={cn(
-            "relative z-10 mx-auto w-full py-6",
+            "mx-auto w-full py-6",
             isQuick ? "max-w-full px-4 pb-4 pt-8" : "max-w-3xl px-6 py-10",
           )}
         >
@@ -127,20 +127,24 @@ export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
           <ThreadStreamFollow />
         </div>
 
-        <ThreadPrimitive.ScrollToBottom asChild>
-          {!isQuick ? (
-            <Button
-              variant="secondary"
-              size="icon"
-              className="sticky bottom-4 left-1/2 -translate-x-1/2 rounded-full shadow-lg transition-opacity disabled:pointer-events-none disabled:opacity-0"
-              aria-label={t("chat.composer.scrollToBottom")}
-            >
-              <ArrowDown />
-            </Button>
-          ) : (
+        {!isQuick ? (
+          <div className="pointer-events-none sticky bottom-4 z-30 flex w-full justify-center">
+            <ThreadPrimitive.ScrollToBottom asChild>
+              <Button
+                variant="secondary"
+                size="icon"
+                className="pointer-events-auto rounded-full shadow-lg transition-opacity disabled:pointer-events-none disabled:opacity-0"
+                aria-label={t("chat.composer.scrollToBottom")}
+              >
+                <ArrowDown />
+              </Button>
+            </ThreadPrimitive.ScrollToBottom>
+          </div>
+        ) : (
+          <ThreadPrimitive.ScrollToBottom asChild>
             <span className="hidden" aria-hidden />
-          )}
-        </ThreadPrimitive.ScrollToBottom>
+          </ThreadPrimitive.ScrollToBottom>
+        )}
       </ThreadPrimitive.Viewport>
 
       <Composer variant={variant} />
