@@ -10,7 +10,7 @@ Turn a brief into finished work: the agent reads and writes files in your worksp
 
 Runtime data lives under `~/.locusagent/` (macOS/Linux) or `%USERPROFILE%\.locusagent\` (Windows): `settings.json`, SQLite databases, and per-workspace storage.
 
-![Locus Agent chat UI — multi-workspace sidebar, scheduled tasks, and tool-using agent runs](docs/images/chat-ui.png)
+![Locus Agent main window — sidebar navigation, chat history, and formatted agent reports](docs/images/main-window.png)
 
 ## About the name
 
