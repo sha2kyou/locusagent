@@ -1,4 +1,4 @@
-import { createContext, Suspense, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, Suspense, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { DesktopWindowDragOverlay } from "@/app/DesktopTitlebarSpacer";
 import { desktopDragRegionProps } from "@/lib/desktop-app";
+import { subscribeWorkspacesChanged } from "@/lib/workspace-events";
 import { cn } from "@/lib/utils";
 import { ArtifactsNav } from "@/features/artifacts/ArtifactsNav";
 import { useAuth } from "./auth";
@@ -86,12 +87,18 @@ export function AppShell() {
     localStorage.setItem(EXPAND_KEY, expanded ? "1" : "0");
   }, [expanded]);
 
-  useEffect(() => {
+  const refreshWorkspaces = useCallback(() => {
     if (!me) return;
     void listWorkspaces()
       .then((res) => setWorkspaces(res.items))
       .catch(() => setWorkspaces([]));
-  }, [me, me?.current_workspace_id]);
+  }, [me]);
+
+  useEffect(() => {
+    refreshWorkspaces();
+  }, [refreshWorkspaces, me?.current_workspace_id]);
+
+  useEffect(() => subscribeWorkspacesChanged(refreshWorkspaces), [refreshWorkspaces]);
 
   useEffect(() => {
     if (onChatRoute) return;

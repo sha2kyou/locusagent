@@ -23,6 +23,7 @@ import type { WorkspaceItem } from "@/api/types";
 import { useAuth } from "@/app/auth";
 import { withWorkspacePrefix } from "@/app/workspace-route";
 import { toastAction } from "@/lib/toast-copy";
+import { notifyWorkspacesChanged } from "@/lib/workspace-events";
 
 export function WorkspacesRoute() {
   const { t } = useTranslation();
@@ -62,6 +63,11 @@ export function WorkspacesRoute() {
     }
   };
 
+  const reloadWorkspaces = async () => {
+    await load();
+    notifyWorkspacesChanged();
+  };
+
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -99,7 +105,7 @@ export function WorkspacesRoute() {
         toast(toastAction("added", nextName, "workspace"), "success");
       }
       resetForm();
-      await load();
+      await reloadWorkspaces();
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
@@ -117,7 +123,7 @@ export function WorkspacesRoute() {
     if (!ok) return;
     try {
       await deleteWorkspace(workspace.id);
-      await load();
+      await reloadWorkspaces();
       if (workspace.id === currentWorkspaceId) {
         setWorkspaceId(defaultWorkspaceId);
         window.location.href = "/chat";
@@ -154,7 +160,7 @@ export function WorkspacesRoute() {
     try {
       const res = await copyWorkspace(workspace.id, { name: buildCopyName(workspace.name) });
       toast(toastAction("added", res.item.name, "workspace"), "success");
-      await load();
+      await reloadWorkspaces();
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
