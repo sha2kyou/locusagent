@@ -76,4 +76,22 @@ describe("resolveTodoPlan", () => {
     const resolved = resolveTodoPlan(fromParts, null, false, true);
     assert.equal(resolved?.steps[1]?.status, "interrupted");
   });
+
+  it("does not attach orphan session plan to unrelated last assistant turn", () => {
+    const session = plan([
+      { id: "s1", title: "A", status: "interrupted" },
+      { id: "s2", title: "B", status: "interrupted" },
+    ]);
+    const resolved = resolveTodoPlan(null, session, true, false);
+    assert.equal(resolved, null);
+  });
+
+  it("still shows session plan on last assistant when todo tools are active", () => {
+    const session = plan([
+      { id: "s1", title: "A", status: "pending" },
+      { id: "s2", title: "B", status: "pending" },
+    ]);
+    const resolved = resolveTodoPlan(null, session, true, true);
+    assert.equal(resolved?.plan_id, "tp_test");
+  });
 });

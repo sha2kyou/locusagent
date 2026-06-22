@@ -108,6 +108,10 @@ export function mergeTodoPlans(primary: TodoPlan, secondary: TodoPlan): TodoPlan
   return { ...primary, title: primary.title || secondary.title, steps };
 }
 
+export function planIsActive(plan: TodoPlan): boolean {
+  return plan.steps.some((s) => s.status === "pending" || s.status === "in_progress");
+}
+
 export function resolveTodoPlan(
   fromParts: TodoPlan | null,
   sessionTodoPlan: TodoPlan | null,
@@ -118,6 +122,11 @@ export function resolveTodoPlan(
     return fromParts ? applyHistoricalTodoInterrupt(fromParts) : null;
   }
   if (!hasTodoInMessage && !fromParts && !sessionTodoPlan) return null;
+  // session 级 todo 只能挂在当前轮确有 todo 活动的最后一条 assistant 上
+  if (sessionTodoPlan && !fromParts && !hasTodoInMessage) return null;
+  if (sessionTodoPlan && !fromParts && hasTodoInMessage && !planIsActive(sessionTodoPlan)) {
+    return null;
+  }
   if (sessionTodoPlan && fromParts) {
     if (sessionTodoPlan.plan_id === fromParts.plan_id) {
       return mergeTodoPlans(sessionTodoPlan, fromParts);

@@ -194,7 +194,7 @@ async def _extract_latest_user_payload(req: ChatRequest) -> tuple[Any, str, str,
 
 async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, Any]], str]:
     from ..core.session_review_state import begin_user_turn
-    from ..todos.store import delete_session_todos
+    from ..todos.store import delete_session_todos, interrupt_current_session_todos
 
     latest_user = await _extract_latest_user_payload(req)
     if latest_user is None:
@@ -208,6 +208,7 @@ async def _prepare_messages(req: ChatRequest, sid: str) -> tuple[list[dict[str, 
             await truncate_after_last_user(sid)
             await delete_session_todos(sid)
         else:
+            await interrupt_current_session_todos(sid)
             user_mid = await append_message(sid, "user", persisted_user_text, run_id=None)
             if user_mid > 0 and attachment_ids:
                 await link_message_attachments(user_mid, attachment_ids)
