@@ -225,7 +225,7 @@
       "rowDone": "Done",
       "overall": {
         "title": "Overall progress",
-        "description": "Vector index status for memory, messages, artifacts, env vars, and skills in the current workspace. Refreshes every 3 seconds."
+        "description": "Vector index status for memory, messages, artifacts, env vars, and skills in the current workspace. Refreshes every 1–3 seconds while indexing."
       },
       "byKind": {
         "title": "By category"

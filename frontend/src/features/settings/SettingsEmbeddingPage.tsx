@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { getEmbeddingProgress } from "@/api/endpoints";
@@ -6,7 +6,8 @@ import type { EmbeddingProgress, EmbeddingStateCounts } from "@/api/types";
 import { SettingsSection } from "./SettingsSection";
 import { cn } from "@/lib/utils";
 
-const POLL_MS = 3000;
+const POLL_MS_IDLE = 3000;
+const POLL_MS_ACTIVE = 1500;
 
 const KIND_ORDER = ["memory", "message", "artifact", "env_var", "skill"] as const;
 
@@ -60,28 +61,56 @@ export function SettingsEmbeddingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const activeRef = useRef(false);
+
   useEffect(() => {
     const ac = new AbortController();
+    let stopped = false;
+    let delayTimer: ReturnType<typeof window.setTimeout> | undefined;
+    let loadSeq = 0;
+
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => {
+        delayTimer = window.setTimeout(resolve, ms);
+      });
 
     const load = async (silent = false) => {
+      const seq = ++loadSeq;
       try {
         const result = await getEmbeddingProgress(ac.signal);
+        if (stopped || seq !== loadSeq) return;
+        activeRef.current = result.active;
         setData(result);
         setError(null);
+        return result;
       } catch (e) {
-        if (ac.signal.aborted) return;
+        if (stopped || ac.signal.aborted || seq !== loadSeq) return;
         if (!silent) setError((e as Error).message);
       } finally {
-        if (!ac.signal.aborted && !silent) setLoading(false);
+        if (!stopped && !silent && seq === loadSeq) setLoading(false);
       }
     };
 
-    void load();
-    const timer = window.setInterval(() => void load(true), POLL_MS);
+    void (async () => {
+      await load();
+      while (!stopped) {
+        const pollMs = activeRef.current ? POLL_MS_ACTIVE : POLL_MS_IDLE;
+        await sleep(pollMs);
+        if (stopped) break;
+        await load(true);
+      }
+    })();
+
+    const onVisible = () => {
+      if (!stopped && document.visibilityState === "visible") void load(true);
+    };
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
+      stopped = true;
       ac.abort();
-      clearInterval(timer);
+      if (delayTimer !== undefined) window.clearTimeout(delayTimer);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
 
