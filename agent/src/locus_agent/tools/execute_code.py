@@ -6,14 +6,16 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
+from locus_shared.workspace_venv import WorkspaceVenvError, ensure_workspace_venv
+
 from ..subprocess_sandbox import (
     build_sandbox_preexec_fn,
     resolve_workdir,
     terminate_process_tree,
     workspace_root_dir,
 )
+from ..workspace import get_workspace_id
 from .proc_env import build_proc_env
-from ..subprocess_env import safe_subprocess_env
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 DEFAULT_TIMEOUT = 30.0
@@ -31,9 +33,13 @@ def _resolve_workdir(workdir: str | None) -> Path:
         raise ToolError(str(exc)) from exc
 
 
-def _python_bin(root: Path) -> str:
-    venv_py = root / ".venv" / "bin" / "python"
-    return str(venv_py) if venv_py.is_file() else "python3"
+async def _workspace_python() -> str:
+    wid = get_workspace_id()
+    try:
+        py = await asyncio.to_thread(ensure_workspace_venv, wid)
+    except WorkspaceVenvError as exc:
+        raise ToolError(str(exc)) from exc
+    return str(py)
 
 
 async def _execute_code(args: dict[str, Any]) -> ToolResult:
@@ -50,7 +56,7 @@ async def _execute_code(args: dict[str, Any]) -> ToolResult:
 
     root = _workspace_root()
     cwd = _resolve_workdir(str(args.get("workdir", "") or "").strip() or None)
-    py = _python_bin(root)
+    py = await _workspace_python()
     preexec_fn = build_sandbox_preexec_fn()
     proc_env = await build_proc_env(args)
 
@@ -87,7 +93,8 @@ register_builtin(
     Tool(
         name="execute_code",
         description=(
-            "Run a code snippet (Python). Runs under workspace; uses .venv/bin/python if present."
+            "Run a code snippet (Python). Uses the current workspace virtualenv "
+            "(workspace/.venv; created on workspace setup or first run). "
             "Subject to resource limits and timeout process-group cleanup. "
             "Optional env: workspace env var names to inject (values resolved from env_vars store; "
             "use os.environ in code—do not embed secrets in code)."

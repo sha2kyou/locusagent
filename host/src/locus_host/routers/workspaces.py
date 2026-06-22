@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+
+from locus_shared.workspace_venv import WorkspaceVenvError, ensure_workspace_venv
 
 from ..auth import AuthContext, require_session
 from ..db import Workspace, get_session
@@ -88,6 +92,13 @@ async def create_workspace(
         session.add(row)
         await session.flush()
         await session.refresh(row)
+    try:
+        await asyncio.to_thread(ensure_workspace_venv, row.id)
+    except WorkspaceVenvError as exc:
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
     record_activity("workspace", "create", f"已创建工作区「{row.name}」", workspace_id=row.id)
     return {
         "item": {
