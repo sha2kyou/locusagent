@@ -65,9 +65,9 @@ function PdfPreview({ src, title }: { src: string; title: string }) {
       data={src}
       type="application/pdf"
       title={title}
-      className="block h-[min(70vh,720px)] w-full rounded-md border border-border bg-surface-2"
+      className="block min-h-0 w-full flex-1 rounded-md border border-border bg-surface-2"
     >
-      <embed src={src} type="application/pdf" className="h-[min(70vh,720px)] w-full" title={title} />
+      <embed src={src} type="application/pdf" className="h-full w-full" title={title} />
       <p className="p-3 text-sm text-muted-foreground">
         {t("chat.attachment.pdfPreviewUnavailable")}{" "}
         <a href={src} target="_blank" rel="noreferrer" className="underline">
@@ -133,9 +133,16 @@ export function FilePreview({
     imageSrc: imageSrcProp,
   });
   const text = content ?? "";
+  const isPdfPreview = kind === "pdf" && Boolean(documentSrc);
 
   return (
-    <div className={cn("min-w-0 space-y-3", className)}>
+    <div
+      className={cn(
+        "min-w-0",
+        isPdfPreview ? "flex min-h-0 flex-1 flex-col gap-3" : "space-y-3",
+        className,
+      )}
+    >
       {kind === "image" ? (
         imageSrc ? (
           <ImagePreview src={imageSrc} alt={filename} />
@@ -159,7 +166,9 @@ export function FilePreview({
           documentSrc ?? null,
         )
       )}
-      {truncated && truncatedText ? <p className="text-xs text-warning">{truncatedText}</p> : null}
+      {truncated && truncatedText ? (
+        <p className="shrink-0 text-xs text-warning">{truncatedText}</p>
+      ) : null}
     </div>
   );
 }
