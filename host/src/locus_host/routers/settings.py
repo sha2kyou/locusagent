@@ -187,6 +187,7 @@ async def save_timezone(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     set_app_timezone(tz)
+    reload_runtime_config()
     await recalc_task_schedules()
     record_activity("settings", "timezone_save", f"Timezone saved: {tz}")
     return TimezoneConfigOut(timezone=tz)
@@ -210,6 +211,7 @@ async def save_locale(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     set_app_locale(locale)
+    reload_runtime_config()
     record_activity("settings", "locale_save", f"Locale saved: {locale}")
     return LocaleConfigOut(locale=locale)
 

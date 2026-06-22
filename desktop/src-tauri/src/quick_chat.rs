@@ -3,11 +3,11 @@
 use std::sync::Mutex;
 
 use tauri::{
-    App, AppHandle, Emitter, LogicalPosition, Manager, PhysicalPosition, WebviewUrl,
+    App, AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl,
     webview::{NewWindowResponse, WebviewWindowBuilder},
 };
 #[cfg(target_os = "macos")]
-use tauri::TitleBarStyle;
+use tauri::{LogicalPosition, TitleBarStyle};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 use tauri_plugin_opener::OpenerExt;
 

@@ -321,6 +321,31 @@ def reload_runtime_config() -> None:
     except ImportError:
         pass
     try:
+        from locus_agent.host_settings import clear_host_settings_runtime_cache
+
+        clear_host_settings_runtime_cache()
+    except ImportError:
+        pass
+    try:
+        from locus_agent.core.llm import get_llm_client
+
+        get_llm_client.cache_clear()
+    except ImportError:
+        pass
+    try:
+        from locus_host.security.crypto import _fernet
+
+        _fernet.cache_clear()
+    except ImportError:
+        pass
+    try:
+        from locus_host.auth.session import _mcp_oauth_state_serializer, _serializer
+
+        _serializer.cache_clear()
+        _mcp_oauth_state_serializer.cache_clear()
+    except ImportError:
+        pass
+    try:
         from locus_shared.local_embeddings import _load_model
 
         _load_model.cache_clear()

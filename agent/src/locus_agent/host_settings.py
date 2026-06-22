@@ -25,6 +25,14 @@ _MODEL_CACHE_TTL_SECONDS = 60.0
 _model_cache: dict[str, tuple[str, float]] = {}
 _model_cache_lock = asyncio.Lock()
 
+
+def clear_host_settings_runtime_cache() -> None:
+    """保存 settings 后丢弃进程内 locale/timezone/model 缓存。"""
+    global _tz_cache, _locale_cache, _model_cache
+    _tz_cache = None
+    _locale_cache = None
+    _model_cache.clear()
+
 _LOCALE_CACHE_TTL_SECONDS = 60.0
 _locale_cache: tuple[str, float] | None = None
 _locale_cache_lock = asyncio.Lock()
