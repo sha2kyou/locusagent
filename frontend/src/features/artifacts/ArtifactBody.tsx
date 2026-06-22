@@ -1,5 +1,5 @@
 import type { ArtifactEntry } from "@/api/types";
-import { ProseMarkdown } from "@/features/chat/Markdown";
+import { Markdown } from "@/features/chat/Markdown";
 
 export function ArtifactBody({ artifact }: { artifact: ArtifactEntry }) {
   if (artifact.type === "text")
@@ -9,7 +9,7 @@ export function ArtifactBody({ artifact }: { artifact: ArtifactEntry }) {
       </pre>
     );
   if (artifact.type === "latex" || artifact.type === "markdown") {
-    return <ProseMarkdown text={artifact.content} enableMath />;
+    return <Markdown text={artifact.content} enableMath />;
   }
   return (
     <pre className="whitespace-pre-wrap wrap-break-word font-mono text-[13px] leading-relaxed">

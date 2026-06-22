@@ -29,7 +29,7 @@ export function ChatRoute() {
     <ChatProvider>
       <div className="flex h-full">
         <SessionSidebar mobileOpen={sessionsOpen} onClose={() => setSessionsOpen(false)} />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 bg-background">
           <Thread />
         </div>
       </div>

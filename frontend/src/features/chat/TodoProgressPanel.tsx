@@ -40,7 +40,7 @@ function TodoStepRow({ step, index }: { step: TodoStep; index: number }) {
           <span className="shrink-0 tabular-nums text-[10px] text-muted-foreground/60">{index + 1}.</span>
           <span
             className={cn(
-              "text-[13px] leading-snug",
+              "break-words text-[13px] leading-snug",
               active && "font-medium text-foreground",
               done && "text-foreground/90",
               skipped && "text-muted-foreground/60 line-through",
@@ -52,12 +52,12 @@ function TodoStepRow({ step, index }: { step: TodoStep; index: number }) {
           </span>
         </div>
         {step.detail && !done && !interrupted ? (
-          <p className="mt-0.5 pl-4 text-[11px] leading-relaxed text-muted-foreground/80">{step.detail}</p>
+          <p className="mt-0.5 break-words pl-4 text-[11px] leading-relaxed text-muted-foreground/80">{step.detail}</p>
         ) : null}
         {step.note && (done || interrupted) ? (
           <p
             className={cn(
-              "mt-0.5 pl-4 text-[11px] leading-relaxed",
+              "mt-0.5 break-words pl-4 text-[11px] leading-relaxed",
               interrupted ? "text-destructive/70" : "text-muted-foreground/70",
             )}
           >

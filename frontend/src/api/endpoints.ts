@@ -199,7 +199,9 @@ export async function fetchAttachmentPreview(
     return { imageSrc: URL.createObjectURL(blob), mimeType: resolvedMime };
   }
   if (kind === "pdf") {
-    return { documentSrc: URL.createObjectURL(blob), mimeType: resolvedMime };
+    const pdfMime = "application/pdf";
+    const pdfBlob = blob.type === pdfMime ? blob : new Blob([blob], { type: pdfMime });
+    return { documentSrc: URL.createObjectURL(pdfBlob), mimeType: pdfMime };
   }
   return { content: await blob.text(), mimeType: resolvedMime };
 }

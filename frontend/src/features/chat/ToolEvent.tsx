@@ -89,12 +89,12 @@ function ClarifyCard({ payload }: { payload: ClarifyPayload }) {
     send(clarifyMessage(payload.question, t));
   };
   return (
-    <div className="my-1.5 rounded-lg border border-border bg-surface/40 px-3 py-2.5 text-[13px]">
+    <div className="my-1.5 min-w-0 overflow-hidden rounded-lg border border-border bg-surface/40 px-3 py-2.5 text-[13px]">
       <div className="flex items-start gap-2">
         <HelpCircle className="mt-0.5 size-4 shrink-0 text-brand" />
-        <span className="font-medium text-foreground">{payload.question}</span>
+        <span className="min-w-0 flex-1 break-words font-medium text-foreground">{payload.question}</span>
       </div>
-      <div className="mt-2.5 flex flex-wrap gap-2">
+      <div className="mt-2.5 flex min-w-0 flex-wrap gap-2">
         {payload.choices.map((opt, i) => (
           <Button
             key={`${i}-${opt}`}
@@ -102,6 +102,7 @@ function ClarifyCard({ payload }: { payload: ClarifyPayload }) {
             size="sm"
             disabled={disabled}
             onClick={() => pick(opt)}
+            className="h-auto min-h-8 max-w-full min-w-0 shrink whitespace-normal break-words py-1.5 text-left"
           >
             {opt}
           </Button>

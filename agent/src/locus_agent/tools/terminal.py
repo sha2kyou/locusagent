@@ -8,6 +8,8 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from locus_shared.workspace_venv import WorkspaceVenvError, ensure_workspace_venv, workspace_venv_pip
+
 from ..config import get_settings
 from ..subprocess_sandbox import (
     build_sandbox_preexec_fn,
@@ -15,12 +17,16 @@ from ..subprocess_sandbox import (
     should_restrict_terminal_workdir,
     terminate_process_tree,
 )
+from ..workspace import get_workspace_id
 from .proc_env import build_proc_env
 from ..subprocess_env import safe_subprocess_env
 from .base import Tool, ToolError, ToolResult, register_builtin
 
 DEFAULT_TIMEOUT = 180.0
 MAX_OUTPUT = 100 * 1024
+
+_WORKSPACE_PYTHON_CMDS = frozenset({"python", "python3"})
+_WORKSPACE_PIP_CMDS = frozenset({"pip", "pip3"})
 
 
 def _command_set(raw: str) -> set[str]:
@@ -37,6 +43,32 @@ def _whitelist() -> set[str]:
 
 def _denylist() -> set[str]:
     return _command_set(get_settings().terminal_denylist)
+
+
+async def _resolve_executable(head: str) -> str:
+    wid = get_workspace_id()
+    if head in _WORKSPACE_PYTHON_CMDS:
+        try:
+            py = await asyncio.to_thread(ensure_workspace_venv, wid)
+        except WorkspaceVenvError as exc:
+            raise ToolError(str(exc)) from exc
+        return str(py)
+    if head in _WORKSPACE_PIP_CMDS:
+        try:
+            await asyncio.to_thread(ensure_workspace_venv, wid)
+        except WorkspaceVenvError as exc:
+            raise ToolError(str(exc)) from exc
+        pip = workspace_venv_pip(wid)
+        if not pip.is_file():
+            raise ToolError("pip not found in workspace virtualenv")
+        return str(pip)
+    resolved = shutil.which(head, path=safe_subprocess_env().get("PATH"))
+    if not resolved:
+        raise ToolError(f"command '{head}' not found in PATH")
+    exec_name = Path(resolved).name.lower()
+    if exec_name != head:
+        raise ToolError(f"resolved executable mismatch for command '{head}'")
+    return resolved
 
 
 async def _terminal(args: dict[str, Any]) -> ToolResult:
@@ -62,12 +94,7 @@ async def _terminal(args: dict[str, Any]) -> ToolResult:
         raise ToolError(f"command '{head}' not in whitelist")
     if head in _denylist():
         raise ToolError(f"command '{head}' is blocked by TERMINAL_DENYLIST")
-    resolved = shutil.which(head, path=safe_subprocess_env().get("PATH"))
-    if not resolved:
-        raise ToolError(f"command '{head}' not found in PATH")
-    exec_name = Path(resolved).name.lower()
-    if exec_name != head:
-        raise ToolError(f"resolved executable mismatch for command '{head}'")
+    resolved = await _resolve_executable(head)
     timeout = float(args.get("timeout", DEFAULT_TIMEOUT) or DEFAULT_TIMEOUT)
     if timeout <= 0:
         raise ToolError("timeout must be > 0")
@@ -121,6 +148,7 @@ register_builtin(
         name="terminal",
         description=(
             "Run shell commands for build, install, git, process management, scripts. "
+            "python/pip commands use the current workspace virtualenv (workspace/.venv). "
             "Subject to terminal enable flag, allow/deny lists, resource limits, timeout cleanup; "
             "not for file read/search (prefer read_file and search_files). "
             "Optional env: workspace env var names to inject (values from env_vars store)."

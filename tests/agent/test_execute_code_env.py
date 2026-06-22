@@ -66,11 +66,11 @@ async def test_execute_code_passes_env_to_subprocess(monkeypatch: pytest.MonkeyP
         captured.update(kwargs)
         return _FakeProc()
 
+    async def _fake_python() -> str:
+        return "python3"
+
     monkeypatch.setattr(asyncio, "create_subprocess_exec", _fake_exec)
-    monkeypatch.setattr(
-        "locus_agent.tools.execute_code._python_bin",
-        lambda _root: "python3",
-    )
+    monkeypatch.setattr("locus_agent.tools.execute_code._workspace_python", _fake_python)
 
     result = await _execute_code(
         {

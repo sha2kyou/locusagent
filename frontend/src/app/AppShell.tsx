@@ -74,7 +74,6 @@ export function AppShell() {
   const [mobileAction, setMobileAction] = useState<ReactNode>(null);
   const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([]);
   const navListRef = useRef<HTMLElement>(null);
-  const [menuScrollable, setMenuScrollable] = useState(false);
   const defaultWorkspaceId = workspaces.find((w) => w.is_default)?.id ?? "";
   const currentWorkspace = workspaces.find((w) => w.id === me?.current_workspace_id) ?? null;
   const currentWorkspaceLabel = currentWorkspace?.name || t("nav.defaultWorkspace");
@@ -115,22 +114,6 @@ export function AppShell() {
     routeWorkspace.workspaceId,
   ]);
 
-  useEffect(() => {
-    const el = navListRef.current;
-    if (!el) return;
-    const updateScrollable = () => {
-      setMenuScrollable(el.scrollHeight > el.clientHeight + 1);
-    };
-    updateScrollable();
-    const ro = new ResizeObserver(updateScrollable);
-    ro.observe(el);
-    window.addEventListener("resize", updateScrollable);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", updateScrollable);
-    };
-  }, [expanded, location.pathname, workspaces.length]);
-
   return (
     <ShellContext.Provider value={{ setMobileAction }}>
       <DesktopWindowDragOverlay
@@ -147,7 +130,7 @@ export function AppShell() {
 
         <aside
           className={cn(
-            "fixed inset-y-0 left-0 z-50 flex flex-col bg-sidebar transition-transform duration-200",
+            "apod-glass-sidebar fixed inset-y-0 left-0 z-50 flex flex-col transition-transform duration-200",
             sidebarPrimaryWidthClass.mobile,
             navOpen ? "translate-x-0" : "-translate-x-full",
             "md:static md:z-auto md:translate-x-0 md:border-r md:border-sidebar-border md:transition-[width]",
@@ -188,7 +171,6 @@ export function AppShell() {
             className={cn(
               "relative shrink-0 border-t border-sidebar-border/40 p-2.5",
               !expanded && "md:flex md:flex-col md:items-center md:p-2",
-              menuScrollable && "bg-sidebar",
             )}
           >
             {!isDefaultWorkspace && (
@@ -258,7 +240,7 @@ export function AppShell() {
               {mobileAction}
             </div>
           </div>
-          <main className="relative min-w-0 flex-1 overflow-hidden">
+          <main className="relative min-w-0 flex-1 overflow-hidden bg-background">
             <div className="pointer-events-none absolute right-3 top-3 z-[70] hidden md:block">
               <NotificationBell menuAlign="end" className="pointer-events-auto" />
             </div>

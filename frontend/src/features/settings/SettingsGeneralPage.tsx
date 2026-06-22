@@ -114,7 +114,7 @@ export function SettingsGeneralPage() {
         launch_at_login: launchAtLogin,
         quick_chat_enabled: current.quick_chat_enabled,
         quick_chat_shortcut: current.quick_chat_shortcut,
-        quick_chat_always_on_top: false,
+        quick_chat_always_on_top: current.quick_chat_always_on_top,
       });
       setRunInBackground(next.run_in_background);
       setLaunchAtLogin(next.launch_at_login);

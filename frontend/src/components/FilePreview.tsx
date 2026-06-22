@@ -1,4 +1,5 @@
-import { ProseMarkdown } from "@/features/chat/Markdown";
+import { useTranslation } from "react-i18next";
+import { Markdown } from "@/features/chat/Markdown";
 import {
   buildDataUrl,
   filePreviewKind,
@@ -46,7 +47,7 @@ function PlainTextBlock({ content, className }: { content: string; className?: s
 
 function CodePreview({ filename, content }: { filename: string; content: string }) {
   const lang = highlightLanguage(filename);
-  return <ProseMarkdown text={`\`\`\`${lang}\n${content}\n\`\`\``} enableMath={false} />;
+  return <Markdown text={`\`\`\`${lang}\n${content}\n\`\`\``} enableMath={false} />;
 }
 
 function ImagePreview({ src, alt }: { src: string; alt: string }) {
@@ -58,12 +59,22 @@ function ImagePreview({ src, alt }: { src: string; alt: string }) {
 }
 
 function PdfPreview({ src, title }: { src: string; title: string }) {
+  const { t } = useTranslation();
   return (
-    <iframe
-      src={src}
+    <object
+      data={src}
+      type="application/pdf"
       title={title}
-      className="h-[min(70vh,720px)] w-full rounded-md border border-border bg-surface-2"
-    />
+      className="block h-[min(70vh,720px)] w-full rounded-md border border-border bg-surface-2"
+    >
+      <embed src={src} type="application/pdf" className="h-[min(70vh,720px)] w-full" title={title} />
+      <p className="p-3 text-sm text-muted-foreground">
+        {t("chat.attachment.pdfPreviewUnavailable")}{" "}
+        <a href={src} target="_blank" rel="noreferrer" className="underline">
+          {t("chat.attachment.openPdf")}
+        </a>
+      </p>
+    </object>
   );
 }
 
@@ -76,7 +87,7 @@ function renderByKind(
 ) {
   switch (kind) {
     case "markdown":
-      return <ProseMarkdown text={content} />;
+      return <Markdown text={content} />;
     case "code":
       return <CodePreview filename={props.filename} content={content} />;
     case "image":
@@ -124,7 +135,7 @@ export function FilePreview({
   const text = content ?? "";
 
   return (
-    <div className={cn("space-y-3", className)}>
+    <div className={cn("min-w-0 space-y-3", className)}>
       {kind === "image" ? (
         imageSrc ? (
           <ImagePreview src={imageSrc} alt={filename} />

@@ -225,7 +225,7 @@
       "rowDone": "已完成",
       "overall": {
         "title": "总体进度",
-        "description": "统计当前工作区记忆、对话、产物、环境变量与技能的向量索引状态，每 3 秒自动刷新。"
+        "description": "统计当前工作区记忆、对话、产物、环境变量与技能的向量索引状态，进行中约每 1.5 秒、完成后每 3 秒自动刷新。"
       },
       "byKind": {
         "title": "分类明细"
@@ -395,6 +395,8 @@
       "exportUnsupported": "当前附件暂不支持导出",
       "emptyFile": "（空文件）",
       "previewUnsupported": "该附件类型暂不支持预览。",
+      "pdfPreviewUnavailable": "当前环境无法预览 PDF。",
+      "openPdf": "打开 PDF",
       "parseUnsupported": "该附件当前不可解析，无法展示内容。",
       "imageMissingData": "图片附件缺少可渲染数据。",
       "oneAtATime": "一次仅支持添加 1 个附件",

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ComposerPrimitive,
@@ -13,6 +13,7 @@ import { ArrowDown, ArrowUp, Check, Copy, Download, Paperclip, RotateCcw, Square
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import { findScrollParent, isScrollAtBottom, scrollContainerToBottom } from "@/lib/scroll-parent";
 import { useImeEnterGuard } from "@/lib/ime-enter";
 import { useCopy } from "@/lib/useCopy";
 import {
@@ -22,7 +23,7 @@ import { Markdown, ThinkingBlock } from "./Markdown";
 import { FilePreview } from "@/components/FilePreview";
 import type { ChatMessage } from "./model";
 import { ToolPartView } from "./ToolEvent";
-import { extractLatestTodoPlan, applyHistoricalTodoInterrupt, isTodoTool, type TodoPlan } from "./todo";
+import { extractLatestTodoPlan, isTodoTool, resolveTodoPlan, type TodoPlan } from "./todo";
 import { TodoProgressPanel } from "./TodoProgressPanel";
 import { useChat } from "./ChatProvider";
 import type { ChatAttachment } from "./model";
@@ -48,6 +49,35 @@ function pickRandomSample<T>(items: T[], count: number): T[] {
 
 type ThreadVariant = "default" | "quick";
 
+/** 流式输出时贴底跟随；todo/工具块等自定义 DOM 变更可能绕过 assistant-ui 的 isAtBottom 检测。 */
+function ThreadStreamFollow() {
+  const { messages, isRunning, sessionTodoPlan } = useChat();
+  const tailRef = useRef<HTMLDivElement>(null);
+  const followRef = useRef(true);
+
+  useEffect(() => {
+    const el = findScrollParent(tailRef.current);
+    if (!el) return;
+    const syncFollow = () => {
+      followRef.current = isScrollAtBottom(el);
+    };
+    el.addEventListener("scroll", syncFollow, { passive: true });
+    syncFollow();
+    return () => el.removeEventListener("scroll", syncFollow);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isRunning || !followRef.current) return;
+    const el = findScrollParent(tailRef.current);
+    if (!el) return;
+    const stick = () => scrollContainerToBottom(el, "instant");
+    stick();
+    requestAnimationFrame(stick);
+  }, [isRunning, messages, sessionTodoPlan]);
+
+  return <div ref={tailRef} aria-hidden className="h-0 w-0 shrink-0" />;
+}
+
 export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
   const { t, i18n } = useTranslation();
   const { currentId } = useChat();
@@ -57,22 +87,11 @@ export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
     return pickRandomSample(all, EMPTY_SUGGESTION_COUNT);
   }, [currentId, i18n.language, t]);
   return (
-    <ThreadPrimitive.Root className="flex h-full flex-col">
+    <ThreadPrimitive.Root className="flex h-full flex-col bg-background">
       <ThreadPrimitive.Viewport className="relative flex-1 overflow-y-auto">
-        <ThreadPrimitive.Empty>
-          <div
-            className="pointer-events-none absolute inset-x-0 top-[8%] z-0 h-[min(55vh,440px)]"
-            style={{
-              background:
-                "radial-gradient(ellipse 680px 68% at 50% 48%, var(--color-brand-soft) 0%, transparent 70%)",
-            }}
-            aria-hidden
-          />
-        </ThreadPrimitive.Empty>
-
         <div
           className={cn(
-            "relative z-10 mx-auto w-full py-6",
+            "mx-auto w-full py-6",
             isQuick ? "max-w-full px-4 pb-4 pt-8" : "max-w-3xl px-6 py-10",
           )}
         >
@@ -90,7 +109,7 @@ export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
                     method="replace"
                     asChild
                   >
-                    <button className="rounded-lg border border-border bg-background/80 px-3.5 py-2 text-sm text-muted-foreground shadow-xs transition-all duration-150 hover:border-border hover:bg-surface hover:text-foreground hover:shadow-sm">
+                    <button className="max-w-full break-words rounded-lg border border-border bg-background/80 px-3.5 py-2 text-left text-sm text-muted-foreground shadow-xs transition-all duration-150 hover:border-border hover:bg-surface hover:text-foreground hover:shadow-sm">
                       {p}
                     </button>
                   </ThreadPrimitive.Suggestion>
@@ -105,22 +124,27 @@ export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
               AssistantMessage,
             }}
           />
+          <ThreadStreamFollow />
         </div>
 
-        <ThreadPrimitive.ScrollToBottom asChild>
-          {!isQuick ? (
-            <Button
-              variant="secondary"
-              size="icon"
-              className="sticky bottom-4 left-1/2 -translate-x-1/2 rounded-full shadow-lg transition-opacity disabled:pointer-events-none disabled:opacity-0"
-              aria-label={t("chat.composer.scrollToBottom")}
-            >
-              <ArrowDown />
-            </Button>
-          ) : (
+        {!isQuick ? (
+          <div className="pointer-events-none sticky bottom-4 z-30 flex w-full justify-center">
+            <ThreadPrimitive.ScrollToBottom asChild>
+              <Button
+                variant="secondary"
+                size="icon"
+                className="pointer-events-auto rounded-full shadow-lg transition-opacity disabled:pointer-events-none disabled:opacity-0"
+                aria-label={t("chat.composer.scrollToBottom")}
+              >
+                <ArrowDown />
+              </Button>
+            </ThreadPrimitive.ScrollToBottom>
+          </div>
+        ) : (
+          <ThreadPrimitive.ScrollToBottom asChild>
             <span className="hidden" aria-hidden />
-          )}
-        </ThreadPrimitive.ScrollToBottom>
+          </ThreadPrimitive.ScrollToBottom>
+        )}
       </ThreadPrimitive.Viewport>
 
       <Composer variant={variant} />
@@ -228,9 +252,10 @@ function Composer({ variant = "default" }: { variant?: ThreadVariant }) {
   };
 
   return (
-    <div className={cn(isQuick ? "px-4 pb-3 pt-1" : "px-6 pb-6 pt-2")}>
+    <div className={cn("shrink-0 bg-background", isQuick ? "px-4 pb-3 pt-2" : "px-6 pb-6 pt-2")}>
+      <div className={cn("mx-auto w-full", !isQuick && "max-w-3xl")}>
       {messageQueue.length > 0 ? (
-        <div className={cn("mx-auto mb-2 flex w-full flex-col gap-1.5", !isQuick && "max-w-3xl")}>
+        <div className="mb-2 flex w-full flex-col gap-1.5">
           {messageQueue.map((item, index) => (
             <div
               key={item.id}
@@ -276,7 +301,7 @@ function Composer({ variant = "default" }: { variant?: ThreadVariant }) {
       ) : null}
 
       {pendingAttachments.length > 0 ? (
-        <div className={cn("mx-auto mb-2 flex w-full flex-wrap gap-1.5", !isQuick && "max-w-3xl")}>
+        <div className="mb-2 flex w-full flex-wrap gap-1.5">
           {pendingAttachments.map((file) => (
             <span
               key={file.id}
@@ -302,10 +327,7 @@ function Composer({ variant = "default" }: { variant?: ThreadVariant }) {
       ) : null}
 
       <ComposerPrimitive.Root
-        className={cn(
-          "mx-auto flex w-full items-end gap-2 rounded-xl border border-border bg-background px-2.5 py-2.5 shadow-sm transition-[box-shadow,border-color] duration-150 focus-within:border-brand/30 focus-within:shadow-[0_0_0_3px_var(--color-ring),var(--shadow-sm)]",
-          !isQuick && "max-w-3xl",
-        )}
+        className="flex w-full items-end gap-2 rounded-xl border border-border bg-background px-2.5 py-2.5 shadow-sm transition-[box-shadow,border-color] duration-150 focus-within:border-brand/30 focus-within:shadow-[0_0_0_3px_var(--color-ring),var(--shadow-sm)]"
       >
         <input
           ref={fileInputRef}
@@ -362,7 +384,7 @@ function Composer({ variant = "default" }: { variant?: ThreadVariant }) {
       </ComposerPrimitive.Root>
 
       {!isQuick ? (
-        <p className="mx-auto mt-2 max-w-3xl text-center text-[11px] text-muted-foreground/50">
+        <p className="mt-2 text-center text-[11px] text-muted-foreground/50">
           {isRunning
             ? t("chat.composer.keyboardHint.queue")
             : messageQueue.length > 0
@@ -370,6 +392,7 @@ function Composer({ variant = "default" }: { variant?: ThreadVariant }) {
               : t("chat.composer.keyboardHint.default")}
         </p>
       ) : null}
+      </div>
     </div>
   );
 }
@@ -803,24 +826,6 @@ function UserMessage() {
       </div>
     </MessagePrimitive.Root>
   );
-}
-
-function resolveTodoPlan(
-  fromParts: TodoPlan | null,
-  sessionTodoPlan: TodoPlan | null,
-  isLastAssistant: boolean,
-  hasTodoInMessage: boolean,
-): TodoPlan | null {
-  if (!isLastAssistant) {
-    return fromParts ? applyHistoricalTodoInterrupt(fromParts) : null;
-  }
-  if (!hasTodoInMessage && !fromParts && !sessionTodoPlan) return null;
-  if (sessionTodoPlan && fromParts && sessionTodoPlan.plan_id === fromParts.plan_id) {
-    return sessionTodoPlan;
-  }
-  if (fromParts) return fromParts;
-  if (hasTodoInMessage && sessionTodoPlan) return sessionTodoPlan;
-  return null;
 }
 
 function AssistantPartList({

@@ -974,7 +974,7 @@ async def create_binary_attachment(
     mime_type: str | None,
     data: bytes,
 ) -> dict[str, Any]:
-    """上传二进制到 MinIO，供对话内下载（不注入 LLM 上下文）。"""
+    """上传二进制到本地附件存储（~/.locusagent/attachments），供对话内下载（不注入 LLM 上下文）。"""
     from ..config import get_settings
 
     if not data:
@@ -1359,8 +1359,74 @@ async def persist_context_compression(
     return await run_in_thread(_do)
 
 
+async def reconcile_incomplete_tool_rounds(session_id: str) -> int:
+    """修复 assistant 有 tool_calls 但 tool 回复未齐的历史, 避免 LLM API 400。"""
+
+    def _do() -> int:
+        with conn_scope(load_vec=False) as c:
+            rows = list(
+                c.execute(
+                    "SELECT id, role, tool_calls, tool_call_id "
+                    "FROM messages WHERE session_id = ? AND context_state = 'active' "
+                    "ORDER BY id ASC",
+                    (session_id,),
+                ).fetchall()
+            )
+            assistant_ids_to_clear: list[int] = []
+            tool_ids_to_delete: list[int] = []
+            i = 0
+            while i < len(rows):
+                row = rows[i]
+                if row["role"] != "assistant":
+                    i += 1
+                    continue
+                tool_calls_raw = row["tool_calls"]
+                tool_calls = None
+                if tool_calls_raw:
+                    try:
+                        tool_calls = json.loads(tool_calls_raw)
+                    except json.JSONDecodeError:
+                        tool_calls = None
+                if not _is_openai_tool_calls(tool_calls):
+                    i += 1
+                    continue
+
+                expected_ids = {
+                    str(tc.get("id") or "").strip()
+                    for tc in tool_calls
+                    if isinstance(tc, dict) and str(tc.get("id") or "").strip()
+                }
+                j = i + 1
+                tool_rows: list[Any] = []
+                found_ids: set[str] = set()
+                while j < len(rows) and rows[j]["role"] == "tool":
+                    tool_row = rows[j]
+                    tool_rows.append(tool_row)
+                    tc_id = str(tool_row["tool_call_id"] or "").strip()
+                    if tc_id:
+                        found_ids.add(tc_id)
+                    j += 1
+
+                if expected_ids and not (expected_ids <= found_ids):
+                    assistant_ids_to_clear.append(int(row["id"]))
+                    tool_ids_to_delete.extend(int(tr["id"]) for tr in tool_rows)
+                i = j
+
+            if not assistant_ids_to_clear and not tool_ids_to_delete:
+                return 0
+
+            for tool_id in tool_ids_to_delete:
+                c.execute("DELETE FROM messages WHERE id = ?", (tool_id,))
+            for assistant_id in assistant_ids_to_clear:
+                c.execute("UPDATE messages SET tool_calls = NULL WHERE id = ?", (assistant_id,))
+            return len(assistant_ids_to_clear) + len(tool_ids_to_delete)
+
+    return await run_in_thread(_do)
+
+
 async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
-    """从 DB 重建 OpenAI 格式上下文（仅 active 消息）。"""
+    """从 DB 重建 OpenAI 格式上下文(仅 active 消息)。"""
+    await reconcile_incomplete_tool_rounds(session_id)
 
     def _do() -> tuple[list[Any], dict[int, list[dict[str, Any]]]]:
         with conn_scope(load_vec=False) as c:

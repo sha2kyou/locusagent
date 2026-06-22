@@ -1,4 +1,4 @@
-"""附件对象存储代理：S3 凭据仅留在 Host。"""
+"""附件本地文件存储代理：读写 ~/.locusagent/attachments，仅 Host 进程直接访问磁盘。"""
 
 from __future__ import annotations
 

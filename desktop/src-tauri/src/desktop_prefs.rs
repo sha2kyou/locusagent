@@ -16,6 +16,10 @@ fn default_quick_chat_shortcut() -> String {
     crate::quick_chat::DEFAULT_QUICK_CHAT_SHORTCUT.to_string()
 }
 
+fn default_quick_chat_always_on_top() -> bool {
+    true
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct QuickChatWindowBounds {
     pub x: i32,
@@ -32,7 +36,7 @@ pub struct DesktopPrefs {
     pub quick_chat_enabled: bool,
     #[serde(default = "default_quick_chat_shortcut")]
     pub quick_chat_shortcut: String,
-    #[serde(default)]
+    #[serde(default = "default_quick_chat_always_on_top")]
     pub quick_chat_always_on_top: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quick_chat_window_bounds: Option<QuickChatWindowBounds>,
@@ -45,7 +49,7 @@ impl Default for DesktopPrefs {
             launch_at_login: false,
             quick_chat_enabled: default_quick_chat_enabled(),
             quick_chat_shortcut: default_quick_chat_shortcut(),
-            quick_chat_always_on_top: false,
+            quick_chat_always_on_top: default_quick_chat_always_on_top(),
             quick_chat_window_bounds: None,
         }
     }
@@ -247,6 +251,7 @@ pub fn desktop_set_prefs(
     if let Err(err) = crate::quick_chat::sync_quick_chat_shortcut(&app, &prefs) {
         return Err(format!("偏好已保存，但快捷对话快捷键更新失败: {err}"));
     }
+    crate::quick_chat::apply_quick_chat_always_on_top(&app, prefs.quick_chat_always_on_top);
     Ok(prefs)
 }
 
