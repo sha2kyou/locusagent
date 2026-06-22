@@ -395,6 +395,8 @@
       "exportUnsupported": "当前附件暂不支持导出",
       "emptyFile": "（空文件）",
       "previewUnsupported": "该附件类型暂不支持预览。",
+      "pdfPreviewUnavailable": "当前环境无法预览 PDF。",
+      "openPdf": "打开 PDF",
       "parseUnsupported": "该附件当前不可解析，无法展示内容。",
       "imageMissingData": "图片附件缺少可渲染数据。",
       "oneAtATime": "一次仅支持添加 1 个附件",

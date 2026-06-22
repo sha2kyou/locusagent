@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { ProseMarkdown } from "@/features/chat/Markdown";
 import {
   buildDataUrl,
@@ -58,6 +59,7 @@ function ImagePreview({ src, alt }: { src: string; alt: string }) {
 }
 
 function PdfPreview({ src, title }: { src: string; title: string }) {
+  const { t } = useTranslation();
   return (
     <object
       data={src}
@@ -66,6 +68,12 @@ function PdfPreview({ src, title }: { src: string; title: string }) {
       className="block h-[min(70vh,720px)] w-full rounded-md border border-border bg-surface-2"
     >
       <embed src={src} type="application/pdf" className="h-[min(70vh,720px)] w-full" title={title} />
+      <p className="p-3 text-sm text-muted-foreground">
+        {t("chat.attachment.pdfPreviewUnavailable")}{" "}
+        <a href={src} target="_blank" rel="noreferrer" className="underline">
+          {t("chat.attachment.openPdf")}
+        </a>
+      </p>
     </object>
   );
 }

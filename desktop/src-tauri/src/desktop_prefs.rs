@@ -49,7 +49,7 @@ impl Default for DesktopPrefs {
             launch_at_login: false,
             quick_chat_enabled: default_quick_chat_enabled(),
             quick_chat_shortcut: default_quick_chat_shortcut(),
-            quick_chat_always_on_top: true,
+            quick_chat_always_on_top: default_quick_chat_always_on_top(),
             quick_chat_window_bounds: None,
         }
     }

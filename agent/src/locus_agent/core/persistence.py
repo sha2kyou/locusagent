@@ -1360,7 +1360,7 @@ async def persist_context_compression(
 
 
 async def reconcile_incomplete_tool_rounds(session_id: str) -> int:
-    """修复 assistant 有 tool_calls 但 tool 回复未齐的历史，避免 LLM API 400。"""
+    """修复 assistant 有 tool_calls 但 tool 回复未齐的历史, 避免 LLM API 400。"""
 
     def _do() -> int:
         with conn_scope(load_vec=False) as c:
@@ -1425,7 +1425,7 @@ async def reconcile_incomplete_tool_rounds(session_id: str) -> int:
 
 
 async def build_llm_messages(session_id: str) -> list[dict[str, Any]]:
-    """从 DB 重建 OpenAI 格式上下文（仅 active 消息）。"""
+    """从 DB 重建 OpenAI 格式上下文(仅 active 消息)。"""
     await reconcile_incomplete_tool_rounds(session_id)
 
     def _do() -> tuple[list[Any], dict[int, list[dict[str, Any]]]]:

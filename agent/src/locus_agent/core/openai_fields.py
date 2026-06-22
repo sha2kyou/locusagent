@@ -76,7 +76,7 @@ def _assistant_tool_call_ids(msg: dict[str, Any]) -> set[str]:
 
 
 def repair_incomplete_tool_rounds(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """去掉 assistant 上未收齐 tool 回复的 tool_calls，并丢弃紧随其后的残缺 tool 消息。"""
+    """去掉 assistant 上未收齐 tool 回复的 tool_calls, 并丢弃紧随其后的残缺 tool 消息。"""
     out: list[dict[str, Any]] = []
     i = 0
     while i < len(messages):

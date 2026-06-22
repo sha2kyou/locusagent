@@ -92,6 +92,7 @@ async def create_workspace(
         session.add(row)
         await session.flush()
         await session.refresh(row)
+    # 工作区行已提交; venv 创建失败时仍返回 500, 但 ensure_workspace_venv 幂等, 后续可重试补齐。
     try:
         await asyncio.to_thread(ensure_workspace_venv, row.id)
     except WorkspaceVenvError as exc:

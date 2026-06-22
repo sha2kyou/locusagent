@@ -395,6 +395,8 @@
       "exportUnsupported": "This attachment cannot be exported",
       "emptyFile": "(empty file)",
       "previewUnsupported": "Preview not supported for this attachment type.",
+      "pdfPreviewUnavailable": "PDF preview isn't available in this environment.",
+      "openPdf": "Open PDF",
       "parseUnsupported": "This attachment cannot be parsed or displayed.",
       "imageMissingData": "Image attachment has no renderable data.",
       "oneAtATime": "Only one attachment at a time",
