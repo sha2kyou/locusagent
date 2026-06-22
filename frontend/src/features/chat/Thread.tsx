@@ -9,7 +9,7 @@ import {
   useThreadRuntime,
   type TextMessagePartComponent,
 } from "@assistant-ui/react";
-import { ArrowDown, ArrowUp, Check, Copy, Download, Paperclip, RotateCcw, Square, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Copy, Download, Loader2, Paperclip, RotateCcw, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
@@ -80,7 +80,7 @@ function ThreadStreamFollow() {
 
 export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
   const { t, i18n } = useTranslation();
-  const { currentId } = useChat();
+  const { currentId, loadingMessages } = useChat();
   const isQuick = variant === "quick";
   const promptChips = useMemo(() => {
     const all = t("chat.empty.suggestions", { returnObjects: true }) as string[];
@@ -96,26 +96,33 @@ export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
           )}
         >
           <ThreadPrimitive.Empty>
-            <div className="flex min-h-[55vh] flex-col items-center justify-center text-center">
-              <h2 className="text-2xl font-semibold tracking-tight">{t("chat.empty.title")}</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {t("chat.empty.subtitle")}
-              </p>
-              <div className="mt-6 flex max-w-lg flex-wrap justify-center gap-2">
-                {promptChips.map((p) => (
-                  <ThreadPrimitive.Suggestion
-                    key={p}
-                    prompt={p}
-                    method="replace"
-                    asChild
-                  >
-                    <button className="max-w-full break-words rounded-lg border border-border bg-background/80 px-3.5 py-2 text-left text-sm text-muted-foreground shadow-xs transition-all duration-150 hover:border-border hover:bg-surface hover:text-foreground hover:shadow-sm">
-                      {p}
-                    </button>
-                  </ThreadPrimitive.Suggestion>
-                ))}
+            {loadingMessages && currentId ? (
+              <div className="flex min-h-[55vh] flex-col items-center justify-center text-muted-foreground">
+                <Loader2 className="size-6 animate-spin" />
+                <p className="mt-3 text-sm">{t("common.loading")}</p>
               </div>
-            </div>
+            ) : (
+              <div className="flex min-h-[55vh] flex-col items-center justify-center text-center">
+                <h2 className="text-2xl font-semibold tracking-tight">{t("chat.empty.title")}</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {t("chat.empty.subtitle")}
+                </p>
+                <div className="mt-6 flex max-w-lg flex-wrap justify-center gap-2">
+                  {promptChips.map((p) => (
+                    <ThreadPrimitive.Suggestion
+                      key={p}
+                      prompt={p}
+                      method="replace"
+                      asChild
+                    >
+                      <button className="max-w-full break-words rounded-lg border border-border bg-background/80 px-3.5 py-2 text-left text-sm text-muted-foreground shadow-xs transition-all duration-150 hover:border-border hover:bg-surface hover:text-foreground hover:shadow-sm">
+                        {p}
+                      </button>
+                    </ThreadPrimitive.Suggestion>
+                  ))}
+                </div>
+              </div>
+            )}
           </ThreadPrimitive.Empty>
 
           <ThreadPrimitive.Messages

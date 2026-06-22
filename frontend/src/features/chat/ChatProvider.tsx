@@ -75,6 +75,7 @@ export interface QueuedMessage {
 interface ChatContextValue {
   messages: ChatMessage[];
   sessions: SessionMeta[];
+  loadingMessages: boolean;
   loadingSessions: boolean;
   hasMoreSessions: boolean;
   loadingMoreSessions: boolean;
@@ -192,6 +193,7 @@ export function ChatProvider({
   const [isRunning, setIsRunning] = useState(false);
   const [lastErrored, setLastErrored] = useState(false);
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(() => Boolean(urlSessionId));
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [hasMoreSessions, setHasMoreSessions] = useState(false);
   const [loadingMoreSessions, setLoadingMoreSessions] = useState(false);
@@ -637,6 +639,7 @@ export function ChatProvider({
     setPendingAttachments([]);
     clearMessageQueue();
     setLastErrored(false);
+    setLoadingMessages(false);
   };
 
   const loadSessionFromUrl = (id: string) => {
@@ -653,6 +656,7 @@ export function ChatProvider({
     setPendingAttachments([]);
     clearMessageQueue();
     setLastErrored(false);
+    setLoadingMessages(true);
     void (async () => {
       try {
         const [{ items, todo_plan: todoPlan }, { run }] = await Promise.all([
@@ -674,6 +678,10 @@ export function ChatProvider({
         toast((e as Error).message || t("chat.errors.sessionNotFound"), "error");
         resetToNewChat();
         navigate(resolveChatPath(null), { replace: true });
+      } finally {
+        if (token === loadTokenRef.current && mountedRef.current) {
+          setLoadingMessages(false);
+        }
       }
     })();
   };
@@ -1142,6 +1150,7 @@ export function ChatProvider({
       value={{
         messages,
         sessions,
+        loadingMessages,
         loadingSessions,
         hasMoreSessions,
         loadingMoreSessions,
