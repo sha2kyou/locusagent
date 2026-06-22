@@ -96,7 +96,7 @@ export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
           )}
         >
           <ThreadPrimitive.Empty>
-            {loadingMessages && currentId ? (
+            {currentId || loadingMessages ? (
               <div className="flex min-h-[55vh] flex-col items-center justify-center text-muted-foreground">
                 <Loader2 className="size-6 animate-spin" />
                 <p className="mt-3 text-sm">{t("common.loading")}</p>
