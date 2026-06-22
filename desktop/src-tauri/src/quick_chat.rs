@@ -20,7 +20,7 @@ pub const QUICK_CHAT_FOCUS_COMPOSER_EVENT: &str = "quick-chat:focus-composer";
 
 pub const DEFAULT_QUICK_CHAT_SHORTCUT: &str = "cmd+shift+K";
 pub const QUICK_CHAT_WINDOW_WIDTH: f64 = 440.0;
-pub const QUICK_CHAT_WINDOW_HEIGHT: f64 = 580.0;
+pub const QUICK_CHAT_WINDOW_HEIGHT: f64 = 640.0;
 
 static REGISTERED_SHORTCUT: Mutex<Option<String>> = Mutex::new(None);
 static SHORTCUT_SYNC_ERROR: Mutex<Option<String>> = Mutex::new(None);

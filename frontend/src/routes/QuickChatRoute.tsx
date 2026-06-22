@@ -6,7 +6,7 @@ export function QuickChatRoute() {
   useQuickChatHtmlClass();
 
   return (
-    <div className="flex h-dvh flex-col bg-background">
+    <div className="flex h-dvh flex-col overflow-hidden bg-background">
       {isDesktopApp() ? (
         <div
           {...desktopDragRegionProps()}
@@ -14,7 +14,7 @@ export function QuickChatRoute() {
           aria-hidden
         />
       ) : null}
-      <div className="apod-quick-chat-body flex min-h-0 flex-1 flex-col">
+      <div className="apod-quick-chat-body flex min-h-0 flex-1 flex-col overflow-hidden">
         <ChatProvider mode="quick">
           <QuickThread />
         </ChatProvider>

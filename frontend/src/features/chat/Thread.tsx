@@ -87,7 +87,7 @@ export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
     return pickRandomSample(all, EMPTY_SUGGESTION_COUNT);
   }, [currentId, i18n.language, t]);
   return (
-    <ThreadPrimitive.Root className="relative flex h-full flex-col bg-background">
+    <ThreadPrimitive.Root className="relative flex h-full min-h-0 flex-col overflow-hidden bg-background">
       <ThreadPrimitive.Viewport className="relative flex-1 overflow-y-auto">
         <div
           className={cn(
@@ -254,8 +254,10 @@ function Composer({ variant = "default" }: { variant?: ThreadVariant }) {
   return (
     <div
       className={cn(
-        "pointer-events-none absolute inset-x-0 bottom-0 z-20",
-        isQuick ? "px-4 pb-3 pt-2" : "px-6 pb-5 pt-2",
+        "pointer-events-none z-20",
+        isQuick
+          ? "fixed inset-x-0 bottom-0 px-4 pb-3 pt-2"
+          : "absolute inset-x-0 bottom-0 px-6 pb-5 pt-2",
       )}
     >
       <div className={cn("pointer-events-auto mx-auto w-full", !isQuick && "max-w-3xl")}>
