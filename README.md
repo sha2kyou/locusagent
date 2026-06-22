@@ -26,6 +26,10 @@ Put together: *an agent anchored to a local place you control.*
 
 ## Highlights
 
+- **Quick chat window** — Press a global shortcut (default `Cmd+Shift+K` / `Ctrl+Shift+K`) to open a lightweight chat overlay from anywhere on your desktop. Stream replies without switching to the main window; shortcut, window position, and enable/disable are configurable in Settings.
+
+![Locus Agent quick chat — floating overlay with streaming replies and LaTeX rendering](docs/images/quick-window.png)
+
 - **Local & private** — Conversations, memory, and workspace files stay on your machine. No cloud account required beyond your LLM provider API key.
 - **Tool-native agent loop** — File I/O, sandboxed code execution, controlled terminal commands, web search/extract, and file delivery from a single chat UI.
 - **Skills** — Reusable instruction packs: built-in (read-only), plus per-workspace user Skills you can author or install from GitHub/zip URLs.
