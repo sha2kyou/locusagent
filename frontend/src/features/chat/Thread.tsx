@@ -80,7 +80,7 @@ export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
                     method="replace"
                     asChild
                   >
-                    <button className="rounded-lg border border-border bg-background/80 px-3.5 py-2 text-sm text-muted-foreground shadow-xs transition-all duration-150 hover:border-border hover:bg-surface hover:text-foreground hover:shadow-sm">
+                    <button className="max-w-full break-words rounded-lg border border-border bg-background/80 px-3.5 py-2 text-left text-sm text-muted-foreground shadow-xs transition-all duration-150 hover:border-border hover:bg-surface hover:text-foreground hover:shadow-sm">
                       {p}
                     </button>
                   </ThreadPrimitive.Suggestion>

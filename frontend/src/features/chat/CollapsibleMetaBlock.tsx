@@ -86,7 +86,7 @@ export function CollapsibleMetaBlock({
         )}
       >
         <BlockLeading running={running} icon={icon} />
-        <span className="shrink-0 whitespace-nowrap text-[13px] font-medium text-foreground">{displayTitle}</span>
+        <span className="min-w-0 shrink truncate text-[13px] font-medium text-foreground">{displayTitle}</span>
         {showRunningBadge && running ? (
           <span className="shrink-0 rounded-full bg-brand/10 px-1.5 py-0.5 text-[10px] font-medium text-brand">
             {t("chat.meta.running")}
