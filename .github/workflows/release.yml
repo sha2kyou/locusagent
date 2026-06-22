@@ -186,6 +186,8 @@ jobs:
 
             zap trash: [
               "~/.locusagent",
+              "~/Library/Preferences/cn.tr1ck.locus.plist",
+              "~/Library/Saved Application State/cn.tr1ck.locus.savedState",
               "~/Library/Preferences/com.locusagent.desktop.plist",
               "~/Library/Saved Application State/com.locusagent.desktop.savedState",
             ]
