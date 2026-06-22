@@ -4,7 +4,9 @@
 [![Release](https://img.shields.io/github/v/release/sha2kyou/locusagent?label=release&sort=semver)](https://github.com/sha2kyou/locusagent/releases)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-**Locus Agent** is a local-first desktop AI agent for macOS and Windows. Chat with an LLM that can read and write files in your workspace, run code, search the web, connect MCP servers, remember context across sessions, and automate recurring work — all with data stored on your machine.
+**Locus Agent** is a local-first desktop AI agent for macOS and Windows, built around **deliverables**—reports, scripts, workspace files, and categorized **Artifacts** you can recall and iterate on later. Chat is how you steer the work; the point is output you can keep.
+
+Turn a brief into finished work: the agent reads and writes files in your workspace, runs code, searches the web, connects MCP servers, remembers context across sessions, and runs recurring prompts on a schedule. Everything stays on your machine.
 
 Runtime data lives under `~/.locusagent/` (macOS/Linux) or `%USERPROFILE%\.locusagent\` (Windows): `settings.json`, SQLite databases, and per-workspace storage.
 
@@ -188,7 +190,3 @@ See `shared/settings.example.json` for an annotated example of host settings.
 Licensed under the [Apache License, Version 2.0](LICENSE).
 
 Copyright © 2026 Locus Agent Team
-
----
-
-**Version:** [latest release](https://github.com/sha2kyou/locusagent/releases) · **Platforms:** macOS (arm64), Windows (x64)
