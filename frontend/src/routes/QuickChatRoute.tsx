@@ -1,18 +1,12 @@
 import { ChatProvider } from "@/features/chat/ChatProvider";
 import { QuickThread } from "@/features/chat/QuickThread";
-import { cn } from "@/lib/utils";
 import { desktopDragRegionProps, isDesktopApp, useQuickChatHtmlClass } from "@/lib/desktop-app";
 
 export function QuickChatRoute() {
   useQuickChatHtmlClass();
 
   return (
-    <div
-      className={cn(
-        "flex h-dvh flex-col",
-        isDesktopApp() ? "apod-glass-chrome" : "bg-background",
-      )}
-    >
+    <div className="flex h-dvh flex-col bg-background">
       {isDesktopApp() ? (
         <div
           {...desktopDragRegionProps()}

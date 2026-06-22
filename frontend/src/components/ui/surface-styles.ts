@@ -2,8 +2,6 @@
 
 export const glassChromeClass = "apod-glass-chrome text-card-foreground";
 
-export const glassComposerClass = "apod-glass-composer";
-
 export const glassOverlayClass = "apod-glass-overlay apod-fade";
 
 /** 浮层、下拉、Toast 等共用面板样式，与 Modal / Drawer 视觉一致 */
