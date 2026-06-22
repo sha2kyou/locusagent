@@ -688,10 +688,10 @@ async def workspace_download_attachment(attachment_id: str) -> Response:
 
 @router.get("/sessions/{session_id}")
 async def workspace_session_messages(session_id: str) -> dict:
-    from ..todos.store import get_active_plan
+    from ..todos.store import get_plan
 
     items = await list_messages(session_id)
-    plan = await get_active_plan(session_id)
+    plan = await get_plan(session_id)
     return {"items": items, "todo_plan": plan}
 
 

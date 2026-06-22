@@ -3,19 +3,11 @@ import { useTranslation } from "react-i18next";
 import { ChevronRight, Loader2 } from "lucide-react";
 import { ListCard } from "@/components/ui/panel";
 import { cn } from "@/lib/utils";
-import { findScrollParent } from "@/lib/scroll-parent";
+import { preserveScrollOnLayoutChange } from "@/lib/scroll-parent";
 import { usePinnedCollapse } from "@/lib/use-pinned-collapse";
 
 export function toggleWithScrollPreservation(toggle: () => void, triggerEl: HTMLButtonElement) {
-  const scroller = findScrollParent(triggerEl);
-  const prevTop = scroller?.scrollTop ?? 0;
-  toggle();
-  requestAnimationFrame(() => {
-    if (scroller) scroller.scrollTop = prevTop;
-    setTimeout(() => {
-      if (scroller) scroller.scrollTop = prevTop;
-    }, 0);
-  });
+  preserveScrollOnLayoutChange(triggerEl, toggle);
 }
 
 function BlockLeading({ running, icon }: { running: boolean; icon: ReactNode }) {

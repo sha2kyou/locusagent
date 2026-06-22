@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ComposerPrimitive,
@@ -13,6 +13,7 @@ import { ArrowDown, ArrowUp, Check, Copy, Download, Paperclip, RotateCcw, Square
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import { findScrollParent, isScrollAtBottom, scrollContainerToBottom } from "@/lib/scroll-parent";
 import { useImeEnterGuard } from "@/lib/ime-enter";
 import { useCopy } from "@/lib/useCopy";
 import {
@@ -22,7 +23,7 @@ import { Markdown, ThinkingBlock } from "./Markdown";
 import { FilePreview } from "@/components/FilePreview";
 import type { ChatMessage } from "./model";
 import { ToolPartView } from "./ToolEvent";
-import { extractLatestTodoPlan, applyHistoricalTodoInterrupt, isTodoTool, type TodoPlan } from "./todo";
+import { extractLatestTodoPlan, isTodoTool, resolveTodoPlan, type TodoPlan } from "./todo";
 import { TodoProgressPanel } from "./TodoProgressPanel";
 import { useChat } from "./ChatProvider";
 import type { ChatAttachment } from "./model";
@@ -47,6 +48,35 @@ function pickRandomSample<T>(items: T[], count: number): T[] {
 }
 
 type ThreadVariant = "default" | "quick";
+
+/** 流式输出时贴底跟随；todo/工具块等自定义 DOM 变更可能绕过 assistant-ui 的 isAtBottom 检测。 */
+function ThreadStreamFollow() {
+  const { messages, isRunning, sessionTodoPlan } = useChat();
+  const tailRef = useRef<HTMLDivElement>(null);
+  const followRef = useRef(true);
+
+  useEffect(() => {
+    const el = findScrollParent(tailRef.current);
+    if (!el) return;
+    const syncFollow = () => {
+      followRef.current = isScrollAtBottom(el);
+    };
+    el.addEventListener("scroll", syncFollow, { passive: true });
+    syncFollow();
+    return () => el.removeEventListener("scroll", syncFollow);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isRunning || !followRef.current) return;
+    const el = findScrollParent(tailRef.current);
+    if (!el) return;
+    const stick = () => scrollContainerToBottom(el, "instant");
+    stick();
+    requestAnimationFrame(stick);
+  }, [isRunning, messages, sessionTodoPlan]);
+
+  return <div ref={tailRef} aria-hidden className="h-0 w-0 shrink-0" />;
+}
 
 export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
   const { t, i18n } = useTranslation();
@@ -94,6 +124,7 @@ export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
               AssistantMessage,
             }}
           />
+          <ThreadStreamFollow />
         </div>
 
         <ThreadPrimitive.ScrollToBottom asChild>
@@ -791,24 +822,6 @@ function UserMessage() {
       </div>
     </MessagePrimitive.Root>
   );
-}
-
-function resolveTodoPlan(
-  fromParts: TodoPlan | null,
-  sessionTodoPlan: TodoPlan | null,
-  isLastAssistant: boolean,
-  hasTodoInMessage: boolean,
-): TodoPlan | null {
-  if (!isLastAssistant) {
-    return fromParts ? applyHistoricalTodoInterrupt(fromParts) : null;
-  }
-  if (!hasTodoInMessage && !fromParts && !sessionTodoPlan) return null;
-  if (sessionTodoPlan && fromParts && sessionTodoPlan.plan_id === fromParts.plan_id) {
-    return sessionTodoPlan;
-  }
-  if (fromParts) return fromParts;
-  if (hasTodoInMessage && sessionTodoPlan) return sessionTodoPlan;
-  return null;
 }
 
 function AssistantPartList({

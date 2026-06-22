@@ -67,11 +67,64 @@ export function parseTodoPlan(raw: unknown): TodoPlan | null {
 export function extractLatestTodoPlan(parts: ChatPart[]): TodoPlan | null {
   let latest: TodoPlan | null = null;
   for (const part of parts) {
-    if (part.type !== "tool" || part.running || !isTodoTool(part.toolName)) continue;
+    if (part.type !== "tool" || !isTodoTool(part.toolName)) continue;
+    if (part.running && !part.preview) continue;
     const plan = parseTodoPlan(part.preview);
     if (plan) latest = plan;
   }
   return latest;
+}
+
+const STEP_STATUS_RANK: Record<TodoStepStatus, number> = {
+  pending: 0,
+  in_progress: 1,
+  interrupted: 2,
+  done: 3,
+  skipped: 3,
+};
+
+function pickRicherStep(a: TodoStep, b: TodoStep): TodoStep {
+  const rankA = STEP_STATUS_RANK[a.status];
+  const rankB = STEP_STATUS_RANK[b.status];
+  const primary = rankA >= rankB ? a : b;
+  const secondary = rankA >= rankB ? b : a;
+  return {
+    ...primary,
+    detail: primary.detail ?? secondary.detail,
+    note: primary.note ?? secondary.note,
+  };
+}
+
+/** 合并同 plan_id 的两份快照，逐步取更「 progressed 」的状态，避免 session / 消息源不一致。 */
+export function mergeTodoPlans(primary: TodoPlan, secondary: TodoPlan): TodoPlan {
+  if (primary.plan_id !== secondary.plan_id) return primary;
+  const merged = new Map<string, TodoStep>();
+  for (const step of secondary.steps) merged.set(step.id, step);
+  for (const step of primary.steps) {
+    const existing = merged.get(step.id);
+    merged.set(step.id, existing ? pickRicherStep(step, existing) : step);
+  }
+  const steps = primary.steps.map((s) => merged.get(s.id)!);
+  return { ...primary, title: primary.title || secondary.title, steps };
+}
+
+export function resolveTodoPlan(
+  fromParts: TodoPlan | null,
+  sessionTodoPlan: TodoPlan | null,
+  isLastAssistant: boolean,
+  hasTodoInMessage: boolean,
+): TodoPlan | null {
+  if (!isLastAssistant) {
+    return fromParts ? applyHistoricalTodoInterrupt(fromParts) : null;
+  }
+  if (!hasTodoInMessage && !fromParts && !sessionTodoPlan) return null;
+  if (sessionTodoPlan && fromParts) {
+    if (sessionTodoPlan.plan_id === fromParts.plan_id) {
+      return mergeTodoPlans(sessionTodoPlan, fromParts);
+    }
+    return sessionTodoPlan;
+  }
+  return sessionTodoPlan ?? fromParts ?? null;
 }
 
 /** 历史轮次气泡内的 todo 快照不会随 interrupt 更新，展示时补齐中断状态。 */
