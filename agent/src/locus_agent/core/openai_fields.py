@@ -62,9 +62,58 @@ def normalize_assistant_for_llm_api(msg: dict[str, Any]) -> dict[str, Any] | Non
     return None
 
 
+def _assistant_tool_call_ids(msg: dict[str, Any]) -> set[str]:
+    tool_calls = msg.get("tool_calls")
+    if not has_openai_tool_calls(tool_calls):
+        return set()
+    ids: set[str] = set()
+    for tc in tool_calls:
+        if isinstance(tc, dict):
+            tc_id = str(tc.get("id") or "").strip()
+            if tc_id:
+                ids.add(tc_id)
+    return ids
+
+
+def repair_incomplete_tool_rounds(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """去掉 assistant 上未收齐 tool 回复的 tool_calls，并丢弃紧随其后的残缺 tool 消息。"""
+    out: list[dict[str, Any]] = []
+    i = 0
+    while i < len(messages):
+        msg = messages[i]
+        expected_ids = _assistant_tool_call_ids(msg) if msg.get("role") == "assistant" else set()
+        if not expected_ids:
+            out.append(msg)
+            i += 1
+            continue
+
+        j = i + 1
+        tool_msgs: list[dict[str, Any]] = []
+        found_ids: set[str] = set()
+        while j < len(messages) and messages[j].get("role") == "tool":
+            tmsg = messages[j]
+            tool_msgs.append(tmsg)
+            tc_id = str(tmsg.get("tool_call_id") or "").strip()
+            if tc_id:
+                found_ids.add(tc_id)
+            j += 1
+
+        if expected_ids <= found_ids:
+            out.append(msg)
+            out.extend(tool_msgs)
+        else:
+            repaired = dict(msg)
+            repaired.pop("tool_calls", None)
+            normalized = normalize_assistant_for_llm_api(repaired)
+            if normalized is not None:
+                out.append(normalized)
+        i = j
+    return out
+
+
 def normalize_messages_for_llm_api(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
-    for msg in messages:
+    for msg in repair_incomplete_tool_rounds(messages):
         if msg.get("role") == "assistant":
             normalized = normalize_assistant_for_llm_api(msg)
             if normalized is not None:

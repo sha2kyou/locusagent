@@ -251,6 +251,9 @@ async def _finalize_run(session_id: str, run_id: str, state: dict[str, Any], *, 
         if error:
             status = "cancelled" if error == CANCELLED_MARK else "failed"
             await update_run(run_id, status=status, error_message=error)
+            from .persistence import reconcile_incomplete_tool_rounds
+
+            await reconcile_incomplete_tool_rounds(session_id)
             return
         if assistant_msg_id is None:
             assistant_msg_id = await append_message(
