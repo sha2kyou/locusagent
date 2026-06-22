@@ -87,12 +87,12 @@ export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
     return pickRandomSample(all, EMPTY_SUGGESTION_COUNT);
   }, [currentId, i18n.language, t]);
   return (
-    <ThreadPrimitive.Root className="flex h-full flex-col bg-background">
+    <ThreadPrimitive.Root className="relative flex h-full flex-col bg-background">
       <ThreadPrimitive.Viewport className="relative flex-1 overflow-y-auto">
         <div
           className={cn(
             "mx-auto w-full py-6",
-            isQuick ? "max-w-full px-4 pb-4 pt-8" : "max-w-3xl px-6 py-10",
+            isQuick ? "max-w-full px-4 pb-28 pt-8" : "max-w-3xl px-6 pb-32 pt-10",
           )}
         >
           <ThreadPrimitive.Empty>
@@ -128,7 +128,7 @@ export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
         </div>
 
         {!isQuick ? (
-          <div className="pointer-events-none sticky bottom-4 z-30 flex w-full justify-center">
+          <div className="pointer-events-none sticky bottom-28 z-30 flex w-full justify-center">
             <ThreadPrimitive.ScrollToBottom asChild>
               <Button
                 variant="secondary"
@@ -252,8 +252,13 @@ function Composer({ variant = "default" }: { variant?: ThreadVariant }) {
   };
 
   return (
-    <div className={cn("shrink-0 bg-background", isQuick ? "px-4 pb-3 pt-2" : "px-6 pb-6 pt-2")}>
-      <div className={cn("mx-auto w-full", !isQuick && "max-w-3xl")}>
+    <div
+      className={cn(
+        "pointer-events-none absolute inset-x-0 bottom-0 z-20",
+        isQuick ? "px-4 pb-3 pt-2" : "px-6 pb-5 pt-2",
+      )}
+    >
+      <div className={cn("pointer-events-auto mx-auto w-full", !isQuick && "max-w-3xl")}>
       {messageQueue.length > 0 ? (
         <div className="mb-2 flex w-full flex-col gap-1.5">
           {messageQueue.map((item, index) => (
@@ -382,16 +387,6 @@ function Composer({ variant = "default" }: { variant?: ThreadVariant }) {
           </ComposerPrimitive.Cancel>
         </ThreadPrimitive.If>
       </ComposerPrimitive.Root>
-
-      {!isQuick ? (
-        <p className="mt-2 text-center text-[11px] text-muted-foreground/50">
-          {isRunning
-            ? t("chat.composer.keyboardHint.queue")
-            : messageQueue.length > 0
-              ? t("chat.composer.keyboardHint.queueWithPending")
-              : t("chat.composer.keyboardHint.default")}
-        </p>
-      ) : null}
       </div>
     </div>
   );
