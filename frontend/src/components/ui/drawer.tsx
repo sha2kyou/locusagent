@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "./button";
+import { glassChromeClass, glassOverlayClass } from "./surface-styles";
 
 /** Former drawer `lg` variant — not `xl` (`max-w-2xl`). */
 const DRAWER_WIDTH = "max-w-xl";
@@ -57,14 +58,15 @@ export function Drawer({
 
   return createPortal(
     <div className="fixed inset-0 z-[90]">
-      <div className="absolute inset-0 bg-black/40 apod-fade" onClick={onClose} />
+      <div className={cn("absolute inset-0", glassOverlayClass)} onClick={onClose} />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         tabIndex={-1}
         className={cn(
-          "absolute inset-y-0 right-0 flex w-full flex-col border-l border-border bg-background shadow-lg apod-enter-right",
+          "absolute inset-y-0 right-0 flex w-full flex-col border-l border-glass-border apod-enter-right",
+          glassChromeClass,
           DRAWER_WIDTH,
         )}
       >

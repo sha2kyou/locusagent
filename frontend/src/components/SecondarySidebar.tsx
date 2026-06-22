@@ -19,7 +19,7 @@ export function SecondarySidebar({
       )}
       <aside
         className={cn(
-          "fixed inset-y-0 z-50 flex w-[272px] flex-col bg-sidebar-sub transition-transform duration-200 md:static md:z-auto md:w-[240px] md:translate-x-0",
+          "apod-glass-sidebar-sub fixed inset-y-0 z-50 flex w-[272px] flex-col transition-transform duration-200 md:static md:z-auto md:w-[240px] md:translate-x-0 md:border-r md:border-sidebar-sub-border",
           mobileSide === "right"
             ? mobileOpen
               ? "right-0 translate-x-0"

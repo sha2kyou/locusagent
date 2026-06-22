@@ -1,6 +1,6 @@
 [project]
 name = "locus-sidecar"
-version = "0.3.0"
+version = "0.3.1"
 description = "Locus Agent desktop sidecar entry (host + agent monolith)"
 license = "Apache-2.0"
 requires-python = ">=3.11"

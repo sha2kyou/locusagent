@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "./button";
+import { glassChromeClass, glassOverlayClass } from "./surface-styles";
 
 interface ModalProps {
   open: boolean;
@@ -98,7 +99,7 @@ export function Modal({
   return createPortal(
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-black/40 apod-fade"
+        className={cn("absolute inset-0", glassOverlayClass)}
         onClick={() => {
           if (!closeDisabled) onClose();
         }}
@@ -109,7 +110,8 @@ export function Modal({
         aria-modal="true"
         tabIndex={-1}
         className={cn(
-          "relative flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xl apod-enter-up",
+          "relative flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden rounded-xl apod-enter-up",
+          glassChromeClass,
           sizes[size],
         )}
       >

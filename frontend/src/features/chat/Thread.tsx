@@ -13,6 +13,7 @@ import { ArrowDown, ArrowUp, Check, Copy, Download, Paperclip, RotateCcw, Square
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import { glassComposerClass } from "@/components/ui/surface-styles";
 import { useImeEnterGuard } from "@/lib/ime-enter";
 import { useCopy } from "@/lib/useCopy";
 import {
@@ -57,23 +58,12 @@ export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
     return pickRandomSample(all, EMPTY_SUGGESTION_COUNT);
   }, [currentId, i18n.language, t]);
   return (
-    <ThreadPrimitive.Root className="flex h-full flex-col">
+    <ThreadPrimitive.Root className="relative flex h-full flex-col">
       <ThreadPrimitive.Viewport className="relative flex-1 overflow-y-auto">
-        <ThreadPrimitive.Empty>
-          <div
-            className="pointer-events-none absolute inset-x-0 top-[8%] z-0 h-[min(55vh,440px)]"
-            style={{
-              background:
-                "radial-gradient(ellipse 680px 68% at 50% 48%, var(--color-brand-soft) 0%, transparent 70%)",
-            }}
-            aria-hidden
-          />
-        </ThreadPrimitive.Empty>
-
         <div
           className={cn(
             "relative z-10 mx-auto w-full py-6",
-            isQuick ? "max-w-full px-4 pb-4 pt-8" : "max-w-3xl px-6 py-10",
+            isQuick ? "max-w-full px-4 pb-28 pt-8" : "max-w-3xl px-6 pb-40 pt-10",
           )}
         >
           <ThreadPrimitive.Empty>
@@ -112,7 +102,10 @@ export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
             <Button
               variant="secondary"
               size="icon"
-              className="sticky bottom-4 left-1/2 -translate-x-1/2 rounded-full shadow-lg transition-opacity disabled:pointer-events-none disabled:opacity-0"
+              className={cn(
+                "sticky left-1/2 -translate-x-1/2 rounded-full shadow-lg transition-opacity disabled:pointer-events-none disabled:opacity-0",
+                isQuick ? "bottom-4" : "bottom-32",
+              )}
               aria-label={t("chat.composer.scrollToBottom")}
             >
               <ArrowDown />
@@ -228,9 +221,15 @@ function Composer({ variant = "default" }: { variant?: ThreadVariant }) {
   };
 
   return (
-    <div className={cn(isQuick ? "px-4 pb-3 pt-1" : "px-6 pb-6 pt-2")}>
+    <div
+      className={cn(
+        "apod-composer-dock pointer-events-none absolute inset-x-0 bottom-0 z-20",
+        isQuick ? "px-4 pb-3 pt-8" : "px-6 pb-5 pt-12",
+      )}
+    >
+      <div className={cn("pointer-events-auto mx-auto w-full", !isQuick && "max-w-3xl")}>
       {messageQueue.length > 0 ? (
-        <div className={cn("mx-auto mb-2 flex w-full flex-col gap-1.5", !isQuick && "max-w-3xl")}>
+        <div className="mb-2 flex w-full flex-col gap-1.5">
           {messageQueue.map((item, index) => (
             <div
               key={item.id}
@@ -276,7 +275,7 @@ function Composer({ variant = "default" }: { variant?: ThreadVariant }) {
       ) : null}
 
       {pendingAttachments.length > 0 ? (
-        <div className={cn("mx-auto mb-2 flex w-full flex-wrap gap-1.5", !isQuick && "max-w-3xl")}>
+        <div className="mb-2 flex w-full flex-wrap gap-1.5">
           {pendingAttachments.map((file) => (
             <span
               key={file.id}
@@ -303,8 +302,8 @@ function Composer({ variant = "default" }: { variant?: ThreadVariant }) {
 
       <ComposerPrimitive.Root
         className={cn(
-          "mx-auto flex w-full items-end gap-2 rounded-xl border border-border bg-background px-2.5 py-2.5 shadow-sm transition-[box-shadow,border-color] duration-150 focus-within:border-brand/30 focus-within:shadow-[0_0_0_3px_var(--color-ring),var(--shadow-sm)]",
-          !isQuick && "max-w-3xl",
+          glassComposerClass,
+          "flex w-full items-end gap-2 rounded-2xl px-3 py-3 transition-[box-shadow,border-color] duration-150 focus-within:border-brand/35 focus-within:shadow-[0_0_0_3px_var(--color-ring),var(--glass-composer-shadow)]",
         )}
       >
         <input
@@ -336,7 +335,7 @@ function Composer({ variant = "default" }: { variant?: ThreadVariant }) {
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           placeholder={getAgentComposerPlaceholder()}
-          className="max-h-48 flex-1 resize-none bg-transparent py-1 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/60"
+          className="max-h-48 min-h-[1.625rem] flex-1 resize-none bg-transparent py-1.5 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/60"
         />
 
         <ThreadPrimitive.If running={false}>
@@ -362,7 +361,7 @@ function Composer({ variant = "default" }: { variant?: ThreadVariant }) {
       </ComposerPrimitive.Root>
 
       {!isQuick ? (
-        <p className="mx-auto mt-2 max-w-3xl text-center text-[11px] text-muted-foreground/50">
+        <p className="mt-2 text-center text-[11px] text-muted-foreground/50">
           {isRunning
             ? t("chat.composer.keyboardHint.queue")
             : messageQueue.length > 0
@@ -370,6 +369,7 @@ function Composer({ variant = "default" }: { variant?: ThreadVariant }) {
               : t("chat.composer.keyboardHint.default")}
         </p>
       ) : null}
+      </div>
     </div>
   );
 }

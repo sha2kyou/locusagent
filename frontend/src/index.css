@@ -4,11 +4,28 @@
 
 /* ============================================================
    Locus Agent 设计系统
-   方向：浅色（白底 + 近黑单色强调），参考 ChatGPT WebUI
-   主操作用近黑按钮，强调色集中在 --brand，换色只改这一处即可。
+   方向：Codex 式布局——侧栏 / Composer / 浮层磨砂 chrome，主内容实底；brand 不变。
    ============================================================ */
 :root {
   --radius: 0.75rem;
+
+  /* 画布：Codex 式扁平底色（无装饰渐变） */
+  --canvas: oklch(0.985 0.002 85);
+
+  /* 磨砂 chrome（侧栏、Composer、Modal）；alpha 偏高，避免拖动时 blur 失效全透 */
+  --glass-blur: 20px;
+  --glass-saturate: 1.15;
+  --glass-chrome-bg: oklch(0.995 0.001 85 / 0.84);
+  --glass-chrome-border: oklch(0 0 0 / 0.09);
+  --glass-chrome-shadow: 0 4px 24px oklch(0 0 0 / 0.06), 0 1px 0 oklch(1 0 0 / 0.45) inset;
+  --glass-sidebar-bg: oklch(0.94 0.004 80 / 0.88);
+  --glass-sidebar-sub-bg: oklch(0.975 0.002 85 / 0.86);
+  --glass-overlay: oklch(0.12 0 0 / 0.36);
+  --glass-composer-bg: oklch(0.998 0.001 85 / 0.92);
+  --glass-composer-shadow:
+    0 8px 32px oklch(0 0 0 / 0.08),
+    0 2px 8px oklch(0 0 0 / 0.04),
+    0 1px 0 oklch(1 0 0 / 0.55) inset;
 
   /* 品牌强调色（唯一信号色）：近黑单色 */
   --brand: oklch(0.22 0 0);
@@ -74,6 +91,22 @@
 }
 
 .dark {
+  --canvas: oklch(0.155 0 0);
+
+  --glass-blur: 22px;
+  --glass-saturate: 1.1;
+  --glass-chrome-bg: oklch(0.17 0 0 / 0.86);
+  --glass-chrome-border: oklch(1 0 0 / 0.1);
+  --glass-chrome-shadow: 0 4px 24px oklch(0 0 0 / 0.32), 0 1px 0 oklch(1 0 0 / 0.05) inset;
+  --glass-sidebar-bg: oklch(0.11 0 0 / 0.9);
+  --glass-sidebar-sub-bg: oklch(0.14 0 0 / 0.88);
+  --glass-overlay: oklch(0 0 0 / 0.52);
+  --glass-composer-bg: oklch(0.18 0 0 / 0.92);
+  --glass-composer-shadow:
+    0 8px 32px oklch(0 0 0 / 0.36),
+    0 2px 8px oklch(0 0 0 / 0.2),
+    0 1px 0 oklch(1 0 0 / 0.06) inset;
+
   --brand: oklch(0.93 0 0);
   --brand-foreground: oklch(0.16 0 0);
   --brand-soft: oklch(0.93 0 0 / 0.12);
@@ -170,6 +203,9 @@
   --color-sidebar-sub-accent: var(--sidebar-sub-accent);
   --color-sidebar-sub-border: var(--sidebar-sub-border);
 
+  --color-glass: var(--glass-chrome-bg);
+  --color-glass-border: var(--glass-chrome-border);
+
   --shadow-xs: var(--shadow-xs);
   --shadow-sm: var(--shadow-sm);
   --shadow-md: var(--shadow-md);
@@ -197,13 +233,79 @@
 
   body {
     margin: 0;
-    background-color: var(--color-background);
+    background-color: var(--canvas);
     color: var(--color-foreground);
     font-family: var(--font-sans);
     font-size: 14px;
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+  }
+
+  /* Codex 式 chrome 磨砂：侧栏 / Composer / 浮层；主内容区用 bg-background 实底 */
+  .apod-glass-chrome {
+    background: var(--glass-chrome-bg);
+    border: 1px solid var(--glass-chrome-border);
+    box-shadow: var(--glass-chrome-shadow);
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  }
+
+  .apod-glass-sidebar {
+    background: var(--glass-sidebar-bg);
+    backdrop-filter: blur(24px) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(24px) saturate(var(--glass-saturate));
+  }
+
+  .apod-glass-sidebar-sub {
+    background: var(--glass-sidebar-sub-bg);
+    backdrop-filter: blur(20px) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(20px) saturate(var(--glass-saturate));
+  }
+
+  .apod-glass-overlay {
+    background: var(--glass-overlay);
+    backdrop-filter: blur(8px) saturate(1.05);
+    -webkit-backdrop-filter: blur(8px) saturate(1.05);
+  }
+
+  /* Composer：底部浮层 + 磨砂输入框（Codex 式） */
+  .apod-glass-composer {
+    background: var(--glass-composer-bg);
+    border: 1px solid var(--glass-chrome-border);
+    box-shadow: var(--glass-composer-shadow);
+    backdrop-filter: blur(24px) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(24px) saturate(var(--glass-saturate));
+  }
+
+  .apod-composer-dock {
+    background: linear-gradient(
+      to top,
+      var(--color-background) 0%,
+      color-mix(in oklab, var(--color-background) 90%, transparent) 55%,
+      transparent 100%
+    );
+  }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .apod-glass-chrome {
+      background: var(--color-card);
+      border-color: var(--color-border);
+    }
+    .apod-glass-composer {
+      background: var(--color-card);
+      border-color: var(--color-border);
+      box-shadow: var(--shadow-md);
+    }
+    .apod-glass-sidebar {
+      background: var(--color-sidebar);
+    }
+    .apod-glass-sidebar-sub {
+      background: var(--color-sidebar-sub);
+    }
+    .apod-glass-overlay {
+      background: oklch(0 0 0 / 0.45);
+    }
   }
 
   ::selection {

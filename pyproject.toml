@@ -1,6 +1,6 @@
 [project]
 name = "locus-workspace"
-version = "0.3.0"
+version = "0.3.1"
 description = "Locus Agent desktop AI agent platform"
 readme = "README.md"
 license = "Apache-2.0"
