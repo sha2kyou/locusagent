@@ -163,12 +163,19 @@ pub fn show_quick_chat(app: &AppHandle) {
     if !desktop_prefs::apply_quick_chat_window_bounds(app) {
         center_quick_chat_window(app);
     }
-    let _ = window.set_always_on_top(false);
+    let prefs = desktop_prefs::read_prefs(app);
+    let _ = window.set_always_on_top(prefs.quick_chat_always_on_top);
     let _ = window.show();
     let _ = window.unminimize();
     let _ = window.set_focus();
     let _ = window.emit(QUICK_CHAT_OPEN_EVENT, ());
     let _ = window.emit(QUICK_CHAT_FOCUS_COMPOSER_EVENT, ());
+}
+
+pub fn apply_quick_chat_always_on_top(app: &AppHandle, always_on_top: bool) {
+    if let Some(window) = app.get_webview_window(QUICK_CHAT_WINDOW_LABEL) {
+        let _ = window.set_always_on_top(always_on_top);
+    }
 }
 
 pub fn hide_quick_chat(app: &AppHandle) {

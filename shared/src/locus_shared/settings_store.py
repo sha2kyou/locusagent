@@ -83,7 +83,7 @@ class DesktopSection(BaseModel):
     launch_at_login: bool = False
     quick_chat_enabled: bool = True
     quick_chat_shortcut: str = "cmd+shift+K"
-    quick_chat_always_on_top: bool = False
+    quick_chat_always_on_top: bool = True
     quick_chat_window_bounds: QuickChatWindowBounds | None = None
 
 

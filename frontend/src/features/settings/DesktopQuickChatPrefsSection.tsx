@@ -14,6 +14,7 @@ export function DesktopQuickChatPrefsSection() {
   const toast = useToast();
   const available = isDesktopPrefsAvailable();
   const [enabled, setEnabled] = useState(true);
+  const [alwaysOnTop, setAlwaysOnTop] = useState(true);
   const [shortcut, setShortcut] = useState("cmd+shift+K");
   const [registered, setRegistered] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
@@ -23,6 +24,7 @@ export function DesktopQuickChatPrefsSection() {
     if (!available) return;
     void getDesktopPrefs().then((prefs) => {
       setEnabled(prefs.quick_chat_enabled ?? true);
+      setAlwaysOnTop(prefs.quick_chat_always_on_top ?? true);
       setShortcut(prefs.quick_chat_shortcut || "cmd+shift+K");
       setRegistered(prefs.quick_chat_shortcut_registered ?? false);
       setRegisterError(prefs.quick_chat_shortcut_error ?? null);
@@ -45,9 +47,10 @@ export function DesktopQuickChatPrefsSection() {
         launch_at_login: current.launch_at_login,
         quick_chat_enabled: enabled,
         quick_chat_shortcut: shortcut.trim() || "cmd+shift+K",
-        quick_chat_always_on_top: false,
+        quick_chat_always_on_top: alwaysOnTop,
       });
       setEnabled(next.quick_chat_enabled);
+      setAlwaysOnTop(next.quick_chat_always_on_top);
       setShortcut(next.quick_chat_shortcut);
       await refreshStatus();
       toast(t("settings.general.desktopPrefsSaved"), "success");
@@ -57,6 +60,7 @@ export function DesktopQuickChatPrefsSection() {
         try {
           const next = await refreshStatus();
           setEnabled(next.quick_chat_enabled);
+          setAlwaysOnTop(next.quick_chat_always_on_top);
           setShortcut(next.quick_chat_shortcut);
         } catch {
           // ignore
@@ -87,6 +91,21 @@ export function DesktopQuickChatPrefsSection() {
             {t("settings.general.quickChat.enabled.label")}
             <span className="mt-1 block text-xs text-muted-foreground">
               {t("settings.general.quickChat.enabled.hint")}
+            </span>
+          </span>
+        </label>
+        <label className="flex cursor-pointer items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={alwaysOnTop}
+            onChange={(e) => setAlwaysOnTop(e.target.checked)}
+            disabled={!enabled || saving}
+          />
+          <span>
+            {t("settings.general.quickChat.alwaysOnTop.label")}
+            <span className="mt-1 block text-xs text-muted-foreground">
+              {t("settings.general.quickChat.alwaysOnTop.hint")}
             </span>
           </span>
         </label>
