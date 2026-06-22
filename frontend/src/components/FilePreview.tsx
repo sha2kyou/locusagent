@@ -59,11 +59,14 @@ function ImagePreview({ src, alt }: { src: string; alt: string }) {
 
 function PdfPreview({ src, title }: { src: string; title: string }) {
   return (
-    <iframe
-      src={src}
+    <object
+      data={src}
+      type="application/pdf"
       title={title}
-      className="h-[min(70vh,720px)] w-full rounded-md border border-border bg-surface-2"
-    />
+      className="block h-[min(70vh,720px)] w-full rounded-md border border-border bg-surface-2"
+    >
+      <embed src={src} type="application/pdf" className="h-[min(70vh,720px)] w-full" title={title} />
+    </object>
   );
 }
 
