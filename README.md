@@ -6,7 +6,7 @@
 
 [English](./README.md) · [简体中文](./README.zh-CN.md)
 
-**Locus Agent** is a local-first desktop AI agent for macOS and Windows, built around **deliverables**—reports, scripts, workspace files, and categorized **Artifacts** you can recall and iterate on later. Chat is how you steer the work; the point is output you can keep.
+**Locus Agent** is a local-first, **BYOK** (bring your own key) desktop AI agent for macOS and Windows, built around **deliverables**—reports, scripts, workspace files, and categorized **Artifacts** you can recall and iterate on later. You connect your own LLM provider API keys—no bundled cloud inference or subscription. Chat is how you steer the work; the point is output you can keep.
 
 Turn a brief into finished work: the agent reads and writes files in your workspace, runs code, searches the web, connects MCP servers, remembers context across sessions, and runs recurring prompts on a schedule. Everything stays on your machine.
 
@@ -32,6 +32,7 @@ Put together: *an agent anchored to a local place you control.*
 
 ![Locus Agent quick chat — floating overlay with streaming replies and LaTeX rendering](docs/images/quick-window.png)
 
+- **BYOK** — Bring your own LLM API keys and pick any OpenAI-compatible provider or base URL. No Locus subscription or bundled inference—you pay only what your provider charges.
 - **Local & private** — Conversations, memory, and workspace files stay on your machine. No cloud account required beyond your LLM provider API key.
 - **Tool-native agent loop** — File I/O, sandboxed code execution, controlled terminal commands, web search/extract, and file delivery from a single chat UI.
 - **Skills** — Reusable instruction packs: built-in (read-only), plus per-workspace user Skills you can author or install from GitHub/zip URLs.

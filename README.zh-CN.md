@@ -6,7 +6,7 @@
 
 [English](./README.md) · [简体中文](./README.zh-CN.md)
 
-**Locus Agent** 是一款本地优先的桌面 AI Agent，支持 macOS 与 Windows。它以**可交付成果**为核心——报告、脚本、工作区文件，以及可按类别归档、日后召回与迭代的 **Artifacts**。聊天是引导方式；重点是能长期保留的产出。
+**Locus Agent** 是一款本地优先、**BYOK**（自带 API Key）的桌面 AI Agent，支持 macOS 与 Windows。它以**可交付成果**为核心——报告、脚本、工作区文件，以及可按类别归档、日后召回与迭代的 **Artifacts**。你自行配置 LLM 服务商的 API Key，无需绑定内置云推理或订阅。聊天是引导方式；重点是能长期保留的产出。
 
 把需求变成成品：Agent 可读写工作区文件、运行代码、搜索网页、连接 MCP 服务、跨会话记忆上下文，并按计划执行定时任务。一切都在本机完成。
 
@@ -32,6 +32,7 @@
 
 ![Locus Agent 快捷对话 — 浮层流式回复与 LaTeX 渲染](docs/images/quick-window.png)
 
+- **BYOK** — 自带 LLM API Key，可配置任意 OpenAI 兼容的服务商与 Base URL；无 Locus 订阅或内置推理套餐，仅按服务商用量计费。
 - **本地与隐私** — 对话、记忆与工作区文件留在本机；除 LLM 提供商 API Key 外，无需云账号。
 - **工具原生 Agent 循环** — 在同一聊天界面中完成文件 I/O、沙箱代码执行、受控终端命令、网页搜索/提取与文件交付。
 - **Skills** — 可复用的指令包：内置（只读），以及各工作区可自建或从 GitHub/zip URL 安装的用户 Skills。
