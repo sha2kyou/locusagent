@@ -4,6 +4,8 @@
 [![Release](https://img.shields.io/github/v/release/sha2kyou/locusagent?label=release&sort=semver)](https://github.com/sha2kyou/locusagent/releases)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
+**Language / 语言:** [English](./README.md) · [简体中文](./README.zh-CN.md)
+
 **Locus Agent** is a local-first desktop AI agent for macOS and Windows, built around **deliverables**—reports, scripts, workspace files, and categorized **Artifacts** you can recall and iterate on later. Chat is how you steer the work; the point is output you can keep.
 
 Turn a brief into finished work: the agent reads and writes files in your workspace, runs code, searches the web, connects MCP servers, remembers context across sessions, and runs recurring prompts on a schedule. Everything stays on your machine.
