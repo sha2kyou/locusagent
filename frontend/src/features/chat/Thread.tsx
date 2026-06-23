@@ -80,7 +80,7 @@ function ThreadStreamFollow() {
 
 export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
   const { t, i18n } = useTranslation();
-  const { currentId, loadingMessages } = useChat();
+  const { currentId, loadingMessages, messages } = useChat();
   const isQuick = variant === "quick";
   const promptChips = useMemo(() => {
     const all = t("chat.empty.suggestions", { returnObjects: true }) as string[];
@@ -96,7 +96,7 @@ export function Thread({ variant = "default" }: { variant?: ThreadVariant }) {
           )}
         >
           <ThreadPrimitive.Empty>
-            {currentId || loadingMessages ? (
+            {loadingMessages || (currentId && messages.length > 0) ? (
               <div className="flex min-h-[55vh] flex-col items-center justify-center text-muted-foreground">
                 <Loader2 className="size-6 animate-spin" />
                 <p className="mt-3 text-sm">{t("common.loading")}</p>

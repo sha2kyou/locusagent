@@ -6,7 +6,7 @@ import {
   normalizeAppLocale,
 } from "@/i18n";
 import { getLocaleConfig, putLocaleConfig } from "@/api/endpoints";
-import { subscribeAppLocaleBroadcast } from "@/lib/app-locale";
+import { broadcastAppLocale, subscribeAppLocaleBroadcast } from "@/lib/app-locale";
 
 /** 登录后从 settings.json 同步界面语言，并迁移旧版 localStorage 偏好。 */
 export function AppLocaleProvider({ children }: { children: ReactNode }) {
@@ -30,6 +30,7 @@ export function AppLocaleProvider({ children }: { children: ReactNode }) {
         // 离线或尚未就绪时仍应用本地语言
       }
       await applyAppLocale(legacy);
+      broadcastAppLocale(legacy);
     })();
   }, []);
 

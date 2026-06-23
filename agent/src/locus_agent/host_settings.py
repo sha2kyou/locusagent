@@ -33,6 +33,7 @@ def clear_host_settings_runtime_cache() -> None:
     _locale_cache = None
     _model_cache.clear()
 
+
 _LOCALE_CACHE_TTL_SECONDS = 60.0
 _locale_cache: tuple[str, float] | None = None
 _locale_cache_lock = asyncio.Lock()
