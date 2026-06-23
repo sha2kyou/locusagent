@@ -1,6 +1,6 @@
 [package]
 name = "locusagent-desktop"
-version = "0.3.1"
+version = "0.3.2"
 description = "Locus Agent macOS desktop shell"
 authors = ["Locus Agent"]
 license = "Apache-2.0"
