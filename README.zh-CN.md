@@ -10,7 +10,7 @@
 
 把需求变成成品：Agent 可读写工作区文件、运行代码、搜索网页、连接 MCP 服务、跨会话记忆上下文，并按计划执行定时任务。一切都在本机完成。
 
-运行时数据位于 `~/.locusagent/`（macOS/Linux）或 `%USERPROFILE%\.locusagent\`（Windows），包括 `settings.json`、SQLite 数据库及各工作区存储。
+运行时数据位于 `~/.locusagent/`（macOS）或 `%USERPROFILE%\.locusagent\`（Windows），包括 `settings.json`、SQLite 数据库及各工作区存储。
 
 ![Locus Agent 主窗口 — 侧边栏导航、聊天历史与格式化的 Agent 报告](docs/images/main-window.png)
 
@@ -39,7 +39,7 @@
 - **记忆** — 跨会话的长期事实/偏好与短期笔记，按工作区隔离。
 - **Artifacts** — 将可交付成果按类别归档，日后召回。
 - **定时任务** — 类 Cron 的提示词，在后台自动执行。
-- **多工作区** — 不同项目或客户拥有独立的文件、会话、记忆与配置。
+- **多工作区** — 不同项目或客户拥有独立的文件、会话、记忆、Skills 与 MCP 配置。
 - **稳健的流式传输** — 导航离开或刷新后，Agent 仍在本地后台继续运行；UI 可重连进行中的任务。
 
 ## 安装
@@ -66,8 +66,8 @@ brew install --cask locusagent
 
 ### 首次启动
 
-1. 打开 **设置 → 模型**，添加 LLM 提供商 API Key 与主模型。
-2. 可选：在 **设置 → 工具** 中配置网页搜索/提取 Key 并启用工具。
+1. 打开 **设置 → 模型与服务**，添加 LLM 提供商 API Key 与主模型；可选配置 Tavily/Jina Key 以启用网页搜索/提取。
+2. 可选：在 **设置 → 工具** 中配置 Terminal 开关与白名单/黑名单。
 3. 开始聊天。可附加文件、在 Agent 生成时排队后续消息，或从侧边栏切换工作区。
 
 ## 项目结构
@@ -85,7 +85,7 @@ locusagent/
 └── scripts/           版本同步、打包辅助脚本
 ```
 
-Sidecar 监听 **`127.0.0.1:21223`**，同源提供 UI 与 API。生产环境中桌面应用内嵌独立 Python 3.11 运行时；开发时通常自行运行 `locusagent-serve`（见下文）。
+Sidecar 监听 **`127.0.0.1:21223`**，同源提供 UI 与 API。生产版桌面应用内嵌独立 Python 3.11 运行时。
 
 ## 从源码构建
 
@@ -126,49 +126,6 @@ pwsh ./scripts/build-desktop-windows.ps1 -FreshVenv   # 强制重建内嵌 Pytho
 uv run python scripts/sync-version.py                 # 同步 VERSION → 各 manifest
 ```
 
-## 开发
-
-### Sidecar（API + UI 宿主）
-
-在仓库根目录：
-
-```bash
-uv sync --group dev
-uv run locusagent-serve
-```
-
-进程绑定 `http://127.0.0.1:21223`，数据写入用户目录下的 `.locusagent`（见[配置](#配置)）。
-
-### Python 测试
-
-```bash
-uv sync --group dev
-uv run pytest tests/ -q
-```
-
-### 前端（Vite HMR）
-
-在另一终端运行 sidecar 的前提下：
-
-```bash
-cd frontend
-npm ci
-npm run dev              # Vite 开发服务器；/api 代理至 :21223
-npm run build:desktop    # Tauri / sidecar 静态 UI 的生产构建
-npm run lint
-npm run test:latex && npm run test:notifications && npm run test:toast && npm run test:stream-sync
-```
-
-### 桌面壳（Tauri）
-
-先完成桌面 bundle 构建（在 `frontend/` 中 `npm run build:desktop`），启动 `locusagent-serve`，然后：
-
-```bash
-cd desktop
-npm ci
-npm run dev              # Tauri 窗口 → devUrl http://127.0.0.1:21223
-```
-
 ## 配置
 
 | 路径 | 用途 |
@@ -180,16 +137,9 @@ npm run dev              # Tauri 窗口 → devUrl http://127.0.0.1:21223
 | `<home>/.locusagent/skills/` | 内置 Skills 镜像（启动时从应用刷新；只读） |
 | `<home>/.locusagent/workspaces/<id>/skills/` | 工作区用户 Skills（UI 创建、`skill_install` 或 Agent `skill_manage`） |
 
-`<home>` 在 macOS/Linux 为 `~`，在 Windows 为 `%USERPROFILE%`。可通过环境变量 `LOCUSAGENT_HOME` 覆盖。
+`<home>` 在 macOS 为 `~`，在 Windows 为 `%USERPROFILE%`。可通过环境变量 `LOCUSAGENT_HOME` 覆盖。
 
 参见 `shared/settings.example.json` 了解 Host 设置的注释示例。
-
-## 文档
-
-| 文档 | 读者 |
-|------|------|
-| [docs/LOCUSAGENT.md](./docs/LOCUSAGENT.md) | 应用内 AI Agent — 平台能力、工具与用户向约定 |
-| [cliff.toml](./cliff.toml) + GitHub Releases | 打 tag 时自动生成的变更日志 |
 
 ## 许可证
 

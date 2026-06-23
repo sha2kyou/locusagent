@@ -10,7 +10,7 @@
 
 Turn a brief into finished work: the agent reads and writes files in your workspace, runs code, searches the web, connects MCP servers, remembers context across sessions, and runs recurring prompts on a schedule. Everything stays on your machine.
 
-Runtime data lives under `~/.locusagent/` (macOS/Linux) or `%USERPROFILE%\.locusagent\` (Windows): `settings.json`, SQLite databases, and per-workspace storage.
+Runtime data lives under `~/.locusagent/` (macOS) or `%USERPROFILE%\.locusagent\` (Windows): `settings.json`, SQLite databases, and per-workspace storage.
 
 ![Locus Agent main window — sidebar navigation, chat history, and formatted agent reports](docs/images/main-window.png)
 
@@ -39,7 +39,7 @@ Put together: *an agent anchored to a local place you control.*
 - **Memory** — Long-term facts/preferences and short-term notes that persist across sessions, scoped per workspace.
 - **Artifacts** — Save deliverables into categorized libraries and recall them later.
 - **Scheduled tasks** — Cron-style prompts that run automatically in the background.
-- **Multi-workspace** — Separate files, sessions, memory, and settings for different projects or clients.
+- **Multi-workspace** — Separate files, sessions, memory, Skills, and MCP config for different projects or clients.
 - **Resilient streaming** — Agent runs continue locally in the background if you navigate away or refresh; the UI reconnects to in-progress runs.
 
 ## Install
@@ -66,8 +66,8 @@ Run the installer and launch **Locus Agent** from the Start menu or desktop shor
 
 ### First launch
 
-1. Open **Settings → Models** and add your LLM provider API key and primary model.
-2. Optionally configure web search/extract keys and enable tools under **Settings → Tools**.
+1. Open **Settings → Models & Services** and add your LLM provider API key and primary model; optionally add Tavily/Jina keys for web search/extract.
+2. Optionally open **Settings → Tools** to configure the terminal toggle and allow/deny lists.
 3. Start chatting. Attach files, queue follow-up messages while the agent is generating, or switch workspaces from the sidebar.
 
 ## Project layout
@@ -85,7 +85,7 @@ locusagent/
 └── scripts/           Version sync, bundle helpers
 ```
 
-The sidecar listens on **`127.0.0.1:21223`** and serves both the UI and API from the same origin. In production the desktop app embeds a standalone Python 3.11 runtime; in development you usually run `locusagent-serve` yourself (see below).
+The sidecar listens on **`127.0.0.1:21223`** and serves both the UI and API from the same origin. The production desktop app embeds a standalone Python 3.11 runtime.
 
 ## Build from source
 
@@ -126,49 +126,6 @@ pwsh ./scripts/build-desktop-windows.ps1 -FreshVenv   # force rebuild bundled Py
 uv run python scripts/sync-version.py                 # sync VERSION → all manifests
 ```
 
-## Development
-
-### Sidecar (API + UI host)
-
-From the repo root:
-
-```bash
-uv sync --group dev
-uv run locusagent-serve
-```
-
-The process binds to `http://127.0.0.1:21223` and stores data under your user `.locusagent` directory (see [Configuration](#configuration)).
-
-### Python tests
-
-```bash
-uv sync --group dev
-uv run pytest tests/ -q
-```
-
-### Frontend (Vite HMR)
-
-With the sidecar running in another terminal:
-
-```bash
-cd frontend
-npm ci
-npm run dev              # Vite dev server; proxies /api to :21223
-npm run build:desktop    # production bundle for Tauri / sidecar static UI
-npm run lint
-npm run test:latex && npm run test:notifications && npm run test:toast && npm run test:stream-sync
-```
-
-### Desktop (Tauri shell)
-
-Build the desktop bundle first (`npm run build:desktop` in `frontend/`), start `locusagent-serve`, then:
-
-```bash
-cd desktop
-npm ci
-npm run dev              # Tauri window → devUrl http://127.0.0.1:21223
-```
-
 ## Configuration
 
 | Location | Purpose |
@@ -180,16 +137,9 @@ npm run dev              # Tauri window → devUrl http://127.0.0.1:21223
 | `<home>/.locusagent/skills/` | Built-in Skills mirror (refreshed from the app on launch; read-only) |
 | `<home>/.locusagent/workspaces/<id>/skills/` | Per-workspace user Skills (create in UI, `skill_install`, or agent `skill_manage`) |
 
-`<home>` is `~` on macOS/Linux and `%USERPROFILE%` on Windows. Override with the `LOCUSAGENT_HOME` environment variable.
+`<home>` is `~` on macOS and `%USERPROFILE%` on Windows. Override with the `LOCUSAGENT_HOME` environment variable.
 
 See `shared/settings.example.json` for an annotated example of host settings.
-
-## Documentation
-
-| Doc | Audience |
-|-----|----------|
-| [docs/LOCUSAGENT.md](./docs/LOCUSAGENT.md) | In-app AI agent — platform capabilities, tools, and user-facing conventions (Chinese) |
-| [cliff.toml](./cliff.toml) + GitHub Releases | Changelog generated on tagged releases |
 
 ## License
 
