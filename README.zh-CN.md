@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/sha2kyou/locusagent?label=release&sort=semver)](https://github.com/sha2kyou/locusagent/releases)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-**Language / 语言:** [English](./README.md) · [简体中文](./README.zh-CN.md)
+[English](./README.md) · [简体中文](./README.zh-CN.md)
 
 **Locus Agent** 是一款本地优先的桌面 AI Agent，支持 macOS 与 Windows。它以**可交付成果**为核心——报告、脚本、工作区文件，以及可按类别归档、日后召回与迭代的 **Artifacts**。聊天是引导方式；重点是能长期保留的产出。
 
