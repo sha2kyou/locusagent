@@ -17,10 +17,8 @@ use std::time::Duration;
 
 use desktop_prefs::{
     desktop_get_prefs, desktop_get_system_locale, desktop_set_prefs, load_prefs,
-    install_window_close_handler, sync_autostart, PrefsState,
+    install_window_close_handler, show_main_window, sync_autostart, PrefsState,
 };
-#[cfg(target_os = "macos")]
-use desktop_prefs::show_main_window;
 use tauri::{Manager, RunEvent};
 use tauri_plugin_global_shortcut::ShortcutState;
 
@@ -28,7 +26,16 @@ static BACKEND_CHILD: Mutex<Option<std::process::Child>> = Mutex::new(None);
 static QUICK_CHAT_SHORTCUT_SYNCED: AtomicBool = AtomicBool::new(false);
 
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            show_main_window(app);
+        }));
+    }
+
+    builder
         .plugin({
             let autostart = tauri_plugin_autostart::Builder::new().app_name("Locus Agent");
             #[cfg(target_os = "macos")]
