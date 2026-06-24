@@ -39,6 +39,30 @@ def has_openai_tool_calls(tool_calls: Any) -> bool:
     return isinstance(first, dict) and ("function" in first or first.get("type") == "function")
 
 
+def prepare_assistant_for_llm_context(
+    *,
+    content: str = "",
+    reasoning_content: str = "",
+    tool_calls: Any = None,
+) -> dict[str, Any] | None:
+    """从历史 assistant 消息重建 LLM 上下文：仅 content / tool_calls，不带 reasoning 分轨。"""
+    d: dict[str, Any] = {"role": "assistant"}
+    text = str(content or "").strip()
+    reasoning = str(reasoning_content or "").strip()
+    if text:
+        d["content"] = text
+    elif reasoning and not has_openai_tool_calls(tool_calls):
+        # 流式中断等仅有 reasoning 落库时，用其填充 content，但不作为 reasoning_content 回传
+        d["content"] = reasoning
+    if has_openai_tool_calls(tool_calls):
+        d["tool_calls"] = tool_calls
+    normalized = normalize_assistant_for_llm_api(d)
+    if normalized is None:
+        return None
+    normalized.pop("reasoning_content", None)
+    return normalized
+
+
 def normalize_assistant_for_llm_api(msg: dict[str, Any]) -> dict[str, Any] | None:
     """OpenAI 兼容 API 要求 assistant 必须有 content 或 tool_calls。
 

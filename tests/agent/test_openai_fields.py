@@ -1,6 +1,7 @@
 from locus_agent.core.openai_fields import (
     normalize_assistant_for_llm_api,
     normalize_messages_for_llm_api,
+    prepare_assistant_for_llm_context,
     repair_incomplete_tool_rounds,
 )
 
@@ -90,3 +91,27 @@ def test_repair_keeps_complete_tool_round():
     out = repair_incomplete_tool_rounds(msgs)
     assert len(out) == 3
     assert out[0]["tool_calls"][0]["id"] == "call_1"
+
+
+def test_prepare_assistant_for_llm_context_drops_reasoning_track():
+    out = prepare_assistant_for_llm_context(
+        content="final answer",
+        reasoning_content="internal thinking",
+    )
+    assert out == {"role": "assistant", "content": "final answer"}
+
+
+def test_prepare_assistant_for_llm_context_promotes_reasoning_only_without_track():
+    out = prepare_assistant_for_llm_context(reasoning_content="only reasoning")
+    assert out == {"role": "assistant", "content": "only reasoning"}
+
+
+def test_prepare_assistant_for_llm_context_keeps_tool_calls():
+    out = prepare_assistant_for_llm_context(
+        reasoning_content="thinking",
+        tool_calls=[{"id": "call_1", "type": "function", "function": {"name": "fs", "arguments": "{}"}}],
+    )
+    assert out is not None
+    assert "content" not in out
+    assert "reasoning_content" not in out
+    assert out["tool_calls"][0]["id"] == "call_1"
