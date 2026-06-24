@@ -360,7 +360,7 @@ async def _execute_one_tool_call(
         )
     chat_attachments: list[dict[str, str]] = []
     try:
-        result = await registry.call(name, args)
+        result = await registry.call(name, args, tool_call_id=tc.id)
         log.info("tool_executed", tool=name)
         session_id = get_chat_session_id()
         if session_id:

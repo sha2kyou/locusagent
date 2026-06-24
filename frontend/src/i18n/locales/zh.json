@@ -185,13 +185,13 @@
       "enableTerminal": "启用 terminal 工具",
       "whitelist": {
         "label": "白名单",
-        "hint": "仅允许列表中的可执行文件名",
-        "detail": "仅允许 bare 命令名（如 git、npm），不允许路径；为空时拒绝所有命令。"
+        "hint": "列表中的可执行文件名自动放行",
+        "detail": "仅 bare 命令名（如 git、npm），不允许路径。不在白名单且不在黑名单的命令执行前须你确认。"
       },
       "denylist": {
-        "label": "禁止项",
-        "hint": "禁止列表中的可执行文件名",
-        "detail": "即使在白名单中，命中禁止项的命令也会被拦截。"
+        "label": "黑名单",
+        "hint": "列表中的可执行文件名一律拒绝",
+        "detail": "命中黑名单的命令直接拦截，不会弹出确认。"
       },
       "saved": "Terminal 设置已保存",
       "save": "保存"
@@ -435,6 +435,22 @@
       "otherPlaceholder": "其他（自由输入）…",
       "question": "问题：{{text}}",
       "answer": "回答：{{text}}"
+    },
+    "terminalApproval": {
+      "title": "终端命令需确认",
+      "command": "命令：{{command}}",
+      "executable": "可执行名：{{head}}",
+      "timeout": "{{seconds}} 秒后自动拒绝",
+      "once": "允许",
+      "always": "永久允许",
+      "deny": "拒绝",
+      "alwaysDeny": "永久拒绝",
+      "resolved": "已处理",
+      "errors": {
+        "notFound": "确认请求已过期或不存在",
+        "sessionMismatch": "会话不匹配，无法提交确认",
+        "failed": "提交确认失败，请重试"
+      }
     },
     "markdown": {
       "wrapOn": "自动换行",

@@ -18,6 +18,7 @@ import {
   getActiveRun,
   getSessionMessages,
   listSessions,
+  listTerminalApprovals,
 } from "@/api/endpoints";
 import type { SessionMeta } from "@/api/types";
 import { ApiError, getWorkspaceId, setWorkspaceId } from "@/api/client";
@@ -436,6 +437,67 @@ export function ChatProvider({
     return run;
   };
 
+  const attachPendingTerminalApprovals = async (sid: string) => {
+    try {
+      const { items } = await listTerminalApprovals(sid);
+      if (!items.length) return;
+      const used = new Set<string>();
+      updateLastAssistant((parts) =>
+        parts.map((p) => {
+          if (p.type !== "tool" || !p.running || p.toolName !== "terminal") return p;
+          if (p.terminalApproval?.resolved) return p;
+          const pending = items.find(
+            (item) => item.tool_call_id === p.id && !used.has(item.approval_id),
+          );
+          if (!pending) return p;
+          used.add(pending.approval_id);
+          return {
+            ...p,
+            terminalApproval: {
+              approvalId: pending.approval_id,
+              command: pending.command,
+              head: pending.head,
+              toolCallId: pending.tool_call_id,
+              expiresAt: pending.expires_at * 1000,
+            },
+          };
+        }),
+      );
+    } catch {
+      /* 后端未就绪或会话无待确认项 */
+    }
+  };
+
+  const applyTerminalApprovalChunk = (chunk: ChatChunk) => {
+    const approvalId = chunk.x_approval_id;
+    if (!approvalId) return;
+    const command = chunk.x_terminal_command || "";
+    const head = chunk.x_terminal_head || "";
+    const toolCallId = chunk.x_tool_call_id || "";
+    const timeout = chunk.x_approval_timeout ?? 30;
+    const expiresAt =
+      typeof chunk.x_approval_expires_at === "number" && chunk.x_approval_expires_at > 0
+        ? chunk.x_approval_expires_at * 1000
+        : Date.now() + timeout * 1000;
+    updateLastAssistant((parts) =>
+      parts.map((p) => {
+        if (p.type !== "tool" || !p.running || p.toolName !== "terminal") return p;
+        if (toolCallId && p.id !== toolCallId) return p;
+        if (!toolCallId && p.terminalApproval) return p;
+        return {
+          ...p,
+          terminalApproval: {
+            approvalId,
+            command,
+            head,
+            toolCallId: toolCallId || p.id,
+            expiresAt,
+          },
+        };
+      }),
+    );
+  };
+
   const applyStreamChunk = (chunk: ChatChunk, opts: { navigateSession?: boolean } = {}) => {
     if (!mountedRef.current) return;
     const navigateSession = opts.navigateSession ?? false;
@@ -470,6 +532,8 @@ export function ChatProvider({
           },
         ];
       });
+    } else if (ev === "terminal_approval") {
+      applyTerminalApprovalChunk(chunk);
     } else if (ev === "tool_result") {
       const id = chunk.x_tool_call_id || chunk.x_tool_id;
       const preview = chunk.x_preview;
@@ -485,6 +549,7 @@ export function ChatProvider({
             return {
               ...p,
               running: false,
+              terminalApproval: undefined,
               preview,
               toolName: chunk.x_tool_name || p.toolName,
               elapsedMs:
@@ -567,6 +632,8 @@ export function ChatProvider({
     void (async () => {
       try {
         await resyncLiveSession(sid);
+        if (token !== pollTokenRef.current || !mountedRef.current) return;
+        await attachPendingTerminalApprovals(sid);
         if (token !== pollTokenRef.current || !mountedRef.current) return;
         await streamActiveRun(
           sid,

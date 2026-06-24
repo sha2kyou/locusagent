@@ -32,6 +32,8 @@ _NON_INTERACTIVE_SYSTEM_PROMPT = (
     "- Never call clarify; make a reasonable default decision and continue.\n"
     "- If requirements are not fully specified, proceed with the smallest sensible output.\n"
     "- Do NOT ask the user to switch to interactive mode or wait for confirmation.\n"
+    "- terminal tool: only allow-listed commands run automatically in scheduled runs; "
+    "others are rejected immediately (no approval UI in scheduled mode).\n"
     "- memory tool (add/replace/remove) IS available in scheduled runs. "
     "When the prompt asks for memory maintenance, consolidation, or cleanup, "
     "execute it directly via memory tool calls—do not defer to a later interactive session.\n"

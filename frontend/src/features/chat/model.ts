@@ -1,5 +1,16 @@
 import type { ToolKind } from "@/api/types";
 
+export type TerminalApprovalChoice = "once" | "always" | "deny" | "always_deny";
+
+export interface TerminalApprovalState {
+  approvalId: string;
+  command: string;
+  head: string;
+  toolCallId: string;
+  expiresAt: number;
+  resolved?: boolean;
+}
+
 export interface ToolPart {
   type: "tool";
   id: string;
@@ -10,6 +21,7 @@ export interface ToolPart {
   argsPreview?: string;
   startedAt: number;
   elapsedMs?: number;
+  terminalApproval?: TerminalApprovalState;
 }
 
 export interface TextPart {

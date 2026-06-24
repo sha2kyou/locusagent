@@ -76,7 +76,7 @@ class ToolRegistry:
     def schemas(self, *, workspace_id: str | None = None) -> list[dict[str, Any]]:
         return [t.to_openai_schema() for t in self.list(workspace_id=workspace_id)]
 
-    async def call(self, name: str, args: dict[str, Any]) -> ToolResult:
+    async def call(self, name: str, args: dict[str, Any], *, tool_call_id: str = "") -> ToolResult:
         with self._lock:
             tool = self._tools.get(name)
             enabled = tool.enabled if tool is not None else False
@@ -84,8 +84,11 @@ class ToolRegistry:
             raise ToolError(f"unknown tool: {name}")
         if not enabled:
             raise ToolError(f"tool disabled: {name}")
+        call_args = dict(args)
+        if tool_call_id and name == "terminal":
+            call_args["_tool_call_id"] = tool_call_id
         try:
-            return await tool.handler(args)
+            return await tool.handler(call_args)
         except ToolError:
             raise
         except Exception as exc:

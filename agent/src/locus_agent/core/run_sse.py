@@ -165,6 +165,22 @@ def _encode_loop_event(
             x_attachment_id=ev.get("id"),
             x_attachment_name=ev.get("name"),
         )
+    if t == "terminal_approval":
+        return sse_chunk(
+            delta={},
+            chat_id=chat_id,
+            public_model=public_model,
+            created=created,
+            session_id=session_id,
+            run_id=run_id,
+            x_event="terminal_approval",
+            x_approval_id=ev.get("approval_id"),
+            x_terminal_command=ev.get("command"),
+            x_terminal_head=ev.get("head"),
+            x_tool_call_id=ev.get("tool_call_id"),
+            x_approval_timeout=ev.get("timeout_seconds"),
+            x_approval_expires_at=ev.get("expires_at"),
+        )
     return None
 
 

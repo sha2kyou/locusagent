@@ -21,6 +21,7 @@ from ..workspace import get_workspace_id
 from .proc_env import build_proc_env
 from ..subprocess_env import safe_subprocess_env
 from .base import Tool, ToolError, ToolResult, register_builtin
+from .terminal_approval import classify_terminal_head, request_terminal_command_approval
 
 DEFAULT_TIMEOUT = 180.0
 MAX_OUTPUT = 100 * 1024
@@ -29,20 +30,8 @@ _WORKSPACE_PYTHON_CMDS = frozenset({"python", "python3"})
 _WORKSPACE_PIP_CMDS = frozenset({"pip", "pip3"})
 
 
-def _command_set(raw: str) -> set[str]:
-    return {x.strip().lower() for x in raw.split(",") if x.strip()}
-
-
 def _enabled() -> bool:
     return get_settings().enable_terminal
-
-
-def _whitelist() -> set[str]:
-    return _command_set(get_settings().terminal_whitelist)
-
-
-def _denylist() -> set[str]:
-    return _command_set(get_settings().terminal_denylist)
 
 
 async def _resolve_executable(head: str) -> str:
@@ -87,13 +76,12 @@ async def _terminal(args: dict[str, Any]) -> ToolResult:
     head = Path(raw_head).name.lower()
     if "/" in raw_head or "\\" in raw_head:
         raise ToolError("command must be a bare executable name, path is not allowed")
-    wl = _whitelist()
-    if not wl:
-        raise ToolError("terminal allowlist is empty; configure allowed commands in Settings → Tools")
-    if head not in wl:
-        raise ToolError(f"command '{head}' not in whitelist")
-    if head in _denylist():
+    gate = classify_terminal_head(head)
+    if gate == "deny":
         raise ToolError(f"command '{head}' is blocked by TERMINAL_DENYLIST")
+    if gate == "confirm":
+        tool_call_id = str(args.get("_tool_call_id") or "").strip()
+        await request_terminal_command_approval(command=cmd, head=head, tool_call_id=tool_call_id)
     resolved = await _resolve_executable(head)
     timeout = float(args.get("timeout", DEFAULT_TIMEOUT) or DEFAULT_TIMEOUT)
     if timeout <= 0:
@@ -149,7 +137,8 @@ register_builtin(
         description=(
             "Run shell commands for build, install, git, process management, scripts. "
             "python/pip commands use the current workspace virtualenv (workspace/.venv). "
-            "Subject to terminal enable flag, allow/deny lists, resource limits, timeout cleanup; "
+            "Subject to terminal enable flag, allow/deny lists with user confirmation for "
+            "commands outside both lists, resource limits, timeout cleanup; "
             "not for file read/search (prefer read_file and search_files). "
             "Optional env: workspace env var names to inject (values from env_vars store)."
         ),

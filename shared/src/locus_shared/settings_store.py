@@ -305,6 +305,56 @@ def import_settings_document(raw: dict[str, Any]) -> SettingsDocument:
     return _ensure_secrets(doc)
 
 
+def _terminal_command_items(raw: str) -> list[str]:
+    seen: set[str] = set()
+    items: list[str] = []
+    for part in raw.split(","):
+        head = part.strip().lower()
+        if not head or head in seen:
+            continue
+        seen.add(head)
+        items.append(head)
+    return items
+
+
+def _join_terminal_commands(items: list[str]) -> str:
+    return ",".join(items)
+
+
+def append_terminal_whitelist_command(head: str) -> SettingsDocument:
+    """将可执行名追加到终端白名单，并从黑名单移除（若存在）。"""
+    name = head.strip().lower()
+    if not name:
+        raise ValueError("command head is empty")
+    doc = load_settings_document()
+    whitelist = _terminal_command_items(doc.terminal.whitelist)
+    denylist = [x for x in _terminal_command_items(doc.terminal.denylist) if x != name]
+    if name not in whitelist:
+        whitelist.append(name)
+    doc.terminal.whitelist = _join_terminal_commands(whitelist)
+    doc.terminal.denylist = _join_terminal_commands(denylist)
+    save_settings_document(doc)
+    clear_settings_cache()
+    return doc
+
+
+def append_terminal_denylist_command(head: str) -> SettingsDocument:
+    """将可执行名追加到终端黑名单，并从白名单移除（若存在）。"""
+    name = head.strip().lower()
+    if not name:
+        raise ValueError("command head is empty")
+    doc = load_settings_document()
+    denylist = _terminal_command_items(doc.terminal.denylist)
+    whitelist = [x for x in _terminal_command_items(doc.terminal.whitelist) if x != name]
+    if name not in denylist:
+        denylist.append(name)
+    doc.terminal.denylist = _join_terminal_commands(denylist)
+    doc.terminal.whitelist = _join_terminal_commands(whitelist)
+    save_settings_document(doc)
+    clear_settings_cache()
+    return doc
+
+
 def reload_runtime_config() -> None:
     """保存 settings.json 后刷新进程内配置缓存。"""
     clear_settings_cache()

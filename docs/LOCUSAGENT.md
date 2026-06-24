@@ -14,7 +14,7 @@ First-time users must configure an LLM API key and main model under **Settings â
 - **Daily Q&A and creation**: writing, analysis, translation, planning, code explanation and generation.
 - **File-based work**: read/search/edit workspace files, batch processing, reports or scripts.
 - **Web research**: search and extract pages (when Host has Tavily / Jina keys configured).
-- **Executable checks**: sandboxed code or controlled terminal commands (allow/deny lists and safety policies apply).
+- **Executable checks**: sandboxed code or controlled terminal commands (allow/deny lists; commands outside both lists require your approval in interactive chat).
 - **External extensions**: MCP for third-party tools (calendar, DB, APIs, etc.).
 - **Long-term memory**: cross-session preferences and stable facts (`memory` tool, `term=long_term`; do not store temporary progress).
 - **Reusable workflows**: load **Skills** (built-in / shared / private) on demand and follow their bodies.
@@ -31,7 +31,7 @@ First-time users must configure an LLM API key and main model under **Settings â
 - `read_file` / `search_files` / `write_file` / `patch` / `delete_file`: files under current workspace `workspace/`.
 - `deliver_file`: user needs to **download** a generated file (docs, spreadsheets, archives); after success **do not** put links or filenames in replyâ€”the UI shows a download chip.
 - `execute_code`: sandbox Python or short scripts.
-- `terminal`: controlled shell (allow/deny lists from platform config).
+- `terminal`: controlled shell â€” allow list runs automatically, deny list is blocked, other commands need your approval (Allow / Always allow / Deny / Always deny) in interactive chat.
 
 ### Web
 - `web_search` / `web_extract`: search and extract page text.

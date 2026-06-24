@@ -94,7 +94,7 @@ export interface ChatChunk {
   }[];
   session_id?: string;
   run_id?: string;
-  x_event?: "tool_call" | "tool_result" | "attachment" | "error" | "sync";
+  x_event?: "tool_call" | "tool_result" | "attachment" | "error" | "sync" | "terminal_approval";
   x_sync?: {
     assistant_message_id?: number | null;
     content?: string;
@@ -110,6 +110,11 @@ export interface ChatChunk {
   x_attachment_id?: string;
   x_attachment_name?: string;
   x_message?: string;
+  x_approval_id?: string;
+  x_terminal_command?: string;
+  x_terminal_head?: string;
+  x_approval_timeout?: number;
+  x_approval_expires_at?: number;
 }
 
 export interface Skill {

@@ -130,6 +130,23 @@ async def cancel_session_run(
     return await proxy_to_agent(request, f"/workspace/sessions/{session_id}/cancel")
 
 
+@router.get("/sessions/{session_id}/terminal-approvals")
+@router.post("/sessions/{session_id}/terminal-approvals/{approval_id}")
+async def proxy_terminal_approvals(
+    request: Request,
+    ctx: AuthContext = Depends(require_session),
+    session_id: str | None = None,
+    approval_id: str | None = None,
+):
+    if approval_id and session_id:
+        target = f"/workspace/sessions/{session_id}/terminal-approvals/{approval_id}"
+    elif session_id:
+        target = f"/workspace/sessions/{session_id}/terminal-approvals"
+    else:
+        target = "/workspace/sessions"
+    return await proxy_to_agent(request, target)
+
+
 @router.api_route("/artifact-categories", methods=PROXY_METHODS)
 @router.api_route("/artifact-categories/{category_id}", methods=PROXY_METHODS)
 async def proxy_artifact_categories(
