@@ -350,7 +350,13 @@ export function ChatProvider({
     updateLastAssistant((parts) =>
       parts.map((p) =>
         p.type === "tool" && p.running
-          ? { ...p, running: false, preview: p.preview ?? reason, elapsedMs: p.startedAt ? Date.now() - p.startedAt : undefined }
+          ? {
+              ...p,
+              running: false,
+              terminalApproval: undefined,
+              preview: p.preview ?? reason,
+              elapsedMs: p.startedAt ? Date.now() - p.startedAt : undefined,
+            }
           : p,
       ),
     );
@@ -701,6 +707,7 @@ export function ChatProvider({
                 ? {
                     ...p,
                     running: false,
+                    terminalApproval: undefined,
                     elapsedMs: p.elapsedMs ?? (p.startedAt ? Date.now() - p.startedAt : undefined),
                   }
                 : p,
@@ -937,6 +944,7 @@ export function ChatProvider({
               ? {
                   ...p,
                   running: false,
+                  terminalApproval: undefined,
                   elapsedMs: p.elapsedMs ?? (p.startedAt ? Date.now() - p.startedAt : undefined),
                 }
               : p,

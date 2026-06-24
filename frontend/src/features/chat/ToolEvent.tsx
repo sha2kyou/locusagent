@@ -255,7 +255,7 @@ export function ToolPartView({ part }: { part: ToolPart }) {
   const approval = part.terminalApproval;
   return (
     <>
-      {approval && currentId ? (
+      {approval && running && currentId ? (
         <TerminalApprovalCard approval={approval} sessionId={currentId} />
       ) : null}
       <GenericToolBlock
