@@ -3,7 +3,9 @@ import type { ChatPart } from "./model";
 /** 末尾连续 running tool 的起止下标；无则 null */
 function trailingRunningToolRange(parts: readonly ChatPart[]): { start: number; end: number } | null {
   let i = parts.length - 1;
-  while (i >= 0 && parts[i].type === "tool" && parts[i].running) {
+  while (i >= 0) {
+    const p = parts[i];
+    if (p.type !== "tool" || !p.running) break;
     i -= 1;
   }
   const start = i + 1;
