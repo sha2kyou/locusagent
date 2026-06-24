@@ -1,20 +1,15 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { Navigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { getAppConfig, putAppConfig } from "@/api/endpoints";
-import { stripWorkspacePrefix, withWorkspacePrefix } from "@/app/workspace-route";
 import { applyDesktopDevtoolsSettings } from "@/lib/desktop-devtools";
-import { isDesktopApp } from "@/lib/desktop-app";
 import { SettingsSection } from "./SettingsSection";
 
 export function SettingsDeveloperPage() {
   const { t } = useTranslation();
   const toast = useToast();
-  const location = useLocation();
-  const { workspaceId } = stripWorkspacePrefix(location.pathname);
   const [devtoolsEnabled, setDevtoolsEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -23,10 +18,6 @@ export function SettingsDeveloperPage() {
       setDevtoolsEnabled(cfg.developer.devtools_enabled);
     });
   }, []);
-
-  if (!isDesktopApp()) {
-    return <Navigate to={withWorkspacePrefix("/settings/general", workspaceId)} replace />;
-  }
 
   const save = async () => {
     setSaving(true);

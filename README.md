@@ -18,9 +18,9 @@ Runtime data lives under `~/.locusagent/` (macOS) or `%USERPROFILE%\.locusagent\
 
 **Locus** (Latin: *place*, *position*) is the fixed point where something is defined — a workspace on disk, a scope of memory, a boundary the agent operates within.
 
-**Locus Agent** is an AI agent that runs at that point on **your machine**, not in a remote tab you keep re-explaining context to:
+**Locus Agent** is a **desktop AI agent** (macOS / Windows) that runs at that point on **your machine**, not in a remote chat tab you keep re-explaining context to:
 
-- **Local locus** — Host and Agent ship as a bundled sidecar on `127.0.0.1:21223`; conversations, tools, and SQLite data stay under `~/.locusagent/`.
+- **Local locus** — Host and Agent run as a sidecar on `127.0.0.1:21223`; conversations, tools, and SQLite data stay under `~/.locusagent/`.
 - **Workspace loci** — Each workspace is its own isolated place: files, sessions, memory, Skills, and MCP config do not bleed into other projects.
 - **Agent** — The part that acts: file I/O, sandboxed code, terminal, web search, MCP, scheduled tasks, and deliverables.
 
@@ -75,9 +75,9 @@ Run the installer and launch **Locus Agent** from the Start menu or desktop shor
 
 ```
 locusagent/
-├── frontend/          React + Vite SPA (chat UI, settings, routes)
+├── frontend/          Desktop UI (React + Vite; HMR in dev, static build in release)
 ├── desktop/           Tauri 2 shell (macOS .app / .dmg, Windows NSIS installer)
-├── sidecar/           Bundled Python entrypoint (Host + Agent monolith)
+├── sidecar/           Python entrypoint (Host + Agent monolith)
 ├── host/              Settings, API proxies, workspace metadata
 ├── agent/             Chat loop, tools, memory, MCP, persistence
 ├── shared/            Shared settings & utilities
@@ -86,15 +86,38 @@ locusagent/
 └── scripts/           Version sync, bundle helpers
 ```
 
-The sidecar listens on **`127.0.0.1:21223`** and serves both the UI and API from the same origin. The production desktop app embeds a standalone Python 3.11 runtime.
+**Desktop-only — no standalone web client.** Use `tauri dev` for daily work; use `./rebuild.sh` (macOS) or `build-desktop-windows.ps1` (Windows) for release installers.
 
-## Build from source
+| | Development (`cd desktop && npm run dev`) | Release (`./rebuild.sh`, etc.) |
+|---|---|---|
+| UI | Vite on `:5173`, hot reload | Static files served by sidecar on `:21223` |
+| API | Sidecar on `:21223` (spawned by Tauri) | Bundled Python sidecar on `:21223` |
+| Output | None | `.app` / `.dmg` / `.exe` |
 
-Shared requirements: [uv](https://docs.astral.sh/uv/), Node.js 22+, Rust (stable). Production bundles embed a standalone Python 3.11 runtime via uv.
+## Local development
+
+**Requirements:** [uv](https://docs.astral.sh/uv/), Node.js 22+, Rust (stable).
+
+```bash
+# First time
+uv sync --frozen
+cd frontend && npm ci && cd ../desktop && npm ci
+
+# Daily (from desktop/)
+cd desktop && npm run dev
+```
+
+- Tauri starts Vite (`:5173`) and the Python sidecar (`:21223`) for you
+- Edit `frontend/src` for instant UI reload; restart `npm run dev` after Python changes
+- Backend tests: `uv run pytest tests/ -q`
+
+> **Note:** Dev WebViews load `:5173`; release builds use `:21223` for both UI and API. API behavior matches (proxied in dev). **Do not** run `./rebuild.sh` just to iterate on UI.
+
+## Build from source (release installers)
 
 ### macOS (Apple Silicon)
 
-**Requirements:** macOS (Apple Silicon), Python 3.11+ (for local dev; the bundle script uses uv-managed Python).
+**Requirements:** macOS (Apple Silicon), Python 3.11+. Release bundles embed a standalone Python 3.11 runtime via uv.
 
 Full desktop build (bundled venv + frontend + Tauri release):
 

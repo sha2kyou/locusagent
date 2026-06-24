@@ -18,6 +18,8 @@ import {
   getActiveRun,
   getSessionMessages,
   listSessions,
+  listTerminalApprovals,
+  listToolTimings,
 } from "@/api/endpoints";
 import type { SessionMeta } from "@/api/types";
 import { ApiError, getWorkspaceId, setWorkspaceId } from "@/api/client";
@@ -47,6 +49,7 @@ import { coalesceHistory } from "./history";
 import { mergeStreamSyncParts } from "./stream-sync";
 import { isTodoTool, parseTodoPlan, type TodoPlan } from "./todo";
 import { formatToolArgsPreview } from "./tool-args";
+import { toolStartedAtMs } from "./tool-timing";
 
 export interface PendingAttachment {
   id: string;
@@ -347,7 +350,13 @@ export function ChatProvider({
     updateLastAssistant((parts) =>
       parts.map((p) =>
         p.type === "tool" && p.running
-          ? { ...p, running: false, preview: p.preview ?? reason, elapsedMs: p.startedAt ? Date.now() - p.startedAt : undefined }
+          ? {
+              ...p,
+              running: false,
+              terminalApproval: undefined,
+              preview: p.preview ?? reason,
+              elapsedMs: p.startedAt ? Date.now() - p.startedAt : undefined,
+            }
           : p,
       ),
     );
@@ -436,6 +445,87 @@ export function ChatProvider({
     return run;
   };
 
+  const attachPendingTerminalApprovals = async (sid: string) => {
+    try {
+      const { items } = await listTerminalApprovals(sid);
+      if (!items.length) return;
+      const used = new Set<string>();
+      updateLastAssistant((parts) =>
+        parts.map((p) => {
+          if (p.type !== "tool" || !p.running || p.toolName !== "terminal") return p;
+          if (p.terminalApproval?.resolved) return p;
+          const pending = items.find(
+            (item) => item.tool_call_id === p.id && !used.has(item.approval_id),
+          );
+          if (!pending) return p;
+          used.add(pending.approval_id);
+          return {
+            ...p,
+            terminalApproval: {
+              approvalId: pending.approval_id,
+              command: pending.command,
+              head: pending.head,
+              toolCallId: pending.tool_call_id,
+              expiresAt: pending.expires_at * 1000,
+            },
+          };
+        }),
+      );
+    } catch {
+      /* 后端未就绪或会话无待确认项 */
+    }
+  };
+
+  const attachActiveToolTimings = async (sid: string) => {
+    try {
+      const { items } = await listToolTimings(sid);
+      if (!items.length) return;
+      const byId = new Map(items.map((item) => [item.tool_call_id, item.started_at]));
+      updateLastAssistant((parts) =>
+        parts.map((p) => {
+          if (p.type !== "tool" || !p.running) return p;
+          const stamp = byId.get(p.id);
+          if (stamp == null) return p;
+          const startedAt = toolStartedAtMs(stamp);
+          if (!startedAt) return p;
+          return { ...p, startedAt };
+        }),
+      );
+    } catch {
+      /* 后端未就绪或会话无进行中 tool */
+    }
+  };
+
+  const applyTerminalApprovalChunk = (chunk: ChatChunk) => {
+    const approvalId = chunk.x_approval_id;
+    if (!approvalId) return;
+    const command = chunk.x_terminal_command || "";
+    const head = chunk.x_terminal_head || "";
+    const toolCallId = chunk.x_tool_call_id || "";
+    const timeout = chunk.x_approval_timeout ?? 30;
+    const expiresAt =
+      typeof chunk.x_approval_expires_at === "number" && chunk.x_approval_expires_at > 0
+        ? chunk.x_approval_expires_at * 1000
+        : Date.now() + timeout * 1000;
+    updateLastAssistant((parts) =>
+      parts.map((p) => {
+        if (p.type !== "tool" || !p.running || p.toolName !== "terminal") return p;
+        if (toolCallId && p.id !== toolCallId) return p;
+        if (!toolCallId && p.terminalApproval) return p;
+        return {
+          ...p,
+          terminalApproval: {
+            approvalId,
+            command,
+            head,
+            toolCallId: toolCallId || p.id,
+            expiresAt,
+          },
+        };
+      }),
+    );
+  };
+
   const applyStreamChunk = (chunk: ChatChunk, opts: { navigateSession?: boolean } = {}) => {
     if (!mountedRef.current) return;
     const navigateSession = opts.navigateSession ?? false;
@@ -455,6 +545,10 @@ export function ChatProvider({
     }
     if (ev === "tool_call") {
       const toolId = chunk.x_tool_id || chunk.x_tool_call_id || uid("t");
+      const startedAt =
+        typeof chunk.x_tool_started_at === "number" && chunk.x_tool_started_at > 0
+          ? toolStartedAtMs(chunk.x_tool_started_at)
+          : Date.now();
       updateLastAssistant((parts) => {
         if (parts.some((p) => p.type === "tool" && p.id === toolId)) return parts;
         return [
@@ -465,11 +559,13 @@ export function ChatProvider({
             toolName: chunk.x_tool_name || "tool",
             toolKind: chunk.x_tool_kind || "tool",
             running: true,
-            startedAt: Date.now(),
+            startedAt,
             argsPreview: formatToolArgsPreview(chunk.x_tool_args),
           },
         ];
       });
+    } else if (ev === "terminal_approval") {
+      applyTerminalApprovalChunk(chunk);
     } else if (ev === "tool_result") {
       const id = chunk.x_tool_call_id || chunk.x_tool_id;
       const preview = chunk.x_preview;
@@ -485,6 +581,7 @@ export function ChatProvider({
             return {
               ...p,
               running: false,
+              terminalApproval: undefined,
               preview,
               toolName: chunk.x_tool_name || p.toolName,
               elapsedMs:
@@ -568,6 +665,10 @@ export function ChatProvider({
       try {
         await resyncLiveSession(sid);
         if (token !== pollTokenRef.current || !mountedRef.current) return;
+        await attachPendingTerminalApprovals(sid);
+        if (token !== pollTokenRef.current || !mountedRef.current) return;
+        await attachActiveToolTimings(sid);
+        if (token !== pollTokenRef.current || !mountedRef.current) return;
         await streamActiveRun(
           sid,
           runId,
@@ -606,6 +707,7 @@ export function ChatProvider({
                 ? {
                     ...p,
                     running: false,
+                    terminalApproval: undefined,
                     elapsedMs: p.elapsedMs ?? (p.startedAt ? Date.now() - p.startedAt : undefined),
                   }
                 : p,
@@ -842,6 +944,7 @@ export function ChatProvider({
               ? {
                   ...p,
                   running: false,
+                  terminalApproval: undefined,
                   elapsedMs: p.elapsedMs ?? (p.startedAt ? Date.now() - p.startedAt : undefined),
                 }
               : p,

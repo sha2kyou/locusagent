@@ -23,6 +23,7 @@ import type {
   ScheduledTask,
   ScheduleKind,
   TimezoneConfig,
+  ToolTimingItem,
   LocaleConfig,
   BackendLogs,
   EmbeddingProgress,
@@ -127,6 +128,35 @@ export const getActiveRun = (id: string) =>
 
 export const cancelRun = (id: string) =>
   apiSend<{ cancelled: boolean }>(`/api/workspace/sessions/${encodeURIComponent(id)}/cancel`, "POST", {});
+
+export const listToolTimings = (sessionId: string) =>
+  apiGet<{ items: ToolTimingItem[] }>(
+    `/api/workspace/sessions/${encodeURIComponent(sessionId)}/tool-timings`,
+  );
+
+export const listTerminalApprovals = (sessionId: string) =>
+  apiGet<{
+    items: Array<{
+      approval_id: string;
+      command: string;
+      head: string;
+      tool_call_id: string;
+      run_id: string;
+      timeout_seconds: number;
+      expires_at: number;
+    }>;
+  }>(`/api/workspace/sessions/${encodeURIComponent(sessionId)}/terminal-approvals`);
+
+export const resolveTerminalApproval = (
+  sessionId: string,
+  approvalId: string,
+  choice: "once" | "always" | "deny" | "always_deny",
+) =>
+  apiSend<{ ok: boolean; choice?: string; error?: string }>(
+    `/api/workspace/sessions/${encodeURIComponent(sessionId)}/terminal-approvals/${encodeURIComponent(approvalId)}`,
+    "POST",
+    { choice },
+  );
 
 export const deleteSession = (id: string) =>
   apiSend<{ deleted: boolean }>(`/api/workspace/sessions/${encodeURIComponent(id)}`, "DELETE");

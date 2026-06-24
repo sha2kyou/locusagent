@@ -3,7 +3,7 @@ import { fileURLToPath, URL } from 'node:url'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-// macOS 桌面壳：静态产物供 Tauri 本地 gateway 托管，API 由 gateway 反代到 Host。
+// macOS 桌面壳：静态产物供 release 版 sidecar 同源托管；开发走 vite.config.ts + tauri dev。
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   base: '/',

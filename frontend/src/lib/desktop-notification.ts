@@ -1,6 +1,5 @@
 import type { NotificationEntry } from "@/api/types";
 import i18n from "../i18n/index.ts";
-import { isDesktopApp } from "@/lib/desktop-app";
 
 async function invokeNotify(options: { title: string; body?: string; id?: number }): Promise<void> {
   const { invoke } = await import("@tauri-apps/api/core");
@@ -14,9 +13,8 @@ async function invokeNotify(options: { title: string; body?: string; id?: number
   });
 }
 
-/** 将通知中心条目镜像到 macOS 系统通知（不影响应用内 toast）。 */
+/** 将通知中心条目镜像到系统通知（不影响应用内 toast）。 */
 export function mirrorNotificationEntryToSystem(item: NotificationEntry): void {
-  if (!isDesktopApp()) return;
   const title = item.title.trim();
   if (!title) return;
   void invokeNotify({
@@ -29,7 +27,6 @@ export function mirrorNotificationEntryToSystem(item: NotificationEntry): void {
 }
 
 export function mirrorNotificationSummaryToSystem(delta: number): void {
-  if (!isDesktopApp()) return;
   void invokeNotify({
     title: delta === 1 ? i18n.t("notifications.newMessage") : i18n.t("notifications.newMessages", { count: delta }),
   }).catch(() => {});

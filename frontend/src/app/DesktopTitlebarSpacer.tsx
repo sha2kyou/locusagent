@@ -1,4 +1,4 @@
-import { desktopDragRegionProps, isDesktopApp, useDesktopAppHtmlClass } from "@/lib/desktop-app";
+import { desktopDragRegionProps, useDesktopAppHtmlClass } from "@/lib/desktop-app";
 import { cn } from "@/lib/utils";
 
 type DesktopWindowDragOverlayProps = {
@@ -6,11 +6,9 @@ type DesktopWindowDragOverlayProps = {
   mainOffsetClassName?: string;
 };
 
-/** macOS 透明标题栏：固定于窗口顶部的拖拽层，不占布局高度。Web 端不渲染。 */
+/** macOS 透明标题栏：固定于窗口顶部的拖拽层，不占布局高度。 */
 export function DesktopWindowDragOverlay({ mainOffsetClassName }: DesktopWindowDragOverlayProps) {
   useDesktopAppHtmlClass();
-
-  if (!isDesktopApp()) return null;
 
   return (
     <div

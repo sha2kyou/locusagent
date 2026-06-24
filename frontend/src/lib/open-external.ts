@@ -1,4 +1,4 @@
-import { DESKTOP_GATEWAY_ORIGIN, isDesktopApp } from "@/lib/desktop-app";
+import { DESKTOP_GATEWAY_ORIGIN } from "@/lib/desktop-app";
 
 function appOrigins(): Set<string> {
   const origins = new Set<string>();
@@ -28,28 +28,15 @@ export function isExternalNavigationUrl(raw: string | null | undefined): boolean
   if (url.protocol === "mailto:" || url.protocol === "tel:") return true;
   if (url.protocol !== "http:" && url.protocol !== "https:") return false;
 
-  if (appOrigins().has(url.origin)) return false;
-
-  if (isDesktopApp()) {
-    const host = url.hostname;
-    if ((host === "127.0.0.1" || host === "localhost") && (url.port === "21223" || url.port === "")) {
-      return false;
-    }
-  }
-
-  return true;
+  return !appOrigins().has(url.origin);
 }
 
-/** 在系统默认浏览器中打开 URL（桌面壳用 Tauri opener，Web 用新标签页）。 */
+/** 在系统默认浏览器中打开 URL。 */
 export async function openExternalUrl(url: string): Promise<void> {
   const target = url.trim();
   if (!target) return;
-  if (isDesktopApp()) {
-    const { openUrl } = await import("@tauri-apps/plugin-opener");
-    await openUrl(target);
-    return;
-  }
-  window.open(target, "_blank", "noopener,noreferrer");
+  const { openUrl } = await import("@tauri-apps/plugin-opener");
+  await openUrl(target);
 }
 
 type WindowWithApod = Window & { __apodExternalLinks?: boolean };

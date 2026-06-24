@@ -10,17 +10,6 @@ use tauri_plugin_opener::OpenerExt;
 
 use crate::sidecar;
 
-fn app_origin() -> String {
-    sidecar::backend_url()
-}
-
-fn is_app_url(url: &url::Url) -> bool {
-    let origin = app_origin();
-    url.as_str().starts_with(&origin)
-        || url.as_str().starts_with("http://localhost:21223")
-        || url.scheme() == "tauri"
-}
-
 fn open_in_system_browser(app: &tauri::AppHandle, url: &url::Url) {
     let app = app.clone();
     let target = url.to_string();
@@ -31,7 +20,7 @@ fn open_in_system_browser(app: &tauri::AppHandle, url: &url::Url) {
 
 pub fn create_main_window(app: &App) -> tauri::Result<()> {
     let handle = app.handle().clone();
-    let app_url: url::Url = app_origin().parse().expect("app url");
+    let app_url: url::Url = sidecar::frontend_url().parse().expect("app url");
 
     let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(app_url))
         .title("Locus Agent")
@@ -58,7 +47,7 @@ pub fn create_main_window(app: &App) -> tauri::Result<()> {
         .on_navigation({
             let handle = handle.clone();
             move |url| {
-                if is_app_url(url) {
+                if sidecar::is_app_web_url(url) {
                     return true;
                 }
                 if matches!(url.scheme(), "http" | "https" | "mailto" | "tel") {

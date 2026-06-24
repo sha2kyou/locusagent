@@ -40,16 +40,6 @@ pub fn is_shortcut_registered(app: &AppHandle, prefs: &DesktopPrefs) -> bool {
     app.global_shortcut().is_registered(shortcut.as_str())
 }
 
-fn app_origin() -> String {
-    sidecar::backend_url()
-}
-
-fn is_app_url(url: &url::Url) -> bool {
-    let origin = app_origin();
-    url.as_str().starts_with(&origin)
-        || url.as_str().starts_with("http://localhost:21223")
-        || url.scheme() == "tauri"
-}
 
 fn open_in_system_browser(app: &AppHandle, url: &url::Url) {
     let app = app.clone();
@@ -61,7 +51,7 @@ fn open_in_system_browser(app: &AppHandle, url: &url::Url) {
 
 pub fn create_quick_chat_window(app: &App) -> Result<(), String> {
     let handle = app.handle().clone();
-    let quick_url: url::Url = format!("{}/quick-chat", app_origin())
+    let quick_url: url::Url = format!("{}/quick-chat", sidecar::frontend_url())
         .parse::<url::Url>()
         .map_err(|e: url::ParseError| e.to_string())?;
 
@@ -96,7 +86,7 @@ pub fn create_quick_chat_window(app: &App) -> Result<(), String> {
         .on_navigation({
             let handle = handle.clone();
             move |url| {
-                if is_app_url(url) {
+                if sidecar::is_app_web_url(url) {
                     return true;
                 }
                 if matches!(url.scheme(), "http" | "https" | "mailto" | "tel") {
@@ -263,7 +253,7 @@ pub fn desktop_open_session_in_main(
             .filter(|id| !id.is_empty())
             .map(|id| format!("/chat/{}", id))
             .unwrap_or_else(|| "/chat".to_string());
-        let url = format!("{}{}", app_origin(), path);
+        let url = format!("{}{}", sidecar::frontend_url(), path);
         let _ = main.eval(&format!("window.location.assign({:?});", url));
     }
     hide_quick_chat(&app);

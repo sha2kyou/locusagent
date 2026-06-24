@@ -752,6 +752,40 @@ async def workspace_session_cancel_run(session_id: str) -> dict:
     return {"cancelled": cancelled}
 
 
+class TerminalApprovalIn(BaseModel):
+    choice: Literal["once", "always", "deny", "always_deny"]
+
+
+@router.get("/sessions/{session_id}/terminal-approvals")
+async def workspace_list_terminal_approvals(session_id: str) -> dict:
+    from ..tools.terminal_approval import list_pending_terminal_approvals
+
+    items = await list_pending_terminal_approvals(session_id)
+    return {"items": items}
+
+
+@router.post("/sessions/{session_id}/terminal-approvals/{approval_id}")
+async def workspace_resolve_terminal_approval(
+    session_id: str,
+    approval_id: str,
+    payload: TerminalApprovalIn,
+) -> dict:
+    from ..tools.terminal_approval import resolve_terminal_approval
+
+    return await resolve_terminal_approval(
+        approval_id,
+        choice=payload.choice,
+        session_id=session_id,
+    )
+
+
+@router.get("/sessions/{session_id}/tool-timings")
+async def workspace_list_tool_timings(session_id: str) -> dict:
+    from ..core.tool_timing import list_active_tool_starts
+
+    return {"items": list_active_tool_starts(session_id)}
+
+
 @router.delete("/sessions/{session_id}")
 async def workspace_delete_session(session_id: str) -> dict:
     lock = await session_lock(session_id)

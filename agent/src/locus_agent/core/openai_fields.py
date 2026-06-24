@@ -75,6 +75,9 @@ def normalize_assistant_for_llm_api(msg: dict[str, Any]) -> dict[str, Any] | Non
     content = str(out.get("content") or "")
     reasoning = str(out.get("reasoning_content") or "").strip()
     if has_openai_tool_calls(out.get("tool_calls")):
+        from .tool_timing import sanitize_tool_calls_for_llm
+
+        out["tool_calls"] = sanitize_tool_calls_for_llm(out.get("tool_calls"))
         if not content.strip():
             out.pop("content", None)
         return out

@@ -1,7 +1,7 @@
 {
   "name": "locusagent-frontend",
   "private": true,
-  "version": "0.3.2",
+  "version": "0.4.0",
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
@@ -11,8 +11,7 @@
     "test:latex": "node --experimental-strip-types --test src/lib/latex-normalize.test.ts",
     "test:notifications": "node --experimental-strip-types --test src/features/notifications/notification-copy.test.ts",
     "test:toast": "node --experimental-strip-types --test src/lib/toast-copy.test.ts",
-    "test:stream-sync": "node --experimental-strip-types --test src/features/chat/stream-sync.test.ts",
-    "preview": "vite preview"
+    "test:stream-sync": "node --experimental-strip-types --test src/features/chat/stream-sync.test.ts"
   },
   "dependencies": {
     "@assistant-ui/react": "^0.14.23",

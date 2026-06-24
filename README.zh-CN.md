@@ -18,9 +18,9 @@
 
 **Locus**（拉丁语：*place*，*position*）指某物被定义的固定位置——磁盘上的工作区、记忆的作用域、Agent 运行的边界。
 
-**Locus Agent** 是在**你的机器**上这一位置运行的 AI Agent，而不是需要反复补充上下文的远程网页：
+**Locus Agent** 是在**你的机器**上这一位置运行的**桌面 AI Agent**（macOS / Windows），而不是需要反复补充上下文的远程聊天网页：
 
-- **本地锚点（Local locus）** — Host 与 Agent 以 sidecar 形式打包，监听 `127.0.0.1:21223`；对话、工具调用与 SQLite 数据均保存在 `~/.locusagent/` 下。
+- **本地锚点（Local locus）** — Host 与 Agent 以 sidecar 形式运行于 `127.0.0.1:21223`；对话、工具调用与 SQLite 数据均保存在 `~/.locusagent/` 下。
 - **工作区锚点（Workspace loci）** — 每个工作区是独立空间：文件、会话、记忆、Skills 与 MCP 配置互不干扰。
 - **Agent** — 执行层：文件 I/O、沙箱代码、终端、网页搜索、MCP、定时任务与可交付成果。
 
@@ -75,9 +75,9 @@ brew install --cask locusagent
 
 ```
 locusagent/
-├── frontend/          React + Vite SPA（聊天 UI、设置、路由）
+├── frontend/          桌面 UI（React + Vite；开发时 HMR，发布时 build 进 app）
 ├── desktop/           Tauri 2 壳（macOS .app / .dmg，Windows NSIS 安装包）
-├── sidecar/           打包的 Python 入口（Host + Agent 单体）
+├── sidecar/           Python 入口（Host + Agent 单体）
 ├── host/              设置、API 代理、工作区元数据
 ├── agent/             聊天循环、工具、记忆、MCP、持久化
 ├── shared/            共享设置与工具函数
@@ -86,15 +86,38 @@ locusagent/
 └── scripts/           版本同步、打包辅助脚本
 ```
 
-Sidecar 监听 **`127.0.0.1:21223`**，同源提供 UI 与 API。生产版桌面应用内嵌独立 Python 3.11 运行时。
+**纯桌面应用，无独立 Web 端。** 日常开发用 `tauri dev`；发布安装包用 `./rebuild.sh`（macOS）或 `build-desktop-windows.ps1`（Windows）。
 
-## 从源码构建
+| | 开发（`cd desktop && npm run dev`） | 发布（`./rebuild.sh` 等） |
+|---|---|---|
+| UI | Vite `:5173`，热更新 | 静态文件由 sidecar `:21223` 同源托管 |
+| API | sidecar `:21223`（Tauri 自动拉起） | 包内嵌 Python sidecar `:21223` |
+| 产物 | 无 | `.app` / `.dmg` / `.exe` |
 
-通用依赖：[uv](https://docs.astral.sh/uv/)、Node.js 22+、Rust（stable）。生产包通过 uv 内嵌独立 Python 3.11 运行时。
+## 本地开发
+
+**依赖：** [uv](https://docs.astral.sh/uv/)、Node.js 22+、Rust（stable）。
+
+```bash
+# 首次
+uv sync --frozen
+cd frontend && npm ci && cd ../desktop && npm ci
+
+# 日常（在 desktop/ 目录）
+cd desktop && npm run dev
+```
+
+- Tauri 会自动启动 Vite（`:5173`）与 Python sidecar（`:21223`）
+- 改 `frontend/src` 保存即热更新；改 Python 需重启 `npm run dev`
+- 后端单测：`uv run pytest tests/ -q`
+
+> **注意：** 本地开发 WebView 走 `:5173`，与发布版 `:21223` 端口不同，但 API 行为一致（经 Vite 代理）。**不要**为日常改 UI 运行 `./rebuild.sh`。
+
+## 从源码构建（发布安装包）
 
 ### macOS（Apple Silicon）
 
-**要求：** macOS（Apple Silicon）、Python 3.11+（本地开发；打包脚本使用 uv 管理的 Python）。
+**要求：** macOS（Apple Silicon）、Python 3.11+。发布包内嵌 uv 管理的 Python 3.11 运行时。
 
 完整桌面构建（打包 venv + 前端 + Tauri release）：
 

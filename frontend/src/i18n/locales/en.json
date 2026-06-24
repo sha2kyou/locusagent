@@ -185,13 +185,13 @@
       "enableTerminal": "Enable terminal tool",
       "whitelist": {
         "label": "Allow list",
-        "hint": "Only executables in this list are allowed",
-        "detail": "Bare command names only (e.g. git, npm); no paths. Empty list denies all commands."
+        "hint": "Executables on this list run without confirmation",
+        "detail": "Bare command names only (e.g. git, npm); no paths. Commands outside both lists require your approval before running."
       },
       "denylist": {
         "label": "Deny list",
-        "hint": "Executables in this list are blocked",
-        "detail": "Commands on the deny list are blocked even if they appear on the allow list."
+        "hint": "Executables on this list are always blocked",
+        "detail": "Deny-listed commands are rejected immediately with no confirmation prompt."
       },
       "saved": "Terminal settings saved",
       "save": "Save"
@@ -241,7 +241,7 @@
     "usage": {
       "loading": "Loading…",
       "empty": "No usage data yet. Complete a chat to start tracking.",
-      "table": { "scene": "Scenario", "token": "Tokens", "apiCalls": "API calls" },
+      "table": { "scene": "Scenario", "token": "Tokens", "apiCalls": "API calls", "total": "Total" },
       "scenarios": {
         "chat": "Chat",
         "compression": "Context compression",
@@ -435,6 +435,22 @@
       "otherPlaceholder": "Other (free text)…",
       "question": "Question: {{text}}",
       "answer": "Answer: {{text}}"
+    },
+    "terminalApproval": {
+      "title": "Terminal command needs approval",
+      "command": "Command: {{command}}",
+      "executable": "Executable: {{head}}",
+      "timeout": "Auto-deny in {{seconds}}s",
+      "once": "Allow",
+      "always": "Always allow",
+      "deny": "Deny",
+      "alwaysDeny": "Always deny",
+      "resolved": "Resolved",
+      "errors": {
+        "notFound": "Approval request expired or not found",
+        "sessionMismatch": "Session mismatch; cannot submit approval",
+        "failed": "Failed to submit approval; try again"
+      }
     },
     "markdown": {
       "wrapOn": "Wrap lines",

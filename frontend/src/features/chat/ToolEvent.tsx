@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMessage, type ToolCallMessagePartComponent } from "@assistant-ui/react";
-import { Blocks, Brain, HelpCircle, Send, Sparkles, Wrench } from "lucide-react";
+import { Blocks, Brain, HelpCircle, Send, ShieldAlert, Sparkles, Wrench } from "lucide-react";
 import { CollapsibleMetaBlock } from "./CollapsibleMetaBlock";
 import { useImeEnterGuard } from "@/lib/ime-enter";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import type { ToolKind } from "@/api/types";
+import { resolveTerminalApproval } from "@/api/endpoints";
 import { useChat } from "./ChatProvider";
-import type { ToolPart } from "./model";
+import type { TerminalApprovalChoice, TerminalApprovalState, ToolPart } from "./model";
 import { formatToolArgsPreview } from "./tool-args";
 import { isTodoTool, parseTodoPlan } from "./todo";
 import i18n from "@/i18n";
@@ -71,6 +73,92 @@ function parseClarify(result: unknown): ClarifyPayload | null {
 
 function clarifyMessage(question: string, answer: string): string {
   return `${i18n.t("chat.clarify.question", { text: question })}\n${i18n.t("chat.clarify.answer", { text: answer })}`;
+}
+
+function TerminalApprovalCard({
+  approval,
+  sessionId,
+}: {
+  approval: TerminalApprovalState;
+  sessionId: string;
+}) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const [submitting, setSubmitting] = useState(false);
+  const [resolved, setResolved] = useState(approval.resolved === true);
+  const [secondsLeft, setSecondsLeft] = useState(() =>
+    Math.max(0, Math.ceil((approval.expiresAt - Date.now()) / 1000)),
+  );
+  const disabled = submitting || resolved || secondsLeft <= 0;
+
+  useEffect(() => {
+    const tick = () => {
+      setSecondsLeft(Math.max(0, Math.ceil((approval.expiresAt - Date.now()) / 1000)));
+    };
+    tick();
+    const timer = window.setInterval(tick, 500);
+    return () => window.clearInterval(timer);
+  }, [approval.expiresAt]);
+
+  const choose = (choice: TerminalApprovalChoice) => {
+    if (disabled) return;
+    setSubmitting(true);
+    void resolveTerminalApproval(sessionId, approval.approvalId, choice)
+      .then((res) => {
+        if (!res.ok) {
+          const key =
+            res.error === "approval_not_found"
+              ? "chat.terminalApproval.errors.notFound"
+              : res.error === "session_mismatch"
+                ? "chat.terminalApproval.errors.sessionMismatch"
+                : "chat.terminalApproval.errors.failed";
+          toast(t(key), "error");
+          return;
+        }
+        setResolved(true);
+      })
+      .finally(() => setSubmitting(false));
+  };
+
+  return (
+    <div className="my-1.5 min-w-0 overflow-hidden rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2.5 text-[13px]">
+      <div className="flex items-start gap-2">
+        <ShieldAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="font-medium text-foreground">{t("chat.terminalApproval.title")}</div>
+          <div className="break-all font-mono text-xs text-muted-foreground">
+            {t("chat.terminalApproval.command", { command: approval.command })}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {t("chat.terminalApproval.executable", { head: approval.head })}
+          </div>
+          {!resolved && secondsLeft > 0 ? (
+            <div className="text-xs text-muted-foreground">
+              {t("chat.terminalApproval.timeout", { seconds: secondsLeft })}
+            </div>
+          ) : null}
+        </div>
+      </div>
+      {resolved ? (
+        <div className="mt-2 text-xs text-muted-foreground">{t("chat.terminalApproval.resolved")}</div>
+      ) : (
+        <div className="mt-2.5 flex min-w-0 flex-wrap gap-2">
+          <Button variant="primary" size="sm" disabled={disabled} onClick={() => choose("once")}>
+            {t("chat.terminalApproval.once")}
+          </Button>
+          <Button variant="outline" size="sm" disabled={disabled} onClick={() => choose("always")}>
+            {t("chat.terminalApproval.always")}
+          </Button>
+          <Button variant="outline" size="sm" disabled={disabled} onClick={() => choose("deny")}>
+            {t("chat.terminalApproval.deny")}
+          </Button>
+          <Button variant="outline" size="sm" disabled={disabled} onClick={() => choose("always_deny")}>
+            {t("chat.terminalApproval.alwaysDeny")}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ClarifyCard({ payload }: { payload: ClarifyPayload }) {
@@ -153,6 +241,7 @@ export const ToolEvent: ToolCallMessagePartComponent = (props) => {
 
 /** 按 ChatPart 时间线直接渲染工具块（不依赖 MessagePrimitive.Parts 顺序） */
 export function ToolPartView({ part }: { part: ToolPart }) {
+  const { currentId } = useChat();
   if (isClarifyTool(part.toolName)) {
     if (!part.running) {
       const payload = parseClarify(part.preview);
@@ -163,16 +252,22 @@ export function ToolPartView({ part }: { part: ToolPart }) {
     return null;
   }
   const running = part.running;
+  const approval = part.terminalApproval;
   return (
-    <GenericToolBlock
-      key={part.id}
-      blockId={part.id}
-      toolName={part.toolName}
-      args={{ kind: part.toolKind, startedAt: part.startedAt, elapsedMs: part.elapsedMs }}
-      argsPreview={part.argsPreview}
-      result={running ? undefined : (part.preview ?? "")}
-      status={{ type: running ? "running" : "complete" }}
-    />
+    <>
+      {approval && running && currentId ? (
+        <TerminalApprovalCard approval={approval} sessionId={currentId} />
+      ) : null}
+      <GenericToolBlock
+        key={part.id}
+        blockId={part.id}
+        toolName={part.toolName}
+        args={{ kind: part.toolKind, startedAt: part.startedAt, elapsedMs: part.elapsedMs }}
+        argsPreview={part.argsPreview}
+        result={running ? undefined : (part.preview ?? "")}
+        status={{ type: running ? "running" : "complete" }}
+      />
+    </>
   );
 }
 

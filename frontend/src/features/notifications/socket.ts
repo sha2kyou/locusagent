@@ -9,7 +9,7 @@ export type NotificationWsEvent =
 export function notificationWsUrl(): string {
   const workspaceId = getWorkspaceId();
   const suffix = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : "";
-  // 与 REST 同源（桌面端 Backend :21223 同时提供 UI 与 API），保证 session Cookie 与 WS 鉴权一致。
+  // 与 REST 同源（生产 :21223 托管 UI+API；开发经 Vite 代理 sidecar），保证 session Cookie 与 WS 鉴权一致。
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${proto}//${window.location.host}/api/notifications/ws${suffix}`;
 }

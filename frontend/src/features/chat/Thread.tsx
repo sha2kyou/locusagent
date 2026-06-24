@@ -31,7 +31,6 @@ import { downloadAttachment, attachmentDownloadUrl, fetchAttachmentPreview } fro
 import { isFilePreviewable } from "@/lib/file-preview";
 import { Drawer } from "@/components/ui/drawer";
 import { useTimeFormatters } from "@/lib/use-app-timezone";
-import { isDesktopApp } from "@/lib/desktop-app";
 import { isShortcutRecordingActive } from "@/lib/format-global-shortcut";
 
 const EMPTY_ATTACHMENTS: ChatAttachment[] = [];
@@ -406,7 +405,7 @@ function useQuickChatComposerFocus(
   enabled: boolean,
 ) {
   useEffect(() => {
-    if (!enabled || !isDesktopApp()) return;
+    if (!enabled) return;
     let cancelled = false;
     let unlisten: (() => void) | undefined;
     const onFocus = () => ref.current?.focus();

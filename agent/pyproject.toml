@@ -1,6 +1,6 @@
 [project]
 name = "locus-agent"
-version = "0.3.2"
+version = "0.4.0"
 description = "Locus Agent agent: per-user container with chat loop, tools, skills, MCP, memory"
 license = "Apache-2.0"
 requires-python = ">=3.11"

@@ -2,6 +2,8 @@ import type { LegacyToolMeta, Message, OpenAIToolCall, ToolKind } from "@/api/ty
 import i18n from "@/i18n";
 import { type ChatAttachment, type ChatMessage, type ToolPart, uid } from "./model";
 import { formatToolArgsPreview } from "./tool-args";
+import { formatTokenCount } from "@/features/settings/usageLabels";
+import { toolStartedAtMs } from "./tool-timing";
 
 function isOpenAIToolCall(tc: OpenAIToolCall | LegacyToolMeta | Record<string, unknown>): tc is OpenAIToolCall {
   return "function" in tc && !!(tc as OpenAIToolCall).function;
@@ -31,8 +33,8 @@ function compressionPreview(msg: Message): string {
   const body = (msg.content || "").trim();
   const header = i18n.t("chat.compression.headerWithMeta", {
     mode,
-    before,
-    after,
+    before: formatTokenCount(before),
+    after: formatTokenCount(after),
   });
   return body ? `${header}\n\n${body}` : `${header}\n${i18n.t("chat.compression.noSummaryTruncated")}`;
 }
@@ -100,16 +102,30 @@ export function historyPollKey(items: Message[]): string {
     .join("|");
 }
 
-/** active run 重连时，仅当末段 part 为 thinking 才标记为进行中 */
+/** active run 重连时，将同轮 running tool 之前的末段 thinking 标为进行中 */
 function applyLiveThinkingState(messages: ChatMessage[]): ChatMessage[] {
   if (messages.length === 0) return messages;
   const last = messages[messages.length - 1];
   if (last.role !== "assistant" || last.parts.length === 0) return messages;
-  const lastIdx = last.parts.length - 1;
-  const lastPart = last.parts[lastIdx];
-  if (lastPart.type !== "thinking") return messages;
+
+  let thinkingIdx = -1;
+  let runningToolIdx = -1;
+  for (let i = 0; i < last.parts.length; i++) {
+    const p = last.parts[i];
+    if (p.type === "thinking") thinkingIdx = i;
+    if (p.type === "tool" && p.running) runningToolIdx = i;
+  }
+
+  let targetIdx = -1;
+  if (last.parts[last.parts.length - 1].type === "thinking") {
+    targetIdx = last.parts.length - 1;
+  } else if (runningToolIdx >= 0 && thinkingIdx >= 0 && thinkingIdx < runningToolIdx) {
+    targetIdx = thinkingIdx;
+  }
+  if (targetIdx < 0) return messages;
+
   const parts = last.parts.map((p, i) =>
-    i === lastIdx && p.type === "thinking" ? { ...p, completed: false } : p,
+    i === targetIdx && p.type === "thinking" ? { ...p, completed: false } : p,
   );
   return [...messages.slice(0, -1), { ...last, parts }];
 }
@@ -206,7 +222,7 @@ export function coalesceHistory(items: Message[], opts: CoalesceHistoryOptions =
           toolName: tc.function.name,
           toolKind: "tool",
           running: true,
-          startedAt: 0,
+          startedAt: toolStartedAtMs(tc.started_at),
           argsPreview: formatToolArgsPreview(tc.function.arguments),
         });
       }
