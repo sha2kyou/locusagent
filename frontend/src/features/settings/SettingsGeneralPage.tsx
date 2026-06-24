@@ -9,11 +9,10 @@ import { useDialogs } from "@/components/ui/dialogs";
 import { useTheme, type ThemePreference } from "@/app/theme";
 import { useRefreshAppTimezone, useAppTimezone } from "@/lib/use-app-timezone";
 import { putTimezoneConfig, exportSettings, importSettings } from "@/api/endpoints";
-import { getDesktopPrefs, isDesktopPrefsAvailable, setDesktopPrefs } from "@/lib/desktop-prefs";
+import { getDesktopPrefs, setDesktopPrefs } from "@/lib/desktop-prefs";
 import { isDesktopPrefsPartialSaveError } from "@/lib/desktop-prefs-errors";
 import { persistAppLocale } from "@/lib/app-locale";
 import { applyDesktopDevtoolsSettings } from "@/lib/desktop-devtools";
-import { isDesktopApp } from "@/lib/desktop-app";
 import { SUPPORTED_LOCALES, type AppLocale } from "@/i18n";
 import { SettingsSection } from "./SettingsSection";
 
@@ -44,7 +43,6 @@ export function SettingsGeneralPage() {
   const [localeSaving, setLocaleSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
-  const desktopPrefsAvailable = isDesktopPrefsAvailable();
 
   const themeOptions = useMemo(
     (): { value: ThemePreference; label: string }[] => [
@@ -84,12 +82,11 @@ export function SettingsGeneralPage() {
   }, [appTimeZone]);
 
   useEffect(() => {
-    if (!desktopPrefsAvailable) return;
     void getDesktopPrefs().then((prefs) => {
       setRunInBackground(prefs.run_in_background);
       setLaunchAtLogin(prefs.launch_at_login);
     });
-  }, [desktopPrefsAvailable]);
+  }, []);
 
   const saveTimezone = async () => {
     setTimezoneSaving(true);
@@ -198,9 +195,7 @@ export function SettingsGeneralPage() {
       setTimezone(next.app.timezone);
       await refreshAppTimeZone();
       await persistAppLocale(next.app.locale === "en" ? "en" : "zh");
-      if (isDesktopApp()) {
-        await applyDesktopDevtoolsSettings();
-      }
+      await applyDesktopDevtoolsSettings();
       toast(t("settings.general.configImport.imported"), "success");
     } catch (e) {
       toast((e as Error).message, "error");
@@ -243,11 +238,10 @@ export function SettingsGeneralPage() {
         />
       </SettingsSection>
 
-      {desktopPrefsAvailable && (
-        <SettingsSection
-          title={t("settings.general.menubar.title")}
-          description={t("settings.general.menubar.description")}
-        >
+      <SettingsSection
+        title={t("settings.general.menubar.title")}
+        description={t("settings.general.menubar.description")}
+      >
           <div className="grid max-w-xl gap-4">
             <label className="flex cursor-pointer items-start gap-2 text-sm">
               <input
@@ -289,7 +283,6 @@ export function SettingsGeneralPage() {
             </div>
           </div>
         </SettingsSection>
-      )}
 
       <SettingsSection title={t("settings.general.timezone.label")}>
         <div className="grid max-w-md gap-3">

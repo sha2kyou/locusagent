@@ -86,7 +86,24 @@ locusagent/
 └── scripts/           版本同步、打包辅助脚本
 ```
 
-Sidecar 监听 **`127.0.0.1:21223`**，同源提供 UI 与 API。生产版桌面应用内嵌独立 Python 3.11 运行时。
+Sidecar 监听 **`127.0.0.1:21223`**，生产环境同源提供 UI 与 API。生产版桌面应用内嵌独立 Python 3.11 运行时。
+
+## 本地开发
+
+纯桌面应用，一条命令启动 Vite HMR + Python sidecar + Tauri 壳：
+
+```bash
+# 首次：安装 sidecar 依赖
+uv sync --frozen
+cd frontend && npm ci && cd ../desktop && npm ci
+
+# 日常开发（在 desktop/ 目录）
+cd desktop && npm run dev
+```
+
+- **UI**：`http://127.0.0.1:5173`（Vite 热更新）
+- **API**：`http://127.0.0.1:21223`（Host + Agent 单体 sidecar，由 Tauri 壳自动拉起）
+- 前端 `/api` 与 WebSocket 经 Vite 代理到 sidecar；无需单独起浏览器或手动 build 前端
 
 ## 从源码构建
 

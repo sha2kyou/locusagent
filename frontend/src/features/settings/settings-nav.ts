@@ -1,5 +1,4 @@
 import { BarChart3, Binary, Code2, Cpu, MessageSquarePlus, ScrollText, Settings2, Terminal } from "lucide-react";
-import { isDesktopApp } from "@/lib/desktop-app";
 
 export const SETTINGS_NAV_EMBEDDING = {
   to: "embedding",
@@ -36,16 +35,15 @@ export type SettingsNavId =
   | typeof SETTINGS_NAV_QUICK_CHAT.to
   | typeof SETTINGS_NAV_DEVELOPER.to;
 
+export const SETTINGS_NAV = [
+  SETTINGS_NAV_BASE[0],
+  SETTINGS_NAV_QUICK_CHAT,
+  ...SETTINGS_NAV_BASE.slice(1),
+  SETTINGS_NAV_DEVELOPER,
+] as const;
+
 export function getSettingsNav() {
-  if (isDesktopApp()) {
-    return [
-      SETTINGS_NAV_BASE[0],
-      SETTINGS_NAV_QUICK_CHAT,
-      ...SETTINGS_NAV_BASE.slice(1),
-      SETTINGS_NAV_DEVELOPER,
-    ];
-  }
-  return [...SETTINGS_NAV_BASE];
+  return SETTINGS_NAV;
 }
 
 export const SETTINGS_PAGE_META: Record<SettingsNavId, { titleKey: string; subtitleKey: string }> = {
@@ -67,6 +65,3 @@ export const SETTINGS_PAGE_META: Record<SettingsNavId, { titleKey: string; subti
     subtitleKey: "settings.pages.developer.subtitle",
   },
 };
-
-/** @deprecated use getSettingsNav() */
-export const SETTINGS_NAV = SETTINGS_NAV_BASE;

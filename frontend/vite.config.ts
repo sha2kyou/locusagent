@@ -4,8 +4,10 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 const API_TARGET = process.env.API_TARGET ?? 'http://127.0.0.1:21223'
+/** 与 desktop/src-tauri/src/sidecar.rs DEV_FRONTEND_PORT 保持一致 */
+const DEV_FRONTEND_PORT = 5173
 
-/** 本地开发：热更新 + 代理 sidecar API */
+/** 桌面壳开发：Vite HMR + 代理 sidecar API（`tauri dev` 自动启动） */
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -14,6 +16,9 @@ export default defineConfig({
     },
   },
   server: {
+    host: '127.0.0.1',
+    port: DEV_FRONTEND_PORT,
+    strictPort: true,
     proxy: {
       '/api': {
         target: API_TARGET,

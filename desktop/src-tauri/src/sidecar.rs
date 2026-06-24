@@ -17,9 +17,32 @@ use tauri::path::BaseDirectory;
 use tracing::{error, info, warn};
 
 pub const BACKEND_PORT: u16 = 21223;
+/// 桌面开发 Vite dev server（与 frontend/vite.config.ts 保持一致）
+pub const DEV_FRONTEND_PORT: u16 = 5173;
 
 pub fn backend_url() -> String {
     format!("http://127.0.0.1:{BACKEND_PORT}")
+}
+
+/// WebView 加载地址：开发走 Vite HMR，发布走 sidecar 同源 gateway。
+pub fn frontend_url() -> String {
+    if cfg!(debug_assertions) {
+        format!("http://127.0.0.1:{DEV_FRONTEND_PORT}")
+    } else {
+        backend_url()
+    }
+}
+
+pub fn is_app_web_url(url: &url::Url) -> bool {
+    if url.scheme() == "tauri" {
+        return true;
+    }
+    if url.as_str().starts_with(&frontend_url()) {
+        return true;
+    }
+    url.as_str().starts_with(&backend_url())
+        || url.as_str().starts_with("http://localhost:21223")
+        || url.as_str().starts_with("http://localhost:5173")
 }
 
 fn default_locusagent_home() -> PathBuf {
@@ -178,9 +201,11 @@ pub fn spawn_backend(app: &AppHandle) -> std::io::Result<Child> {
     if let Some(agent_doc) = bundled_agent_doc(app) {
         command.env("LOCUSAGENT_AGENT_DOC_PATH", agent_doc);
     }
-    let static_dir = crate::gateway::resolve_static_dir(app);
-    if static_dir.join("index.html").is_file() {
-        command.env("LOCUSAGENT_STATIC_DIR", static_dir);
+    if !cfg!(debug_assertions) {
+        let static_dir = crate::gateway::resolve_static_dir(app);
+        if static_dir.join("index.html").is_file() {
+            command.env("LOCUSAGENT_STATIC_DIR", static_dir);
+        }
     }
     command.env(
         "MCP_OAUTH_REDIRECT_URI",

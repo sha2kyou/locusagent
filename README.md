@@ -86,7 +86,24 @@ locusagent/
 └── scripts/           Version sync, bundle helpers
 ```
 
-The sidecar listens on **`127.0.0.1:21223`** and serves both the UI and API from the same origin. The production desktop app embeds a standalone Python 3.11 runtime.
+The sidecar listens on **`127.0.0.1:21223`** and serves both the UI and API from the same origin in production. The production desktop app embeds a standalone Python 3.11 runtime.
+
+## Local development
+
+Desktop-only workflow — one command starts Vite HMR, the Python sidecar, and the Tauri shell:
+
+```bash
+# First time: install sidecar deps
+uv sync --frozen
+cd frontend && npm ci && cd ../desktop && npm ci
+
+# Daily dev (from desktop/)
+cd desktop && npm run dev
+```
+
+- **UI**: `http://127.0.0.1:5173` (Vite hot reload)
+- **API**: `http://127.0.0.1:21223` (Host + Agent monolith sidecar, spawned by the Tauri shell)
+- Frontend `/api` and WebSocket traffic are proxied to the sidecar; no separate browser tab or manual frontend build
 
 ## Build from source
 

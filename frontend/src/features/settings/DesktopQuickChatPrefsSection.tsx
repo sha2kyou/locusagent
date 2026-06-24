@@ -3,7 +3,7 @@ import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { getDesktopPrefs, isDesktopPrefsAvailable, setDesktopPrefs } from "@/lib/desktop-prefs";
+import { getDesktopPrefs, setDesktopPrefs } from "@/lib/desktop-prefs";
 import { isDesktopPrefsPartialSaveError } from "@/lib/desktop-prefs-errors";
 import { SettingsSection } from "./SettingsSection";
 import { ShortcutCapture } from "./ShortcutCapture";
@@ -12,7 +12,6 @@ import { ShortcutCapture } from "./ShortcutCapture";
 export function DesktopQuickChatPrefsSection() {
   const { t } = useTranslation();
   const toast = useToast();
-  const available = isDesktopPrefsAvailable();
   const [enabled, setEnabled] = useState(true);
   const [alwaysOnTop, setAlwaysOnTop] = useState(true);
   const [shortcut, setShortcut] = useState("cmd+shift+K");
@@ -21,7 +20,6 @@ export function DesktopQuickChatPrefsSection() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!available) return;
     void getDesktopPrefs().then((prefs) => {
       setEnabled(prefs.quick_chat_enabled ?? true);
       setAlwaysOnTop(prefs.quick_chat_always_on_top ?? true);
@@ -29,7 +27,7 @@ export function DesktopQuickChatPrefsSection() {
       setRegistered(prefs.quick_chat_shortcut_registered ?? false);
       setRegisterError(prefs.quick_chat_shortcut_error ?? null);
     });
-  }, [available]);
+  }, []);
 
   const refreshStatus = async () => {
     const prefs = await getDesktopPrefs();
@@ -71,8 +69,6 @@ export function DesktopQuickChatPrefsSection() {
       setSaving(false);
     }
   };
-
-  if (!available) return null;
 
   return (
     <SettingsSection
