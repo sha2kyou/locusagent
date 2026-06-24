@@ -137,20 +137,125 @@ pub fn run_in_background(app: &AppHandle) -> bool {
         .unwrap_or(false)
 }
 
-fn apply_autostart(app: &AppHandle, enabled: bool) -> Result<(), String> {
+#[cfg(target_os = "macos")]
+const MACOS_LOGIN_ITEM_NAME: &str = "Locus Agent";
+
+#[cfg(target_os = "macos")]
+fn current_app_bundle_path() -> Option<String> {
+    let exe = std::env::current_exe().ok()?.canonicalize().ok()?;
+    let exe_path = exe.display().to_string();
+    let parts: Vec<&str> = exe_path.split(".app/").collect();
+    if parts.len() == 2 {
+        Some(format!("{}.app", parts.first()?))
+    } else {
+        None
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn run_applescript(script: &str) -> Result<String, String> {
+    use std::process::Command;
+
+    let output = Command::new("osascript")
+        .args(["-e", script])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("osascript failed: {stderr}"));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+#[cfg(target_os = "macos")]
+fn macos_login_item_paths() -> Result<Vec<String>, String> {
+    let script = format!(
+        r#"tell application "System Events"
+    set itemPaths to {{}}
+    repeat with li in login items
+        if name of li is "{MACOS_LOGIN_ITEM_NAME}" then
+            set end of itemPaths to path of li
+        end if
+    end repeat
+    return itemPaths
+end tell"#
+    );
+    let stdout = run_applescript(&script)?;
+    if stdout.is_empty() {
+        return Ok(Vec::new());
+    }
+    Ok(stdout.split(", ").map(str::trim).map(str::to_string).collect())
+}
+
+#[cfg(target_os = "macos")]
+fn remove_macos_login_items() -> Result<(), String> {
+    let script = format!(
+        r#"tell application "System Events"
+    repeat
+        set removed to false
+        repeat with li in login items
+            if name of li is "{MACOS_LOGIN_ITEM_NAME}" then
+                delete li
+                set removed to true
+                exit repeat
+            end if
+        end repeat
+        if not removed then exit repeat
+    end repeat
+end tell"#
+    );
+    run_applescript(&script).map(|_| ())
+}
+
+#[cfg(target_os = "macos")]
+fn sync_macos_autostart(app: &AppHandle, enabled: bool) -> Result<(), String> {
     use tauri_plugin_autostart::ManagerExt;
 
-    #[cfg(target_os = "macos")]
     remove_legacy_launch_agent_plists();
 
     let autolaunch = app.autolaunch();
+    let current_path = current_app_bundle_path();
+    let existing_paths = macos_login_item_paths().unwrap_or_default();
+
     if enabled {
+        let already_correct = current_path
+            .as_ref()
+            .is_some_and(|current| existing_paths == [current.clone()]);
+        if already_correct {
+            return Ok(());
+        }
+        if !existing_paths.is_empty() {
+            remove_macos_login_items()?;
+        }
         return autolaunch.enable().map_err(|e| e.to_string());
     }
-    match autolaunch.is_enabled() {
-        Ok(true) => autolaunch.disable().map_err(|e| e.to_string()),
-        Ok(false) => Ok(()),
-        Err(e) => Err(e.to_string()),
+
+    if existing_paths.is_empty() {
+        return Ok(());
+    }
+    remove_macos_login_items()
+}
+
+fn apply_autostart(app: &AppHandle, enabled: bool) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    return sync_macos_autostart(app, enabled);
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        use tauri_plugin_autostart::ManagerExt;
+
+        let autolaunch = app.autolaunch();
+        if enabled {
+            return match autolaunch.is_enabled() {
+                Ok(true) => Ok(()),
+                Ok(false) | Err(_) => autolaunch.enable().map_err(|e| e.to_string()),
+            };
+        }
+        match autolaunch.is_enabled() {
+            Ok(true) => autolaunch.disable().map_err(|e| e.to_string()),
+            Ok(false) => Ok(()),
+            Err(e) => Err(e.to_string()),
+        }
     }
 }
 
