@@ -138,6 +138,7 @@ def _encode_loop_event(
             x_tool_kind=kind,
             x_tool_id=ev.get("id"),
             x_tool_args=ev.get("arguments"),
+            x_tool_started_at=ev.get("started_at"),
         )
     if t == "tool_result":
         return sse_chunk(

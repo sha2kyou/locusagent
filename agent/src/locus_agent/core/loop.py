@@ -27,6 +27,7 @@ from .models import messages_include_images, resolve_model
 from .llm import get_llm_client
 from .stream_health import StreamHealthError, iter_with_stream_health
 from .run_context import get_chat_session_id, set_chat_session_id
+from .tool_timing import annotate_tool_calls_started_at, tool_round_started_at
 from .session_review_state import reset_memory_nudge, reset_skill_nudge
 from .tool_guardrails import (
     ToolCallGuardrailController,
@@ -692,6 +693,9 @@ async def run_chat_loop(
                     assistant_msg["content"] = text
                 if reasoning:
                     assistant_msg["reasoning_content"] = reasoning
+            round_started_at = tool_round_started_at()
+            annotated_calls = annotate_tool_calls_started_at(normalized_calls, started_at=round_started_at)
+            assistant_msg["tool_calls"] = annotated_calls
             working.append(assistant_msg)
             if tool_rounds_made >= max_tool_rounds:
                 log.warning(
@@ -721,8 +725,8 @@ async def run_chat_loop(
                     working,
                 )
             tool_rounds_made += 1
-            tool_calls_made += len(normalized_calls)
-            stub_calls = [_ToolCallStub(raw) for raw in normalized_calls]
+            tool_calls_made += len(annotated_calls)
+            stub_calls = [_ToolCallStub(raw) for raw in annotated_calls]
             if _all_calls_are(stub_calls, "artifact_save") and artifact_save_rounds_made >= 1:
                 final_msg, final_text, final_reasoning, more_tokens = await _finalize_without_tools(
                     client=client,
@@ -1070,7 +1074,12 @@ async def run_chat_loop_stream(
                 return
             tool_rounds_made += 1
             tool_calls_made += len(normalized_tool_calls)
-            stub_calls = [_ToolCallStub(raw) for raw in normalized_tool_calls]
+            round_started_at = tool_round_started_at()
+            annotated_tool_calls = annotate_tool_calls_started_at(
+                normalized_tool_calls,
+                started_at=round_started_at,
+            )
+            stub_calls = [_ToolCallStub(raw) for raw in annotated_tool_calls]
             if _all_calls_are(stub_calls, "artifact_save") and artifact_save_rounds_made >= 1:
                 final_msg, capped_text, capped_reasoning, more_tokens = await _finalize_without_tools(
                     client=client,
@@ -1094,9 +1103,17 @@ async def run_chat_loop_stream(
                     "tool_calls_made": tool_calls_made,
                 }
                 return
+            msg_dict = {**msg_dict, "tool_calls": annotated_tool_calls}
+            working[-1] = msg_dict
             yield {"type": "assistant_tools", "message": msg_dict}
             for stub in stub_calls:
-                yield {"type": "tool_call", "name": stub.function.name, "id": stub.id, "arguments": stub.function.arguments}
+                yield {
+                    "type": "tool_call",
+                    "name": stub.function.name,
+                    "id": stub.id,
+                    "arguments": stub.function.arguments,
+                    "started_at": round_started_at,
+                }
             tool_results = await _execute_tool_calls(
                 registry,
                 stub_calls,

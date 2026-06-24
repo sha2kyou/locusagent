@@ -241,7 +241,7 @@
     "usage": {
       "loading": "Loading…",
       "empty": "No usage data yet. Complete a chat to start tracking.",
-      "table": { "scene": "Scenario", "token": "Tokens", "apiCalls": "API calls" },
+      "table": { "scene": "Scenario", "token": "Tokens", "apiCalls": "API calls", "total": "Total" },
       "scenarios": {
         "chat": "Chat",
         "compression": "Context compression",

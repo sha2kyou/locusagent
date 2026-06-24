@@ -132,14 +132,18 @@ async def cancel_session_run(
 
 @router.get("/sessions/{session_id}/terminal-approvals")
 @router.post("/sessions/{session_id}/terminal-approvals/{approval_id}")
+@router.get("/sessions/{session_id}/tool-timings")
 async def proxy_terminal_approvals(
     request: Request,
     ctx: AuthContext = Depends(require_session),
     session_id: str | None = None,
     approval_id: str | None = None,
 ):
+    path = request.url.path.rstrip("/")
     if approval_id and session_id:
         target = f"/workspace/sessions/{session_id}/terminal-approvals/{approval_id}"
+    elif session_id and path.endswith("/tool-timings"):
+        target = f"/workspace/sessions/{session_id}/tool-timings"
     elif session_id:
         target = f"/workspace/sessions/{session_id}/terminal-approvals"
     else:

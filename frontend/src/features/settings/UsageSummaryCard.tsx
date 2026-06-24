@@ -3,7 +3,7 @@ import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { getUsageSummary } from "@/api/endpoints";
 import type { UsageSummary } from "@/api/types";
-import { formatTokenCount, usageScenarioLabel } from "./usageLabels";
+import { formatTokenCount, formatTokenCountTitle, usageScenarioLabel } from "./usageLabels";
 
 interface AggregatedRow {
   label: string;
@@ -65,6 +65,8 @@ export function UsageSummaryCard({ active }: { active?: boolean }) {
     return Array.from(m.values()).sort((a, b) => b.total_tokens - a.total_tokens || b.api_calls - a.api_calls);
   })();
 
+  const totals = data?.totals;
+
   return (
     <div className="overflow-x-auto rounded-lg border border-border bg-surface/40">
       {loading && (
@@ -96,14 +98,31 @@ export function UsageSummaryCard({ active }: { active?: boolean }) {
               {aggregated.map((row) => (
                 <tr key={row.label} className="border-b border-border/60 last:border-0">
                   <td className="px-3 py-2 text-sm">{row.label}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">
+                  <td
+                    className="px-3 py-2 text-right tabular-nums"
+                    title={formatTokenCountTitle(row.total_tokens)}
+                  >
                     {row.total_tokens > 0 ? formatTokenCount(row.total_tokens) : "—"}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    {row.api_calls > 0 ? row.api_calls : "—"}
+                    {row.api_calls > 0 ? row.api_calls.toLocaleString() : "—"}
                   </td>
                 </tr>
               ))}
+              {totals && (totals.total_tokens > 0 || totals.api_calls > 0) && (
+                <tr className="border-t border-border bg-muted/30 font-medium">
+                  <td className="px-3 py-2 text-sm">{t("settings.usage.table.total")}</td>
+                  <td
+                    className="px-3 py-2 text-right tabular-nums"
+                    title={formatTokenCountTitle(totals.total_tokens)}
+                  >
+                    {totals.total_tokens > 0 ? formatTokenCount(totals.total_tokens) : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {totals.api_calls > 0 ? totals.api_calls.toLocaleString() : "—"}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

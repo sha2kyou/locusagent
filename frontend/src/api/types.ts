@@ -27,6 +27,13 @@ export interface OpenAIToolCall {
   id: string;
   type: "function";
   function: { name: string; arguments: string };
+  /** Unix 秒，assistant 落库时由服务端写入 */
+  started_at?: number;
+}
+
+export interface ToolTimingItem {
+  tool_call_id: string;
+  started_at: number;
 }
 
 export interface LegacyToolMeta {
@@ -105,6 +112,8 @@ export interface ChatChunk {
   x_tool_id?: string;
   x_tool_call_id?: string;
   x_tool_args?: string;
+  /** tool_call 开始时间（Unix 秒） */
+  x_tool_started_at?: number;
   x_preview?: string;
   x_elapsed_ms?: number;
   x_attachment_id?: string;

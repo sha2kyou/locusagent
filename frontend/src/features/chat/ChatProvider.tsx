@@ -19,6 +19,7 @@ import {
   getSessionMessages,
   listSessions,
   listTerminalApprovals,
+  listToolTimings,
 } from "@/api/endpoints";
 import type { SessionMeta } from "@/api/types";
 import { ApiError, getWorkspaceId, setWorkspaceId } from "@/api/client";
@@ -48,6 +49,7 @@ import { coalesceHistory } from "./history";
 import { mergeStreamSyncParts } from "./stream-sync";
 import { isTodoTool, parseTodoPlan, type TodoPlan } from "./todo";
 import { formatToolArgsPreview } from "./tool-args";
+import { toolStartedAtMs } from "./tool-timing";
 
 export interface PendingAttachment {
   id: string;
@@ -468,6 +470,26 @@ export function ChatProvider({
     }
   };
 
+  const attachActiveToolTimings = async (sid: string) => {
+    try {
+      const { items } = await listToolTimings(sid);
+      if (!items.length) return;
+      const byId = new Map(items.map((item) => [item.tool_call_id, item.started_at]));
+      updateLastAssistant((parts) =>
+        parts.map((p) => {
+          if (p.type !== "tool" || !p.running) return p;
+          const stamp = byId.get(p.id);
+          if (stamp == null) return p;
+          const startedAt = toolStartedAtMs(stamp);
+          if (!startedAt) return p;
+          return { ...p, startedAt };
+        }),
+      );
+    } catch {
+      /* 后端未就绪或会话无进行中 tool */
+    }
+  };
+
   const applyTerminalApprovalChunk = (chunk: ChatChunk) => {
     const approvalId = chunk.x_approval_id;
     if (!approvalId) return;
@@ -517,6 +539,10 @@ export function ChatProvider({
     }
     if (ev === "tool_call") {
       const toolId = chunk.x_tool_id || chunk.x_tool_call_id || uid("t");
+      const startedAt =
+        typeof chunk.x_tool_started_at === "number" && chunk.x_tool_started_at > 0
+          ? toolStartedAtMs(chunk.x_tool_started_at)
+          : Date.now();
       updateLastAssistant((parts) => {
         if (parts.some((p) => p.type === "tool" && p.id === toolId)) return parts;
         return [
@@ -527,7 +553,7 @@ export function ChatProvider({
             toolName: chunk.x_tool_name || "tool",
             toolKind: chunk.x_tool_kind || "tool",
             running: true,
-            startedAt: Date.now(),
+            startedAt,
             argsPreview: formatToolArgsPreview(chunk.x_tool_args),
           },
         ];
@@ -634,6 +660,8 @@ export function ChatProvider({
         await resyncLiveSession(sid);
         if (token !== pollTokenRef.current || !mountedRef.current) return;
         await attachPendingTerminalApprovals(sid);
+        if (token !== pollTokenRef.current || !mountedRef.current) return;
+        await attachActiveToolTimings(sid);
         if (token !== pollTokenRef.current || !mountedRef.current) return;
         await streamActiveRun(
           sid,

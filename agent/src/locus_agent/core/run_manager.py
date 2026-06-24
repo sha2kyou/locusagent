@@ -22,6 +22,7 @@ from .persistence import (
 from ..memory.queue import bump_message_embedding
 from .post_run import schedule_post_run
 from .run_context import reset_chat_run_id, reset_run_event_emitter, set_chat_run_id, set_run_event_emitter
+from .tool_timing import clear_session_tool_starts, clear_tool_start, register_tool_start
 
 log = get_logger("run_manager")
 
@@ -367,8 +368,16 @@ async def _worker(
                 if tool_id and tool_name:
                     call_name_by_id[tool_id] = tool_name
                 public["tool_kind"] = _tool_kind(tool_name)
+                started_at = public.get("started_at")
+                if tool_id and started_at is not None:
+                    try:
+                        register_tool_start(handle.session_id, tool_id, float(started_at))
+                    except (TypeError, ValueError):
+                        pass
             elif et == "tool_result":
                 tool_call_id = str(public.get("tool_call_id") or "")
+                if tool_call_id:
+                    clear_tool_start(handle.session_id, tool_call_id)
                 mapped_name = call_name_by_id.get(tool_call_id, "")
                 if mapped_name:
                     public["name"] = mapped_name
@@ -408,6 +417,7 @@ async def _worker(
     finally:
         reset_run_event_emitter(emitter_token)
         reset_chat_run_id(run_id_token)
+        clear_session_tool_starts(handle.session_id)
     stop_heartbeat.set()
     heartbeat_task.cancel()
     await persist_queue.put(None)
@@ -496,6 +506,7 @@ async def cancel_active_run(session_id: str) -> bool:
     from ..tools.terminal_approval import deny_pending_for_session
 
     await deny_pending_for_session(session_id)
+    clear_session_tool_starts(session_id)
     await reconcile_session_active_handles(session_id)
     run = await get_active_run(session_id)
     if not run:

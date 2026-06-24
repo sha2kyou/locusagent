@@ -779,6 +779,13 @@ async def workspace_resolve_terminal_approval(
     )
 
 
+@router.get("/sessions/{session_id}/tool-timings")
+async def workspace_list_tool_timings(session_id: str) -> dict:
+    from ..core.tool_timing import list_active_tool_starts
+
+    return {"items": list_active_tool_starts(session_id)}
+
+
 @router.delete("/sessions/{session_id}")
 async def workspace_delete_session(session_id: str) -> dict:
     lock = await session_lock(session_id)

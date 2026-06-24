@@ -2,6 +2,8 @@ import type { LegacyToolMeta, Message, OpenAIToolCall, ToolKind } from "@/api/ty
 import i18n from "@/i18n";
 import { type ChatAttachment, type ChatMessage, type ToolPart, uid } from "./model";
 import { formatToolArgsPreview } from "./tool-args";
+import { formatTokenCount } from "@/features/settings/usageLabels";
+import { toolStartedAtMs } from "./tool-timing";
 
 function isOpenAIToolCall(tc: OpenAIToolCall | LegacyToolMeta | Record<string, unknown>): tc is OpenAIToolCall {
   return "function" in tc && !!(tc as OpenAIToolCall).function;
@@ -31,8 +33,8 @@ function compressionPreview(msg: Message): string {
   const body = (msg.content || "").trim();
   const header = i18n.t("chat.compression.headerWithMeta", {
     mode,
-    before,
-    after,
+    before: formatTokenCount(before),
+    after: formatTokenCount(after),
   });
   return body ? `${header}\n\n${body}` : `${header}\n${i18n.t("chat.compression.noSummaryTruncated")}`;
 }
@@ -206,7 +208,7 @@ export function coalesceHistory(items: Message[], opts: CoalesceHistoryOptions =
           toolName: tc.function.name,
           toolKind: "tool",
           running: true,
-          startedAt: 0,
+          startedAt: toolStartedAtMs(tc.started_at),
           argsPreview: formatToolArgsPreview(tc.function.arguments),
         });
       }

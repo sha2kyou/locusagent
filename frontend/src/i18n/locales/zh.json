@@ -241,7 +241,7 @@
     "usage": {
       "loading": "加载中…",
       "empty": "暂无用量数据，完成一次对话后将开始累计。",
-      "table": { "scene": "场景", "token": "Token", "apiCalls": "API 次数" },
+      "table": { "scene": "场景", "token": "Token", "apiCalls": "API 次数", "total": "合计" },
       "scenarios": {
         "chat": "对话",
         "compression": "上下文压缩",

@@ -23,6 +23,7 @@ import type {
   ScheduledTask,
   ScheduleKind,
   TimezoneConfig,
+  ToolTimingItem,
   LocaleConfig,
   BackendLogs,
   EmbeddingProgress,
@@ -127,6 +128,11 @@ export const getActiveRun = (id: string) =>
 
 export const cancelRun = (id: string) =>
   apiSend<{ cancelled: boolean }>(`/api/workspace/sessions/${encodeURIComponent(id)}/cancel`, "POST", {});
+
+export const listToolTimings = (sessionId: string) =>
+  apiGet<{ items: ToolTimingItem[] }>(
+    `/api/workspace/sessions/${encodeURIComponent(sessionId)}/tool-timings`,
+  );
 
 export const listTerminalApprovals = (sessionId: string) =>
   apiGet<{
